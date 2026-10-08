@@ -11,13 +11,14 @@ import { useState } from 'react'
 import { Avatar } from '../Avatar'
 import { NeedsBar } from '../NeedsBar'
 import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
+import { MapScreen } from './MapScreen'
 import { audio } from '@/game/systems/audio'
 import { formatNaira, nextReputationTier, reputationTier, xpToNextLevel } from '@/game/systems/progression'
 import { conditionSummary } from '@/game/systems/needs'
 import { LEVEL_UNLOCKS } from '@/game/data/config'
 import { JOBS } from '@/game/data/jobs'
 import { FOODS } from '@/game/data/foods'
-import { LOCATIONS, LOCATION_BY_ID } from '@/game/data/locations'
+import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
 
 /* --------------------------- small HUD helpers ----------------------------- */
@@ -49,6 +50,7 @@ function Chip({ children, className = '' }: { children: React.ReactNode; classNa
 function HomeTab() {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
+  const isTravelling = useGameStore((s) => s.isTravelling)
   const rest = useGameStore((s) => s.rest)
 
   const condition = conditionSummary(player.needs)
@@ -126,43 +128,57 @@ function HomeTab() {
         </div>
         <div className="lko-card flex flex-col justify-center p-4">
           <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            You are at
+            📍 Location
           </p>
-          <p className="lko-display mt-1 flex items-center gap-1.5 text-lg leading-tight">
-            <span aria-hidden>{location.emoji}</span> {location.name}
-          </p>
-          <p className="mt-0.5 text-xs font-semibold italic text-[var(--lko-ink-soft)]">
-            “{location.tagline}”
-          </p>
+          {isTravelling ? (
+            <p className="lko-display mt-1 animate-pulse text-lg text-[var(--lko-gold)]">
+              🛺 Travelling…
+            </p>
+          ) : (
+            <>
+              <p className="lko-display mt-1 flex items-center gap-1.5 text-lg leading-tight">
+                <span aria-hidden>{location.emoji}</span> {location.name}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold italic text-[var(--lko-ink-soft)]">
+                “{location.tagline}”
+              </p>
+            </>
+          )}
         </div>
 
-        {/* Stage 1 real mechanic: rest at home */}
+        {/* Stage 1 real mechanic: rest — only possible while actually at home */}
         <div className="col-span-2 lko-card p-4">
           <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
             Rest at home
           </h2>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => {
-                audio.play('click')
-                rest('nap')
-              }}
-              className="lko-press min-h-[52px] rounded-xl border-b-4 border-[#b57d0a] bg-[var(--lko-gold)] px-2 py-2 text-sm font-extrabold text-[#3d2a00]"
-            >
-              😴 Nap
-              <span className="mt-0.5 block text-[10px] font-bold opacity-80">+22 Energy • 1 slot</span>
-            </button>
-            <button
-              onClick={() => {
-                audio.play('click')
-                rest('sleep')
-              }}
-              className="lko-press min-h-[52px] rounded-xl border-b-4 border-[#0a5c2e] bg-[var(--lko-green)] px-2 py-2 text-sm font-extrabold text-white"
-            >
-              🛏️ Sleep
-              <span className="mt-0.5 block text-[10px] font-bold opacity-80">Full rest • next morning</span>
-            </button>
-          </div>
+          {world.currentLocation === 'home' ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  audio.play('click')
+                  rest('nap')
+                }}
+                className="lko-press min-h-[52px] rounded-xl border-b-4 border-[#b57d0a] bg-[var(--lko-gold)] px-2 py-2 text-sm font-extrabold text-[#3d2a00]"
+              >
+                😴 Nap
+                <span className="mt-0.5 block text-[10px] font-bold opacity-80">+22 Energy • 1 slot</span>
+              </button>
+              <button
+                onClick={() => {
+                  audio.play('click')
+                  rest('sleep')
+                }}
+                className="lko-press min-h-[52px] rounded-xl border-b-4 border-[#0a5c2e] bg-[var(--lko-green)] px-2 py-2 text-sm font-extrabold text-white"
+              >
+                🛏️ Sleep
+                <span className="mt-0.5 block text-[10px] font-bold opacity-80">Full rest • next morning</span>
+              </button>
+            </div>
+          ) : (
+            <p className="rounded-xl bg-black/[0.03] px-4 py-3 text-center text-xs font-semibold text-[var(--lko-ink-soft)]">
+              🏠 Rest is only possible at your place. Open the Map to head home.
+            </p>
+          )}
         </div>
       </section>
     </div>
@@ -171,54 +187,9 @@ function HomeTab() {
 
 /* --------------------------------- map tab --------------------------------- */
 
+/** Stage 2: the map is live — see MapScreen. */
 function MapTab() {
-  const world = useGameStore((s) => s.world)!
-  return (
-    <div>
-      <ComingSoon
-        icon="🗺️"
-        title="The Lokoja Map"
-        stage="Stage 2"
-        description="Walking, keke rides and taxis will take you across ten hand-crafted neighbourhoods — from Kpata Market to the Confluence."
-      />
-      {/* real data teaser: the actual launch locations */}
-      <section className="px-4" aria-label="Coming locations">
-        <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          10 neighbourhoods are being mapped
-        </h3>
-        <ul className="flex flex-col gap-2">
-          {LOCATIONS.map((l) => {
-            const isCurrent = l.id === world.currentLocation
-            return (
-              <li
-                key={l.id}
-                className={`lko-card flex items-center gap-3 p-3 ${isCurrent ? 'border-[var(--lko-green)]/40 bg-[var(--lko-green-soft)]' : 'opacity-70'}`}
-              >
-                <span
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl"
-                  style={{ background: `${l.color}22` }}
-                  aria-hidden
-                >
-                  {l.emoji}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold leading-tight">
-                    {l.name}
-                    {isCurrent && (
-                      <span className="ml-2 rounded-full bg-[var(--lko-green)] px-2 py-0.5 text-[9px] font-extrabold uppercase text-white">
-                        You are here
-                      </span>
-                    )}
-                  </p>
-                  <p className="truncate text-xs text-[var(--lko-ink-soft)]">{l.tagline}</p>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      </section>
-    </div>
-  )
+  return <MapScreen />
 }
 
 /* --------------------------------- work tab -------------------------------- */

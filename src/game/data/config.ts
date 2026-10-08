@@ -87,12 +87,19 @@ export const LEVEL_UNLOCKS: Record<number, string[]> = {
 export const ECONOMY = {
   currencySymbol: '₦',
 
-  /** Transport costs + energy costs (Stage 2). Base speed in slots per trip. */
+  /**
+   * Transport (Stage 2). Fares scale with trip distance from these params:
+   *   cost   = base + perKm × km  (rounded to TRAVEL.fareRounding)
+   *   time   = minutesPerKm × km  (× location modifier × weather modifier)
+   *   energy = energyPerKm × km   (× location modifier)
+   * Tuned so a median trip (≈3 km) matches Lokoja-realistic fares:
+   *   walk ₦0/15min/-10⚡, keke ≈₦300/8min/-2⚡, taxi ≈₦1,000/4min/-1⚡
+   */
   transport: {
-    walk: { cost: 0, energyPerTrip: 8, timeSlots: 1 },
-    keke: { cost: 150, energyPerTrip: 2, timeSlots: 1 },
-    taxi: { cost: 500, energyPerTrip: 1, timeSlots: 1 },
-    // future: bus, motorcycle, personal car, boat
+    walk: { label: 'Walk', emoji: '🚶', cost: { base: 0, perKm: 0 }, minutesPerKm: 4.8, energyPerKm: 3.2 },
+    keke: { label: 'Keke', emoji: '🛺', cost: { base: 100, perKm: 60 }, minutesPerKm: 2.6, energyPerKm: 0.65 },
+    taxi: { label: 'Taxi', emoji: '🚕', cost: { base: 300, perKm: 220 }, minutesPerKm: 1.3, energyPerKm: 0.32 },
+    // future: bus, motorcycle, personal car, boat — add entries here only
   },
 
   /** Rent charged every N days per home (Stage 4). */
@@ -130,12 +137,38 @@ export const TIME = {
     rain: 20,
   },
 
-  /** Effects applied to travel/jobs per weather (Stage 2/3 reads these). */
+  /** Effects on the player per weather (travel modifiers live in TRAVEL below). */
   weatherEffects: {
-    sunny: { mood: 0, travelEnergyMultiplier: 1 },
-    cloudy: { mood: 0, travelEnergyMultiplier: 1 },
-    rain: { mood: -3, travelEnergyMultiplier: 1.5 },
+    sunny: { mood: 0 },
+    cloudy: { mood: 0 },
+    rain: { mood: -3 },
   },
+} as const
+
+/* ---------------------------------- Travel ---------------------------------- */
+
+/**
+ * Stage 2 movement tuning. All travel numbers flow through here —
+ * components and the travel system must never hard-code fares or speeds.
+ */
+export const TRAVEL = {
+  /** Map units (0–100 grid) → kilometres. Lokoja core ≈ 11 km across. */
+  kmPerMapUnit: 0.11,
+  /** Every completed trip advances this many time slots on the EXISTING clock. */
+  slotsPerTrip: 1,
+  /** Minutes multiplier per transport in each weather (kept gentle by design). */
+  weatherMinutesMultiplier: {
+    sunny: { walk: 1, keke: 1, taxi: 1 },
+    cloudy: { walk: 1, keke: 1, taxi: 1 },
+    rain: { walk: 1.4, keke: 1.15, taxi: 1.08 },
+    'night-clear': { walk: 1, keke: 1, taxi: 1 },
+  },
+  /** Chance (0–1) that a travel event rolls on a completed trip. */
+  eventChance: 0.3,
+  /** Fares are rounded to the nearest naira step. */
+  fareRounding: 10,
+  /** How long the on-screen "travelling…" transition lasts (ms). */
+  transitionMs: 850,
 } as const
 
 /* ------------------------------- Misc / Meta -------------------------------- */

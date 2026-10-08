@@ -95,6 +95,9 @@ export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night'
 
 export type Weather = 'sunny' | 'cloudy' | 'rain' | 'night-clear'
 
+/** Player-usable transport modes (Stage 2). Future: bus, motorcycle, car, boat. */
+export type TransportId = 'walk' | 'keke' | 'taxi'
+
 export interface WorldState {
   /** in-game day counter, starts at 1 */
   day: number

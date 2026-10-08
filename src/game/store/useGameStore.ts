@@ -18,44 +18,23 @@ import type {
   Gender,
   PlayerState,
   Screen,
-  TimeOfDay,
-  Weather,
+  TransportId,
   WorldState,
 } from '../types'
-import { STARTING, TIME, NEEDS, AUTOSAVE } from '../data/config'
+import { STARTING, NEEDS, TRAVEL, AUTOSAVE } from '../data/config'
 import { DEFAULT_AVATAR } from '../data/avatar'
+import { LOCATION_BY_ID } from '../data/locations'
 import { applyNeedsDelta } from '../systems/needs'
-import { addXp as processXp } from '../systems/progression'
+import { addXp as processXp, formatNaira } from '../systems/progression'
 import { SaveSystem } from '../systems/save'
 import { audio, syncAudioWithSettings } from '../systems/audio'
-
-/* ------------------------------ helpers ------------------------------ */
-
-/** Advance a time-of-day slot; returns new slot + day delta. */
-function nextSlot(t: TimeOfDay): { timeOfDay: TimeOfDay; dayDelta: number } {
-  const idx = TIME.slots.indexOf(t)
-  const next = TIME.slots[(idx + 1) % TIME.slots.length]
-  return { timeOfDay: next, dayDelta: next === 'morning' ? 1 : 0 }
-}
-
-/** Pick a random weather for a new day, weighted by config. */
-function rollNewDayWeather(): Weather {
-  const entries = Object.entries(TIME.weatherWeights) as Array<[Weather, number]>
-  const total = entries.reduce((sum, [, w]) => sum + w, 0)
-  let roll = Math.random() * total
-  for (const [weather, weight] of entries) {
-    roll -= weight
-    if (roll <= 0) return weather
-  }
-  return 'sunny'
-}
-
-/** Night-time weather is always clear night. */
-function weatherForSlot(weather: Weather, timeOfDay: TimeOfDay): Weather {
-  if (timeOfDay === 'night') return 'night-clear'
-  if (weather === 'night-clear') return 'sunny'
-  return weather
-}
+import {
+  nextSlot,
+  rollNewDayWeather,
+  weatherForSlot,
+  advanceWorldClock,
+} from '../systems/world'
+import { calculateTravel, rollTravelEvent } from '../systems/travel'
 
 /* ------------------------------- store -------------------------------- */
 
@@ -80,9 +59,13 @@ interface GameStore {
   continueGame: () => boolean
   returnToMenu: () => void
 
-  /* needs / time actions (Stage 1: rest is the first real mechanic) */
+  /* needs / time actions (Stage 1: rest; Stage 2: travel — both use the same clock) */
   rest: (kind: 'nap' | 'sleep') => void
   advanceTime: (slots?: number) => void
+
+  /* travel (Stage 2) */
+  isTravelling: boolean
+  travel: (destinationId: string, transport: TransportId) => void
 
   /* engine actions used by all future systems */
   addCash: (amount: number) => void
@@ -129,6 +112,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   player: null,
   world: null,
   settings: { sound: true },
+
+  isTravelling: false,
 
   /* ----------------------------- lifecycle ----------------------------- */
 
@@ -228,16 +213,97 @@ export const useGameStore = create<GameStore>((set, get) => ({
   advanceTime: (slots = 1) => {
     const { world } = get()
     if (!world) return
-    let { timeOfDay, day } = world
-    let weather = world.weather
-    for (let i = 0; i < slots; i++) {
-      const r = nextSlot(timeOfDay)
-      timeOfDay = r.timeOfDay
-      day += r.dayDelta
-      weather = weatherForSlot(weather, timeOfDay)
-    }
-    set({ world: { ...world, timeOfDay, day, weather } })
+    const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, slots)
+    set({ world: { ...world, ...clock } })
     scheduleAutosave(get)
+  },
+
+  /* ------------------------------- travel ------------------------------- */
+
+  travel: (destinationId, transportId) => {
+    const { player, world, isTravelling } = get()
+    if (!player || !world || isTravelling) return
+
+    const origin = LOCATION_BY_ID[world.currentLocation]
+    const destination = LOCATION_BY_ID[destinationId]
+    if (!origin || !destination || origin.id === destination.id) return
+
+    // --- guards (all feedback through notifications, never silent) ---
+    if (player.level < destination.unlockLevel) {
+      audio.play('notify')
+      get().notify({
+        icon: '🔒',
+        text: `${destination.name} unlocks at Level ${destination.unlockLevel}.`,
+        tone: 'bad',
+      })
+      return
+    }
+    if (!destination.transport.includes(transportId)) return
+
+    // pure calculation — same inputs always give the same plan
+    const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay)
+    const event = rollTravelEvent(transportId, world.weather)
+
+    if (player.cash < plan.cost) {
+      audio.play('notify')
+      get().notify({
+        icon: '💸',
+        text: `The fare is ${formatNaira(plan.cost)} — you no get am.`,
+        tone: 'bad',
+      })
+      return
+    }
+    if (player.needs.energy < plan.energyCost) {
+      audio.play('notify')
+      get().notify({
+        icon: '🥵',
+        text: 'You are too tired for that journey. Rest first.',
+        tone: 'bad',
+      })
+      return
+    }
+
+    // travelling state drives the 📍 HUD + map transition
+    set({ isTravelling: true })
+
+    // apply the completed trip on the EXISTING clock through proper systems
+    const applyArrival = () => {
+      const { player: p, world: w } = get()
+      if (!p || !w) return
+
+      const cash = Math.max(0, p.cash - plan.cost + (event?.cashDelta ?? 0))
+      const needs = applyNeedsDelta(p.needs, {
+        energy: -(plan.energyCost + (event?.energyDelta ?? 0)),
+        mood: event?.moodDelta ?? 0,
+      })
+      const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, plan.slots)
+
+      set({
+        player: { ...p, cash, needs },
+        world: { ...w, currentLocation: destination.id, ...clock },
+        isTravelling: false,
+      })
+
+      // arrival feedback: destination + a compact time/money/energy summary
+      get().notify({
+        icon: destination.emoji,
+        text: `You arrived at ${destination.name}.`,
+        tone: 'neutral',
+      })
+      get().notify({
+        icon: '🧾',
+        text: `${formatNaira(cash)} • ⚡ ${Math.round(needs.energy)}`,
+        tone: 'neutral',
+      })
+      if (event) {
+        get().notify({ icon: event.icon, text: event.description, tone: event.tone })
+        if (event.xpDelta && event.xpDelta > 0) get().addXp(event.xpDelta)
+      }
+      audio.play('notify')
+      scheduleAutosave(get)
+    }
+
+    setTimeout(applyArrival, TRAVEL.transitionMs)
   },
 
   /* -------------------------- engine actions ---------------------------- */

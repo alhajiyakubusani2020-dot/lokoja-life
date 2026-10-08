@@ -44,12 +44,27 @@ function deserialize(raw: string): GameSave | null {
     let save = parsed
     switch (save.version) {
       case 1:
-        // current version — nothing to do yet
+        // current version — Stage 2 added no new persisted fields
+        // (world.currentLocation already existed since Stage 1), so no
+        // schema bump was needed. Defaults below only guard against
+        // corrupt/hand-edited saves.
         break
       default:
         // Unknown / newer save from a newer app version — keep it, best effort.
         break
     }
+
+    // --- defensive defaults (never break a loadable save) ---
+    if (!save.world) {
+      save.world = {
+        day: 1,
+        timeOfDay: 'morning',
+        weather: 'sunny',
+        currentLocation: 'home',
+      }
+    }
+    if (!save.world.currentLocation) save.world.currentLocation = 'home'
+    if (!save.settings) save.settings = { sound: true }
 
     save.version = SAVE_VERSION
     return save

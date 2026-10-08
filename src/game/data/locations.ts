@@ -1,13 +1,16 @@
 /**
  * LOKOJA LIFE — Lokoja city data
  * -------------------------------
- * The ten launch locations. Stage 1 uses `home` as the player's starting
- * location; the full interactive map arrives in Stage 2 and will render
- * straight from this file.
+ * The ten launch locations. Stage 2 renders the interactive map straight
+ * from this file: mapX/mapY drive the marker positions on the stylised
+ * map canvas, `transport` lists which modes can reach the location, and
+ * `travelModifier` scales trip time/energy (uphill, riverside roads…).
  *
  * Each location carries its own visual identity + activity catalogue so the
  * map screen stays 100% data-driven.
  */
+
+import type { TransportId } from '../types'
 
 export interface LocationActivity {
   key: string
@@ -19,6 +22,8 @@ export interface LocationActivity {
 export interface LokojaLocation {
   id: string
   name: string
+  /** compact label for map markers */
+  shortName: string
   /** short flavour line shown on map pins */
   tagline: string
   description: string
@@ -27,9 +32,13 @@ export interface LokojaLocation {
   accent: string
   emoji: string
   unlockLevel: number
-  /** map layout position (0–100 percentage grid) for the Stage 2 map canvas */
+  /** map layout position (0–100 percentage grid) on the stylised map canvas */
   mapX: number
   mapY: number
+  /** transport modes that can reach this location */
+  transport: TransportId[]
+  /** multiplies trip minutes + energy (uphill trails, rough roads…) */
+  travelModifier: number
   activities: LocationActivity[]
 }
 
@@ -37,6 +46,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'home',
     name: 'Your Place',
+    shortName: 'Home',
     tagline: 'Where the hustle rests',
     description:
       'A basic room you can call your own. It is not much yet — but every big name in Lokoja started somewhere.',
@@ -46,6 +56,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 1,
     mapX: 50,
     mapY: 72,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
     activities: [
       { key: 'rest', label: 'Rest', stage: 1 },
       { key: 'sleep', label: 'Sleep till morning', stage: 1 },
@@ -55,6 +67,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'kpata-market',
     name: 'Kpata Market',
+    shortName: 'Kpata',
     tagline: 'The heartbeat of Lokoja commerce',
     description:
       'Colourful stalls, loud traders, and the best pepper soup ingredients in Kogi State. Every hustle in this city passes through Kpata one way or another.',
@@ -64,6 +77,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 1,
     mapX: 30,
     mapY: 52,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
     activities: [
       { key: 'shop-food', label: 'Buy food items', stage: 4 },
       { key: 'shop-general', label: 'General store', stage: 4 },
@@ -74,6 +89,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'ganaja-junction',
     name: 'Ganaja Junction',
+    shortName: 'Ganaja',
     tagline: 'Where every road meets',
     description:
       'The busy junction that connects Lokoja to the rest of Kogi. Keke horns, suya smoke, and delivery riders everywhere — the right place to hear today’s gist.',
@@ -83,6 +99,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 1,
     mapX: 68,
     mapY: 44,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
     activities: [
       { key: 'transport-hub', label: 'Get transport anywhere', stage: 2 },
       { key: 'job-delivery', label: 'Delivery gigs', stage: 3 },
@@ -92,6 +110,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'confluence',
     name: 'The Confluence',
+    shortName: 'Confluence',
     tagline: 'Where the Niger kisses the Benue',
     description:
       'The world-famous meeting point of two great rivers. Tourists come with cameras; fishermen come with nets. Lokoja’s proudest landmark — and your signature opportunity.',
@@ -101,6 +120,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 1,
     mapX: 82,
     mapY: 68,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1.15,
     activities: [
       { key: 'fishing', label: 'Fishing', stage: 7 },
       { key: 'photography', label: 'Riverside photography', stage: 7 },
@@ -111,6 +132,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'mount-patti',
     name: 'Mount Patti',
+    shortName: 'Mt. Patti',
     tagline: 'The giant that watches over Lokoja',
     description:
       'The hill that guards the city, covered in green and history. The climb is not easy — but the view from the top has humbled every visitor since 1860.',
@@ -120,6 +142,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 1,
     mapX: 18,
     mapY: 20,
+    transport: ['walk', 'keke'],
+    travelModifier: 1.5,
     activities: [
       { key: 'hiking', label: 'Hike the trail', stage: 7 },
       { key: 'photography', label: 'Photo spots', stage: 7 },
@@ -129,6 +153,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'historic-lokoja',
     name: 'Historic Lokoja',
+    shortName: 'Historic',
     tagline: 'Old buildings, old stories',
     description:
       'Colonial-era relics, the old European cemetery, and Lord Lugard’s rest house. Lokoja was once the capital of the Northern Protectorate — the streets still remember.',
@@ -138,6 +163,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 2,
     mapX: 42,
     mapY: 30,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
     activities: [
       { key: 'discover', label: 'Discover historical sites', stage: 7 },
       { key: 'tour', label: 'History tours', stage: 7 },
@@ -146,6 +173,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'government-area',
     name: 'Government Area',
+    shortName: 'GRA',
     tagline: 'GRA — where things are official',
     description:
       'Quiet roads, low fences, and offices where paperwork can change your whole week. Government work is slow — but it is steady, and it comes with respect.',
@@ -155,6 +183,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 3,
     mapX: 58,
     mapY: 18,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
     activities: [
       { key: 'job-govt', label: 'Government jobs', stage: 3 },
       { key: 'errands', label: 'Official errands', stage: 5 },
@@ -163,6 +193,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'university-area',
     name: 'University Area',
+    shortName: 'Univ.',
     tagline: 'Book bright, street sharp',
     description:
       'Student hostels, cheap cafés, and copy-copy shops. The campus crowd has energy — and money-making ideas that usually need one more partner.',
@@ -172,6 +203,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 2,
     mapX: 74,
     mapY: 28,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
     activities: [
       { key: 'job-tutorial', label: 'Tutorial gigs', stage: 3 },
       { key: 'network', label: 'Meet students', stage: 5 },
@@ -181,6 +214,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'food-area',
     name: 'Mama’s Food Strip',
+    shortName: 'Food Strip',
     tagline: 'Come hungry, leave happy',
     description:
       'Bukas, suya stands and cold drinks lined side by side. The aroma alone will reset your mood — and the traders here know everybody’s business.',
@@ -190,6 +224,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 1,
     mapX: 46,
     mapY: 62,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
     activities: [
       { key: 'eat', label: 'Eat a proper meal', stage: 4 },
       { key: 'job-waiter', label: 'Restaurant shifts', stage: 3 },
@@ -199,6 +235,7 @@ export const LOCATIONS: LokojaLocation[] = [
   {
     id: 'transport-area',
     name: 'Motor Park',
+    shortName: 'Motor Park',
     tagline: 'The city moves from here',
     description:
       'Taxi drivers argue, keke riders load passengers, and the last bus to Abuja is always “just leaving”. If you want to move, this is where you start.',
@@ -208,6 +245,8 @@ export const LOCATIONS: LokojaLocation[] = [
     unlockLevel: 1,
     mapX: 60,
     mapY: 80,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
     activities: [
       { key: 'travel', label: 'Take a ride', stage: 2 },
       { key: 'job-driver', label: 'Driver jobs', stage: 3 },
