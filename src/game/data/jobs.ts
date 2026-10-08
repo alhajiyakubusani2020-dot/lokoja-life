@@ -23,6 +23,8 @@ export interface JobDef {
   /** which skill the job trains + how much */
   skillTraining: { skill: 'hustle' | 'smart' | 'social'; xp: number }
   reputationReward: number
+  /** cooldown after a shift, in absolute clock slots (Stage 3; default from WORK config) */
+  cooldownSlots?: number
   /** hard requirements checked before the job can start */
   requirements: {
     minSkills?: Partial<{ hustle: number; smart: number; social: number }>
@@ -104,6 +106,7 @@ export const JOBS: JobDef[] = [
     xpReward: 32,
     skillTraining: { skill: 'smart', xp: 10 },
     reputationReward: 5,
+    cooldownSlots: 2,
     requirements: { minSkills: { smart: 2 } },
   },
   {

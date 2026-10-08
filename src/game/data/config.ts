@@ -145,6 +145,64 @@ export const TIME = {
   },
 } as const
 
+/* ----------------------------------- Work ----------------------------------- */
+
+/**
+ * Stage 3 work tuning — jobs read every number below at runtime.
+ * One job shift: energy − time slots on the SAME world clock — payout.
+ * Cooldowns are measured in absolute clock slots (see systems/world.ts).
+ */
+export const WORK = {
+  /** default cooldown after a shift, if a job doesn't define its own */
+  defaultCooldownSlots: 1,
+  /** pay bonus per relevant skill level above 1 (0.05 = +5%) */
+  payPerSkillLevel: 0.05,
+  /** pay factor when mood is high / low — hustle rewards good vibes */
+  moodBonusHigh: { threshold: 70, factor: 1.08 },
+  moodPenaltyLow: { threshold: 25, factor: 0.9 },
+  /** base success chance for a hustle-style roll (jobs always succeed) */
+  baseSuccess: 0.72,
+  /** success shift per (skill − difficulty) point, clamped below */
+  skillStep: 0.07,
+  successClamp: { min: 0.15, max: 0.95 },
+  /** chance a success becomes a 'great' outcome (bigger payout + bonus rep) */
+  greatChance: 0.18,
+  /** great outcomes multiply the payout by this */
+  greatPayFactor: 1.5,
+  /** what a failed hustle still yields (lesson XP, mood hit) */
+  fail: { xpFactor: 0.5, cashFactor: 0, moodDelta: -6 },
+  /** pay rounding step (keeps naira amounts tidy) */
+  payRounding: 10,
+  /** success chance bonus when mood is high (hustle rolls) */
+  moodChanceBonusHigh: 0.05,
+  /** success chance penalty when mood is low (hustle rolls) */
+  moodChancePenaltyLow: 0.05,
+  /** extra reputation a 'great' outcome adds */
+  greatBonusReputation: 2,
+  /** how long the on-screen "working…" transition lasts (ms) */
+  transitionMs: 700,
+} as const
+
+/* ------------------------------- Hustles / offers ---------------------------- */
+
+/**
+ * Stage 3 hustle/opportunity tuning. Opportunities are generated from data
+ * (hustles.ts) and carried on the player until done or expired.
+ */
+export const HUSTLE = {
+  /** max accepted-but-undone opportunities the player can hold */
+  maxActive: 3,
+  /** generated offers expire after this many absolute slots */
+  expirySlots: 6,
+  /** cooldown for "look around for hustles" searching */
+  searchCooldownSlots: 1,
+  /** how many offers one search can produce (weighted random pick) */
+  maxPerSearch: 2,
+  /** chance (0–1) that a search finds nothing — the streets are not always kind */
+  dryChance: 0.25,
+  /** duplicate-instance guard: same def can't be active twice */
+} as const
+
 /* ---------------------------------- Travel ---------------------------------- */
 
 /**
@@ -176,8 +234,8 @@ export const TRAVEL = {
 export const GAME_META = {
   title: 'Lokoja Life',
   tagline: 'Build your life at the Confluence.',
-  version: '0.1.0',
-  stage: 'Stage 1 — Foundation',
+  version: '0.3.0',
+  stage: 'Stage 3 — Economy, Work & Opportunities',
 } as const
 
 export const AUTOSAVE = {

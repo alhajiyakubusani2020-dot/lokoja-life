@@ -12,11 +12,12 @@ import { Avatar } from '../Avatar'
 import { NeedsBar } from '../NeedsBar'
 import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
 import { MapScreen } from './MapScreen'
+import { WorkScreen } from './WorkScreen'
 import { audio } from '@/game/systems/audio'
-import { formatNaira, nextReputationTier, reputationTier, xpToNextLevel } from '@/game/systems/progression'
+import { formatNaira, nextReputationTier, reputationTier, skillCap, xpToNextLevel } from '@/game/systems/progression'
+import { skillXpToNext, SKILL_META } from '@/game/systems/skills'
 import { conditionSummary } from '@/game/systems/needs'
 import { LEVEL_UNLOCKS } from '@/game/data/config'
-import { JOBS } from '@/game/data/jobs'
 import { FOODS } from '@/game/data/foods'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -93,23 +94,35 @@ function HomeTab() {
         </h2>
         <div className="grid grid-cols-3 gap-2">
           {(
-            [
-              { key: 'hustle', label: 'Hustle', emoji: '💪' },
-              { key: 'smart', label: 'Smart', emoji: '🧠' },
-              { key: 'social', label: 'Social', emoji: '🗣️' },
-            ] as const
-          ).map((s) => (
-            <div
-              key={s.key}
-              className="flex flex-col items-center rounded-xl border-2 border-black/[0.05] bg-[var(--lko-cream)] py-2.5"
-            >
-              <span className="text-xl" aria-hidden>
-                {s.emoji}
-              </span>
-              <span className="mt-0.5 text-[11px] font-bold text-[var(--lko-ink-soft)]">{s.label}</span>
-              <span className="lko-display text-lg text-[var(--lko-green-deep)]">{player.skills[s.key]}</span>
-            </div>
-          ))}
+            ['hustle', 'smart', 'social'] as const
+          ).map((key) => {
+            const meta = SKILL_META[key]
+            const cap = skillCap(player.level)
+            const capped = player.skills[key] >= cap
+            const toNext = skillXpToNext()
+            return (
+              <div
+                key={key}
+                className="flex flex-col items-center rounded-xl border-2 border-black/[0.05] bg-[var(--lko-cream)] py-2.5"
+              >
+                <span className="text-xl" aria-hidden>
+                  {meta.emoji}
+                </span>
+                <span className="mt-0.5 text-[11px] font-bold text-[var(--lko-ink-soft)]">{meta.label}</span>
+                <span className="lko-display text-lg text-[var(--lko-green-deep)]">{player.skills[key]}</span>
+                {/* skill XP bar — work grinds visibly fill this */}
+                <div className="mt-1 h-1.5 w-3/4 overflow-hidden rounded-full bg-black/[0.08]">
+                  <div
+                    className="h-full rounded-full bg-[var(--lko-gold)] transition-all duration-500"
+                    style={{ width: capped ? '100%' : `${Math.min(100, (player.skillXp[key] / toNext) * 100)}%` }}
+                  />
+                </div>
+                <span className="mt-0.5 text-[9px] font-bold text-[var(--lko-ink-soft)]">
+                  {capped ? 'MAX (level up)' : `${player.skillXp[key]}/${toNext} xp`}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </section>
 
@@ -188,41 +201,29 @@ function HomeTab() {
 /* --------------------------------- map tab --------------------------------- */
 
 /** Stage 2: the map is live — see MapScreen. */
-function MapTab() {
-  return <MapScreen />
+function MapTab({
+  focusLocationId,
+  onFocusHandled,
+  onOpenWork,
+}: {
+  focusLocationId?: string | null
+  onFocusHandled?: () => void
+  onOpenWork?: () => void
+}) {
+  return (
+    <MapScreen
+      focusLocationId={focusLocationId}
+      onFocusHandled={onFocusHandled}
+      onOpenWork={onOpenWork}
+    />
+  )
 }
 
 /* --------------------------------- work tab -------------------------------- */
 
-function WorkTab() {
-  return (
-    <div>
-      <ComingSoon
-        icon="💼"
-        title="Jobs & Hustles"
-        stage="Stage 3"
-        description="Take shifts, run deliveries, hear about quick hustles — every job pays in naira, XP and reputation. The grind begins here."
-      />
-      {/* real data teaser: actual launch jobs */}
-      <section className="px-4" aria-label="Coming jobs">
-        <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          {JOBS.length} jobs are hiring soon
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {JOBS.map((j) => (
-            <div key={j.id} className="lko-card p-3 opacity-75">
-              <p className="text-sm font-bold leading-tight">
-                <span aria-hidden>{j.emoji}</span> {j.name}
-              </p>
-              <p className="mt-0.5 text-[11px] font-semibold text-[var(--lko-gold)]">
-                up to {formatNaira(j.basePay)} / shift
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  )
+/** Stage 3: the economy is live — see WorkScreen. */
+function WorkTab({ onGoToMap }: { onGoToMap: (locationId: string) => void }) {
+  return <WorkScreen onGoToMap={onGoToMap} />
 }
 
 /* ---------------------------------- bag tab --------------------------------- */
@@ -318,6 +319,31 @@ function ProfileTab() {
         </p>
       </section>
 
+      {/* life stats */}
+      <section className="lko-card mt-3 p-4" aria-label="Life stats">
+        <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+          📊 Life so far
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2 text-center">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Shifts worked</p>
+            <p className="lko-display text-lg text-[var(--lko-green-deep)]">{player.stats.jobsCompleted}</p>
+          </div>
+          <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2 text-center">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Hustles done</p>
+            <p className="lko-display text-lg text-[var(--lko-green-deep)]">{player.stats.hustlesCompleted}</p>
+          </div>
+          <div className="rounded-xl bg-[var(--lko-green-soft)] px-3 py-2 text-center">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-green-deep)]">Total earned</p>
+            <p className="lko-display text-base text-[var(--lko-green-deep)]">{formatNaira(player.stats.totalEarned)}</p>
+          </div>
+          <div className="rounded-xl bg-red-50 px-3 py-2 text-center">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-700">Total spent</p>
+            <p className="lko-display text-base text-red-700">{formatNaira(player.stats.totalSpent)}</p>
+          </div>
+        </div>
+      </section>
+
       {/* path & unlocks */}
       <section className="lko-card mt-3 p-4" aria-label="Your path">
         <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
@@ -397,7 +423,10 @@ export function Dashboard() {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const notifications = useGameStore((s) => s.notifications)
+  const hasActiveOpportunities = useGameStore((s) => (s.player?.activeOpportunities.length ?? 0) > 0)
   const [tab, setTab] = useState<TabKey>('home')
+  /** map deep-link: which location the map should open (from work screen links) */
+  const [focusLoc, setFocusLoc] = useState<string | null>(null)
 
   const xpNeeded = xpToNextLevel(player.level)
   const tier = reputationTier(player.reputation)
@@ -461,13 +490,26 @@ export function Dashboard() {
         aria-label={tab}
       >
         {tab === 'home' && <HomeTab />}
-        {tab === 'map' && <MapTab />}
-        {tab === 'work' && <WorkTab />}
+        {tab === 'map' && (
+          <MapTab
+            focusLocationId={focusLoc}
+            onFocusHandled={() => setFocusLoc(null)}
+            onOpenWork={() => setTab('work')}
+          />
+        )}
+        {tab === 'work' && (
+          <WorkTab
+            onGoToMap={(locId) => {
+              setFocusLoc(locId)
+              setTab('map')
+            }}
+          />
+        )}
         {tab === 'bag' && <BagTab />}
         {tab === 'profile' && <ProfileTab />}
       </main>
 
-      <BottomNav active={tab} onChange={setTab} />
+      <BottomNav active={tab} onChange={setTab} badge={{ work: hasActiveOpportunities }} />
     </div>
   )
 }

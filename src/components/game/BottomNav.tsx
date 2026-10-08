@@ -28,9 +28,11 @@ const TABS: TabDef[] = [
 interface BottomNavProps {
   active: TabKey
   onChange: (tab: TabKey) => void
+  /** attention dots — e.g. work tab pings when accepted hustles are waiting */
+  badge?: Partial<Record<TabKey, boolean>>
 }
 
-export function BottomNav({ active, onChange }: BottomNavProps) {
+export function BottomNav({ active, onChange, badge }: BottomNavProps) {
   return (
     <nav
       aria-label="Game navigation"
@@ -52,12 +54,15 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
               }`}
             >
               <span
-                className={`flex h-7 w-12 items-center justify-center rounded-lg text-lg transition-colors ${
+                className={`relative flex h-7 w-12 items-center justify-center rounded-lg text-lg transition-colors ${
                   isActive ? 'bg-[var(--lko-green-soft)]' : ''
                 }`}
                 aria-hidden
               >
                 {tab.icon}
+                {badge?.[tab.key] && (
+                  <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#fffdf7] bg-[var(--lko-terra)]" />
+                )}
               </span>
               {tab.label}
             </button>

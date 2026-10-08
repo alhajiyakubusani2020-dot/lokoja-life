@@ -39,3 +39,23 @@ Work Log:
 Stage Summary:
 - STAGE 2 COMPLETE. Player can explore all 10 Lokoja locations via walk/keke/taxi with config-driven fares, one shared clock, weather + location modifiers, travel events, and persistent location.
 - Ready for Stage 3: jobs/hustles will read JOBS data (already complete) and can hook travel events into the opportunity system.
+
+---
+Task ID: 3
+Agent: Main Agent (Super Z)
+Task: STAGE 3 — Core Economy, Work & Opportunity System
+
+Work Log:
+- Extended (no rewrites): types.ts (Transaction/Reward/SkillId/ActiveOpportunity/WorkResult + player.skillXp, cooldowns, activeOpportunities, transactions, stats), config.ts (new WORK + HUSTLE tuning sections, GAME_META → Stage 3), jobs.ts (+optional cooldownSlots; photographer 2), world.ts (+absoluteSlot monotonic clock helper — cooldowns/expiry share the ONE clock, no second time system)
+- New data: npcs.ts (10 NPCs w/ stable ids + homeLocationId + speech style — future phone/relationship registry), hustles.ts (17 personal hustles across all 9 work locations, each tied to an NPC + location id, with difficulty/skill/requirements/cash-range/cooldown/weight)
+- New systems: economy.ts (canAfford, recordTransaction, pushTransaction cap 50, sums, describeReward — the ledger the future Bank reads), skills.ts (skill XP→level with level-scaled caps + banking), work.ts (checkRequirements w/ human reasons, calculateJobPay = base × skill bonus × mood, resolveJob always-pays + great crits, resolveHustle risk roll skill-vs-difficulty clamped, seeded-RNG injectable for deterministic tests), opportunities.ts (makeOpportunityInstance, isEligible dupe/cooldown/requirements gates, generateHustleOffers weighted w/ dry-chance, pruneExpiredOpportunities, resolveOpportunity, jobAsOpportunityMeta — board jobs speak the same opportunity language)
+- Store: addMoney/removeMoney (ledger + stats), giveReward (one entry point for cash+xp+skillXp+rep, composes engine actions), addSkillXp (skill level-up toasts), workShift (location/requirement/cooldown/energy guards → working overlay → clock advance → payout → cooldown), searchHustles/acceptOffer/declineOffer/completeOpportunity/dropOpportunity/pruneExpired (full lifecycle), travel now records fare + event tips in the ledger; offers cleared on arrival (gist goes cold)
+- Save v2: migration case 1→2 + defensive defaults for all new fields; verified in browser that a stripped v1 save loads and autosaves back as v2 with stats intact
+- UI: WorkScreen.tsx (accepted-offer cards w/ NPC message + 🎯 live odds + expiry countdown + Do it/Take me there/Drop; hustle board w/ search cooldown; jobs here w/ pay estimates + confirm sheet; jobs elsewhere w/ deep-links; earnings section w/ today flow + recent ledger); Dashboard wiring (WorkTab live, skill XP bars on Home, Life-stats card on Profile, work-tab nav badge when offers wait); MapScreen (focus deep-link via state initializer, stage≤3 activity chips now live + work chips deep-link to Work tab)
+- Tests: scripts/test-stage3.ts 48/48 (ledger math, skill caps+banking, pay scaling, seeded outcome determinism, fail/success paths, odds clamps, generation eligibility/dry-chance/location-binding, expiry pruning, cooldown day-crossing, 6-day work-loop economics); test-travel.ts regression 17/17; browser: full loop at 360/390/1280px — create→map deep-link→keke→shift (exact ₦ math 5000−290+970=5680)→cooldown block→search→accept→do (₦510 in range)→fail path (₦0 + lesson XP)→away-offer Take-me-there→expiry pruned (2→0 after deadlines)→reload persistence (cash/offers/cooldowns)→v1 migration; zero console/page errors; lint clean
+
+Stage Summary:
+- STAGE 3 COMPLETE. The core loop works: travel to a place → work a shift or hear gist → accept → do it → money/XP/skill XP/reputation → ledger + stats → autosave. Jobs are reliable, hustles are personal and risky, skills grow visibly, cooldowns run on the one world clock.
+- Architecture is phone-ready: opportunities are plain data (source: npc|board|phone|gist), NPCs are a registry, every offer references stable location ids the future 3D world will reuse, and the ledger awaits Banking. No UI coupling — the same opportunity shape can arrive via chat later without redesign.
+- Key decisions: absolute-slot clock space for all cooldowns/expiry (no second time system); job cooldowns default from WORK config with per-job override; skill caps scale with player level and bank excess XP; hustle odds shown honestly on cards; offers are transient (not saved) while ACCEPTED opportunities persist on the player.
+- Next stage entry point: FOODS data + eat activity keys are waiting for Stage 4 shops/inventory; mood now meaningfully affects pay, giving needs management economic weight.

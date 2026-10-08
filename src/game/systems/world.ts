@@ -56,3 +56,12 @@ export function advanceWorldClock(
   }
   return { timeOfDay: t, day: d, weather: w }
 }
+
+/**
+ * Collapse (day, slot) into one monotonic number — the "absolute slot".
+ * Cooldowns and offer expiry are compared in this space so they work
+ * across day boundaries without any second clock.
+ */
+export function absoluteSlot(day: number, timeOfDay: TimeOfDay): number {
+  return (day - 1) * TIME.slots.length + TIME.slots.indexOf(timeOfDay)
+}

@@ -52,7 +52,7 @@ export function skillCap(level: number): number {
 
 /** Current reputation tier for the given reputation value. */
 export function reputationTier(reputation: number) {
-  let current = REPUTATION_TIERS[0]
+  let current: (typeof REPUTATION_TIERS)[number] = REPUTATION_TIERS[0]
   for (const tier of REPUTATION_TIERS) {
     if (reputation >= tier.threshold) current = tier
   }

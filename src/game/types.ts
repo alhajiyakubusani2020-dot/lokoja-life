@@ -32,6 +32,8 @@ export interface Needs {
   mood: number
 }
 
+export type SkillId = 'hustle' | 'smart' | 'social'
+
 export interface Skills {
   /** 💪 physical / market / practical */
   hustle: number
@@ -40,6 +42,9 @@ export interface Skills {
   /** 🗣️ negotiation / tourism / dialogue */
   social: number
 }
+
+/** XP earned toward the next level of each skill (Stage 3). */
+export type SkillXpMap = Record<SkillId, number>
 
 export interface InventoryItem {
   id: string
@@ -61,6 +66,78 @@ export interface MissionProgress {
   progress: number
 }
 
+/* ------------------------------ Economy (St.3) ------------------------------ */
+
+export type TransactionCategory =
+  | 'job'
+  | 'hustle'
+  | 'transport'
+  | 'shop'
+  | 'tip'
+  | 'other'
+
+/** One money event in the player's life — the ledger the phone/Bank reads later. */
+export interface Transaction {
+  id: string
+  /** in-game day + absolute slot when it happened */
+  day: number
+  slot: number
+  label: string
+  category: TransactionCategory
+  /** positive = earned, negative = spent */
+  amount: number
+}
+
+/** A bundle of gains produced by any activity (job, hustle, event, gift). */
+export interface Reward {
+  cash?: number
+  xp?: number
+  skillXp?: Partial<SkillXpMap>
+  reputation?: number
+}
+
+/** Player life counters — shown on the profile and read by future systems. */
+export interface LifeStats {
+  jobsCompleted: number
+  hustlesCompleted: number
+  totalEarned: number
+  totalSpent: number
+}
+
+/* ---------------------------- Opportunities (St.3) --------------------------- */
+
+export type OpportunityType = 'job' | 'hustle'
+
+/**
+ * Where an opportunity came from. Stage 3 uses 'npc' (personal hustle) and
+ * 'board' (location job). The phone/chat/gist systems of later stages will
+ * emit the SAME shape through 'phone' / 'gist' — no redesign needed.
+ */
+export type OpportunitySource = 'npc' | 'board' | 'phone' | 'gist'
+
+/**
+ * An accepted, not-yet-done opportunity instance living on the player.
+ * References its data definition by id (stays small in saves + data-driven).
+ */
+export interface ActiveOpportunity {
+  /** unique instance id — `defId@absSlot` so the same hustle can reappear later */
+  instanceId: string
+  defId: string
+  type: OpportunityType
+  source: OpportunitySource
+  /** who offered it (id from NPCS data) — future relationships hook */
+  npcId: string | null
+  /** stable world location id — the 3D world will use this exact id */
+  locationId: string
+  /** absolute world-clock slot when accepted (world.ts helper) */
+  acceptedAtSlot: number
+  /** absolute slot after which the offer goes cold */
+  expiresAtSlot: number
+}
+
+/** Job cooldowns etc. — activity key → absolute slot when it becomes usable. */
+export type Cooldowns = Record<string, number>
+
 export interface PlayerState {
   name: string
   gender: Gender
@@ -71,6 +148,8 @@ export interface PlayerState {
 
   needs: Needs
   skills: Skills
+  /** progress toward the next level of each skill (Stage 3) */
+  skillXp: SkillXpMap
 
   /** ⭐ 0 – 2500+ */
   reputation: number
@@ -81,6 +160,15 @@ export interface PlayerState {
   homeId: string
   /** 💼 id from JOBS data, null = unemployed */
   jobId: string | null
+
+  /** accepted hustles/offers not yet done (Stage 3) */
+  activeOpportunities: ActiveOpportunity[]
+  /** activity key → absolute slot when the activity is ready again (Stage 3) */
+  cooldowns: Cooldowns
+  /** last money events, newest first, capped (Stage 3) */
+  transactions: Transaction[]
+  /** life counters (Stage 3) */
+  stats: LifeStats
 
   inventory: InventoryItem[]
   businesses: BusinessState[]
@@ -149,4 +237,19 @@ export interface GameNotification {
   icon: string
   text: string
   tone: 'good' | 'bad' | 'neutral'
+}
+
+/* ------------------------------- Work results ------------------------------- */
+
+/** How an activity ended — drives the outcome toast + reward scaling. */
+export type WorkOutcome = 'great' | 'good' | 'fail'
+
+/** Everything the UI needs to show after a shift or hustle resolves. */
+export interface WorkResult {
+  outcome: WorkOutcome
+  headline: string
+  reward: Reward
+  /** final ₦ actually paid (after performance scaling) — 0 on most fails */
+  cash: number
+  skillId: SkillId | null
 }

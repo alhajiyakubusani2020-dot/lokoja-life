@@ -8,10 +8,10 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave } from '../types'
+import type { GameSave, PlayerState } from '../types'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 1
+const SAVE_VERSION = 2
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -44,10 +44,12 @@ function deserialize(raw: string): GameSave | null {
     let save = parsed
     switch (save.version) {
       case 1:
-        // current version — Stage 2 added no new persisted fields
-        // (world.currentLocation already existed since Stage 1), so no
-        // schema bump was needed. Defaults below only guard against
-        // corrupt/hand-edited saves.
+        // v1 → v2 (Stage 3): economy/work fields added to the player.
+        // All are defaulted below — nothing a v1 player had is lost.
+        save.version = 2
+        break
+      case 2:
+        // current version
         break
       default:
         // Unknown / newer save from a newer app version — keep it, best effort.
@@ -65,6 +67,16 @@ function deserialize(raw: string): GameSave | null {
     }
     if (!save.world.currentLocation) save.world.currentLocation = 'home'
     if (!save.settings) save.settings = { sound: true }
+
+    // --- Stage 3 player fields (missing on v1 saves / corrupt data) ---
+    const p = save.player as PlayerState
+    if (!p.skillXp) p.skillXp = { hustle: 0, smart: 0, social: 0 }
+    if (!p.activeOpportunities) p.activeOpportunities = []
+    if (!p.cooldowns) p.cooldowns = {}
+    if (!p.transactions) p.transactions = []
+    if (!p.stats) {
+      p.stats = { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }
+    }
 
     save.version = SAVE_VERSION
     return save

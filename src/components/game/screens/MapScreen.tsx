@@ -11,7 +11,7 @@
  * nothing is hard-coded here.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MapCanvas } from '../MapCanvas'
 import { audio } from '@/game/systems/audio'
 import { formatNaira } from '@/game/systems/progression'
@@ -127,16 +127,35 @@ function TravelOptionRow({
 
 /* ------------------------------- map screen ----------------------------- */
 
-export function MapScreen() {
+interface MapScreenProps {
+  /** deep-link: open the sheet for this location (Work screen → map handoff) */
+  focusLocationId?: string | null
+  /** called once the focus has been applied (lets the parent reset it) */
+  onFocusHandled?: () => void
+  /** deep-link out: activity chips for live work content jump to the Work tab */
+  onOpenWork?: () => void
+}
+
+export function MapScreen({
+  focusLocationId,
+  onFocusHandled,
+  onOpenWork,
+}: MapScreenProps) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const isTravelling = useGameStore((s) => s.isTravelling)
   const travel = useGameStore((s) => s.travel)
 
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [userSelectedId, setUserSelectedId] = useState<string | null>(focusLocationId ?? null)
+
+  // consume the focus request (parent clears it) — the selection itself was
+  // already captured in the state initializer above
+  useEffect(() => {
+    if (focusLocationId) onFocusHandled?.()
+  }, [focusLocationId, onFocusHandled])
 
   const origin = LOCATION_BY_ID[world.currentLocation]
-  const selected = selectedId ? LOCATION_BY_ID[selectedId] : null
+  const selected = userSelectedId ? LOCATION_BY_ID[userSelectedId] : null
 
   const isSelectedCurrent = selected?.id === origin.id
   const isSelectedLocked = !!selected && player.level < selected.unlockLevel
@@ -151,14 +170,14 @@ export function MapScreen() {
 
   const openLocation = (id: string) => {
     audio.play('click')
-    setSelectedId(id)
+    setUserSelectedId(id)
   }
 
   const confirmTravel = (transport: TransportId) => {
     if (!selected) return
     audio.play('click')
     travel(selected.id, transport)
-    setSelectedId(null)
+    setUserSelectedId(null)
   }
 
   return (
@@ -219,7 +238,7 @@ export function MapScreen() {
           {/* backdrop */}
           <button
             aria-label="Close panel"
-            onClick={() => setSelectedId(null)}
+            onClick={() => setUserSelectedId(null)}
             className="absolute inset-0 bg-black/40"
           />
           {/* sheet */}
@@ -265,18 +284,38 @@ export function MapScreen() {
                     Activities here
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
-                    {selected.activities.map((a) => (
-                      <span
-                        key={a.key}
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                          a.stage === 1
-                            ? 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'
-                            : 'bg-black/[0.05] text-[var(--lko-ink-soft)]'
-                        }`}
-                      >
-                        {a.stage === 1 ? a.label : `🔒 ${a.label} (Stage ${a.stage})`}
-                      </span>
-                    ))}
+                    {selected.activities.map((a) => {
+                      // Stage 3: work content is live — chips deep-link to the Work tab
+                      const isLive = a.stage <= 3
+                      const isWork = a.key.startsWith('job-') || a.key === 'hustle'
+                      if (isLive && isWork && onOpenWork) {
+                        return (
+                          <button
+                            key={a.key}
+                            onClick={() => {
+                              audio.play('click')
+                              setUserSelectedId(null)
+                              onOpenWork()
+                            }}
+                            className="lko-press rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[11px] font-bold text-[#8a5a00]"
+                          >
+                            {a.label} →
+                          </button>
+                        )
+                      }
+                      return (
+                        <span
+                          key={a.key}
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                            isLive
+                              ? 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'
+                              : 'bg-black/[0.05] text-[var(--lko-ink-soft)]'
+                          }`}
+                        >
+                          {isLive ? a.label : `🔒 ${a.label} (Stage ${a.stage})`}
+                        </span>
+                      )
+                    })}
                   </div>
                 </>
               )}
@@ -322,7 +361,7 @@ export function MapScreen() {
               <button
                 onClick={() => {
                   audio.play('click')
-                  setSelectedId(null)
+                  setUserSelectedId(null)
                 }}
                 className="lko-press mt-3 min-h-[48px] w-full rounded-xl border-2 border-black/[0.08] bg-white py-3 text-sm font-extrabold text-[var(--lko-ink)]"
               >
