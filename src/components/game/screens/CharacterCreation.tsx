@@ -1,0 +1,278 @@
+'use client'
+
+/**
+ * LOKOJA LIFE — Character Creation
+ * Live-preview avatar builder: name, gender, skin tone, hair colour,
+ * hairstyle and clothing. All options come from game data files, so
+ * future cosmetics (Loko Gems shop) plug straight in.
+ */
+
+import { useState } from 'react'
+import { Avatar } from '../Avatar'
+import { audio } from '@/game/systems/audio'
+import {
+  AVATAR_CLOTHING_STYLES,
+  AVATAR_HAIRSTYLES,
+  CLOTHING_COLORS,
+  DEFAULT_AVATAR,
+  HAIR_COLORS,
+  SKIN_TONES,
+} from '@/game/data/avatar'
+import {
+  NIGERIAN_FIRST_NAMES_FEMALE,
+  NIGERIAN_FIRST_NAMES_MALE,
+  NIGERIAN_SURNAMES,
+} from '@/game/data/flavor'
+import type { AvatarConfig, Gender } from '@/game/types'
+import { useGameStore } from '@/game/store/useGameStore'
+
+/** small circular swatch button used for colours */
+function Swatch({
+  color,
+  active,
+  label,
+  onSelect,
+}: {
+  color: string
+  active: boolean
+  label: string
+  onSelect: () => void
+}) {
+  return (
+    <button
+      onClick={() => {
+        audio.play('click')
+        onSelect()
+      }}
+      aria-label={label}
+      aria-pressed={active}
+      className={`lko-press h-11 w-11 shrink-0 rounded-full border-2 transition-shadow ${
+        active
+          ? 'border-[var(--lko-green)] shadow-[0_0_0_3px_var(--lko-green-soft)]'
+          : 'border-black/15'
+      }`}
+      style={{ background: color }}
+    />
+  )
+}
+
+/** horizontal scroll strip with a section label */
+function OptionStrip({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <section aria-label={label} className="mt-4">
+      <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+        {label}
+      </h3>
+      <div className="lko-scroll-x flex gap-2 overflow-x-auto pb-1">{children}</div>
+    </section>
+  )
+}
+
+const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)]
+
+export function CharacterCreation() {
+  const startNewGame = useGameStore((s) => s.startNewGame)
+  const setScreen = useGameStore((s) => s.setScreen)
+
+  const [name, setName] = useState('')
+  const [gender, setGender] = useState<Gender>('male')
+  const [avatar, setAvatar] = useState<AvatarConfig>({ ...DEFAULT_AVATAR })
+
+  const patch = (p: Partial<AvatarConfig>) => setAvatar((a) => ({ ...a, ...p }))
+
+  const randomizeName = () => {
+    audio.play('click')
+    const first = pick(gender === 'male' ? NIGERIAN_FIRST_NAMES_MALE : NIGERIAN_FIRST_NAMES_FEMALE)
+    setName(`${first} ${pick(NIGERIAN_SURNAMES)}`)
+  }
+
+  const randomizeLook = () => {
+    audio.play('click')
+    setAvatar({
+      skinTone: pick(SKIN_TONES).value,
+      hairColor: pick(HAIR_COLORS).value,
+      hairstyle: pick(AVATAR_HAIRSTYLES).key,
+      clothingStyle: pick(AVATAR_CLOTHING_STYLES).key,
+      clothingColor: pick(CLOTHING_COLORS).value,
+    })
+  }
+
+  const canStart = name.trim().length >= 2
+
+  return (
+    <div className="lko-root lko-pop min-h-dvh pb-28">
+      <header className="mx-auto flex w-full max-w-md items-center gap-3 px-4 pt-4">
+        <button
+          onClick={() => {
+            audio.play('click')
+            setScreen('menu')
+          }}
+          className="lko-press lko-card flex h-11 w-11 items-center justify-center rounded-xl text-lg"
+          aria-label="Back to menu"
+        >
+          ←
+        </button>
+        <div>
+          <h1 className="lko-display text-xl text-[var(--lko-green-deep)]">Create Your Hustler</h1>
+          <p className="text-xs text-[var(--lko-ink-soft)]">Who is coming to build a life in Lokoja?</p>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-md px-4">
+        {/* live preview */}
+        <div className="mt-4 flex items-center gap-4">
+          <div className="lko-card shrink-0 p-2">
+            <Avatar config={avatar} gender={gender} className="h-36 w-36" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="relative">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={24}
+                placeholder="Your name…"
+                aria-label="Character name"
+                className="lko-card min-h-[48px] w-full rounded-xl px-4 py-3 pr-12 text-base font-bold outline-none placeholder:font-normal placeholder:text-[var(--lko-ink-soft)] focus:border-[var(--lko-green)]"
+              />
+              <button
+                onClick={randomizeName}
+                className="lko-press absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg bg-[var(--lko-gold-soft)] text-lg"
+                aria-label="Random Nigerian name"
+              >
+                🎲
+              </button>
+            </div>
+            <button
+              onClick={randomizeLook}
+              className="lko-press mt-2 min-h-[40px] w-full rounded-xl border-2 border-black/[0.08] bg-white px-4 text-sm font-bold text-[var(--lko-ink)]"
+            >
+              ✨ Surprise me (random look)
+            </button>
+          </div>
+        </div>
+
+        {/* gender */}
+        <OptionStrip label="Gender / Avatar type">
+          {(['male', 'female'] as Gender[]).map((g) => (
+            <button
+              key={g}
+              onClick={() => {
+                audio.play('click')
+                setGender(g)
+              }}
+              aria-pressed={gender === g}
+              className={`lko-press min-h-[44px] shrink-0 rounded-xl border-2 px-5 text-sm font-bold capitalize ${
+                gender === g
+                  ? 'border-[var(--lko-green)] bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'
+                  : 'border-black/10 bg-white text-[var(--lko-ink-soft)]'
+              }`}
+            >
+              {g === 'male' ? '👨 Man' : '👩 Woman'}
+            </button>
+          ))}
+        </OptionStrip>
+
+        {/* skin tones */}
+        <OptionStrip label="Skin tone">
+          {SKIN_TONES.map((t) => (
+            <Swatch
+              key={t.key}
+              color={t.value}
+              label={t.label}
+              active={avatar.skinTone === t.value}
+              onSelect={() => patch({ skinTone: t.value })}
+            />
+          ))}
+        </OptionStrip>
+
+        {/* hairstyle */}
+        <OptionStrip label="Hairstyle">
+          {AVATAR_HAIRSTYLES.map((h) => (
+            <button
+              key={h.key}
+              onClick={() => {
+                audio.play('click')
+                patch({ hairstyle: h.key })
+              }}
+              aria-pressed={avatar.hairstyle === h.key}
+              className={`lko-press min-h-[44px] shrink-0 rounded-xl border-2 px-4 text-sm font-bold ${
+                avatar.hairstyle === h.key
+                  ? 'border-[var(--lko-green)] bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'
+                  : 'border-black/10 bg-white text-[var(--lko-ink-soft)]'
+              }`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </OptionStrip>
+
+        {/* hair colour */}
+        <OptionStrip label="Hair colour">
+          {HAIR_COLORS.map((c) => (
+            <Swatch
+              key={c.key}
+              color={c.value}
+              label={c.label}
+              active={avatar.hairColor === c.value}
+              onSelect={() => patch({ hairColor: c.value })}
+            />
+          ))}
+        </OptionStrip>
+
+        {/* clothing style */}
+        <OptionStrip label="Clothing style">
+          {AVATAR_CLOTHING_STYLES.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => {
+                audio.play('click')
+                patch({ clothingStyle: s.key })
+              }}
+              aria-pressed={avatar.clothingStyle === s.key}
+              className={`lko-press min-h-[52px] w-28 shrink-0 rounded-xl border-2 px-2 py-2 text-left ${
+                avatar.clothingStyle === s.key
+                  ? 'border-[var(--lko-green)] bg-[var(--lko-green-soft)]'
+                  : 'border-black/10 bg-white'
+              }`}
+            >
+              <span className="block text-sm font-bold leading-tight text-[var(--lko-ink)]">{s.label}</span>
+              <span className="mt-0.5 block text-[10px] leading-tight text-[var(--lko-ink-soft)]">
+                {s.description}
+              </span>
+            </button>
+          ))}
+        </OptionStrip>
+
+        {/* clothing colour */}
+        <OptionStrip label="Clothing colour">
+          {CLOTHING_COLORS.map((c) => (
+            <Swatch
+              key={c.key}
+              color={c.value}
+              label={c.label}
+              active={avatar.clothingColor === c.value}
+              onSelect={() => patch({ clothingColor: c.value })}
+            />
+          ))}
+        </OptionStrip>
+      </main>
+
+      {/* sticky start CTA */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-black/[0.06] bg-[#fffdf7]/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-sm">
+        <div className="mx-auto w-full max-w-md">
+          <button
+            onClick={() => {
+              if (!canStart) return
+              audio.play('levelup')
+              startNewGame(name, gender, avatar)
+            }}
+            disabled={!canStart}
+            className="lko-press min-h-[56px] w-full rounded-2xl border-b-4 border-[#0a5c2e] bg-[var(--lko-green)] text-lg font-extrabold tracking-wide text-white shadow-md disabled:cursor-not-allowed disabled:opacity-45 disabled:[border-b-color:transparent]"
+          >
+            {canStart ? `🚀 Start Life in Lokoja` : 'Enter your name to start'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
