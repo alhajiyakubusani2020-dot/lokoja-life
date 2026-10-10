@@ -85,3 +85,22 @@ Stage Summary:
 - R1 COMPLETE. Presentation layer transformed: living day/night world scene, coherent SVG icon language, premium surface/motion system, desktop layouts that use the space, zero emoji-as-art remaining in UI chrome. All game systems (store, economy, travel, jobs/hustles, clock, save v2, location IDs) untouched and verified by tests + E2E.
 - Key decisions: LivingScene responds to real world state (honest aliveness, not decoration); .lko-card/.lko-press restyled in place so all screens inherit; one icons.tsx as the single visual language source; initials NPC discs instead of emoji faces.
 - Known limitations: prod build not run (env restriction); rain scene code-verified only (weather roll is per-day); menu scene fixed to evening golden hour (by design); 3D world from the brief's Stages 3.1–3.6 does not exist in this workspace — that remains future work if commissioned.
+
+---
+Task ID: RECON-1
+Agent: Main Agent (Super Z)
+Task: POST-R1 PROJECT RECONCILIATION — audit actual project state vs historical build reports
+
+Work Log:
+- Confirmed active project: /home/z/my-project, branch main @ 5399f21, single worktree, clean working tree, no stashes, no dangling objects, linear 5-commit history (Oct 8–10: scaffold → Stage 1 → Stage 2 → Stage 3 (amended) → R1).
+- Searched ENTIRE /home/z filesystem (incl. node_modules): ZERO files named WorldView*, PlayerAvatar*, CameraRig*, terrain.ts, world3d.ts. Zero content references to react-three / from 'three' / WorldView / CameraRig / PlayerAvatar in src, examples, mini-services, tests, db.
+- package.json has NO three/@react-three deps; three is not even installed in node_modules. Git pickaxe (-S) across all commits: 3D code was NEVER committed here.
+- No other project copies, archives (.tar/.zip/.tgz), lokoja-named dirs, or git branches exist anywhere accessible. examples/ = scaffold websocket demo; prisma/db = unused scaffold.
+- Verified R1 saved: commit 5399f21 contains all 13 src changes (+2,274/−734 — LivingScene.tsx NEW, icons.tsx NEW 764 lines, SceneBackdrop.tsx DELETED, all screens reworked); committed src == working tree.
+- Verified app starts: dev server HTTP 200 (~30ms); rendered live menu at browser = R1 LivingScene evening design confirmed visually.
+- Ran tests: test-travel.ts 15 ✓ + test-stage3.ts 51 ✓ = 66/66 pass, 0 failures. The claimed "136 passing tests" has no counterpart in this workspace.
+
+Stage Summary:
+- RECONCILIATION COMPLETE. Exactly ONE implementation exists: Stage 1–3 (2D SVG presentation) + R1 (visual overhaul), 66/66 tests, committed and running. The reported Stages 3.1–3.6 walkable 3D world (R3F, joystick walking, vehicles, NPCs, camera rig) DOES NOT EXIST anywhere accessible — verified at file, dependency, content, and git-object level.
+- No merging/reset/deletion performed (as instructed). Player saves are client-side localStorage and untouched. Audit screenshot: .zscripts/audit-live-menu.png.
+- Conclusion: current project is the single source of truth; any future 3D world stage must be planned fresh from this baseline. Prior 3D stage reports are historical claims not backed by artifacts in this environment.
