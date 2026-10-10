@@ -53,6 +53,17 @@ export function MapIcon(p: IconProps) {
   )
 }
 
+/** World — a spinning-globe view of Lokoja in 3D */
+export function WorldIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="12" cy="12" r="8.2" />
+      <path d="M3.8 12h16.4" />
+      <path d="M12 3.8c2.5 2.3 3.8 5.1 3.8 8.2s-1.3 5.9-3.8 8.2c-2.5-2.3-3.8-5.1-3.8-8.2s1.3-5.9 3.8-8.2Z" />
+    </Svg>
+  )
+}
+
 export function WorkIcon(p: IconProps) {
   return (
     <Svg {...p}>
@@ -630,10 +641,11 @@ export function FireIcon(p: IconProps) {
 
 /* ------------------------------- mapped sets ----------------------------- */
 
-export type NavIconKey = 'home' | 'map' | 'work' | 'bag' | 'profile'
+export type NavIconKey = 'home' | 'world' | 'map' | 'work' | 'bag' | 'profile'
 
 const NAV_ICONS: Record<NavIconKey, (p: IconProps) => ReactNode> = {
   home: HomeIcon,
+  world: WorldIcon,
   map: MapIcon,
   work: WorkIcon,
   bag: BagIcon,

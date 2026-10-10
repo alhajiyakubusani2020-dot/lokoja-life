@@ -19,6 +19,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { key: 'home', label: 'Home' },
+  { key: 'world', label: 'World' },
   { key: 'map', label: 'Map' },
   { key: 'work', label: 'Work' },
   { key: 'bag', label: 'Bag' },
@@ -45,7 +46,7 @@ export function BottomNav({ active, onChange, badge }: BottomNavProps) {
         style={{ background: 'linear-gradient(90deg, transparent, rgba(232,163,23,0.35), transparent)' }}
         aria-hidden
       />
-      <div className="mx-auto grid max-w-xl grid-cols-5 px-2">
+      <div className="mx-auto grid max-w-xl grid-cols-6 px-1.5">
         {TABS.map((tab) => {
           const isActive = active === tab.key
           return (

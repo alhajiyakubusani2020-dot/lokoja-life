@@ -1,0 +1,868 @@
+     1→/**
+     2→ * LOKOJA LIFE — Game Store (Zustand)
+     3→ * -----------------------------------
+     4→ * The single source of truth for live game state.
+     5→ *
+     6→ * Persistence strategy: explicit, versioned saves via SaveSystem
+     7→ * (localStorage now, Supabase later) + debounced autosave.
+     8→ * We deliberately do NOT use zustand/persist so the saved schema
+     9→ * stays clean and cloud-migratable instead of dumping raw store state.
+    10→ */
+    11→
+    12→import { create } from 'zustand'
+    13→import type {
+    14→  ActiveOpportunity,
+    15→  AvatarConfig,
+    16→  GameNotification,
+    17→  GameSave,
+    18→  GameSettings,
+    19→  Gender,
+    20→  PlayerState,
+    21→  Reward,
+    22→  Screen,
+    23→  SkillId,
+    24→  Transaction,
+    25→  TransactionCategory,
+    26→  TransportId,
+    27→  WorldState,
+    28→} from '../types'
+    29→import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE } from '../data/config'
+    30→import { DEFAULT_AVATAR } from '../data/avatar'
+    31→import { LOCATION_BY_ID } from '../data/locations'
+    32→import { JOB_BY_ID } from '../data/jobs'
+    33→import { applyNeedsDelta, clampNeed } from '../systems/needs'
+    34→import { addXp as processXp, formatNaira } from '../systems/progression'
+    35→import { recordTransaction, pushTransaction, canAfford, rewardCash, describeReward } from '../systems/economy'
+    36→import { addSkillXp as applySkillXp, SKILL_META } from '../systems/skills'
+    37→import { checkRequirements, cooldownRemaining, resolveJob } from '../systems/work'
+    38→import {
+    39→  generateHustleOffers,
+    40→  hustleDefFor,
+    41→  pruneExpiredOpportunities,
+    42→  resolveOpportunity,
+    43→} from '../systems/opportunities'
+    44→import { SaveSystem } from '../systems/save'
+    45→import { audio, syncAudioWithSettings } from '../systems/audio'
+    46→import {
+    47→  nextSlot,
+    48→  rollNewDayWeather,
+    49→  weatherForSlot,
+    50→  advanceWorldClock,
+    51→  absoluteSlot,
+    52→} from '../systems/world'
+    53→import { calculateTravel, rollTravelEvent } from '../systems/travel'
+    54→
+    55→/* ------------------------------- store -------------------------------- */
+    56→
+    57→interface GameStore {
+    58→  /* UI-level state */
+    59→  screen: Screen
+    60→  booted: boolean
+    61→  hasSave: boolean
+    62→  notifications: GameNotification[]
+    63→
+    64→  /* live game state (null until a game starts) */
+    65→  player: PlayerState | null
+    66→  world: WorldState | null
+    67→  settings: GameSettings
+    68→
+    69→  /* lifecycle */
+    70→  boot: () => void
+    71→  setScreen: (screen: Screen) => void
+    72→
+    73→  /* core actions */
+    74→  startNewGame: (name: string, gender: Gender, avatar: AvatarConfig) => void
+    75→  continueGame: () => boolean
+    76→  returnToMenu: () => void
+    77→
+    78→  /* needs / time actions (Stage 1: rest; Stage 2: travel — both use the same clock) */
+    79→  rest: (kind: 'nap' | 'sleep') => void
+    80→  advanceTime: (slots?: number) => void
+    81→
+    82→  /* travel (Stage 2) */
+    83→  isTravelling: boolean
+    84→  travel: (destinationId: string, transport: TransportId) => void
+    85→
+    86→  /* free walking (Stage 3.6) — manual movement coexists with travel */
+    87→  /** the player walked into a location zone; make it their location */
+    88→  settleAt: (locationId: string) => void
+    89→  /** silent ⚡ drain for distance actually walked (clamp-only, no consequences) */
+    90→  drainWalkingEnergy: (units: number) => void
+    91→
+    92→  /* work & opportunities (Stage 3) */
+    93→  /** true while a job-shift/hustle resolution transition plays */
+    94→  isWorking: boolean
+    95→  /** label shown on the working overlay */
+    96→  workingLabel: string | null
+    97→  /** transient hustle offers found by searching — NOT persisted (gist goes cold) */
+    98→  offers: ActiveOpportunity[]
+    99→
+   100→  /** economy services — every naira flows through these */
+   101→  addMoney: (amount: number, meta: { label: string; category: TransactionCategory }) => void
+   102→  removeMoney: (amount: number, meta: { label: string; category: TransactionCategory }) => boolean
+   103→  giveReward: (reward: Reward, meta: { label: string; category: TransactionCategory }) => void
+   104→  addSkillXp: (skill: SkillId, amount: number) => void
+   105→
+   106→  /** formal jobs (source: board) */
+   107→  workShift: (jobId: string) => void
+   108→  /** hustle lifecycle: find → accept → do (or drop) — same shape the phone will use */
+   109→  searchHustles: () => void
+   110→  acceptOffer: (instanceId: string) => void
+   111→  declineOffer: (instanceId: string) => void
+   112→  completeOpportunity: (instanceId: string) => void
+   113→  dropOpportunity: (instanceId: string) => void
+   114→  /** remove offers whose time is up (called lazily by the work screen) */
+   115→  pruneExpired: () => void
+   116→
+   117→  /* engine actions used by all future systems */
+   118→  addCash: (amount: number) => void
+   119→  addXp: (amount: number) => void
+   120→  addReputation: (amount: number) => void
+   121→
+   122→  /* settings & save */
+   123→  toggleSound: () => void
+   124→  saveNow: () => void
+   125→  resetGame: () => void
+   126→
+   127→  /* feedback */
+   128→  notify: (n: Omit<GameNotification, 'id'>) => void
+   129→  dismissNotification: (id: number) => void
+   130→}
+   131→
+   132→let saveTimer: ReturnType<typeof setTimeout> | null = null
+   133→let notificationId = 0
+   134→
+   135→/** Ledger cap — newest entries survive, old ones fall off. */
+   136→const LEDGER_CAP = 50
+   137→
+   138→/** Debounced autosave — called after every state-mutating action. */
+   139→function scheduleAutosave(get: () => GameStore) {
+   140→  if (saveTimer) clearTimeout(saveTimer)
+   141→  saveTimer = setTimeout(() => {
+   142→    const { player, world, settings } = get()
+   143→    if (!player || !world) return
+   144→    const existing = SaveSystem.load()
+   145→    SaveSystem.write({
+   146→      version: SaveSystem.SAVE_VERSION,
+   147→      createdAt: existing?.createdAt ?? Date.now(),
+   148→      updatedAt: Date.now(),
+   149→      player,
+   150→      world,
+   151→      settings,
+   152→    })
+   153→  }, AUTOSAVE.debounceMs)
+   154→}
+   155→
+   156→export const useGameStore = create<GameStore>((set, get) => ({
+   157→  screen: 'menu',
+   158→  booted: false,
+   159→  hasSave: false,
+   160→  notifications: [],
+   161→
+   162→  player: null,
+   163→  world: null,
+   164→  settings: { sound: true },
+   165→
+   166→  isTravelling: false,
+   167→  isWorking: false,
+   168→  workingLabel: null,
+   169→  offers: [],
+   170→
+   171→  /* ----------------------------- lifecycle ----------------------------- */
+   172→
+   173→  boot: () => {
+   174→    const save = SaveSystem.load()
+   175→    syncAudioWithSettings(save?.settings ?? { sound: true })
+   176→    set({ booted: true, hasSave: SaveSystem.hasSave(), settings: save?.settings ?? { sound: true } })
+   177→  },
+   178→
+   179→  setScreen: (screen) => set({ screen }),
+   180→
+   181→  /* ---------------------------- core actions ---------------------------- */
+   182→
+   183→  startNewGame: (name, gender, avatar) => {
+   184→    const player: PlayerState = {
+   185→      name: name.trim() || 'New Hustler',
+   186→      gender,
+   187→      avatar: { ...DEFAULT_AVATAR, ...avatar },
+   188→      cash: STARTING.cash,
+   189→      needs: { ...STARTING.needs },
+   190→      skills: { ...STARTING.skills },
+   191→      reputation: STARTING.reputation,
+   192→      level: STARTING.level,
+   193→      xp: STARTING.xp,
+   194→      homeId: STARTING.homeId,
+   195→      jobId: STARTING.jobId,
+   196→      skillXp: { hustle: 0, smart: 0, social: 0 },
+   197→      activeOpportunities: [],
+   198→      cooldowns: {},
+   199→      transactions: [],
+   200→      stats: { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 },
+   201→      inventory: [],
+   202→      businesses: [],
+   203→      missions: {},
+   204→      achievements: [],
+   205→      discoveries: [],
+   206→    }
+   207→    const world: WorldState = {
+   208→      day: 1,
+   209→      timeOfDay: 'morning',
+   210→      weather: 'sunny',
+   211→      currentLocation: 'home',
+   212→    }
+   213→    set({ player, world, screen: 'game', offers: [] })
+   214→    scheduleAutosave(get)
+   215→  },
+   216→
+   217→  continueGame: () => {
+   218→    const save = SaveSystem.load()
+   219→    if (!save) return false
+   220→    syncAudioWithSettings(save.settings)
+   221→    set({ player: save.player, world: save.world, settings: save.settings, screen: 'game' })
+   222→    return true
+   223→  },
+   224→
+   225→  returnToMenu: () => {
+   226→    get().saveNow()
+   227→    set({ screen: 'menu', hasSave: SaveSystem.hasSave() })
+   228→  },
+   229→
+   230→  /* --------------------------- needs / time ----------------------------- */
+   231→
+   232→  rest: (kind) => {
+   233→    const { player, world } = get()
+   234→    if (!player || !world) return
+   235→
+   236→    // rest values come from the central config — never hard-coded
+   237→    const { energy, hunger, mood, health } = NEEDS.rest[kind]
+   238→    const delta = { energy, hunger, mood, health }
+   239→
+   240→    const needs = applyNeedsDelta(player.needs, delta)
+   241→
+   242→    let newWorld: WorldState
+   243→    if (kind === 'nap') {
+   244→      const { timeOfDay, dayDelta } = nextSlot(world.timeOfDay)
+   245→      newWorld = {
+   246→        ...world,
+   247→        timeOfDay,
+   248→        day: world.day + dayDelta,
+   249→        weather: weatherForSlot(world.weather, timeOfDay),
+   250→      }
+   251→    } else {
+   252→      // sleep till next morning — fresh day, fresh weather
+   253→      newWorld = {
+   254→        ...world,
+   255→        day: world.day + 1,
+   256→        timeOfDay: 'morning',
+   257→        weather: rollNewDayWeather(),
+   258→      }
+   259→    }
+   260→
+   261→    set({ player: { ...player, needs }, world: newWorld })
+   262→    get().notify({
+   263→      icon: kind === 'nap' ? '😴' : '🌙',
+   264→      text: kind === 'nap' ? 'You took a short nap.' : `Day ${newWorld.day} begins!`,
+   265→      tone: 'good',
+   266→    })
+   267→    audio.play('notify')
+   268→    scheduleAutosave(get)
+   269→  },
+   270→
+   271→  advanceTime: (slots = 1) => {
+   272→    const { world } = get()
+   273→    if (!world) return
+   274→    const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, slots)
+   275→    set({ world: { ...world, ...clock } })
+   276→    scheduleAutosave(get)
+   277→  },
+   278→
+   279→  /* ------------------------------- travel ------------------------------- */
+   280→
+   281→  travel: (destinationId, transportId) => {
+   282→    const { player, world, isTravelling } = get()
+   283→    if (!player || !world || isTravelling) return
+   284→
+   285→    const origin = LOCATION_BY_ID[world.currentLocation]
+   286→    const destination = LOCATION_BY_ID[destinationId]
+   287→    if (!origin || !destination || origin.id === destination.id) return
+   288→
+   289→    // --- guards (all feedback through notifications, never silent) ---
+   290→    if (player.level < destination.unlockLevel) {
+   291→      audio.play('notify')
+   292→      get().notify({
+   293→        icon: '🔒',
+   294→        text: `${destination.name} unlocks at Level ${destination.unlockLevel}.`,
+   295→        tone: 'bad',
+   296→      })
+   297→      return
+   298→    }
+   299→    if (!destination.transport.includes(transportId)) return
+   300→
+   301→    // pure calculation — same inputs always give the same plan
+   302→    const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay)
+   303→    const event = rollTravelEvent(transportId, world.weather)
+   304→
+   305→    if (player.cash < plan.cost) {
+   306→      audio.play('notify')
+   307→      get().notify({
+   308→        icon: '💸',
+   309→        text: `The fare is ${formatNaira(plan.cost)} — you no get am.`,
+   310→        tone: 'bad',
+   311→      })
+   312→      return
+   313→    }
+   314→    if (player.needs.energy < plan.energyCost) {
+   315→      audio.play('notify')
+   316→      get().notify({
+   317→        icon: '🥵',
+   318→        text: 'You are too tired for that journey. Rest first.',
+   319→        tone: 'bad',
+   320→      })
+   321→      return
+   322→    }
+   323→
+   324→    // travelling state drives the 📍 HUD + map transition
+   325→    set({ isTravelling: true })
+   326→
+   327→    // apply the completed trip on the EXISTING clock through proper systems
+   328→    const applyArrival = () => {
+   329→      const { player: p, world: w } = get()
+   330→      if (!p || !w) return
+   331→
+   332→      const cash = Math.max(0, p.cash - plan.cost + (event?.cashDelta ?? 0))
+   333→      const needs = applyNeedsDelta(p.needs, {
+   334→        energy: -(plan.energyCost + (event?.energyDelta ?? 0)),
+   335→        mood: event?.moodDelta ?? 0,
+   336→      })
+   337→      const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, plan.slots)
+   338→
+   339→      // Stage 3: record the fare (and any event tip) in the player's ledger
+   340→      const arrivalSlot = absoluteSlot(clock.day, clock.timeOfDay)
+   341→      const txs: Transaction[] = []
+   342→      if (plan.cost > 0) {
+   343→        txs.push(
+   344→          recordTransaction(`Fare to ${destination.name}`, 'transport', -plan.cost, clock.day, arrivalSlot),
+   345→        )
+   346→      }
+   347→      if (event?.cashDelta && event.cashDelta > 0) {
+   348→        txs.push(recordTransaction(event.title, 'tip', event.cashDelta, clock.day, arrivalSlot))
+   349→      }
+   350→      const stats = {
+   351→        ...p.stats,
+   352→        totalEarned:
+   353→          p.stats.totalEarned + (event?.cashDelta && event.cashDelta > 0 ? event.cashDelta : 0),
+   354→        totalSpent: p.stats.totalSpent + plan.cost,
+   355→      }
+   356→
+   357→      set({
+   358→        player: {
+   359→          ...p,
+   360→          cash,
+   361→          needs,
+   362→          transactions: [...txs, ...p.transactions].slice(0, LEDGER_CAP),
+   363→          stats,
+   364→        },
+   365→        world: { ...w, currentLocation: destination.id, ...clock },
+   366→        isTravelling: false,
+   367→        offers: [], // left the area — unclaimed gist goes cold
+   368→      })
+   369→
+   370→      // arrival feedback: destination + a compact time/money/energy summary
+   371→      get().notify({
+   372→        icon: destination.emoji,
+   373→        text: `You arrived at ${destination.name}.`,
+   374→        tone: 'neutral',
+   375→      })
+   376→      get().notify({
+   377→        icon: '🧾',
+   378→        text: `${formatNaira(cash)} • ⚡ ${Math.round(needs.energy)}`,
+   379→        tone: 'neutral',
+   380→      })
+   381→      if (event) {
+   382→        get().notify({ icon: event.icon, text: event.description, tone: event.tone })
+   383→        if (event.xpDelta && event.xpDelta > 0) get().addXp(event.xpDelta)
+   384→      }
+   385→      audio.play('notify')
+   386→      scheduleAutosave(get)
+   387→    }
+   388→
+   389→    setTimeout(applyArrival, TRAVEL.transitionMs)
+   390→  },
+   391→
+   392→  /* --------------------- free walking (Stage 3.6) --------------------- */
+   393→
+   394→  /**
+   395→   * The player physically walked into a location's zone. Walking costs
+   396→   * real time (not the world clock) and a little energy, so arriving on
+   397→   * foot is honest: no fare, no slot advance — but the gist still goes
+   398→   * cold exactly like travel (you left the area where you heard it).
+   399→   */
+   400→  settleAt: (locationId) => {
+   401→    const { player, world, isTravelling } = get()
+   402→    if (!player || !world || isTravelling) return
+   403→    const loc = LOCATION_BY_ID[locationId]
+   404→    if (!loc || loc.id === world.currentLocation) return
+   405→    // locked districts can be looked at, not settled into
+   406→    if (player.level < loc.unlockLevel) return
+   407→
+   408→    set({ world: { ...world, currentLocation: loc.id }, offers: [] })
+   409→    get().notify({ icon: loc.emoji, text: `You arrive at ${loc.name} on foot.`, tone: 'neutral' })
+   410→    audio.play('notify')
+   411→    scheduleAutosave(get)
+   412→  },
+   413→
+   414→  /**
+   415→    * Clamp-only energy drain for walking — deliberately NOT
+   416→    * applyNeedsDelta: walking is movement, not an "action", so the
+   417→    * hungry/starving consequences must not tick on every chunk.
+   418→    */
+   419→  drainWalkingEnergy: (units) => {
+   420→    const { player } = get()
+   421→    if (!player || units <= 0) return
+   422→    const energy = clampNeed(player.needs.energy - units)
+   423→    if (energy === player.needs.energy) return
+   424→    set({ player: { ...player, needs: { ...player.needs, energy } } })
+   425→    scheduleAutosave(get)
+   426→  },
+   427→
+   428→  /* ------------------------ work & opportunities ------------------------ */
+   429→
+   430→  addMoney: (amount, meta) => {
+   431→    const { player, world } = get()
+   432→    if (!player || !world || amount <= 0) return
+   433→    const slot = absoluteSlot(world.day, world.timeOfDay)
+   434→    const tx = recordTransaction(meta.label, meta.category, amount, world.day, slot)
+   435→    set({
+   436→      player: {
+   437→        ...player,
+   438→        cash: player.cash + amount,
+   439→        transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
+   440→        stats: { ...player.stats, totalEarned: player.stats.totalEarned + amount },
+   441→      },
+   442→    })
+   443→    audio.play('chime')
+   444→    scheduleAutosave(get)
+   445→  },
+   446→
+   447→  removeMoney: (amount, meta) => {
+   448→    const { player, world } = get()
+   449→    if (!player || !world || amount <= 0) return false
+   450→    if (!canAfford(player.cash, amount)) {
+   451→      get().notify({ icon: '💸', text: 'You no get that kind money.', tone: 'bad' })
+   452→      return false
+   453→    }
+   454→    const slot = absoluteSlot(world.day, world.timeOfDay)
+   455→    const tx = recordTransaction(meta.label, meta.category, -amount, world.day, slot)
+   456→    set({
+   457→      player: {
+   458→        ...player,
+   459→        cash: player.cash - amount,
+   460→        transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
+   461→        stats: { ...player.stats, totalSpent: player.stats.totalSpent + amount },
+   462→      },
+   463→    })
+   464→    audio.play('notify')
+   465→    scheduleAutosave(get)
+   466→    return true
+   467→  },
+   468→
+   469→  /**
+   470→   * Apply a full reward bundle (cash + xp + skill xp + reputation) through
+   471→   * the proper engine actions, with ONE ledger entry for the cash part.
+   472→   * Jobs, hustles, events and future systems all pay through here.
+   473→   */
+   474→  giveReward: (reward, meta) => {
+   475→    const { player, world } = get()
+   476→    if (!player || !world) return
+   477→
+   478→    // 1) cash + ledger entry
+   479→    const cash = rewardCash(reward)
+   480→    if (cash > 0) {
+   481→      const slot = absoluteSlot(world.day, world.timeOfDay)
+   482→      const tx = recordTransaction(meta.label, meta.category, cash, world.day, slot)
+   483→      set({
+   484→        player: {
+   485→          ...player,
+   486→          cash: player.cash + cash,
+   487→          transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
+   488→          stats: { ...player.stats, totalEarned: player.stats.totalEarned + cash },
+   489→        },
+   490→      })
+   491→      audio.play('chime')
+   492→    }
+   493→
+   494→    // 2) player XP (level-ups handled by the existing engine action)
+   495→    if (reward.xp && reward.xp > 0) get().addXp(reward.xp)
+   496→
+   497→    // 3) skill XP
+   498→    for (const [skill, amount] of Object.entries(reward.skillXp ?? {})) {
+   499→      if (amount && amount > 0) get().addSkillXp(skill as SkillId, amount)
+   500→    }
+   501→
+   502→    // 4) reputation
+   503→    if (reward.reputation && reward.reputation !== 0) get().addReputation(reward.reputation)
+   504→
+   505→    // 5) one compact summary toast
+   506→    const summary = describeReward(reward)
+   507→    if (summary) get().notify({ icon: '🧾', text: summary, tone: 'good' })
+   508→
+   509→    scheduleAutosave(get)
+   510→  },
+   511→
+   512→  addSkillXp: (skill, amount) => {
+   513→    const { player } = get()
+   514→    if (!player || amount <= 0) return
+   515→    const result = applySkillXp(player.skillXp, player.skills, player.level, skill, amount)
+   516→    set({ player: { ...player, skillXp: result.skillXp, skills: result.skills } })
+   517→    if (result.leveledUp) {
+   518→      audio.play('chime')
+   519→      get().notify({
+   520→        icon: SKILL_META[skill].emoji,
+   521→        text: `${SKILL_META[skill].label} is now Level ${result.newLevel}!`,
+   522→        tone: 'good',
+   523→      })
+   524→    }
+   525→  },
+   526→
+   527→  /** Work a formal job shift — reliable pay, real time + energy cost. */
+   528→  workShift: (jobId) => {
+   529→    const { player, world, isWorking, isTravelling } = get()
+   530→    if (!player || !world || isWorking || isTravelling) return
+   531→
+   532→    const job = JOB_BY_ID[jobId]
+   533→    if (!job) return
+   534→
+   535→    // --- guards: location, requirements, cooldown, energy ---
+   536→    if (world.currentLocation !== job.locationId) {
+   537→      const loc = LOCATION_BY_ID[job.locationId]
+   538→      get().notify({
+   539→        icon: '📍',
+   540→        text: `This shift is at ${loc?.name ?? 'another part of Lokoja'}.`,
+   541→        tone: 'bad',
+   542→      })
+   543→      return
+   544→    }
+   545→    const req = checkRequirements(player, job.requirements)
+   546→    if (!req.ok) {
+   547→      audio.play('notify')
+   548→      get().notify({ icon: '🔒', text: req.reasons[0], tone: 'bad' })
+   549→      return
+   550→    }
+   551→    const slot = absoluteSlot(world.day, world.timeOfDay)
+   552→    const cd = cooldownRemaining(player.cooldowns, job.id, slot)
+   553→    if (cd > 0) {
+   554→      audio.play('notify')
+   555→      get().notify({
+   556→        icon: '⏳',
+   557→        text: `${job.name} needs a breather — ready in ${cd} time slot${cd > 1 ? 's' : ''}.`,
+   558→        tone: 'bad',
+   559→      })
+   560→      return
+   561→    }
+   562→    if (player.needs.energy < job.energyCost) {
+   563→      audio.play('notify')
+   564→      get().notify({ icon: '🥵', text: 'You are too tired for this shift. Rest first.', tone: 'bad' })
+   565→      return
+   566→    }
+   567→
+   568→    const result = resolveJob(job, player)
+   569→    set({ isWorking: true, workingLabel: job.name })
+   570→
+   571→    const applyDone = () => {
+   572→      const { player: p, world: w } = get()
+   573→      if (!p || !w) return
+   574→
+   575→      const needs = applyNeedsDelta(p.needs, { energy: -job.energyCost })
+   576→      const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, job.timeSlots)
+   577→      const afterSlot = absoluteSlot(clock.day, clock.timeOfDay)
+   578→      const cooldownSlots = job.cooldownSlots ?? WORK.defaultCooldownSlots
+   579→
+   580→      set({
+   581→        player: {
+   582→          ...p,
+   583→          needs,
+   584→          cooldowns: { ...p.cooldowns, [job.id]: afterSlot + cooldownSlots },
+   585→          stats: { ...p.stats, jobsCompleted: p.stats.jobsCompleted + 1 },
+   586→        },
+   587→        world: { ...w, ...clock },
+   588→        isWorking: false,
+   589→        workingLabel: null,
+   590→      })
+   591→
+   592→      get().notify({
+   593→        icon: result.outcome === 'great' ? '🌟' : '💼',
+   594→        text: result.headline,
+   595→        tone: 'good',
+   596→      })
+   597→      get().giveReward(result.reward, { label: job.name, category: 'job' })
+   598→      if (result.outcome === 'great') audio.play('levelup')
+   599→      scheduleAutosave(get)
+   600→    }
+   601→
+   602→    setTimeout(applyDone, WORK.transitionMs)
+   603→  },
+   604→
+   605→  /** Look around the current area for personal hustles (gist). */
+   606→  searchHustles: () => {
+   607→    const { player, world } = get()
+   608→    if (!player || !world) return
+   609→
+   610→    const slot = absoluteSlot(world.day, world.timeOfDay)
+   611→    if (cooldownRemaining(player.cooldowns, 'hustle-search', slot) > 0) {
+   612→      audio.play('notify')
+   613→      get().notify({ icon: '⏳', text: 'You just checked around. Give the streets a moment.', tone: 'bad' })
+   614→      return
+   615→    }
+   616→
+   617→    const generation = generateHustleOffers(world.currentLocation, player, slot)
+   618→    set({
+   619→      player: {
+   620→        ...player,
+   621→        cooldowns: { ...player.cooldowns, 'hustle-search': slot + HUSTLE.searchCooldownSlots },
+   622→      },
+   623→      offers: generation.offers,
+   624→    })
+   625→
+   626→    if (generation.dry) {
+   627→      audio.play('notify')
+   628→      get().notify({ icon: '👀', text: 'You looked around but nothing came up this time.', tone: 'neutral' })
+   629→    } else {
+   630→      audio.play('notify')
+   631→      get().notify({
+   632→        icon: '🗣️',
+   633→        text: `Fresh gist! ${generation.offers.length} offer${generation.offers.length > 1 ? 's' : ''} came up.`,
+   634→        tone: 'good',
+   635→      })
+   636→    }
+   637→    scheduleAutosave(get)
+   638→  },
+   639→
+   640→  /** Accept a hustle offer — it joins the player's active opportunities. */
+   641→  acceptOffer: (instanceId) => {
+   642→    const { player, offers } = get()
+   643→    if (!player) return
+   644→    const offer = offers.find((o) => o.instanceId === instanceId)
+   645→    if (!offer) return
+   646→
+   647→    if (player.activeOpportunities.length >= HUSTLE.maxActive) {
+   648→      audio.play('notify')
+   649→      get().notify({
+   650→        icon: '🎒',
+   651→        text: `Your hands are full — finish or drop something first (max ${HUSTLE.maxActive}).`,
+   652→        tone: 'bad',
+   653→      })
+   654→      return
+   655→    }
+   656→    if (player.activeOpportunities.some((o) => o.defId === offer.defId)) {
+   657→      audio.play('notify')
+   658→      get().notify({ icon: '🤔', text: 'You already took this one.', tone: 'bad' })
+   659→      return
+   660→    }
+   661→
+   662→    set({
+   663→      player: { ...player, activeOpportunities: [...player.activeOpportunities, offer] },
+   664→      offers: offers.filter((o) => o.instanceId !== instanceId),
+   665→    })
+   666→    audio.play('click')
+   667→    get().notify({ icon: '🤝', text: 'Offer accepted — it goes cold if you wait too long!', tone: 'good' })
+   668→    scheduleAutosave(get)
+   669→  },
+   670→
+   671→  declineOffer: (instanceId) => {
+   672→    const { offers } = get()
+   673→    const offer = offers.find((o) => o.instanceId === instanceId)
+   674→    if (!offer) return
+   675→    set({ offers: offers.filter((o) => o.instanceId !== instanceId) })
+   676→    audio.play('click')
+   677→    get().notify({ icon: '🚶', text: 'You declined. No wahala.', tone: 'neutral' })
+   678→  },
+   679→
+   680→  /** Do an accepted hustle at its real location — outcome rolls in work.ts. */
+   681→  completeOpportunity: (instanceId) => {
+   682→    const { player, world, isWorking, isTravelling } = get()
+   683→    if (!player || !world || isWorking || isTravelling) return
+   684→
+   685→    const instance = player.activeOpportunities.find((o) => o.instanceId === instanceId)
+   686→    if (!instance) return
+   687→    const def = hustleDefFor(instance)
+   688→    if (!def) {
+   689→      // data changed between versions — drop the orphan quietly but honestly
+   690→      set({
+   691→        player: {
+   692→          ...player,
+   693→          activeOpportunities: player.activeOpportunities.filter((o) => o.instanceId !== instanceId),
+   694→        },
+   695→      })
+   696→      return
+   697→    }
+   698→
+   699→    if (world.currentLocation !== instance.locationId) {
+   700→      const loc = LOCATION_BY_ID[instance.locationId]
+   701→      audio.play('notify')
+   702→      get().notify({
+   703→        icon: '📍',
+   704→        text: `This hustle is at ${loc?.name ?? 'another part of Lokoja'}.`,
+   705→        tone: 'bad',
+   706→      })
+   707→      return
+   708→    }
+   709→    if (player.needs.energy < def.energyCost) {
+   710→      audio.play('notify')
+   711→      get().notify({ icon: '🥵', text: 'Too tired for this hustle. Rest small first.', tone: 'bad' })
+   712→      return
+   713→    }
+   714→
+   715→    const result = resolveOpportunity(instance, player)
+   716→    if (!result) return
+   717→    set({ isWorking: true, workingLabel: def.title })
+   718→
+   719→    const applyDone = () => {
+   720→      const { player: p, world: w } = get()
+   721→      if (!p || !w) return
+   722→
+   723→      const needs = applyNeedsDelta(p.needs, {
+   724→        energy: -def.energyCost,
+   725→        mood: result.outcome === 'fail' ? WORK.fail.moodDelta : 0,
+   726→      })
+   727→      const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, def.timeSlots)
+   728→      const afterSlot = absoluteSlot(clock.day, clock.timeOfDay)
+   729→
+   730→      set({
+   731→        player: {
+   732→          ...p,
+   733→          needs,
+   734→          cooldowns: { ...p.cooldowns, [def.id]: afterSlot + def.cooldownSlots },
+   735→          activeOpportunities: p.activeOpportunities.filter((o) => o.instanceId !== instanceId),
+   736→          stats: { ...p.stats, hustlesCompleted: p.stats.hustlesCompleted + 1 },
+   737→        },
+   738→        world: { ...w, ...clock },
+   739→        isWorking: false,
+   740→        workingLabel: null,
+   741→      })
+   742→
+   743→      get().notify({
+   744→        icon: result.outcome === 'great' ? '🌟' : result.outcome === 'fail' ? '😐' : '🤝',
+   745→        text: result.headline,
+   746→        tone: result.outcome === 'fail' ? 'bad' : 'good',
+   747→      })
+   748→      get().giveReward(result.reward, { label: def.title, category: 'hustle' })
+   749→      audio.play(result.outcome === 'fail' ? 'notify' : result.outcome === 'great' ? 'levelup' : 'chime')
+   750→      scheduleAutosave(get)
+   751→    }
+   752→
+   753→    setTimeout(applyDone, WORK.transitionMs)
+   754→  },
+   755→
+   756→  dropOpportunity: (instanceId) => {
+   757→    const { player } = get()
+   758→    if (!player) return
+   759→    const dropped = player.activeOpportunities.find((o) => o.instanceId === instanceId)
+   760→    if (!dropped) return
+   761→    const def = hustleDefFor(dropped)
+   762→    set({
+   763→      player: {
+   764→        ...player,
+   765→        activeOpportunities: player.activeOpportunities.filter((o) => o.instanceId !== instanceId),
+   766→      },
+   767→    })
+   768→    audio.play('click')
+   769→    get().notify({ icon: '🚶', text: `You dropped “${def?.title ?? 'the offer'}”.`, tone: 'neutral' })
+   770→    scheduleAutosave(get)
+   771→  },
+   772→
+   773→  /** Lazily remove expired offers — the Work screen calls this on mount. */
+   774→  pruneExpired: () => {
+   775→    const { player, world, offers } = get()
+   776→    if (!player || !world) return
+   777→    const slot = absoluteSlot(world.day, world.timeOfDay)
+   778→
+   779→    const { kept, expired } = pruneExpiredOpportunities(player.activeOpportunities, slot)
+   780→    const keptOffers = offers.filter((o) => o.expiresAtSlot > slot)
+   781→
+   782→    if (kept.length === player.activeOpportunities.length && keptOffers.length === offers.length) {
+   783→      return
+   784→    }
+   785→
+   786→    set({ player: { ...player, activeOpportunities: kept }, offers: keptOffers })
+   787→    for (const o of expired) {
+   788→      const def = hustleDefFor(o)
+   789→      get().notify({ icon: '⌛', text: `“${def?.title ?? 'An offer'}” went cold.`, tone: 'neutral' })
+   790→    }
+   791→    scheduleAutosave(get)
+   792→  },
+   793→
+   794→  /* -------------------------- engine actions ---------------------------- */
+   795→
+   796→  addCash: (amount) => {
+   797→    const { player } = get()
+   798→    if (!player || amount === 0) return
+   799→    set({ player: { ...player, cash: Math.max(0, player.cash + amount) } })
+   800→    if (amount > 0) audio.play('chime')
+   801→    scheduleAutosave(get)
+   802→  },
+   803→
+   804→  addXp: (amount) => {
+   805→    const { player } = get()
+   806→    if (!player || amount <= 0) return
+   807→    const result = processXp(player.xp, player.level, amount)
+   808→    set({ player: { ...player, xp: result.xp, level: result.level } })
+   809→    if (result.leveledUp) {
+   810→      audio.play('levelup')
+   811→      get().notify({
+   812→        icon: '🎉',
+   813→        text: `Level up! You are now Level ${result.level}.`,
+   814→        tone: 'good',
+   815→      })
+   816→    }
+   817→    scheduleAutosave(get)
+   818→  },
+   819→
+   820→  addReputation: (amount) => {
+   821→    const { player } = get()
+   822→    if (!player || amount === 0) return
+   823→    set({ player: { ...player, reputation: Math.max(0, player.reputation + amount) } })
+   824→    scheduleAutosave(get)
+   825→  },
+   826→
+   827→  /* --------------------------- settings/save ---------------------------- */
+   828→
+   829→  toggleSound: () => {
+   830→    const settings = { ...get().settings, sound: !get().settings.sound }
+   831→    syncAudioWithSettings(settings)
+   832→    set({ settings })
+   833→    scheduleAutosave(get)
+   834→  },
+   835→
+   836→  saveNow: () => {
+   837→    const { player, world, settings } = get()
+   838→    if (!player || !world) return
+   839→    const existing = SaveSystem.load()
+   840→    SaveSystem.write({
+   841→      version: SaveSystem.SAVE_VERSION,
+   842→      createdAt: existing?.createdAt ?? Date.now(),
+   843→      updatedAt: Date.now(),
+   844→      player,
+   845→      world,
+   846→      settings,
+   847→    })
+   848→    set({ hasSave: true })
+   849→  },
+   850→
+   851→  resetGame: () => {
+   852→    SaveSystem.clear()
+   853→    set({ player: null, world: null, screen: 'menu', hasSave: false })
+   854→  },
+   855→
+   856→  /* ------------------------------ feedback ------------------------------ */
+   857→
+   858→  notify: (n) => {
+   859→    notificationId += 1
+   860→    const notification: GameNotification = { ...n, id: notificationId }
+   861→    set({ notifications: [...get().notifications.slice(-2), notification] })
+   862→    setTimeout(() => get().dismissNotification(notification.id), 3200)
+   863→  },
+   864→
+   865→  dismissNotification: (id) =>
+   866→    set({ notifications: get().notifications.filter((n) => n.id !== id) }),
+   867→}))
+   868→

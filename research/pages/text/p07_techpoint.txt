@@ -1,0 +1,170 @@
+SOURCE: https://techpoint.africa/news/lagos-life-10m-valuation
+TITLE: Lagos Life is now valued at $10m, less than 8 days after launch
+PUBLISHED: 2026-10-09T10:41:00+01:00
+======================================================================
+Lagos Life is now valued at $10m, less than 8 days after launch 
+This is a preview. This ad will run at the top of the page as expected when running (or previewing) on your website 
+ADVERTISEMENT 
+Friday, October 9 
+ Techpoint Digest 
+ Brand Press 
+ Subject 
+ Fintech 
+ Renewable Energy 
+ Startups 
+ Governance & Policy 
+ About 
+ Techpoint Digest 
+ Subjects 
+ Fintech 
+ Renewable Energy 
+ Startups 
+ Governance & Policy 
+ Series 
+ After Hours 
+ Techpoint Diaspora 
+ Equity Merchants 
+ Work Life 
+ Brand Press 
+ Media Solutions 
+ Partner Pages 
+ Executive Spotlight 
+ X 
+ Facebook 
+ Instagram 
+ LinkedIn 
+ Join 30,000 other smart people like you 
+Get our fun 5-minute roundup of happenings in African and global tech, directly in your inbox every weekday, hours before everyone else. 
+ Digest Subscription (In-post) 
+ Updates 
+ First Name 
+ Email 
+ Join free 
+ Techpoint Digest 
+ Subjects 
+ Fintech 
+ Renewable Energy 
+ Startups 
+ Governance & Policy 
+ Series 
+ After Hours 
+ Techpoint Diaspora 
+ Equity Merchants 
+ Work Life 
+ Brand Press 
+ Media Solutions 
+ Partner Pages 
+ Executive Spotlight 
+ Search 
+ Subscribe 
+Point AI 
+Powered by AI and perfected by seasoned editors. Every story blends AI speed with human judgment. 
+IN PARTNERSHIP WITH 
+EXCLUSIVE 
+Lagos Life is now valued at $10m, less than 8 days after launch 
+Days earlier, its founder dismissed a reported $100,000 offer, saying it was worth $1 billion 
+Lagos Life latest figures 
+ PointAI 
+ PointAI 
+Share this story 
+Published: 
+ October 9, 2026 
+ Subject(s): Internet Culture , Startups 
+Share this story 
+ Psst… you’re reading Techpoint Digest 
+Every day, we handpick the biggest stories, skip the noise, and bring you a fun digest you can trust. 
+ Digest Subscription (In-post) 
+ Subscribe 
+ First Name 
+ Email 
+ Join free 
+Lagos Life, the free Sims-style viral browser-based game set in a virtual Lagos, is now reportedly valued at $10 million, just eight days after it went live. 
+The valuation comes from a $500,000 pre-seed round raised by Vatar, Inc., a company game creator, Shalom Rayhamen incorporated in Delaware on October 5, four days after the game launched, according to state records seen by Techpoint Africa . Rayhamen says the round took a day to close and was completed three days after incorporation. 
+Flutterwave CEO Olugbenga “GB” Agboola invested through his fund, Resilience17, alongside Oo Nwoye, Terra Industries CEO Nathan Nwachuku, and Mono CEO Abdulhamid Hassan. Rayhamen, a UK-based Nigerian software developer, released the game on October 1. 
+Rayhamen told The African Engineer on October 6 that she was paying roughly $2,000 a month for Amazon Web Services (AWS), which hosts the game, and $4,000 a month for Cloudflare, which protects it from bots and attacks. She put her running costs so far at about $6,500, and said someone had given her $10,000 in AWS credits. 
+by 
+Sterling Bank 
+ Sterling Financial Commences Share Capital Reconstruction….total Shareholders’ funds to remain unchanged 
+Sterling Financial Holdings Company Plc (“Sterling Financial” or “the Group”) has commenced its approved share capital reconstruction, consolidating every ten existing ordinary shares into one new ordinary share. Following the expansion of its equity base and balance sheet, the exercise is designed to improve capital-structure efficiency, support strategic growth and strengthen the Group’s positioning with institutional and retail investors. 
+ Lagos Life creator and Vatar co-founder, Shalom Rayhamen 
+Getting there took two infrastructure moves in the game’s first week. Rayhamen started on Cloudflare’s database service, which she called “not scalable” under the load, moved the database to DigitalOcean, then moved the whole application to AWS and switched on autoscaling. 
+Those figures came when the game had about 2.5 million players. By October 8, it had 4.3 million, she told TechCabal , which reported that she declined to say how much the game costs to run. 
+What Lagos Life earns 
+Lagos Life has charged brands since launch. Businesses rent billboards and lagoon plots inside the game, and Techpoint Africa observed billboard prices rising from ₦5,000 ($3.77) to ₦50,000 ($37.66) a week on October 5. 
+ Related Story: 
+ This startup is betting on tap-to-pay in a transfer-dominated market 
+Rayhamen posted that the game made about $46,900 in its first four days. Vatar now says it has earned and contracted more than $170,000, a figure that combines money received with deals signed. Its five revenue streams include advertising, music promotion, brand deals, football streaming, and players paying real money to top up their in-game cash. 
+On Rayhamen’s own numbers, the first four days of revenue would cover the AWS and Cloudflare bills she described for about seven months. Those bills were quoted before the player count almost doubled, and she hasn’t said whether Vatar is profitable. 
+An economy with too much money 
+Top-ups bring real money into an in-game economy Rayhamen admits is out of balance. “We have too much money in the game. So much money,” she told The African Engineer. 
+A loophole let some players generate more cash than the game intended, and that money spread through transfers between players. Her fix flagged accounts that had only received transfers, and some players saw their balances drop to zero. In an interview with tech YouTuber Fisayo Fosudo , she said some players held “trillions” and that her team was working to rebalance the economy. 
+The game has also added expensive items for wealthier players. “We have created a class,” she told Fosudo. “We need to offer that class their value.” 
+Players have asked to withdraw money from the game. Lagos Life’s terms describe its in-game naira as non-redeemable, and Rayhamen told The African Engineer that demand alone wouldn’t settle whether to allow withdrawals. 
+From $1 billion to $10 million 
+In the Fosudo interview, published on October 7, Rayhamen dismissed a reported $100,000 offer for the game. “$100,000 is small. Lagos Life is valued at $1 billion,” she said. 
+PARTNER 
+ Related Story: 
+ ‘Africa is not an afterthought’ – Why Speedinvest is doubling down on Africa with new fund 
+Asked what success would look like in 30 to 90 days, she named two goals: closing a pre-seed round and releasing a second game. Vatar closed its round within days, at a $10 million valuation, 1% of the figure she had named. The $500,000 buys investors roughly 5% of the company. 
+She also told Fosudo that Lagos Life apps for Android and iOS could arrive by the end of October. The funding will go to product, marketing, and hiring, according to the company. 
+Follow Techpoint Africa on WhatsApp! 
+Never miss a beat on tech, startups, and business news from across Africa with the best of journalism. 
+ Follow 
+ Sidebar 
+Events 
+| 
+| 
+| 
+No events for now. Check back soon. 
+ Join 30,000 other smart people like you 
+Get our fun 5-minute roundup of happenings in African and global tech, directly in your inbox every weekday, hours before everyone else. 
+ Digest Subscription (In-post) 
+ Newsletter 
+ First Name 
+ Email 
+ Join free 
+Read next 
+EXCLUSIVE 
+ Salary Index is building the Glassdoor for Nigeria 
+Afolabi Sokeye started building Salary Index after repeatedly receiving requests from friends and family asking how much they should earn in their respective jobs. Today, tens of thousands individuals use the platform to benchmark salary figures. 
+ Follow the story 
+EXCLUSIVE 
+ Lagos Life: Sim-style web game crosses 1m players in 3 days, as virtual billboards foot the bill 
+Shalom Rayhamen’s free Sims-style browser game, Lagos Life, set in the titular city says it passed one million players in days. It’s paying its way by renting out virtual billboards to real businesses. 
+ Follow the story 
+EXCLUSIVE 
+ The Nigerian couple behind SmallChopsng and AutoGirl are building their first company together: an EV charging network 
+Uche Ukonu and Chinazom Arinze built their entrepreneurial careers independently before becoming husband and wife. Now, together, they are building LotGrids, an EV charging infrastructure startup. 
+ Follow the story 
+EXCLUSIVE 
+ Two Nigerian founders are building a new delivery layer for Africa’s internet 
+Nigerian startup, FreePass is building infrastructure to shorten how far content travels before reaching African users. After tests and partnerships in Nigeria and Kenya, the founders are betting on a more distributed model that could cut latency and delivery costs across the continent. 
+ Follow the story 
+EXCLUSIVE 
+ Careersome is turning employee data into insights for better workplace decisions 
+Careersome wants companies to look beyond performance reviews and manager impressions by turning employee activity, feedback, compensation, and development data into insights that can inform better workplace decisions. 
+ Follow the story 
+More Stories 
+ South Africa wants TikTok’s creator economy to include local talent 
+ The Nigerian couple behind SmallChopsng and AutoGirl are building their first company together: an EV charging network 
+ Internet blackout hits Ethiopia’s Tigray as fighting escalates 
+ Airtel customers affected by poor service are getting compensated 
+ X 
+ Facebook 
+ Instagram 
+ LinkedIn 
+Explore 
+ About 
+ Editorial team 
+ Contact us 
+Reach our audience 
+ Post Brand Press 
+ Get your startup featured 
+ Advertise with us 
+Our publications 
+ Energy in Africa 
+ Finance in Africa 
+ © 2026, 
+ Businessfront. All rights reserved 
+ Privacy Policy 
+ Close

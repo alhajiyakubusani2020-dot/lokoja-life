@@ -1,0 +1,362 @@
+SOURCE: https://lagoslife.app/terms
+TITLE: Lagos Life — live your Lagos story
+PUBLISHED: 
+======================================================================
+Terms of Use · Lagos Life 
+ ← Lagos Life Terms Privacy Disclaimer 
+Terms of Use 
+Effective 1 October 2026 Jump to section ⌄ 
+ 1. About Lagos Life 
+ 2. Eligibility 
+ 3. Accounts 
+ 4. One Game World, Multiple Locations 
+ 5. Lagos Life Naira and the ₦ Symbol 
+ 6. Purchasing Game Naira 
+ 7. The Virtual Economy 
+ 8. No Real-World Investment or Financial Advice 
+ 9. Purchases 
+ 10. Refunds 
+ 11. Advertising and Brand Partnerships 
+ 12. Third-Party Brands 
+ 13. Government Institutions and Public Offices 
+ 14. Fictional Characters 
+ 15. Social Features and User Content 
+ 16. Stickers and Game Content 
+ 17. Prohibited Conduct 
+ 18. Device and Abuse Protection 
+ 19. Enforcement 
+ 20. Soft Deletion 
+ 21. Intellectual Property 
+ 22. Availability and Changes 
+ 23. No Guarantee of Gameplay Outcomes 
+ 24. Limitation of Liability 
+ 25. Indemnity 
+ 26. Privacy 
+ 27. Changes to These Terms 
+ 28. Governing Law 
+ 29. Severability 
+ 30. No Waiver 
+ 31. Entire Agreement 
+ 32. Contact 
+ These Terms of Use govern your access to and use of Lagos Life, including the game, website, applications, services, features, virtual economy, social features, advertising services, and related services available through lagoslife.app , lagoslife.eliysites.com , and any other official Lagos Life service made available by us. 
+ Lagos Life is operated by Shalom Rayhamen , Nigeria, referred to in these Terms as "Lagos Life", "we", "us", or "our". 
+ By creating an account, accessing Lagos Life, purchasing any digital item or service, or otherwise using Lagos Life, you agree to these Terms. 
+ If you do not agree to these Terms, you must not use Lagos Life. 
+1. About Lagos Life 
+ Lagos Life is an entertainment and life-simulation game inspired by life in Nigeria. 
+ The game may simulate cities, states, neighbourhoods, businesses, institutions, careers, social relationships, government offices, transportation, banking, commerce, entertainment, property ownership, investments, crime, law enforcement, taxation, politics, employment, healthcare, nightlife, and other aspects of everyday life. 
+ Although Lagos Life seeks a high degree of realism, it remains a fictional simulation. 
+ Game mechanics, dialogue, events, characters, prices, salaries, economic conditions, investment outcomes, legal processes, government actions, business activities, probabilities, statistics, and other simulated circumstances should not be interpreted as factual representations of the real world. 
+ Our separate Game, Brand & Real-World Content Disclaimer forms part of these Terms. 
+2. Eligibility 
+ Lagos Life is intended only for persons who are 18 years of age or older . 
+ By creating an account or using Lagos Life, you represent that you are at least 18 years old and legally capable of entering into these Terms. 
+ We may suspend or terminate an account where we reasonably believe the user is under 18. 
+3. Accounts 
+ To create an account, Lagos Life may require information including: 
+display name; 
+username or handle; 
+email address; 
+password; and 
+a man or woman selection used in connection with avatar customization. 
+ You are responsible for providing accurate information and maintaining the security of your account. 
+ Your username, display name, profile, avatar, and permitted social activity may be visible to other players. 
+ You are responsible for activity carried out through your account except where unauthorized activity results from circumstances for which you are not legally responsible. 
+ You must not sell, rent, transfer, share, or commercially trade your Lagos Life account without our written permission. 
+4. One Game World, Multiple Locations 
+ Lagos Life may contain simulated versions of Lagos and other states, cities, locations, institutions, venues, businesses, and environments across Nigeria. 
+ Their presence in the game does not mean that Lagos Life is an official representation of those places or that any real-world government, company, institution, property owner, or other person has approved the game. 
+ Locations may be altered, compressed, relocated, renamed, fictionalized, simplified, or adapted for gameplay. 
+5. Lagos Life Naira and the ₦ Symbol 
+ Lagos Life uses the word "Naira" , the symbol "₦" , and Naira-denominated numerical amounts as part of its fictional internal game economy. 
+ For the purposes of these Terms, such units may be referred to as "Game Naira" or "Lagos Life Naira" . 
+ Game Naira is a fictional digital game unit. 
+ Game Naira: 
+is not Nigerian legal tender; 
+is not physical Nigerian Naira; 
+is not eNaira; 
+is not issued, guaranteed, sponsored, backed, or approved by the Central Bank of Nigeria; 
+is not a bank deposit; 
+is not electronic money; 
+is not stored monetary value; 
+does not constitute a financial account; 
+does not represent money held on trust for a player; 
+does not represent a debt payable by Lagos Life to a player; 
+cannot be withdrawn into a bank account; 
+cannot be redeemed from Lagos Life for real-world Naira or another real-world currency; 
+does not carry an exchange rate against real-world Naira or any other legal tender; and 
+has no real-world cash value merely because the game displays it using the word "Naira" or the ₦ symbol. 
+ A display such as "₦1,000,000" inside the Lagos Life game world does not mean that Lagos Life owes the player one million Nigerian Naira. 
+ Game Naira exists solely for gameplay and may be earned, spent, transferred, gifted, lost, taxed, invested, received from other players, or otherwise used within the rules of the Lagos Life game world. 
+ Game Naira may move between player accounts where the game permits player-to-player transfers. Such transfers remain entirely within Lagos Life and do not convert Game Naira into real money. 
+ Players must not sell Game Naira for real-world money, operate unauthorized exchanges, broker Game Naira for cash, or otherwise attempt to create an unauthorized real-money market around Lagos Life's virtual economy. 
+6. Purchasing Game Naira 
+ Lagos Life may allow players to purchase Game Naira using real money. 
+ Purchasing Game Naira gives you a limited contractual entitlement to receive the specified amount of virtual game units in your Lagos Life account. 
+ It does not create ownership of Nigerian currency, a deposit account, an investment, a security, a financial product, or a right to redeem the units for cash. 
+ Payment processing is currently provided through Flutterwave (payments made before 6 October 2026 were processed through Bachs ). 
+ Your payment may also be subject to the payment provider's applicable terms and policies. 
+7. The Virtual Economy 
+ Lagos Life operates a dynamic simulated economy. 
+ The economy may include: 
+jobs and salaries; 
+businesses; 
+property; 
+virtual taxes; 
+skills; 
+experience; 
+investments; 
+insurance; 
+transportation; 
+repairs; 
+maintenance; 
+gifts; 
+player transfers; 
+virtual purchases; 
+random events; 
+promotions; 
+bonuses; 
+penalties; 
+fines; 
+economic events; 
+investment gains and losses; and 
+other gameplay mechanics. 
+ We may adjust the game economy to maintain gameplay balance, economic sustainability, fairness, security, or technical integrity. 
+ This may include changing: 
+prices; 
+salaries; 
+payouts; 
+skill requirements; 
+virtual tax rates; 
+probabilities; 
+promotional multipliers; 
+economic events; 
+item availability; 
+asset values; 
+job requirements; 
+transaction limits; 
+transfer mechanics; and 
+other game parameters. 
+ Where a balance, item, reward, transaction, or asset was obtained through fraud, exploitation, automation, a technical error, a duplicated transaction, unauthorized activity, or abuse of a game mechanic, we may reverse or correct it. 
+ Nothing in this section limits rights that cannot lawfully be excluded under applicable consumer law. 
+8. No Real-World Investment or Financial Advice 
+ Any investment, banking, insurance, taxation, business, gambling, betting, employment, financial, cryptocurrency, trading, or economic system appearing in Lagos Life is a game mechanic. 
+ Lagos Life does not provide financial, investment, banking, insurance, tax, legal, or other professional advice through those mechanics. 
+ Game investment performance does not represent the performance of any real investment. 
+9. Purchases 
+ Lagos Life may offer purchases including: 
+Game Naira; 
+advertising placements; 
+billboard placements; 
+banner placements; 
+open-sea or other environmental advertising lots; 
+placement within statistics or discovery surfaces; 
+virtual application placement on a player's in-game phone; 
+branded venues; 
+branded activities; 
+branded consumables; 
+branded fashion or virtual items; 
+sponsored experiences; 
+in-game integrations; 
+partnerships; and 
+other digital products, promotional services, or commercial integrations. 
+ Prices and the scope of a purchase will be shown before purchase or agreed separately with the purchaser. 
+10. Refunds 
+ Except where applicable law requires otherwise, purchases are generally final once the purchased digital item, Game Naira, advertising service, integration, placement, or other service has been successfully delivered or substantially performed. 
+Game Naira and Digital Purchases 
+ A refund may be considered where: 
+a real-money payment was successfully collected; 
+the corresponding purchase action was not successfully completed or delivered in Lagos Life; and 
+the failure can be reasonably verified using the payment provider's transaction records and Lagos Life's internal transaction or game ledger. 
+ Where our records show that the purchased Game Naira or other digital item was correctly credited or delivered, the purchase will ordinarily not qualify for a refund merely because the purchaser later changes their mind, spends the Game Naira, transfers it to another player, loses it through gameplay, or no longer wishes to use the Service. 
+Advertising and Commercial Services 
+ Advertising placements, integrations, partnerships, and other commercial arrangements may involve reservation of inventory, creative work, development work, campaign configuration, or other preparation. 
+ Except where required by law or expressly stated in a separate written agreement, payments for such services are non-refundable once the relevant inventory has been reserved, work has commenced, or the service has been delivered. 
+ Where Lagos Life fails to provide a paid service, any remedy will be determined in accordance with the applicable agreement and mandatory Nigerian consumer law. 
+Chargebacks 
+ You must not initiate a fraudulent or dishonest chargeback for a purchase that was properly delivered. 
+ Where a chargeback, reversal, or payment dispute results in Lagos Life not receiving payment for delivered Game Naira or another digital benefit, we may reverse the associated virtual transaction, suspend the relevant account, or take other reasonable action. 
+ Nothing in these Terms removes any refund, cancellation, or consumer remedy that cannot legally be waived. 
+11. Advertising and Brand Partnerships 
+ Lagos Life may sell advertising and brand integration throughout the game world. 
+ Advertising may appear in forms including: 
+billboards; 
+banners; 
+buildings; 
+venues; 
+virtual products; 
+clothing; 
+events; 
+activities; 
+in-game applications; 
+virtual phones; 
+transportation; 
+environmental placements; 
+statistics pages; and 
+other interactive or visual integrations. 
+ Unless expressly agreed in writing, the purchase of an advertising placement does not guarantee any particular number of impressions, players, interactions, sales, conversions, revenue, or other commercial result. 
+ Any reach, traffic, player, usage, or engagement figures provided to advertisers must be understood in the context in which they are stated. 
+ Advertisers and partners are responsible for ensuring that materials they provide to Lagos Life are lawful and that they have the rights necessary for Lagos Life to display those materials. 
+ Advertisers must not provide material that infringes intellectual property rights, misleads consumers, violates applicable advertising regulation, or is otherwise unlawful. 
+ Lagos Life may reject, suspend, modify, or remove advertising where reasonably necessary for legal compliance, platform safety, technical operation, or protection of the game experience. 
+ Additional terms may apply to individual advertising campaigns and partnerships. 
+12. Third-Party Brands 
+ Lagos Life may contain references to real companies, trademarks, trade names, products, services, logos, designs, buildings, locations, and other real-world identifiers. 
+ Unless a brand is expressly identified by Lagos Life as an Official Partner , Sponsor , Advertiser , or equivalent designation, its appearance in the game does not mean that the relevant company has sponsored, endorsed, authorized, approved, or partnered with Lagos Life. 
+ All third-party trademarks and other third-party intellectual property remain the property of their respective owners. 
+ Nothing in these Terms grants a player any right to use a third party's intellectual property. 
+ Further information appears in the Game, Brand & Real-World Content Disclaimer. 
+13. Government Institutions and Public Offices 
+ Lagos Life may simulate or reference Nigerian government institutions, public authorities, law enforcement agencies, prisons, regulators, ministries, governors' offices, and other public institutions. 
+ These may include institutions such as the Nigeria Police Force, the Economic and Financial Crimes Commission, correctional institutions, state governments, and other agencies or offices. 
+ Unless expressly stated otherwise, Lagos Life is not affiliated with, sponsored by, endorsed by, or operated on behalf of any such institution. 
+ Game characters representing officers, officials, employees, investigators, politicians, regulators, or other public actors are fictional characters unless expressly identified otherwise. 
+ Actions performed by such fictional characters within Lagos Life are game scenarios and are not assertions that any actual institution, officer, employee, or official engaged in the depicted conduct. 
+ Lagos Life does not claim a right under these Terms to use any protected official seal, coat of arms, insignia, emblem, flag, or other material where authorization is legally required. 
+ We may stylize, fictionalize, replace, or remove official imagery where appropriate. 
+14. Fictional Characters 
+ Lagos Life primarily uses player avatars and fictional non-player characters. 
+ Unless expressly stated otherwise, fictional characters are not intended to represent actual individuals. 
+ Any resemblance between a fictional character and an actual person is unintended or coincidental unless Lagos Life expressly identifies an authorized real-world collaboration. 
+15. Social Features and User Content 
+ Lagos Life may allow players to interact through features including: 
+public or venue chat; 
+direct messages; 
+profiles; 
+usernames; 
+posts; 
+comments; 
+uploaded or selected images; 
+stickers; 
+reactions; 
+social interactions; and 
+other player-to-player communication. 
+ Content that you submit, send, upload, publish, or otherwise make available through Lagos Life is referred to as "User Content". 
+ You retain any rights that you lawfully hold in your User Content. 
+ By providing User Content through Lagos Life, you grant Lagos Life a non-exclusive, worldwide, royalty-free licence to host, store, reproduce, display, transmit, format, moderate, and otherwise use that content to operate, secure, improve, and provide the Service. 
+ This licence lasts for as long as reasonably necessary to provide the Service and handle legitimate legal, moderation, security, and operational requirements. 
+ You must not use Lagos Life to publish or transmit content that: 
+is unlawful; 
+infringes another person's intellectual property; 
+impersonates another person in a deceptive manner; 
+contains malicious software; 
+facilitates fraud; 
+constitutes unlawful harassment or threats; 
+unlawfully discloses another person's private information; 
+exploits or abuses another user; 
+attempts to compromise the Service; or 
+otherwise violates these Terms. 
+ We may moderate, restrict, remove, preserve, or disclose User Content where reasonably necessary to enforce these Terms, comply with law, protect users, investigate abuse, or secure the Service. 
+16. Stickers and Game Content 
+ Lagos Life may provide custom stickers, reaction content, artwork, and other communication assets. 
+ Unless otherwise stated, these assets are provided only for use within Lagos Life. 
+17. Prohibited Conduct 
+ You must not: 
+use bots, scripts, macros, automated systems, or unauthorized software to play or interact with Lagos Life; 
+exploit bugs or unintended mechanics; 
+duplicate virtual items or currency; 
+manipulate the game's economy through unauthorized means; 
+create accounts for farming, fraud, or circumvention; 
+attempt to access another player's account; 
+circumvent security or abuse-prevention systems; 
+interfere with servers or infrastructure; 
+scrape the Service without permission; 
+buy or sell accounts; 
+exchange Game Naira for real money outside authorized game mechanics; 
+conduct fraudulent transactions; 
+deceive advertisers, players, or Lagos Life; 
+use another person's payment method without authorization; or 
+assist another person in doing any of the above. 
+18. Device and Abuse Protection 
+ Lagos Life may use technical security measures, including device fingerprinting and related signals, to identify fraud, abuse, account farming, unauthorized automation, suspicious activity, and attempts to circumvent platform restrictions. 
+ Our handling of such information is described in the Privacy & Cookie Policy. 
+19. Enforcement 
+ Where we reasonably believe that these Terms have been violated, we may take proportionate action including: 
+warnings; 
+restrictions; 
+removal of content; 
+transaction reversal; 
+correction of fraudulently obtained assets; 
+temporary suspension; 
+permanent suspension; or 
+termination of an account. 
+ Serious fraud, security incidents, exploitation, or unlawful activity may result in immediate action. 
+ Where appropriate and legally permissible, relevant information may be preserved or provided to competent authorities. 
+20. Soft Deletion 
+ Players may request deletion of their accounts where the applicable feature is available or by contacting Lagos Life. 
+ Account deletion may initially be implemented as a soft deletion. 
+ Certain information may remain for a limited period or longer where reasonably necessary for: 
+fraud prevention; 
+security; 
+transaction reconciliation; 
+enforcement; 
+dispute resolution; 
+accounting; 
+compliance with legal obligations; or 
+establishment, exercise, or defence of legal claims. 
+ Personal information that is no longer necessary will be deleted or anonymized in accordance with our Privacy & Cookie Policy and applicable law. 
+21. Intellectual Property 
+ Except for third-party materials and User Content, Lagos Life, including its original source code, game systems, original artwork, original characters, designs, interface, text, custom assets, original music where applicable, branding, and other original content, is owned by Shalom Rayhamen or used under appropriate permission. 
+ You receive a limited, personal, revocable, non-transferable right to use Lagos Life for its intended purpose. 
+ You may not copy, sell, reproduce, modify, distribute, reverse engineer, commercially exploit, or create unauthorized derivative works from protected Lagos Life materials except where applicable law permits it or we provide written permission. 
+22. Availability and Changes 
+ Lagos Life is an evolving online game. 
+ We may add, remove, update, rebalance, redesign, suspend, or discontinue features. 
+ We do not guarantee that every feature, venue, activity, brand, item, job, asset, state, city, game mechanic, or service will remain permanently available. 
+ We may perform maintenance and may occasionally experience outages, technical failures, or interruptions. 
+23. No Guarantee of Gameplay Outcomes 
+ Randomness, player choices, skills, statistics, probabilities, simulated economic conditions, and other game mechanics may influence outcomes. 
+ We do not guarantee: 
+earnings; 
+game wealth; 
+investment gains; 
+job success; 
+relationship outcomes; 
+competition outcomes; 
+availability of particular opportunities; 
+continued access to a venue or item; 
+a particular ranking; 
+advertising performance; or 
+any other specific gameplay outcome. 
+24. Limitation of Liability 
+ To the fullest extent permitted by applicable law, Lagos Life will not be liable for indirect, incidental, consequential, special, or purely economic losses arising from use of the Service where such liability may lawfully be excluded. 
+ Nothing in these Terms excludes or limits liability that cannot lawfully be excluded or limited. 
+ Nothing in these Terms removes a consumer's rights under applicable Nigerian law. 
+25. Indemnity 
+ To the extent permitted by law, you agree to be responsible for losses, claims, liabilities, and reasonable costs arising directly from: 
+your unlawful use of Lagos Life; 
+your material breach of these Terms; 
+content you submit that infringes another person's rights; 
+advertising materials you provide without the necessary rights; or 
+fraud or deliberate misuse committed through your account. 
+ This section does not apply where the relevant loss was caused by Lagos Life's own unlawful conduct. 
+26. Privacy 
+ Our collection and use of personal information is governed by the Lagos Life Privacy & Cookie Policy . 
+27. Changes to These Terms 
+ We may update these Terms to reflect: 
+new game features; 
+legal or regulatory requirements; 
+security needs; 
+changes in our business; 
+payment systems; 
+advertising services; or 
+changes to the Lagos Life economy. 
+ Where a change is material, we may provide reasonable notice through the Service or another appropriate channel. 
+ Continued use after the effective date of updated Terms constitutes acceptance where permitted by law. 
+28. Governing Law 
+ These Terms are governed by the laws of the Federal Republic of Nigeria. 
+ Before commencing formal proceedings, you and Lagos Life should make reasonable efforts to resolve a dispute directly where appropriate. 
+ Any unresolved dispute may be brought before a court of competent jurisdiction in Nigeria, subject to any rights or procedures provided by applicable consumer law. 
+29. Severability 
+ If any provision of these Terms is found to be unlawful or unenforceable, the remaining provisions will continue to apply to the fullest extent permitted by law. 
+30. No Waiver 
+ Failure by Lagos Life to enforce a provision of these Terms does not permanently waive our right to enforce that provision later. 
+31. Entire Agreement 
+ These Terms, together with the Privacy & Cookie Policy, Game, Brand & Real-World Content Disclaimer, and any additional written commercial agreement applicable to a specific purchase or partnership, constitute the applicable agreement between you and Lagos Life concerning the Service. 
+32. Contact 
+ Lagos Life is operated by: 
+ Shalom Rayhamen 
+ Nigeria
+ Website: https://lagoslife.app 
+ Additional production service: https://lagoslife.eliysites.com/ 
+ Contact: support@lagoslife.app

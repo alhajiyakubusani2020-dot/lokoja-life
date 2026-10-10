@@ -1,0 +1,139 @@
+SOURCE: https://technext24.com/reviews/lagos-life-5-lagos-themed-games-ai
+TITLE: As Lagos Run and Lagos Life shatter records, here are 5 earlier Lagos-themed games and how they fared - Technext
+PUBLISHED: 2026-10-06T20:20:30+01:00
+======================================================================
+As Lagos Run and Lagos Life shatter records, here are 5 earlier Lagos-themed games and how they fared - Technext 
+ Home 
+ News 
+ Features 
+ Industry Analysis 
+ Explainers 
+ Roundups 
+ Startup Reviews 
+ App Reviews 
+ Movie Reviews 56 
+ Interviews 
+ Interviews 
+ Founder’s Spotlight 
+ Policy and Tech 
+ Women in Tech 
+ Tech Teen 
+ Social Tech 
+ Events 
+ Reach Out 
+ Search 
+ Social Links 
+ Twitter 
+ Facebook 
+ Instagram 
+ YouTube 
+ LinkedIn 
+ Home 
+ News 
+ 2 minute read 
+ News 
+ Chowdeck hits 100 million items delivered in 5 years 
+ 3 minute read 
+ News 
+ Who controls the infrastructure behind Africa’s $205bn crypto market? 
+ 3 minute read 
+ News 
+ Airtel Money debuts on London IPO at $2.59 per share, now at $7 billion market capitalisation  
+ Features 
+ Industry Analysis 
+ Explainers 
+ Roundups 
+ Startup Reviews 
+ App Reviews 
+ Movie Reviews 
+ 5 minute read 
+ Industry Analysis 
+ “Can a women-only e-hailing app survive in Nigeria?”- We asked female drivers 
+ 6 minute read 
+ Industry Analysis 
+ News 
+ 44,000 Nigerians played a game to get into Learn2Earn, Iyin Aboyeji calls it the future of tech talent 
+ 5 minute read 
+ FinTech 
+ Industry Analysis 
+ Saving in dollars, trapped in naira: Why domiciliary accounts no longer work for millions of Nigerians 
+ Interviews 
+ Interviews 
+ Founder’s Spotlight 
+ Policy and Tech 
+ Women in Tech 
+ Tech Teen 
+ Social Tech 
+ 8 minute read 
+ Social Tech 
+ These 10 Nigerian creators are turning social media influence into industry power 
+ 3 minute read 
+ Social Tech 
+ Apple TV just got bigger in Nigeria. But what does it mean for Nollywood and local content? 
+ 5 minute read 
+ Social Tech 
+ 7 reasons why technical skills alone won’t keep you employable in 2026 
+ Events 
+ Reach Out 
+ dark 
+ Hand-Picked Top-Read Stories 
+ Breaking: Nigeria Overtakes Algeria as Third in Africa as NCDC Reports 387 New Covid-19 Cases, 254 in Lagos 
+ BVN enrollments hit 67.8m in 2025, an increase from 63.5m in 2024 
+ Google Search data show that Valentine’s Day will be different for Nigerians in 2026 
+ Review 
+ 4 minute read 
+ As Lagos Run and Lagos Life shatter records, here are 5 earlier Lagos-themed games and how they fared 
+ Blessed Frank 
+3 days ago 
+ 0 
+ 0 
+ 0 
+Total 
+0 
+Shares 
+ 0 
+ 0 
+ 0 
+For nearly two decades, capturing the manic, horn-blaring energy of Lagos inside a video game was the ultimate white whale for African developers. Brilliant studios formed, raised funding, built culturally rich titles, and then slammed directly into a familiar brick wall: prohibitive mobile data costs, app store download fatigue, and local payment rails that refused to convert players into paying customers. 
+As Nigeria marked its 66th independence anniversary on October 1st, 2026, two browser games tore that twenty-year script to shreds. 
+First arrived Lagos Run , an addictive web-based endless runner created by Berlin-based Nigerian engineer Opeyemi Adeniran under Eureka Studios. Released just before Nigeria’s Independence Day, it went from a weekend viral sensation to racking up over 140,000 players across 145 countries within seven days, while racking up more than 10 million impressions on X. 
+Then came Lagos Life . Developed by UK-based Nigerian creator Ijeoma Shalom Rayhamen, the persistent multiplayer browser sim triggered an absolute cultural stampede. Players flooded in to rent apartments, dodge police, secure virtual jobs, and scramble out of “Lapo” poverty into “Nepo” luxury. In three days, the game crossed one million users, moving faster than ChatGPT did at launch. By day four, it logged nearly 2.5 million players and 23 million visits, with almost 5 million visits today , peaking at over 122,000 concurrent users. 
+Even more startling was the financial haul: Lagos Life generated roughly $46,900 (₦62 million) in its first four days. By selling in-game billboards to eager Nigerian consumer brands and tech startups, along with player transactions within the virtual city, it proved a Nigerian game could print substantial revenue almost overnight. 
+Also read: Lagos Run is not the first Danfo game: Here’s why it’s the one everyone is playing 
+To understand why this moment is an unprecedented triumph, one has to examine the graveyard of ambitious titles that came before. 
+ 5 notable Lagos-themed games and how they fared 
+ 1. The Danfo Series (ChopUp, 2007–2014) : Long before mobile app stores dominated, Bayo Puddicombe built the original Danfo in 2007. Later expanded under ChopUp with Zubair Abubakar, Danfo Reloaded and Danfo Reloaded II tasked players with navigating Lagos traffic while expanding garage routes. The series was a critical pioneer, crossing one million collective downloads across ChopUp’s catalogue and attracting $100,000 in venture backing in 2014. Yet the transition from lightweight Java feature phones to heavy smartphone app ecosystems crippled its momentum, leaving monetisation capped by the friction of early app marketplaces. 
+ 2. Okada Ride (Maliyo Games, 2012) : When Hugo Obi launched Maliyo Games, Okada Ride served as its flagship. Navigating a commercial motorcycle through mainland potholes was instantly recognisable to Nigeria’s 44 million web users at the time. Maliyo was ahead of the curve by deploying directly on the web, but desktop Flash limitations and a market that abruptly shifted toward mobile smartphones forced the studio to pivot toward broader B2B gaming partnerships and training bootcamps. 
+ Lagos Life hit 1 million players in three days, and it may be rewriting the rules for Nigerian games 
+ 3. Gidi Run (Gamsole, 2016) : Founded by the late Abiola Olaniran, Gamsole was a giant, surpassing 15 million downloads across its Windows Phone catalogue. When the studio launched Gidi Run , a colourful 3D runner through Yaba, it recorded 3,400 downloads in its first week. To make money, Olaniran famously tied the game to MTN Game+ airtime billing, proving that Nigerian gamers would only pay if microtransactions bypassed credit cards. It was a commercial success for its era, yet it remained handcuffed to telecom operator revenue cuts. 
+ 4. Aboki Run (Maliyo Games, 2016–2017) : Maliyo returned to the runner genre with Aboki Run , taking players through Lagos street parties, obstacles, and caves to collect cowries. While it earned praise for visual presentation and authentic sound design, it ran headlong into the economics of the Google Play Store: high user-acquisition costs paired with bottom-tier AdMob advertising rates that yielded mere pennies for African traffic. 
+ 5. Idansquest (Hfrogames, August 2025) : Released just last year by a three-person indie studio, Idansquest demonstrated the immense endurance required by traditional indie development. The team spent two full years building a polished mobile runner where players battled street obstacles and a villain personifying “sapa” (poverty). Despite its cultural flair, the hurdle of convincing data-conscious mobile users to expend data on a native app install kept numbers modest. 
+Why Lagos Run and Lagos Life succeed 
+What makes Lagos Run and Lagos Life so decisively superior by every modern operational metric comes down to a radical shift in technology and distribution. 
+AI did not merely refine the gameplay; it collapsed the development timeline. Where Idansquest required two years of painstaking studio production, Adeniran built Lagos Run in four to five weeks as an after-work experiment, using Anthropic’s Claude to generate code and AI tools to produce visual assets. 
+That velocity eliminated financial risk. It allowed developers to test viral premises instantly, opening the floodgates for fast follow-ons like London Red Bus and PH Lifestyle . 
+Crucially, pairing rapid AI workflows with lightweight browser architecture eliminated the dreaded “app store tax”. Players do not download a 150MB file over costly mobile data; they tap a link on X or WhatsApp and are playing within three seconds. 
+By removing installation barriers, Lagos Life unlocked unprecedented audience density. That mass of 122,000 concurrent eyeballs allowed Rayhamen to bypass programmatic ad networks entirely, selling prime billboard real estate directly to local brands for real cash. After twenty years of waiting on app stores and telcos, Nigerian gaming finally found its winning formula: build fast with AI, run in the browser, and turn the culture itself into the economy. 
+Technext Newsletter 
+Get the best of Africa’s daily tech to your inbox – first thing every morning.
+ Join the community now! 
+ Please leave this field empty 
+ Crypto Roundup Technext Roundup 
+Thanks for subscribing. Please check your email to confirm your subscription.
+ If you’d like to get featured on our Entrepreneur Spotlight, click  here  to share your startup story with us. 
+ Discover more 
+ African Tech News 
+ Technology Industry Analysis 
+ Read Tech News 
+ Women in Tech 
+ Learn Engineering 
+ Buy Maps 
+ Shop African Art 
+ Daily Tech News 
+Technext Newsletter 
+Get the best of Africa’s daily tech to your inbox – first thing every morning.
+ Join the community now! 
+ Please leave this field empty 
+ Crypto Roundup Technext Roundup 
+Thanks for subscribing. Please check your email to confirm your subscription.
+ Copyright 2024 Technext | Privacy Policy | Media Policy

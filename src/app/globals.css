@@ -203,6 +203,16 @@
   animation: lko-float 5s ease-in-out infinite;
 }
 
+/* Slow Ken Burns drift — makes the menu's painted world feel alive */
+@keyframes lko-kenburns {
+  from { transform: scale(1.04) translate3d(0, 0, 0); }
+  to   { transform: scale(1.12) translate3d(-1.6%, -1%, 0); }
+}
+.lko-kenburns {
+  animation: lko-kenburns 44s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
 /* Gentle pop-in for screens */
 @keyframes lko-pop {
   from { opacity: 0; transform: translateY(14px) scale(0.985); }
@@ -327,6 +337,7 @@
 /* ------------------------- reduced motion -------------------------- */
 @media (prefers-reduced-motion: reduce) {
   .lko-float,
+  .lko-kenburns,
   .lko-pop,
   .lko-fade,
   .lko-sheet,

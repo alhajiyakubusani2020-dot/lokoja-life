@@ -18,6 +18,7 @@ import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
 import { LivingScene } from '../LivingScene'
 import { MapScreen } from './MapScreen'
 import { WorkScreen } from './WorkScreen'
+import { WorldTab } from '../world/WorldTab'
 import {
   PlaceIcon,
   TimeIcon,
@@ -38,6 +39,7 @@ import {
   ExitIcon,
   SettingsIcon,
   PinIcon,
+  WorldIcon,
 } from '../icons'
 import { audio } from '@/game/systems/audio'
 import { formatNaira, nextReputationTier, reputationTier, skillCap, xpToNextLevel } from '@/game/systems/progression'
@@ -72,7 +74,7 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
 
 /* --------------------------------- home tab -------------------------------- */
 
-function HomeTab() {
+function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const isTravelling = useGameStore((s) => s.isTravelling)
@@ -118,8 +120,22 @@ function HomeTab() {
           </div>
         </div>
 
+        {/* 3D world CTA — top left of the hero */}
+        <div className="absolute left-3 top-3">
+          <button
+            onClick={() => {
+              audio.play('click')
+              onExploreWorld()
+            }}
+            className="lko-press flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1.5 text-[11px] font-extrabold text-white backdrop-blur-sm"
+          >
+            <WorldIcon size={13} />
+            Explore in 3D
+          </button>
+        </div>
+
         {/* day / time / weather — top right */}
-        <div className="absolute right-3 top-3 flex flex-col items-end gap-1.5">
+        <div className="absolute right-3 top-12 flex flex-col items-end gap-1.5 sm:top-3">
           <Chip className="bg-black/30 text-white backdrop-blur-sm">Day {world.day}</Chip>
           <Chip className="bg-black/30 text-white backdrop-blur-sm">
             <TimeIcon name={world.timeOfDay} size={13} className="text-[#ffd88a]" />
@@ -520,66 +536,82 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* HUD header — one compact strip, no heavy card stack */}
-      <header className="mx-auto w-full max-w-md px-4 pt-3 sm:max-w-3xl sm:px-6">
-        <div className="lko-card flex items-center gap-3 px-3.5 py-2.5">
-          <Avatar config={player.avatar} gender={player.gender} withBackdrop className="h-11 w-11 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="lko-display truncate text-[15px] leading-tight">{player.name}</p>
-              <span className="flex h-[18px] shrink-0 items-center rounded-full bg-[var(--lko-green)] px-1.5 text-[10px] font-extrabold text-white">
-                LV {player.level}
-              </span>
-            </div>
-            {/* xp bar */}
-            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/[0.07]">
-              <div
-                className="h-full rounded-full bg-[var(--lko-gold)] transition-[width] duration-500"
-                style={{ width: `${Math.min(100, (player.xp / xpNeeded) * 100)}%` }}
-              />
-            </div>
-          </div>
-          <div className="flex shrink-0 flex-col items-end">
-            <span className="lko-display lko-num text-[17px] leading-tight text-[var(--lko-green-deep)]">
-              {formatNaira(player.cash)}
-            </span>
-            <Chip className="mt-0.5 bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]">
-              <StarIcon size={11} />
-              {tier.name}
-            </Chip>
-          </div>
-        </div>
-      </header>
+      {/* the 3D world is a fullscreen mode — it replaces the page chrome */}
+      {tab === 'world' && (
+        <WorldTab
+          onExit={() => switchTab('home')}
+          onOpenWork={() => switchTab('work')}
+          onOpenMap={(locId) => {
+            setFocusLoc(locId)
+            switchTab('map')
+          }}
+        />
+      )}
 
-      {/* tab content */}
-      <main
-        className="mx-auto w-full max-w-md pb-28 sm:max-w-3xl"
-        role="tabpanel"
-        aria-label={tab}
-      >
-        <div key={tabTick} className="lko-fade">
-          {tab === 'home' && <HomeTab />}
-          {tab === 'map' && (
-            <MapTab
-              focusLocationId={focusLoc}
-              onFocusHandled={() => setFocusLoc(null)}
-              onOpenWork={() => switchTab('work')}
-            />
-          )}
-          {tab === 'work' && (
-            <WorkTab
-              onGoToMap={(locId) => {
-                setFocusLoc(locId)
-                switchTab('map')
-              }}
-            />
-          )}
-          {tab === 'bag' && <BagTab />}
-          {tab === 'profile' && <ProfileTab />}
-        </div>
-      </main>
+      {tab !== 'world' && (
+        <>
+          {/* HUD header — one compact strip, no heavy card stack */}
+          <header className="mx-auto w-full max-w-md px-4 pt-3 sm:max-w-3xl sm:px-6">
+            <div className="lko-card flex items-center gap-3 px-3.5 py-2.5">
+              <Avatar config={player.avatar} gender={player.gender} withBackdrop className="h-11 w-11 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="lko-display truncate text-[15px] leading-tight">{player.name}</p>
+                  <span className="flex h-[18px] shrink-0 items-center rounded-full bg-[var(--lko-green)] px-1.5 text-[10px] font-extrabold text-white">
+                    LV {player.level}
+                  </span>
+                </div>
+                {/* xp bar */}
+                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/[0.07]">
+                  <div
+                    className="h-full rounded-full bg-[var(--lko-gold)] transition-[width] duration-500"
+                    style={{ width: `${Math.min(100, (player.xp / xpNeeded) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col items-end">
+                <span className="lko-display lko-num text-[17px] leading-tight text-[var(--lko-green-deep)]">
+                  {formatNaira(player.cash)}
+                </span>
+                <Chip className="mt-0.5 bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]">
+                  <StarIcon size={11} />
+                  {tier.name}
+                </Chip>
+              </div>
+            </div>
+          </header>
 
-      <BottomNav active={tab} onChange={switchTab} badge={{ work: hasActiveOpportunities }} />
+          {/* tab content */}
+          <main
+            className="mx-auto w-full max-w-md pb-28 sm:max-w-3xl"
+            role="tabpanel"
+            aria-label={tab}
+          >
+            <div key={tabTick} className="lko-fade">
+              {tab === 'home' && <HomeTab onExploreWorld={() => switchTab('world')} />}
+              {tab === 'map' && (
+                <MapTab
+                  focusLocationId={focusLoc}
+                  onFocusHandled={() => setFocusLoc(null)}
+                  onOpenWork={() => switchTab('work')}
+                />
+              )}
+              {tab === 'work' && (
+                <WorkTab
+                  onGoToMap={(locId) => {
+                    setFocusLoc(locId)
+                    switchTab('map')
+                  }}
+                />
+              )}
+              {tab === 'bag' && <BagTab />}
+              {tab === 'profile' && <ProfileTab />}
+            </div>
+          </main>
+
+          <BottomNav active={tab} onChange={switchTab} badge={{ work: hasActiveOpportunities }} />
+        </>
+      )}
     </div>
   )
 }

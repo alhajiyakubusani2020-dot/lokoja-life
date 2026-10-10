@@ -1,17 +1,18 @@
 'use client'
 
 /**
- * LOKOJA LIFE — Main Menu (R1)
- * ----------------------------
- * A full-bleed living Lokoja scene — Mount Patti, the confluence, drifting
- * clouds, gliding birds, a keke rolling past — with the menu composed over
- * it. The player should feel they are looking INTO a world they are about
- * to enter, not reading a webpage about one.
+ * LOKOJA LIFE — Main Menu (R2-ART)
+ * ---------------------------------
+ * The world IS the menu: a full-bleed original painted key art of Lokoja
+ * (Mount Patti + the Niger–Benue confluence + a keke on the laterite road)
+ * with a slow Ken Burns drift, so the first screen feels alive — you are
+ * looking INTO a world you are about to enter, not reading a webpage.
+ * R1's LivingScene continues to render the in-game home hero.
  * No fake features: only New Game / Continue / Settings exist here.
  */
 
 import { useEffect, useState } from 'react'
-import { LivingScene } from '../LivingScene'
+import Image from 'next/image'
 import { audio } from '@/game/systems/audio'
 import { GAME_META } from '@/game/data/config'
 import { MENU_TIPS } from '@/game/data/flavor'
@@ -56,9 +57,16 @@ export function MainMenu() {
       className="relative min-h-dvh overflow-hidden"
       style={{ background: 'linear-gradient(180deg, #f9bd77 0%, #f4925a 62%, #e56f4d 100%)' }}
     >
-      {/* ---- the living world ---- */}
+      {/* ---- the world itself (original key art, slow drift) ---- */}
       <div className="absolute inset-0" aria-hidden>
-        <LivingScene timeOfDay="evening" className="h-full w-full" />
+        <Image
+          src="/art/menu-hero.webp"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="lko-kenburns object-cover"
+        />
       </div>
 
       {/* ---- legibility scrims (dusk-toned, subtle) ---- */}

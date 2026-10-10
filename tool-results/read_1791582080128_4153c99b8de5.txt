@@ -1,0 +1,615 @@
+     1→'use client'
+     2→
+     3→/**
+     4→ * LOKOJA LIFE — WorkScreen (Stage 3)
+     5→ * -----------------------------------
+     6→ * Jobs + hustles + earnings. The UI reads every number from the systems
+     7→ * (work.ts / opportunities.ts / economy.ts) — nothing is hard-coded.
+     8→ *
+     9→ * Structure:
+    10→ *   1. Active offers   — accepted hustles waiting at real locations
+    11→ *   2. Hustle board    — search the current area for personal gist
+    12→ *   3. Jobs here       — formal shifts available at the current location
+    13→ *   4. Jobs elsewhere  — honest pointers that deep-link to the map
+    14→ *   5. Earnings        — today's flow + the recent ledger
+    15→ */
+    16→
+    17→import { useEffect, useMemo, useState } from 'react'
+    18→import { audio } from '@/game/systems/audio'
+    19→import { formatNaira } from '@/game/systems/progression'
+    20→import { calculateJobPay, checkRequirements, cooldownRemaining, hustleSuccessChance } from '@/game/systems/work'
+    21→import { hustleDefFor } from '@/game/systems/opportunities'
+    22→import { absoluteSlot } from '@/game/systems/world'
+    23→import { SKILL_META } from '@/game/systems/skills'
+    24→import { sumEarned, sumSpent, transactionsOnDay } from '@/game/systems/economy'
+    25→import { JOBS, type JobDef } from '@/game/data/jobs'
+    26→import { NPC_BY_ID } from '@/game/data/npcs'
+    27→import type { HustleDef } from '@/game/data/hustles'
+    28→import { LOCATION_BY_ID } from '@/game/data/locations'
+    29→import { HUSTLE, WORK } from '@/game/data/config'
+    30→import type { ActiveOpportunity } from '@/game/types'
+    31→import { useGameStore } from '@/game/store/useGameStore'
+    32→
+    33→/* ------------------------------- helpers -------------------------------- */
+    34→
+    35→/** One-line reward preview for a hustle def: ₦range • skill • rep. */
+    36→function rewardPreview(def: HustleDef): string {
+    37→  const parts = [
+    38→    `${formatNaira(def.reward.cashMin)}–${formatNaira(def.reward.cashMax)}`,
+    39→    `${SKILL_META[def.skill].emoji}+${def.reward.skillXp}`,
+    40→    `⭐+${def.reward.reputation}`,
+    41→  ]
+    42→  return parts.join(' • ')
+    43→}
+    44→
+    45→function SkillPill({ skillId }: { skillId: string }) {
+    46→  const meta = SKILL_META[skillId as keyof typeof SKILL_META]
+    47→  if (!meta) return null
+    48→  return (
+    49→    <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-bold text-[var(--lko-ink-soft)]">
+    50→      {meta.emoji} {meta.label}
+    51→    </span>
+    52→  )
+    53→}
+    54→
+    55→/* ---------------------------- opportunity card --------------------------- */
+    56→
+    57→function OfferCard({
+    58→  instance,
+    59→  isHere,
+    60→  onDo,
+    61→  onDrop,
+    62→  onGo,
+    63→}: {
+    64→  instance: ActiveOpportunity
+    65→  isHere: boolean
+    66→  onDo: () => void
+    67→  onDrop: () => void
+    68→  onGo: () => void
+    69→}) {
+    70→  const player = useGameStore((s) => s.player)!
+    71→  const world = useGameStore((s) => s.world)!
+    72→  const def = hustleDefFor(instance)
+    73→  if (!def) return null
+    74→
+    75→  const npc = NPC_BY_ID[instance.npcId ?? '']
+    76→  const loc = LOCATION_BY_ID[instance.locationId]
+    77→  const abs = absoluteSlot(world.day, world.timeOfDay)
+    78→  const slotsLeft = instance.expiresAtSlot - abs
+    79→  const urgent = slotsLeft <= 2
+    80→  const tooTired = player.needs.energy < def.energyCost
+    81→  const odds = Math.round(hustleSuccessChance(def, player) * 100)
+    82→
+    83→  return (
+    84→    <div className={`lko-card p-4 ${urgent ? 'border-[var(--lko-terra)]/40' : ''}`}>
+    85→      {/* npc header */}
+    86→      <div className="flex items-center gap-2.5">
+    87→        <span
+    88→          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--lko-gold-soft)] text-lg"
+    89→          aria-hidden
+    90→        >
+    91→          {npc?.emoji ?? '🙂'}
+    92→        </span>
+    93→        <div className="min-w-0 flex-1">
+    94→          <p className="text-sm font-extrabold leading-tight">{npc?.name ?? 'Someone'}</p>
+    95→          <p className="text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+    96→            📍 {loc?.name ?? 'Somewhere'} • ⏛ {urgent ? 'going cold soon!' : `${slotsLeft} slot${slotsLeft === 1 ? '' : 's'} left`}
+    97→          </p>
+    98→        </div>
+    99→        <span className="shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2 py-0.5 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
+   100→          🎯 {odds}%
+   101→        </span>
+   102→      </div>
+   103→
+   104→      {/* the personal message */}
+   105→      <p className="mt-2.5 rounded-xl bg-[var(--lko-cream)] px-3 py-2 text-[13px] italic leading-relaxed text-[var(--lko-ink)]">
+   106→        “{def.message}”
+   107→      </p>
+   108→
+   109→      {/* terms */}
+   110→      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-[var(--lko-ink-soft)]">
+   111→        <span className="rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[#8a5a00]">
+   112→          {formatNaira(def.reward.cashMin)}–{formatNaira(def.reward.cashMax)}
+   113→        </span>
+   114→        <SkillPill skillId={def.skill} />
+   115→        <span className="rounded-full bg-black/[0.05] px-2 py-0.5">−{def.energyCost} ⚡</span>
+   116→        {def.timeSlots > 0 && (
+   117→          <span className="rounded-full bg-black/[0.05] px-2 py-0.5">{def.timeSlots} slot</span>
+   118→        )}
+   119→      </div>
+   120→
+   121→      {/* actions */}
+   122→      <div className="mt-3 grid grid-cols-2 gap-2">
+   123→        {isHere ? (
+   124→          <button
+   125→            onClick={onDo}
+   126→            disabled={tooTired}
+   127→            className={`lko-press min-h-[46px] rounded-xl border-b-4 px-2 py-2 text-sm font-extrabold ${
+   128→              tooTired
+   129→                ? 'cursor-not-allowed border-black/10 bg-black/10 text-white/70'
+   130→                : 'border-[#0a5c2e] bg-[var(--lko-green)] text-white'
+   131→            }`}
+   132→          >
+   133→            {tooTired ? '🥵 Too tired' : '💪 Do it'}
+   134→          </button>
+   135→        ) : (
+   136→          <button
+   137→            onClick={onGo}
+   138→            className="lko-press min-h-[46px] rounded-xl border-b-4 border-[#b57d0a] bg-[var(--lko-gold)] px-2 py-2 text-sm font-extrabold text-[#3d2a00]"
+   139→          >
+   140→            🗺️ Take me there
+   141→          </button>
+   142→        )}
+   143→        <button
+   144→          onClick={onDrop}
+   145→          className="lko-press min-h-[46px] rounded-xl border-2 border-black/[0.08] bg-white px-2 py-2 text-sm font-bold text-[var(--lko-ink)]"
+   146→        >
+   147→          Drop
+   148→        </button>
+   149→      </div>
+   150→    </div>
+   151→  )
+   152→}
+   153→
+   154→/* ------------------------------ offer (fresh) ---------------------------- */
+   155→
+   156→function FreshOfferCard({
+   157→  instance,
+   158→  onAccept,
+   159→  onDecline,
+   160→}: {
+   161→  instance: ActiveOpportunity
+   162→  onAccept: () => void
+   163→  onDecline: () => void
+   164→}) {
+   165→  const player = useGameStore((s) => s.player)!
+   166→  const def = hustleDefFor(instance)
+   167→  if (!def) return null
+   168→  const npc = NPC_BY_ID[instance.npcId ?? '']
+   169→  const handsFull = player.activeOpportunities.length >= HUSTLE.maxActive
+   170→
+   171→  return (
+   172→    <div className="lko-card lko-pop border-[var(--lko-gold)]/40 p-4">
+   173→      <div className="flex items-center gap-2.5">
+   174→        <span
+   175→          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--lko-gold-soft)] text-lg"
+   176→          aria-hidden
+   177→        >
+   178→          {npc?.emoji ?? '🙂'}
+   179→        </span>
+   180→        <div className="min-w-0 flex-1">
+   181→          <p className="text-sm font-extrabold leading-tight">{npc?.name ?? 'Someone'}</p>
+   182→          <p className="truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">{def.title}</p>
+   183→        </div>
+   184→      </div>
+   185→      <p className="mt-2.5 rounded-xl bg-[var(--lko-cream)] px-3 py-2 text-[13px] italic leading-relaxed">
+   186→        “{def.message}”
+   187→      </p>
+   188→      <p className="mt-2 text-[11px] font-bold text-[var(--lko-ink-soft)]">{rewardPreview(def)}</p>
+   189→      <div className="mt-3 grid grid-cols-2 gap-2">
+   190→        <button
+   191→          onClick={onAccept}
+   192→          disabled={handsFull}
+   193→          className={`lko-press min-h-[46px] rounded-xl border-b-4 px-2 py-2 text-sm font-extrabold ${
+   194→            handsFull
+   195→              ? 'cursor-not-allowed border-black/10 bg-black/10 text-white/70'
+   196→              : 'border-[#0a5c2e] bg-[var(--lko-green)] text-white'
+   197→          }`}
+   198→        >
+   199→          {handsFull ? `Hands full (${HUSTLE.maxActive})` : '🤝 Accept'}
+   200→        </button>
+   201→        <button
+   202→          onClick={onDecline}
+   203→          className="lko-press min-h-[46px] rounded-xl border-2 border-black/[0.08] bg-white px-2 py-2 text-sm font-bold text-[var(--lko-ink)]"
+   204→        >
+   205→          Not interested
+   206→        </button>
+   207→      </div>
+   208→    </div>
+   209→  )
+   210→}
+   211→
+   212→/* -------------------------------- job row -------------------------------- */
+   213→
+   214→function JobRow({ job, onOpen }: { job: JobDef; onOpen: () => void }) {
+   215→  const player = useGameStore((s) => s.player)!
+   216→  const world = useGameStore((s) => s.world)!
+   217→  const abs = absoluteSlot(world.day, world.timeOfDay)
+   218→  const req = checkRequirements(player, job.requirements)
+   219→  const cd = cooldownRemaining(player.cooldowns, job.id, abs)
+   220→  const pay = calculateJobPay(job, player)
+   221→
+   222→  return (
+   223→    <button
+   224→      onClick={onOpen}
+   225→      className={`lko-press flex w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left ${
+   226→        req.ok ? 'border-[var(--lko-green)]/20 bg-white hover:border-[var(--lko-green)]/50' : 'border-black/[0.06] bg-black/[0.02]'
+   227→      }`}
+   228→    >
+   229→      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-green-soft)] text-xl" aria-hidden>
+   230→        {job.emoji}
+   231→      </span>
+   232→      <span className="min-w-0 flex-1">
+   233→        <span className="block truncate text-sm font-extrabold text-[var(--lko-ink)]">{job.name}</span>
+   234→        <span className="block truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+   235→          {req.ok
+   236→            ? cd > 0
+   237→              ? `⏳ Ready in ${cd} slot${cd > 1 ? 's' : ''}`
+   238→              : `−${job.energyCost} ⚡ • ${job.timeSlots} slot${job.timeSlots > 1 ? 's' : ''}`
+   239→            : req.reasons.join(' • ')}
+   240→        </span>
+   241→      </span>
+   242→      <span className="shrink-0 text-right">
+   243→        <span className="block text-sm font-extrabold text-[var(--lko-terra)]">~{formatNaira(pay)}</span>
+   244→        <SkillPill skillId={job.skillTraining.skill} />
+   245→      </span>
+   246→    </button>
+   247→  )
+   248→}
+   249→
+   250→/* ------------------------------- job sheet ------------------------------- */
+   251→
+   252→function JobSheet({ job, onClose, onStart }: { job: JobDef; onClose: () => void; onStart: () => void }) {
+   253→  const player = useGameStore((s) => s.player)!
+   254→  const world = useGameStore((s) => s.world)!
+   255→  const abs = absoluteSlot(world.day, world.timeOfDay)
+   256→  const req = checkRequirements(player, job.requirements)
+   257→  const cd = cooldownRemaining(player.cooldowns, job.id, abs)
+   258→  const tooTired = player.needs.energy < job.energyCost
+   259→  const pay = calculateJobPay(job, player)
+   260→  const moodNote =
+   261→    player.needs.mood >= WORK.moodBonusHigh.threshold
+   262→      ? '😊 Good vibes — better pay today'
+   263→      : player.needs.mood <= WORK.moodPenaltyLow.threshold
+   264→        ? '😞 Low vibes — pay takes a small hit'
+   265→        : null
+   266→
+   267→  const blocked = !req.ok || cd > 0 || tooTired
+   268→
+   269→  return (
+   270→    <div className="fixed inset-0 z-50" role="dialog" aria-label={`${job.name} details`}>
+   271→      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/40" />
+   272→      <div className="lko-pop absolute inset-x-0 bottom-0 mx-auto w-full max-w-md">
+   273→        <div className="rounded-t-3xl border-t-2 border-black/[0.08] bg-[#fffdf7] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 shadow-2xl">
+   274→          <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-black/15" aria-hidden />
+   275→
+   276→          <div className="flex items-start gap-3">
+   277→            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--lko-green-soft)] text-3xl" aria-hidden>
+   278→              {job.emoji}
+   279→            </span>
+   280→            <div className="min-w-0 flex-1">
+   281→              <h3 className="lko-display text-lg leading-tight">{job.name}</h3>
+   282→              <p className="text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+   283→                📍 {LOCATION_BY_ID[job.locationId]?.name}
+   284→              </p>
+   285→            </div>
+   286→          </div>
+   287→          <p className="mt-2 text-[13px] leading-relaxed text-[var(--lko-ink-soft)]">{job.description}</p>
+   288→
+   289→          {/* terms grid */}
+   290→          <div className="mt-3 grid grid-cols-2 gap-2">
+   291→            <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2">
+   292→              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Pay (est.)</p>
+   293→              <p className="lko-display text-base text-[var(--lko-terra)]">~{formatNaira(pay)}</p>
+   294→            </div>
+   295→            <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2">
+   296→              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Cost</p>
+   297→              <p className="lko-display text-base">−{job.energyCost} ⚡</p>
+   298→            </div>
+   299→            <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2">
+   300→              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Time</p>
+   301→              <p className="lko-display text-base">
+   302→                {job.timeSlots} slot{job.timeSlots > 1 ? 's' : ''}
+   303→              </p>
+   304→            </div>
+   305→            <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2">
+   306→              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Trains</p>
+   307→              <p className="lko-display text-base">
+   308→                {SKILL_META[job.skillTraining.skill].emoji} +{job.skillTraining.xp}
+   309→              </p>
+   310→            </div>
+   311→          </div>
+   312→
+   313→          <p className="mt-2 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+   314→            +{job.xpReward} XP • ⭐+{job.reputationReward} reputation • cooldown:{' '}
+   315→            {job.cooldownSlots ?? WORK.defaultCooldownSlots} slot{(job.cooldownSlots ?? WORK.defaultCooldownSlots) > 1 ? 's' : ''}
+   316→          </p>
+   317→          {moodNote && <p className="mt-1 text-[11px] font-bold text-[#8a5a00]">{moodNote}</p>}
+   318→
+   319→          {/* blockers */}
+   320→          {!req.ok && (
+   321→            <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+   322→              🔒 {req.reasons.join(' • ')}
+   323→            </p>
+   324→          )}
+   325→          {req.ok && cd > 0 && (
+   326→            <p className="mt-2 rounded-xl bg-black/[0.04] px-3 py-2 text-xs font-bold text-[var(--lko-ink-soft)]">
+   327→              ⏳ You just worked this — ready in {cd} time slot{cd > 1 ? 's' : ''}.
+   328→            </p>
+   329→          )}
+   330→          {req.ok && cd === 0 && tooTired && (
+   331→            <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+   332→              🥵 You need {job.energyCost} energy — rest first.
+   333→            </p>
+   334→          )}
+   335→
+   336→          <button
+   337→            onClick={onStart}
+   338→            disabled={blocked}
+   339→            className={`lko-press mt-3 min-h-[50px] w-full rounded-xl border-b-4 py-3 text-sm font-extrabold ${
+   340→              blocked
+   341→                ? 'cursor-not-allowed border-black/10 bg-black/10 text-white/70'
+   342→                : 'border-[#0a5c2e] bg-[var(--lko-green)] text-white'
+   343→            }`}
+   344→          >
+   345→            {blocked ? 'Not available now' : `💼 Start shift • earn ~${formatNaira(pay)}`}
+   346→          </button>
+   347→          <button
+   348→            onClick={onClose}
+   349→            className="lko-press mt-2 min-h-[48px] w-full rounded-xl border-2 border-black/[0.08] bg-white py-3 text-sm font-extrabold text-[var(--lko-ink)]"
+   350→          >
+   351→            Cancel
+   352→          </button>
+   353→        </div>
+   354→      </div>
+   355→    </div>
+   356→  )
+   357→}
+   358→
+   359→/* ------------------------------- work screen ----------------------------- */
+   360→
+   361→export function WorkScreen({ onGoToMap }: { onGoToMap: (locationId: string) => void }) {
+   362→  const player = useGameStore((s) => s.player)!
+   363→  const world = useGameStore((s) => s.world)!
+   364→  const isWorking = useGameStore((s) => s.isWorking)
+   365→  const workingLabel = useGameStore((s) => s.workingLabel)
+   366→  const offers = useGameStore((s) => s.offers)
+   367→  const searchHustles = useGameStore((s) => s.searchHustles)
+   368→  const acceptOffer = useGameStore((s) => s.acceptOffer)
+   369→  const declineOffer = useGameStore((s) => s.declineOffer)
+   370→  const completeOpportunity = useGameStore((s) => s.completeOpportunity)
+   371→  const dropOpportunity = useGameStore((s) => s.dropOpportunity)
+   372→  const pruneExpired = useGameStore((s) => s.pruneExpired)
+   373→  const workShift = useGameStore((s) => s.workShift)
+   374→
+   375→  const [sheetJobId, setSheetJobId] = useState<string | null>(null)
+   376→
+   377→  const location = LOCATION_BY_ID[world.currentLocation]
+   378→  const abs = absoluteSlot(world.day, world.timeOfDay)
+   379→  const searchCd = cooldownRemaining(player.cooldowns, 'hustle-search', abs)
+   380→
+   381→  // lazily expire cold offers whenever the work screen is open
+   382→  useEffect(() => {
+   383→    pruneExpired()
+   384→  }, [world.day, world.timeOfDay, offers.length, pruneExpired])
+   385→
+   386→  const jobsHere = useMemo(() => JOBS.filter((j) => j.locationId === location.id), [location.id])
+   387→  const jobsElsewhere = useMemo(() => JOBS.filter((j) => j.locationId !== location.id), [location.id])
+   388→
+   389→  const todayTxs = transactionsOnDay(player.transactions, world.day)
+   390→  const todayEarned = sumEarned(todayTxs)
+   391→  const todaySpent = sumSpent(todayTxs)
+   392→
+   393→  const sheetJob = sheetJobId ? JOBS.find((j) => j.id === sheetJobId) ?? null : null
+   394→
+   395→  return (
+   396→    <div className="px-4 pt-3">
+   397→      {/* working transition overlay */}
+   398→      {isWorking && (
+   399→        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--lko-cream)]/60 backdrop-blur-[2px]">
+   400→          <span className="lko-display animate-bounce rounded-full border-2 border-[var(--lko-gold)]/40 bg-white/95 px-5 py-2.5 text-sm shadow-lg">
+   401→            💼 Working{workingLabel ? ` — ${workingLabel}` : ''}…
+   402→          </span>
+   403→        </div>
+   404→      )}
+   405→
+   406→      {/* location header */}
+   407→      <div className="lko-card mb-3 flex items-center justify-between gap-2 px-4 py-2.5">
+   408→        <div className="min-w-0">
+   409→          <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+   410→            💼 Work • you dey here
+   411→          </p>
+   412→          <p className="lko-display truncate text-base">
+   413→            {location.emoji} {location.name}
+   414→          </p>
+   415→        </div>
+   416→        <span className="shrink-0 rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[11px] font-bold text-[#8a5a00]">
+   417→          ⏛ slot {abs % 4 + 1}/4
+   418→        </span>
+   419→      </div>
+   420→
+   421→      {/* ------------------------- active offers ------------------------- */}
+   422→      {player.activeOpportunities.length > 0 && (
+   423→        <section aria-label="Active offers" className="mb-4">
+   424→          <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+   425→            🤝 Your accepted hustles ({player.activeOpportunities.length}/{HUSTLE.maxActive})
+   426→          </h2>
+   427→          <div className="flex flex-col gap-2.5">
+   428→            {player.activeOpportunities.map((o) => (
+   429→              <OfferCard
+   430→                key={o.instanceId}
+   431→                instance={o}
+   432→                isHere={o.locationId === world.currentLocation}
+   433→                onDo={() => {
+   434→                  audio.play('click')
+   435→                  completeOpportunity(o.instanceId)
+   436→                }}
+   437→                onDrop={() => {
+   438→                  audio.play('click')
+   439→                  dropOpportunity(o.instanceId)
+   440→                }}
+   441→                onGo={() => {
+   442→                  audio.play('click')
+   443→                  onGoToMap(o.locationId)
+   444→                }}
+   445→              />
+   446→            ))}
+   447→          </div>
+   448→        </section>
+   449→      )}
+   450→
+   451→      {/* ------------------------- hustle board ------------------------- */}
+   452→      <section aria-label="Hustle board" className="mb-4">
+   453→        <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+   454→          🗣️ Hustle board — hear the gist
+   455→        </h2>
+   456→
+   457→        {offers.length > 0 && (
+   458→          <div className="mb-2.5 flex flex-col gap-2.5">
+   459→            {offers.map((o) => (
+   460→              <FreshOfferCard
+   461→                key={o.instanceId}
+   462→                instance={o}
+   463→                onAccept={() => {
+   464→                  audio.play('click')
+   465→                  acceptOffer(o.instanceId)
+   466→                }}
+   467→                onDecline={() => {
+   468→                  audio.play('click')
+   469→                  declineOffer(o.instanceId)
+   470→                }}
+   471→              />
+   472→            ))}
+   473→          </div>
+   474→        )}
+   475→
+   476→        <button
+   477→          onClick={() => {
+   478→            audio.play('click')
+   479→            searchHustles()
+   480→          }}
+   481→          disabled={searchCd > 0 || isWorking}
+   482→          className={`lko-press min-h-[52px] w-full rounded-xl border-b-4 px-2 py-2.5 text-sm font-extrabold ${
+   483→            searchCd > 0 || isWorking
+   484→              ? 'cursor-not-allowed border-black/10 bg-black/10 text-white/70'
+   485→              : 'border-[#b57d0a] bg-[var(--lko-gold)] text-[#3d2a00]'
+   486→          }`}
+   487→        >
+   488→          {searchCd > 0 ? `⏳ Streets dey rest — ${searchCd} slot${searchCd > 1 ? 's' : ''}` : '👀 Look around for hustles'}
+   489→          <span className="mt-0.5 block text-[10px] font-bold opacity-80">
+   490→            {searchCd > 0 ? 'Offers turn up when the time moves' : 'Ask around this area • quick errands from real people'}
+   491→          </span>
+   492→        </button>
+   493→      </section>
+   494→
+   495→      {/* --------------------------- jobs here --------------------------- */}
+   496→      <section aria-label="Jobs here" className="mb-4">
+   497→        <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+   498→          🧰 Shifts at {location.shortName} ({jobsHere.length})
+   499→        </h2>
+   500→        <div className="flex flex-col gap-2">
+   501→          {jobsHere.map((job) => (
+   502→            <JobRow
+   503→              key={job.id}
+   504→              job={job}
+   505→              onOpen={() => {
+   506→                audio.play('click')
+   507→                setSheetJobId(job.id)
+   508→              }}
+   509→            />
+   510→          ))}
+   511→        </div>
+   512→      </section>
+   513→
+   514→      {/* ------------------------ jobs elsewhere ------------------------- */}
+   515→      {jobsElsewhere.length > 0 && (
+   516→        <section aria-label="Jobs elsewhere" className="mb-4">
+   517→          <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+   518→            🗺️ Work in other parts of Lokoja
+   519→          </h2>
+   520→          <div className="flex flex-col gap-2">
+   521→            {jobsElsewhere.map((job) => {
+   522→              const loc = LOCATION_BY_ID[job.locationId]
+   523→              const lockedLoc = player.level < (loc?.unlockLevel ?? 1)
+   524→              return (
+   525→                <button
+   526→                  key={job.id}
+   527→                  onClick={() => {
+   528→                    audio.play('click')
+   529→                    onGoToMap(job.locationId)
+   530→                  }}
+   531→                  className="lko-press flex w-full items-center gap-3 rounded-xl border-2 border-black/[0.05] bg-black/[0.02] px-3 py-2.5 text-left"
+   532→                >
+   533→                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/[0.05] text-lg opacity-70" aria-hidden>
+   534→                    {job.emoji}
+   535→                  </span>
+   536→                  <span className="min-w-0 flex-1">
+   537→                    <span className="block truncate text-[13px] font-bold text-[var(--lko-ink)]">{job.name}</span>
+   538→                    <span className="block truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+   539→                      📍 {loc?.name ?? 'Lokoja'}{lockedLoc ? ` • 🔒 Level ${loc?.unlockLevel}` : ''}
+   540→                    </span>
+   541→                  </span>
+   542→                  <span className="shrink-0 text-[11px] font-extrabold text-[var(--lko-green)]">Go →</span>
+   543→                </button>
+   544→              )
+   545→            })}
+   546→          </div>
+   547→        </section>
+   548→      )}
+   549→
+   550→      {/* ---------------------------- earnings ---------------------------- */}
+   551→      <section aria-label="Earnings" className="mb-4">
+   552→        <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+   553→          🧾 Money — Day {world.day}
+   554→        </h2>
+   555→        <div className="lko-card p-4">
+   556→          <div className="grid grid-cols-2 gap-2 text-center">
+   557→            <div className="rounded-xl bg-[var(--lko-green-soft)] py-2.5">
+   558→              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-green-deep)]">Earned today</p>
+   559→              <p className="lko-display text-lg text-[var(--lko-green-deep)]">+{formatNaira(todayEarned).replace('₦', '₦')}</p>
+   560→            </div>
+   561→            <div className="rounded-xl bg-red-50 py-2.5">
+   562→              <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-700">Spent today</p>
+   563→              <p className="lko-display text-lg text-red-700">−{formatNaira(todaySpent)}</p>
+   564→            </div>
+   565→          </div>
+   566→
+   567→          <h3 className="mb-1.5 mt-3 text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+   568→            Recent
+   569→          </h3>
+   570→          {player.transactions.length === 0 ? (
+   571→            <p className="rounded-xl bg-black/[0.03] px-3 py-3 text-center text-xs font-semibold text-[var(--lko-ink-soft)]">
+   572→              No money moves yet — your first hustle dey wait.
+   573→            </p>
+   574→          ) : (
+   575→            <ul className="flex flex-col gap-1">
+   576→              {player.transactions.slice(0, 5).map((t) => (
+   577→                <li key={t.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 odd:bg-black/[0.03]">
+   578→                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--lko-ink)]">
+   579→                    {t.amount > 0 ? '📈' : '📉'} {t.label}
+   580→                    <span className="ml-1 text-[10px] text-[var(--lko-ink-soft)]">D{t.day}</span>
+   581→                  </span>
+   582→                  <span
+   583→                    className={`shrink-0 text-xs font-extrabold ${
+   584→                      t.amount > 0 ? 'text-[var(--lko-green-deep)]' : 'text-[var(--lko-terra)]'
+   585→                    }`}
+   586→                  >
+   587→                    {t.amount > 0 ? '+' : '−'}
+   588→                    {formatNaira(Math.abs(t.amount))}
+   589→                  </span>
+   590→                </li>
+   591→              ))}
+   592→            </ul>
+   593→          )}
+   594→        </div>
+   595→      </section>
+   596→
+   597→      {/* job confirm sheet */}
+   598→      {sheetJob && (
+   599→        <JobSheet
+   600→          job={sheetJob}
+   601→          onClose={() => {
+   602→            audio.play('click')
+   603→            setSheetJobId(null)
+   604→          }}
+   605→          onStart={() => {
+   606→            audio.play('click')
+   607→            setSheetJobId(null)
+   608→            workShift(sheetJob.id)
+   609→          }}
+   610→        />
+   611→      )}
+   612→    </div>
+   613→  )
+   614→}
+   615→
