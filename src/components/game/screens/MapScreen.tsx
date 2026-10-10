@@ -1,14 +1,16 @@
 'use client'
 
 /**
- * LOKOJA LIFE — MapScreen (Stage 2)
- * ----------------------------------
+ * LOKOJA LIFE — MapScreen (Stage 2, R1 presentation pass)
+ * -------------------------------------------------------
  * The functional Lokoja map: stylised canvas + tappable location markers
- * (current / available / locked states) + a mobile bottom-sheet location
- * panel with the travel confirmation built from the pure travel system.
+ * (current / available / locked states) + a bottom-sheet location panel
+ * with the travel confirmation built from the pure travel system.
  *
- * All fares, times and energy costs come from calculateTravel() —
- * nothing is hard-coded here.
+ * R1 changes are presentation-only: SVG place icons on the markers, an
+ * honest lock treatment without "Coming Soon" noise, slide-up sheet motion,
+ * transport rows with the shared icon language. All fares, times and energy
+ * costs still come from calculateTravel() — nothing is hard-coded here.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -20,12 +22,24 @@ import { ECONOMY, TRAVEL } from '@/game/data/config'
 import { LOCATIONS, LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
+import {
+  PlaceIcon,
+  TransportIcon,
+  PinIcon,
+  KekeIcon,
+  WeatherIcon,
+  LockIcon,
+  CheckIcon,
+  EnergyIcon,
+  ClockIcon,
+  ArrowRightIcon,
+} from '../icons'
 
 const WEATHER_HINT: Record<string, string | null> = {
-  rain: '🌧️ Rain is falling — trips take a bit longer.',
+  rain: 'Rain is falling — trips take a bit longer.',
   sunny: null,
   cloudy: null,
-  'night-clear': '🌙 Night roads are quiet.',
+  'night-clear': 'Night roads are quiet.',
 }
 
 /* ------------------------------- marker -------------------------------- */
@@ -49,28 +63,28 @@ function Marker({
       style={{ left: `${location.mapX}%`, top: `${location.mapY}%` }}
     >
       <span
-        className={`relative flex h-11 w-11 items-center justify-center rounded-full border-2 text-xl shadow-md transition-transform ${
+        className={`relative flex h-9 w-9 items-center justify-center rounded-full border-2 shadow-md transition-transform ${
           isCurrent
-            ? 'border-[var(--lko-green)] ring-4 ring-[var(--lko-green)]/30'
-            : 'border-white/90'
-        } ${isLocked ? 'opacity-50 grayscale' : ''}`}
+            ? 'border-[var(--lko-green)] ring-4 ring-[var(--lko-green)]/25'
+            : 'border-white/95'
+        } ${isLocked ? 'opacity-45 grayscale' : ''}`}
         style={{ background: location.color }}
       >
-        <span aria-hidden>{location.emoji}</span>
+        <PlaceIcon id={location.id} size={17} className="text-white" />
         {isCurrent && (
-          <span className="absolute -bottom-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-[var(--lko-green)] text-[9px] font-extrabold text-white">
-            ✓
+          <span className="absolute -bottom-1.5 -right-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 border-white bg-[var(--lko-green)]" style={{ width: 18, height: 18 }}>
+            <CheckIcon size={9} className="text-white" />
           </span>
         )}
         {isLocked && (
-          <span className="absolute -bottom-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-[#5a5a52] text-[9px] font-extrabold text-white">
-            🔒
+          <span className="absolute -bottom-1.5 -right-1.5 flex items-center justify-center rounded-full border-2 border-white bg-[#5a5a52]" style={{ width: 18, height: 18 }}>
+            <LockIcon size={9} className="text-white" />
           </span>
         )}
       </span>
       <span
-        className={`mt-0.5 rounded-md px-1 py-px text-[9px] font-extrabold leading-tight shadow-sm ${
-          isCurrent ? 'bg-[var(--lko-green)] text-white' : 'bg-white/90 text-[var(--lko-ink)]'
+        className={`mt-1 rounded-md px-1.5 py-px text-[9px] font-extrabold leading-tight shadow-sm ${
+          isCurrent ? 'bg-[var(--lko-green)] text-white' : 'bg-white/95 text-[var(--lko-ink)]'
         }`}
       >
         {location.shortName}
@@ -84,14 +98,14 @@ function Marker({
 function TravelOptionRow({
   plan,
   label,
-  emoji,
+  transport,
   disabled,
   disabledReason,
   onConfirm,
 }: {
   plan: TravelPlan
   label: string
-  emoji: string
+  transport: TransportId
   disabled: boolean
   disabledReason: string
   onConfirm: () => void
@@ -100,26 +114,40 @@ function TravelOptionRow({
     <button
       onClick={onConfirm}
       disabled={disabled}
-      className={`lko-press flex min-h-[56px] w-full items-center gap-3 rounded-xl border-2 px-3 py-2 text-left ${
+      className={`lko-press flex min-h-[56px] w-full items-center gap-3 rounded-xl border px-3 py-2 text-left ${
         disabled
-          ? 'cursor-not-allowed border-black/[0.06] bg-black/[0.03] opacity-60'
-          : 'border-[var(--lko-green)]/25 bg-white hover:border-[var(--lko-green)]/60'
+          ? 'cursor-not-allowed border-black/[0.05] bg-black/[0.03] opacity-60'
+          : 'border-black/[0.07] bg-white hover:border-[var(--lko-green)]/50'
       }`}
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-gold-soft)] text-xl" aria-hidden>
-        {emoji}
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+          disabled ? 'bg-black/[0.05] text-[var(--lko-ink-soft)]' : 'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]'
+        }`}
+        aria-hidden
+      >
+        <TransportIcon name={transport} size={20} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-extrabold text-[var(--lko-ink)]">{label}</span>
-        <span className="block text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-          {disabled ? disabledReason : `${plan.minutes} min trip`}
+        <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+          {disabled ? (
+            disabledReason
+          ) : (
+            <>
+              <ClockIcon size={11} />
+              {plan.minutes} min trip
+            </>
+          )}
         </span>
       </span>
       <span className="shrink-0 text-right">
-        <span className="block text-sm font-extrabold text-[var(--lko-terra)]">
+        <span className="lko-num block text-sm font-extrabold text-[var(--lko-terra)]">
           {plan.cost === 0 ? 'Free' : formatNaira(plan.cost)}
         </span>
-        <span className="block text-[11px] font-bold text-[#b57d0a]">−{plan.energyCost} ⚡</span>
+        <span className="lko-num flex items-center justify-end gap-0.5 text-[11px] font-bold text-[#b57d0a]">
+          <EnergyIcon size={11} />−{plan.energyCost}
+        </span>
       </span>
     </button>
   )
@@ -181,55 +209,67 @@ export function MapScreen({
   }
 
   return (
-    <div className="px-4 pt-3">
+    <div className="px-4 pt-3 sm:px-6">
       {/* status header */}
-      <div className="lko-card mb-3 flex items-center justify-between gap-2 px-4 py-2.5">
-        <div className="min-w-0">
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            📍 Current location
+      <div className="lko-card mb-3 flex items-center gap-3 px-4 py-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-river-soft)] text-[var(--lko-river)]" aria-hidden>
+          <PinIcon size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+            Current location
           </p>
           {isTravelling ? (
-            <p className="lko-display animate-pulse text-base text-[var(--lko-gold)]">🛺 Travelling…</p>
+            <p className="lko-display flex animate-pulse items-center gap-1.5 text-base text-[var(--lko-gold-deep)]">
+              <KekeIcon size={16} /> Travelling…
+            </p>
           ) : (
-            <p className="lko-display truncate text-base">
-              {origin.emoji} {origin.name}
+            <p className="lko-display flex items-center gap-1.5 truncate text-base">
+              <PlaceIcon id={origin.id} size={16} className="shrink-0 text-[var(--lko-terra)]" />
+              {origin.name}
             </p>
           )}
         </div>
-        <span className="shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2.5 py-1 text-[11px] font-bold text-[var(--lko-green-deep)]">
+        <span className="lko-num shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2.5 py-1 text-[11px] font-bold text-[var(--lko-green-deep)]">
           Day {world.day}
         </span>
       </div>
       {WEATHER_HINT[world.weather] && (
-        <p className="mb-2 px-1 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+        <p className="mb-2 flex items-center gap-1.5 px-1 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+          <WeatherIcon name={world.weather} size={13} />
           {WEATHER_HINT[world.weather]}
         </p>
       )}
 
-      {/* map canvas + markers */}
-      <div className="lko-card relative aspect-square w-full overflow-hidden p-0">
-        <MapCanvas />
-        {LOCATIONS.map((l) => (
-          <Marker
-            key={l.id}
-            location={l}
-            isCurrent={l.id === origin.id && !isTravelling}
-            isLocked={player.level < l.unlockLevel}
-            onSelect={() => openLocation(l.id)}
-          />
-        ))}
-        {isTravelling && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[var(--lko-cream)]/40 backdrop-blur-[1px]">
-            <span className="lko-display animate-bounce rounded-full border-2 border-[var(--lko-gold)]/40 bg-white/95 px-4 py-2 text-sm shadow-md">
-              🛺 Travelling…
-            </span>
-          </div>
-        )}
+      {/* map canvas + markers — square art, width-capped and centred on desktop */}
+      <div className="mx-auto w-full max-w-[560px] lg:max-w-[600px]">
+        <div className="lko-card relative aspect-square w-full overflow-hidden p-0">
+          <MapCanvas />
+          {LOCATIONS.map((l) => (
+            <Marker
+              key={l.id}
+              location={l}
+              isCurrent={l.id === origin.id && !isTravelling}
+              isLocked={player.level < l.unlockLevel}
+              onSelect={() => openLocation(l.id)}
+            />
+          ))}
+          {isTravelling && (
+            <div className="lko-scrim absolute inset-0 z-20 flex items-center justify-center bg-[var(--lko-cream)]/40 backdrop-blur-[1px]">
+              <span className="lko-display flex items-center gap-2 rounded-full border border-[var(--lko-gold)]/40 bg-white/95 px-4 py-2 text-sm shadow-md">
+                <KekeIcon size={17} className="animate-pulse text-[var(--lko-gold-deep)]" />
+                Travelling…
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* transport legend (informational, fares shown per-trip) */}
-      <p className="mt-2 px-1 text-center text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-        🚶 Walk is free but tiring • 🛺 Keke is cheap • 🚕 Taxi is fastest
+      <p className="mt-2.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-center text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+        <span className="inline-flex items-center gap-1"><TransportIcon name="walk" size={13} /> Walk is free but tiring</span>
+        <span className="inline-flex items-center gap-1"><TransportIcon name="keke" size={13} /> Keke is cheap</span>
+        <span className="inline-flex items-center gap-1"><TransportIcon name="taxi" size={13} /> Taxi is fastest</span>
       </p>
 
       {/* ------------------------ location bottom sheet ------------------------ */}
@@ -239,25 +279,25 @@ export function MapScreen({
           <button
             aria-label="Close panel"
             onClick={() => setUserSelectedId(null)}
-            className="absolute inset-0 bg-black/40"
+            className="lko-scrim absolute inset-0 bg-black/45"
           />
           {/* sheet */}
-          <div className="lko-pop absolute inset-x-0 bottom-0 mx-auto w-full max-w-md">
-            <div className="rounded-t-3xl border-t-2 border-black/[0.08] bg-[#fffdf7] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 shadow-2xl">
+          <div className="lko-sheet absolute inset-x-0 bottom-0 mx-auto w-full max-w-md">
+            <div className="max-h-[86dvh] overflow-y-auto rounded-t-3xl border-t border-black/[0.06] bg-[var(--lko-surface)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 shadow-[var(--lko-shadow-lg)]">
               <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-black/15" aria-hidden />
 
               {/* header */}
               <div className="flex items-start gap-3">
                 <span
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-3xl"
-                  style={{ background: `${selected.color}22` }}
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl"
+                  style={{ background: `${selected.color}1e`, color: selected.accent }}
                   aria-hidden
                 >
-                  {selected.emoji}
+                  <PlaceIcon id={selected.id} size={28} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <h3 className="lko-display text-lg leading-tight">{selected.name}</h3>
-                  <p className="text-xs font-semibold italic text-[var(--lko-ink-soft)]">
+                  <p className="mt-0.5 text-xs font-semibold italic text-[var(--lko-ink-soft)]">
                     “{selected.tagline}”
                   </p>
                 </div>
@@ -266,10 +306,13 @@ export function MapScreen({
                 {selected.description}
               </p>
 
-              {/* locked notice */}
+              {/* locked notice — honest, quiet */}
               {isSelectedLocked && (
-                <div className="mt-3 rounded-xl border-2 border-black/[0.06] bg-black/[0.03] p-4 text-center">
-                  <p className="text-sm font-extrabold">🔒 Not open to you yet</p>
+                <div className="mt-3 rounded-xl border border-black/[0.06] bg-black/[0.03] p-4 text-center">
+                  <p className="flex items-center justify-center gap-1.5 text-sm font-extrabold">
+                    <LockIcon size={15} className="text-[var(--lko-ink-soft)]" />
+                    Not open to you yet
+                  </p>
                   <p className="mt-1 text-xs text-[var(--lko-ink-soft)]">
                     Reach <b>Level {selected.unlockLevel}</b> to unlock this part of Lokoja.
                     You are Level {player.level}.
@@ -280,7 +323,7 @@ export function MapScreen({
               {/* activities */}
               {!isSelectedLocked && (
                 <>
-                  <h4 className="mb-1.5 mt-3 text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+                  <h4 className="mb-1.5 mt-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
                     Activities here
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
@@ -297,22 +340,25 @@ export function MapScreen({
                               setUserSelectedId(null)
                               onOpenWork()
                             }}
-                            className="lko-press rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[11px] font-bold text-[#8a5a00]"
+                            className="lko-press inline-flex items-center gap-0.5 rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[11px] font-bold text-[var(--lko-gold-deep)]"
                           >
-                            {a.label} →
+                            {a.label}
+                            <ArrowRightIcon size={11} />
                           </button>
                         )
                       }
                       return (
                         <span
                           key={a.key}
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${
                             isLive
                               ? 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'
                               : 'bg-black/[0.05] text-[var(--lko-ink-soft)]'
                           }`}
                         >
-                          {isLive ? a.label : `🔒 ${a.label} (Stage ${a.stage})`}
+                          {!isLive && <LockIcon size={10} />}
+                          {a.label}
+                          {!isLive && ` (Stage ${a.stage})`}
                         </span>
                       )
                     })}
@@ -323,7 +369,7 @@ export function MapScreen({
               {/* travel confirmation */}
               {!isSelectedCurrent && !isSelectedLocked && (
                 <>
-                  <h4 className="mb-1.5 mt-3 text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+                  <h4 className="lko-num mb-1.5 mt-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
                     Travel to {selected.name}? ({plans[0]?.distanceKm.toFixed(1)} km from {origin.shortName})
                   </h4>
                   <div className="flex flex-col gap-2">
@@ -335,8 +381,8 @@ export function MapScreen({
                         <TravelOptionRow
                           key={plan.transport}
                           plan={plan}
-                          label={`${params.emoji} ${params.label}`}
-                          emoji={params.emoji}
+                          label={params.label}
+                          transport={plan.transport}
                           disabled={tooPoor || tooTired}
                           disabledReason={
                             tooPoor
@@ -353,8 +399,9 @@ export function MapScreen({
 
               {/* current location note */}
               {isSelectedCurrent && (
-                <p className="mt-3 rounded-xl bg-[var(--lko-green-soft)] p-3 text-center text-sm font-bold text-[var(--lko-green-deep)]">
-                  ✓ You are already here.
+                <p className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-[var(--lko-green-soft)] p-3 text-center text-sm font-bold text-[var(--lko-green-deep)]">
+                  <CheckIcon size={15} />
+                  You are already here.
                 </p>
               )}
 
@@ -363,7 +410,7 @@ export function MapScreen({
                   audio.play('click')
                   setUserSelectedId(null)
                 }}
-                className="lko-press mt-3 min-h-[48px] w-full rounded-xl border-2 border-black/[0.08] bg-white py-3 text-sm font-extrabold text-[var(--lko-ink)]"
+                className="lko-press mt-3 min-h-[48px] w-full rounded-xl border border-black/[0.08] bg-white py-3 text-sm font-extrabold text-[var(--lko-ink)]"
               >
                 Cancel
               </button>

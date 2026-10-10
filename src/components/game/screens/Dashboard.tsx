@@ -1,18 +1,44 @@
 'use client'
 
 /**
- * LOKOJA LIFE — Dashboard (Stage 1 shell)
- * The in-game HUD: player header, needs, skills, time/weather and the
- * 5-tab bottom navigation. Tabs that arrive in later stages show honest
- * "coming soon" panels with real data teasers where available.
+ * LOKOJA LIFE — Dashboard (R1 visual overhaul)
+ * The in-game shell: a compact HUD header, the living-world hero on the
+ * Home tab (driven by the real world clock + weather), needs/skills/rest,
+ * and the 5-tab bottom navigation. Tabs that arrive in later stages show
+ * honest "coming soon" panels with real data teasers where available.
+ *
+ * R1 is presentation-only: every store action, guard and data source below
+ * is untouched — only the visual layer was redesigned.
  */
 
 import { useState } from 'react'
 import { Avatar } from '../Avatar'
 import { NeedsBar } from '../NeedsBar'
 import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
+import { LivingScene } from '../LivingScene'
 import { MapScreen } from './MapScreen'
 import { WorkScreen } from './WorkScreen'
+import {
+  PlaceIcon,
+  TimeIcon,
+  WeatherIcon,
+  SkillIcon,
+  StarIcon,
+  KekeIcon,
+  FireIcon,
+  ThumbsUpIcon,
+  AlertIcon,
+  MoonIcon,
+  ClockIcon,
+  CoinsIcon,
+  TrendUpIcon,
+  TrendDownIcon,
+  SoundIcon,
+  SaveIcon,
+  ExitIcon,
+  SettingsIcon,
+  PinIcon,
+} from '../icons'
 import { audio } from '@/game/systems/audio'
 import { formatNaira, nextReputationTier, reputationTier, skillCap, xpToNextLevel } from '@/game/systems/progression'
 import { skillXpToNext, SKILL_META } from '@/game/systems/skills'
@@ -24,25 +50,23 @@ import { useGameStore } from '@/game/store/useGameStore'
 
 /* --------------------------- small HUD helpers ----------------------------- */
 
-const TIME_META: Record<string, { icon: string; label: string; bg: string }> = {
-  morning: { icon: '🌅', label: 'Morning', bg: 'bg-[var(--lko-gold-soft)]' },
-  afternoon: { icon: '☀️', label: 'Afternoon', bg: 'bg-[var(--lko-gold-soft)]' },
-  evening: { icon: '🌇', label: 'Evening', bg: 'bg-orange-100' },
-  night: { icon: '🌙', label: 'Night', bg: 'bg-[var(--lko-green-soft)]' },
-}
-
-const WEATHER_META: Record<string, { icon: string; label: string }> = {
-  sunny: { icon: '☀️', label: 'Sunny' },
-  cloudy: { icon: '☁️', label: 'Cloudy' },
-  rain: { icon: '🌧️', label: 'Rain' },
-  'night-clear': { icon: '🌙', label: 'Clear Night' },
-}
-
 function Chip({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${className}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${className}`}>
       {children}
     </span>
+  )
+}
+
+/** Section heading with the shared icon language (replaces emoji prefixes). */
+function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <h2 className="mb-2.5 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+      <span className="text-[var(--lko-gold-deep)]" aria-hidden>
+        {icon}
+      </span>
+      {children}
+    </h2>
   )
 }
 
@@ -55,144 +79,170 @@ function HomeTab() {
   const rest = useGameStore((s) => s.rest)
 
   const condition = conditionSummary(player.needs)
-  const timeMeta = TIME_META[world.timeOfDay]
-  const weatherMeta = WEATHER_META[world.weather]
   const location = LOCATION_BY_ID[world.currentLocation]
   const xpNeeded = xpToNextLevel(player.level)
 
   return (
-    <div className="px-4 pt-3">
-      {/* condition banner */}
+    <div className="px-4 pt-3 sm:px-6">
+      {/* ---- the living world hero ---- */}
+      <section
+        className="lko-fade relative h-44 overflow-hidden rounded-3xl border border-black/[0.07] shadow-[var(--lko-shadow-md)] sm:h-52"
+        aria-label={`You are at ${location.name}`}
+      >
+        <LivingScene timeOfDay={world.timeOfDay} weather={world.weather} className="absolute inset-0 h-full w-full" />
+        {/* legibility scrim */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-black/25" aria-hidden />
+
+        {/* location — bottom left */}
+        <div className="absolute bottom-3 left-3.5 right-3.5 flex items-end justify-between gap-2">
+          <div className="min-w-0 drop-shadow-[0_1px_6px_rgba(0,0,0,0.45)]">
+            <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-white/85">
+              <PinIcon size={12} />
+              You are here
+            </p>
+            {isTravelling ? (
+              <p className="lko-display mt-0.5 flex items-center gap-1.5 text-xl text-white animate-pulse">
+                <KekeIcon size={20} /> Travelling…
+              </p>
+            ) : (
+              <p className="lko-display mt-0.5 flex items-center gap-2 text-xl leading-tight text-white">
+                <PlaceIcon id={location.id} size={20} className="shrink-0 text-[#ffd88a]" />
+                <span className="truncate">{location.name}</span>
+              </p>
+            )}
+            {!isTravelling && (
+              <p className="mt-0.5 truncate text-[11.5px] font-semibold italic text-white/80">
+                “{location.tagline}”
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* day / time / weather — top right */}
+        <div className="absolute right-3 top-3 flex flex-col items-end gap-1.5">
+          <Chip className="bg-black/30 text-white backdrop-blur-sm">Day {world.day}</Chip>
+          <Chip className="bg-black/30 text-white backdrop-blur-sm">
+            <TimeIcon name={world.timeOfDay} size={13} className="text-[#ffd88a]" />
+            <span className="capitalize">{world.timeOfDay}</span>
+          </Chip>
+          <Chip className="bg-black/30 text-white backdrop-blur-sm">
+            <WeatherIcon name={world.weather} size={13} className="text-[#ffd88a]" />
+            <span>{world.weather === 'night-clear' ? 'Clear' : world.weather === 'rain' ? 'Rain' : world.weather === 'cloudy' ? 'Cloudy' : 'Sunny'}</span>
+          </Chip>
+        </div>
+      </section>
+
+      {/* condition summary — one quiet line */}
       <div
-        className={`lko-card mb-3 flex items-center gap-2 px-4 py-2.5 ${
-          condition.tone === 'bad' ? 'border-red-200 bg-red-50' : ''
+        className={`lko-fade mt-3 flex items-center gap-2 rounded-2xl px-4 py-2.5 ${
+          condition.tone === 'bad' ? 'border border-red-200 bg-red-50' : 'lko-card'
         }`}
       >
-        <span className="text-lg" aria-hidden>
-          {condition.tone === 'good' ? '🔥' : condition.tone === 'bad' ? '⚠️' : '👍'}
+        <span className="text-[var(--lko-terra)]" aria-hidden>
+          {condition.tone === 'good' ? <FireIcon size={17} /> : condition.tone === 'bad' ? <AlertIcon size={17} /> : <ThumbsUpIcon size={17} />}
         </span>
         <p className="text-[13px] font-semibold text-[var(--lko-ink)]">{condition.text}</p>
       </div>
 
-      {/* needs */}
-      <section className="lko-card p-4" aria-label="Player needs">
-        <h2 className="mb-3 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          Condition
-        </h2>
-        <div className="flex flex-col gap-2.5">
-          <NeedsBar need="health" value={player.needs.health} />
-          <NeedsBar need="energy" value={player.needs.energy} />
-          <NeedsBar need="hunger" value={player.needs.hunger} />
-          <NeedsBar need="mood" value={player.needs.mood} />
-        </div>
-      </section>
+      {/* needs + skills — side by side from small tablets up */}
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <section className="lko-card p-4" aria-label="Player needs">
+          <SectionTitle icon={<FireIcon size={13} />}>Condition</SectionTitle>
+          <div className="flex flex-col gap-2.5">
+            <NeedsBar need="health" value={player.needs.health} />
+            <NeedsBar need="energy" value={player.needs.energy} />
+            <NeedsBar need="hunger" value={player.needs.hunger} />
+            <NeedsBar need="mood" value={player.needs.mood} />
+          </div>
+        </section>
 
-      {/* skills */}
-      <section className="lko-card mt-3 p-4" aria-label="Skills">
-        <h2 className="mb-3 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          Skills
-        </h2>
-        <div className="grid grid-cols-3 gap-2">
-          {(
-            ['hustle', 'smart', 'social'] as const
-          ).map((key) => {
-            const meta = SKILL_META[key]
-            const cap = skillCap(player.level)
-            const capped = player.skills[key] >= cap
-            const toNext = skillXpToNext()
-            return (
-              <div
-                key={key}
-                className="flex flex-col items-center rounded-xl border-2 border-black/[0.05] bg-[var(--lko-cream)] py-2.5"
-              >
-                <span className="text-xl" aria-hidden>
-                  {meta.emoji}
-                </span>
-                <span className="mt-0.5 text-[11px] font-bold text-[var(--lko-ink-soft)]">{meta.label}</span>
-                <span className="lko-display text-lg text-[var(--lko-green-deep)]">{player.skills[key]}</span>
-                {/* skill XP bar — work grinds visibly fill this */}
-                <div className="mt-1 h-1.5 w-3/4 overflow-hidden rounded-full bg-black/[0.08]">
-                  <div
-                    className="h-full rounded-full bg-[var(--lko-gold)] transition-all duration-500"
-                    style={{ width: capped ? '100%' : `${Math.min(100, (player.skillXp[key] / toNext) * 100)}%` }}
-                  />
+        <section className="lko-card p-4" aria-label="Skills">
+          <SectionTitle icon={<TrendUpIcon size={13} />}>Skills</SectionTitle>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              ['hustle', 'smart', 'social'] as const
+            ).map((key) => {
+              const meta = SKILL_META[key]
+              const cap = skillCap(player.level)
+              const capped = player.skills[key] >= cap
+              const toNext = skillXpToNext()
+              return (
+                <div
+                  key={key}
+                  className="flex flex-col items-center rounded-xl border border-black/[0.05] bg-[var(--lko-cream)] py-2.5"
+                >
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                      key === 'hustle'
+                        ? 'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]'
+                        : key === 'smart'
+                          ? 'bg-[var(--lko-river-soft)] text-[var(--lko-river)]'
+                          : 'bg-[var(--lko-green-soft)] text-[var(--lko-green)]'
+                    }`}
+                    aria-hidden
+                  >
+                    <SkillIcon name={key} size={16} />
+                  </span>
+                  <span className="mt-1 text-[11px] font-bold text-[var(--lko-ink-soft)]">{meta.label}</span>
+                  <span className="lko-display lko-num text-lg text-[var(--lko-green-deep)]">{player.skills[key]}</span>
+                  {/* skill XP bar — work grinds visibly fill this */}
+                  <div className="mt-1 h-1.5 w-3/4 overflow-hidden rounded-full bg-black/[0.08]">
+                    <div
+                      className="h-full rounded-full bg-[var(--lko-gold)] transition-[width] duration-500"
+                      style={{ width: capped ? '100%' : `${Math.min(100, (player.skillXp[key] / toNext) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="lko-num mt-0.5 text-[9px] font-bold text-[var(--lko-ink-soft)]">
+                    {capped ? 'MAX' : `${player.skillXp[key]}/${toNext}`}
+                  </span>
                 </div>
-                <span className="mt-0.5 text-[9px] font-bold text-[var(--lko-ink-soft)]">
-                  {capped ? 'MAX (level up)' : `${player.skillXp[key]}/${toNext} xp`}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </section>
+              )
+            })}
+          </div>
+        </section>
+      </div>
 
-      {/* world card + rest actions */}
-      <section className="mt-3 grid grid-cols-2 gap-3" aria-label="Time and rest">
-        <div className={`lko-card flex flex-col justify-center p-4 ${timeMeta.bg}`}>
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            Lokoja • Day {world.day}
-          </p>
-          <p className="lko-display mt-1 text-lg">
-            {timeMeta.icon} {timeMeta.label}
-          </p>
-          <p className="mt-0.5 text-xs font-semibold text-[var(--lko-ink-soft)]">
-            {weatherMeta.icon} {weatherMeta.label}
-          </p>
-        </div>
-        <div className="lko-card flex flex-col justify-center p-4">
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            📍 Location
-          </p>
-          {isTravelling ? (
-            <p className="lko-display mt-1 animate-pulse text-lg text-[var(--lko-gold)]">
-              🛺 Travelling…
-            </p>
-          ) : (
-            <>
-              <p className="lko-display mt-1 flex items-center gap-1.5 text-lg leading-tight">
-                <span aria-hidden>{location.emoji}</span> {location.name}
-              </p>
-              <p className="mt-0.5 text-xs font-semibold italic text-[var(--lko-ink-soft)]">
-                “{location.tagline}”
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* Stage 1 real mechanic: rest — only possible while actually at home */}
-        <div className="col-span-2 lko-card p-4">
-          <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            Rest at home
-          </h2>
-          {world.currentLocation === 'home' ? (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => {
-                  audio.play('click')
-                  rest('nap')
-                }}
-                className="lko-press min-h-[52px] rounded-xl border-b-4 border-[#b57d0a] bg-[var(--lko-gold)] px-2 py-2 text-sm font-extrabold text-[#3d2a00]"
-              >
-                😴 Nap
+      {/* rest actions — only while actually at home (Stage 1 mechanic, preserved) */}
+      <section className="lko-card mt-3 p-4" aria-label="Time and rest">
+        <SectionTitle icon={<MoonIcon size={13} />}>Rest at home</SectionTitle>
+        {world.currentLocation === 'home' ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                audio.play('click')
+                rest('nap')
+              }}
+              className="lko-press flex min-h-[56px] items-center gap-2.5 rounded-xl bg-[var(--lko-gold)] px-3 py-2 text-left text-sm font-extrabold text-[#3d2a00] shadow-[inset_0_-3px_0_rgba(0,0,0,0.14)]"
+            >
+              <ClockIcon size={19} className="shrink-0" />
+              <span>
+                Nap
                 <span className="mt-0.5 block text-[10px] font-bold opacity-80">+22 Energy • 1 slot</span>
-              </button>
-              <button
-                onClick={() => {
-                  audio.play('click')
-                  rest('sleep')
-                }}
-                className="lko-press min-h-[52px] rounded-xl border-b-4 border-[#0a5c2e] bg-[var(--lko-green)] px-2 py-2 text-sm font-extrabold text-white"
-              >
-                🛏️ Sleep
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                audio.play('click')
+                rest('sleep')
+              }}
+              className="lko-press flex min-h-[56px] items-center gap-2.5 rounded-xl bg-[var(--lko-green)] px-3 py-2 text-left text-sm font-extrabold text-white shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)]"
+            >
+              <MoonIcon size={19} className="shrink-0" />
+              <span>
+                Sleep
                 <span className="mt-0.5 block text-[10px] font-bold opacity-80">Full rest • next morning</span>
-              </button>
-            </div>
-          ) : (
-            <p className="rounded-xl bg-black/[0.03] px-4 py-3 text-center text-xs font-semibold text-[var(--lko-ink-soft)]">
-              🏠 Rest is only possible at your place. Open the Map to head home.
-            </p>
-          )}
-        </div>
+              </span>
+            </button>
+          </div>
+        ) : (
+          <p className="rounded-xl bg-black/[0.03] px-4 py-3 text-center text-xs font-semibold text-[var(--lko-ink-soft)]">
+            Rest is only possible at your place. Open the Map to head home.
+          </p>
+        )}
+        {/* honest XP hint */}
+        <p className="lko-num mt-2.5 text-center text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
+          {Math.max(0, xpNeeded - player.xp)} XP to Level {player.level + 1}
+        </p>
       </section>
     </div>
   )
@@ -232,27 +282,27 @@ function BagTab() {
   return (
     <div>
       <ComingSoon
-        icon="🎒"
+        icon="bag"
         title="Inventory & Shops"
         stage="Stage 4"
         description="Buy food, drinks and tools; keep your pace meals and fishing gear close. A hungry hustler cannot hustle."
       />
-      {/* real data teaser: actual launch menu */}
-      <section className="px-4" aria-label="Coming food menu">
-        <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+      {/* real data teaser: actual launch menu — food emoji kept as menu flavour */}
+      <section className="px-4 sm:px-6" aria-label="Coming food menu">
+        <h3 className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
           The menu is getting ready
         </h3>
         <ul className="flex flex-col gap-2">
           {FOODS.slice(0, 6).map((f) => (
-            <li key={f.id} className="lko-card flex items-center gap-3 p-3 opacity-75">
-              <span className="text-xl" aria-hidden>
+            <li key={f.id} className="lko-card flex items-center gap-3 p-3 opacity-80">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-cream)] text-lg" aria-hidden>
                 {f.emoji}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold leading-tight">{f.name}</p>
                 <p className="truncate text-[11px] text-[var(--lko-ink-soft)]">{f.description}</p>
               </div>
-              <span className="text-xs font-extrabold text-[var(--lko-terra)]">{formatNaira(f.price)}</span>
+              <span className="lko-num text-xs font-extrabold text-[var(--lko-terra)]">{formatNaira(f.price)}</span>
             </li>
           ))}
         </ul>
@@ -279,14 +329,14 @@ function ProfileTab() {
     .flatMap(([, items]) => items)
 
   return (
-    <div className="px-4 pt-3">
+    <div className="px-4 pt-3 sm:px-6">
       {/* identity card */}
       <section className="lko-card flex items-center gap-4 p-4" aria-label="Identity">
         <Avatar config={player.avatar} gender={player.gender} withBackdrop className="h-24 w-24 shrink-0" />
         <div className="min-w-0">
           <h2 className="lko-display truncate text-xl">{player.name}</h2>
           <p className="text-xs font-semibold capitalize text-[var(--lko-ink-soft)]">
-            {player.gender === 'male' ? '👨' : '👩'} Hustler • {tier.name}
+            Hustler • {tier.name}
           </p>
           <p className="mt-1 text-[11px] italic leading-snug text-[var(--lko-ink-soft)]">
             “{tier.title}”
@@ -297,14 +347,15 @@ function ProfileTab() {
       {/* reputation ladder */}
       <section className="lko-card mt-3 p-4" aria-label="Reputation">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            ⭐ Reputation
+          <h3 className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+            <StarIcon size={13} className="text-[var(--lko-gold-deep)]" aria-hidden />
+            Reputation
           </h3>
-          <span className="lko-display text-lg text-[var(--lko-terra)]">{player.reputation}</span>
+          <span className="lko-display lko-num text-lg text-[var(--lko-terra)]">{player.reputation}</span>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-black/[0.08]">
+        <div className="h-2.5 overflow-hidden rounded-full bg-black/[0.07]">
           <div
-            className="h-full rounded-full bg-[var(--lko-terra)] transition-all duration-500"
+            className="h-full rounded-full bg-[var(--lko-terra)] transition-[width] duration-500"
             style={{
               width: nextTier
                 ? `${Math.min(100, (player.reputation / nextTier.tier.threshold) * 100)}%`
@@ -321,33 +372,35 @@ function ProfileTab() {
 
       {/* life stats */}
       <section className="lko-card mt-3 p-4" aria-label="Life stats">
-        <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          📊 Life so far
+        <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+          <CoinsIcon size={13} className="text-[var(--lko-gold-deep)]" aria-hidden />
+          Life so far
         </h3>
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2 text-center">
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Shifts worked</p>
-            <p className="lko-display text-lg text-[var(--lko-green-deep)]">{player.stats.jobsCompleted}</p>
+            <p className="lko-display lko-num text-lg text-[var(--lko-green-deep)]">{player.stats.jobsCompleted}</p>
           </div>
           <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2 text-center">
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Hustles done</p>
-            <p className="lko-display text-lg text-[var(--lko-green-deep)]">{player.stats.hustlesCompleted}</p>
+            <p className="lko-display lko-num text-lg text-[var(--lko-green-deep)]">{player.stats.hustlesCompleted}</p>
           </div>
           <div className="rounded-xl bg-[var(--lko-green-soft)] px-3 py-2 text-center">
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-green-deep)]">Total earned</p>
-            <p className="lko-display text-base text-[var(--lko-green-deep)]">{formatNaira(player.stats.totalEarned)}</p>
+            <p className="lko-display lko-num text-base text-[var(--lko-green-deep)]">{formatNaira(player.stats.totalEarned)}</p>
           </div>
           <div className="rounded-xl bg-red-50 px-3 py-2 text-center">
             <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-700">Total spent</p>
-            <p className="lko-display text-base text-red-700">{formatNaira(player.stats.totalSpent)}</p>
+            <p className="lko-display lko-num text-base text-red-700">{formatNaira(player.stats.totalSpent)}</p>
           </div>
         </div>
       </section>
 
       {/* path & unlocks */}
       <section className="lko-card mt-3 p-4" aria-label="Your path">
-        <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          🛤️ Your path so far
+        <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+          <TrendUpIcon size={13} className="text-[var(--lko-gold-deep)]" aria-hidden />
+          Your path so far
         </h3>
         {unlocked.length === 0 ? (
           <p className="text-xs text-[var(--lko-ink-soft)]">
@@ -365,22 +418,27 @@ function ProfileTab() {
             ))}
           </ul>
         )}
-        <p className="mt-2 text-[11px] text-[var(--lko-ink-soft)]">
+        <p className="lko-num mt-2 text-[11px] text-[var(--lko-ink-soft)]">
           XP to Level {player.level + 1}: {Math.max(0, xpNeeded - player.xp)}
         </p>
       </section>
 
       {/* settings & save */}
       <section className="lko-card mt-3 mb-4 p-4" aria-label="Settings">
-        <h3 className="mb-3 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          ⚙️ Settings
+        <h3 className="mb-3 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+          <SettingsIcon size={13} className="text-[var(--lko-gold-deep)]" aria-hidden />
+          Settings
         </h3>
         <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between rounded-xl border-2 border-black/[0.06] px-4 py-3">
-            <span className="text-sm font-bold">🔊 Sound</span>
+          <div className="flex items-center justify-between rounded-xl border border-black/[0.06] px-4 py-3">
+            <span className="flex items-center gap-2 text-sm font-bold">
+              <SoundIcon size={16} className="text-[var(--lko-ink-soft)]" aria-hidden />
+              Sound
+            </span>
             <button
               role="switch"
               aria-checked={settings.sound}
+              aria-label="Toggle sound"
               onClick={toggleSound}
               className={`lko-press h-8 w-14 rounded-full transition-colors ${
                 settings.sound ? 'bg-[var(--lko-green)]' : 'bg-black/15'
@@ -398,18 +456,20 @@ function ProfileTab() {
               audio.play('chime')
               saveNow()
             }}
-            className="lko-press min-h-[48px] rounded-xl border-2 border-[var(--lko-green)]/30 bg-[var(--lko-green-soft)] py-3 text-sm font-extrabold text-[var(--lko-green-deep)]"
+            className="lko-press flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-[var(--lko-green)]/25 bg-[var(--lko-green-soft)] py-3 text-sm font-extrabold text-[var(--lko-green-deep)]"
           >
-            💾 Save now
+            <SaveIcon size={16} />
+            Save now
           </button>
           <button
             onClick={() => {
               audio.play('click')
               returnToMenu()
             }}
-            className="lko-press min-h-[48px] rounded-xl border-2 border-black/[0.08] bg-white py-3 text-sm font-bold text-[var(--lko-ink)]"
+            className="lko-press flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-black/[0.08] bg-white py-3 text-sm font-bold text-[var(--lko-ink)]"
           >
-            🚪 Main menu (auto-saves)
+            <ExitIcon size={16} />
+            Main menu (auto-saves)
           </button>
         </div>
       </section>
@@ -427,23 +487,30 @@ export function Dashboard() {
   const [tab, setTab] = useState<TabKey>('home')
   /** map deep-link: which location the map should open (from work screen links) */
   const [focusLoc, setFocusLoc] = useState<string | null>(null)
+  /** remount key so tab switches replay the gentle fade */
+  const [tabTick, setTabTick] = useState(0)
 
   const xpNeeded = xpToNextLevel(player.level)
   const tier = reputationTier(player.reputation)
 
+  const switchTab = (next: TabKey) => {
+    setTab(next)
+    setTabTick((t) => t + 1)
+  }
+
   return (
     <div className="lko-root min-h-dvh">
       {/* floating notifications */}
-      <div className="pointer-events-none fixed inset-x-0 top-2 z-50 mx-auto flex w-full max-w-md flex-col items-center gap-1.5 px-4">
+      <div className="pointer-events-none fixed inset-x-0 top-2 z-50 mx-auto flex w-full max-w-xl flex-col items-center gap-1.5 px-4">
         {notifications.map((n) => (
           <div
             key={n.id}
-            className={`lko-toast flex items-center gap-2 rounded-full border-2 px-4 py-2 text-[13px] font-bold shadow-lg ${
+            className={`lko-toast flex items-center gap-2 rounded-full border px-4 py-2 text-[13px] font-bold shadow-[var(--lko-shadow-lg)] backdrop-blur-sm ${
               n.tone === 'good'
-                ? 'border-[var(--lko-green)]/30 bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'
+                ? 'border-[var(--lko-green)]/25 bg-[var(--lko-green-soft)]/95 text-[var(--lko-green-deep)]'
                 : n.tone === 'bad'
-                  ? 'border-red-200 bg-red-50 text-red-700'
-                  : 'border-black/10 bg-white text-[var(--lko-ink)]'
+                  ? 'border-red-200 bg-red-50/95 text-red-700'
+                  : 'border-black/10 bg-white/95 text-[var(--lko-ink)]'
             }`}
             role="status"
           >
@@ -453,63 +520,66 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* header */}
-      <header className="mx-auto w-full max-w-md px-4 pt-3">
-        <div className="lko-card p-3">
-          <div className="flex items-center gap-3">
-            <Avatar config={player.avatar} gender={player.gender} withBackdrop className="h-14 w-14 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="lko-display truncate text-base leading-tight">{player.name}</p>
-              {/* xp bar */}
-              <div className="mt-1 flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--lko-green)] text-[10px] font-extrabold text-white">
-                  {player.level}
-                </span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/[0.08]">
-                  <div
-                    className="h-full rounded-full bg-[var(--lko-green)] transition-all duration-500"
-                    style={{ width: `${Math.min(100, (player.xp / xpNeeded) * 100)}%` }}
-                  />
-                </div>
-              </div>
+      {/* HUD header — one compact strip, no heavy card stack */}
+      <header className="mx-auto w-full max-w-md px-4 pt-3 sm:max-w-3xl sm:px-6">
+        <div className="lko-card flex items-center gap-3 px-3.5 py-2.5">
+          <Avatar config={player.avatar} gender={player.gender} withBackdrop className="h-11 w-11 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="lko-display truncate text-[15px] leading-tight">{player.name}</p>
+              <span className="flex h-[18px] shrink-0 items-center rounded-full bg-[var(--lko-green)] px-1.5 text-[10px] font-extrabold text-white">
+                LV {player.level}
+              </span>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="lko-display text-lg leading-tight text-[var(--lko-green-deep)]">
-                {formatNaira(player.cash)}
-              </p>
-              <Chip className="bg-[var(--lko-gold-soft)] text-[#8a5a00]">⭐ {tier.name}</Chip>
+            {/* xp bar */}
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/[0.07]">
+              <div
+                className="h-full rounded-full bg-[var(--lko-gold)] transition-[width] duration-500"
+                style={{ width: `${Math.min(100, (player.xp / xpNeeded) * 100)}%` }}
+              />
             </div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end">
+            <span className="lko-display lko-num text-[17px] leading-tight text-[var(--lko-green-deep)]">
+              {formatNaira(player.cash)}
+            </span>
+            <Chip className="mt-0.5 bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]">
+              <StarIcon size={11} />
+              {tier.name}
+            </Chip>
           </div>
         </div>
       </header>
 
       {/* tab content */}
       <main
-        className="mx-auto w-full max-w-md pb-24"
+        className="mx-auto w-full max-w-md pb-28 sm:max-w-3xl"
         role="tabpanel"
         aria-label={tab}
       >
-        {tab === 'home' && <HomeTab />}
-        {tab === 'map' && (
-          <MapTab
-            focusLocationId={focusLoc}
-            onFocusHandled={() => setFocusLoc(null)}
-            onOpenWork={() => setTab('work')}
-          />
-        )}
-        {tab === 'work' && (
-          <WorkTab
-            onGoToMap={(locId) => {
-              setFocusLoc(locId)
-              setTab('map')
-            }}
-          />
-        )}
-        {tab === 'bag' && <BagTab />}
-        {tab === 'profile' && <ProfileTab />}
+        <div key={tabTick} className="lko-fade">
+          {tab === 'home' && <HomeTab />}
+          {tab === 'map' && (
+            <MapTab
+              focusLocationId={focusLoc}
+              onFocusHandled={() => setFocusLoc(null)}
+              onOpenWork={() => switchTab('work')}
+            />
+          )}
+          {tab === 'work' && (
+            <WorkTab
+              onGoToMap={(locId) => {
+                setFocusLoc(locId)
+                switchTab('map')
+              }}
+            />
+          )}
+          {tab === 'bag' && <BagTab />}
+          {tab === 'profile' && <ProfileTab />}
+        </div>
       </main>
 
-      <BottomNav active={tab} onChange={setTab} badge={{ work: hasActiveOpportunities }} />
+      <BottomNav active={tab} onChange={switchTab} badge={{ work: hasActiveOpportunities }} />
     </div>
   )
 }

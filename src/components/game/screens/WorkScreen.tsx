@@ -1,10 +1,14 @@
 'use client'
 
 /**
- * LOKOJA LIFE — WorkScreen (Stage 3)
- * -----------------------------------
+ * LOKOJA LIFE — WorkScreen (Stage 3, R1 presentation pass)
+ * --------------------------------------------------------
  * Jobs + hustles + earnings. The UI reads every number from the systems
  * (work.ts / opportunities.ts / economy.ts) — nothing is hard-coded.
+ *
+ * R1 changes are presentation-only: SVG icon language instead of emoji
+ * art, initials-based NPC discs, clearer card hierarchy and status states,
+ * animated working overlay. Every store action and guard is untouched.
  *
  * Structure:
  *   1. Active offers   — accepted hustles waiting at real locations
@@ -29,15 +33,56 @@ import { LOCATION_BY_ID } from '@/game/data/locations'
 import { HUSTLE, WORK } from '@/game/data/config'
 import type { ActiveOpportunity } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
+import {
+  JobIcon,
+  PlaceIcon,
+  SkillIcon,
+  TargetIcon,
+  HourglassIcon,
+  EnergyIcon,
+  MapIcon,
+  WorkIcon,
+  SocialIcon,
+  CoinsIcon,
+  TrendUpIcon,
+  TrendDownIcon,
+  CheckIcon,
+} from '../icons'
 
 /* ------------------------------- helpers -------------------------------- */
+
+/** Tinted initials disc — replaces the old emoji NPC avatar. */
+const NPC_TINTS = [
+  'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]',
+  'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]',
+  'bg-[var(--lko-river-soft)] text-[var(--lko-river)]',
+  'bg-orange-50 text-[var(--lko-terra)]',
+]
+
+function NpcDisc({ name, size = 36 }: { name: string; size?: number }) {
+  const tint = NPC_TINTS[(name.length + name.charCodeAt(0)) % NPC_TINTS.length]
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
+  return (
+    <span
+      className={`lko-display flex shrink-0 items-center justify-center rounded-full ${tint}`}
+      style={{ width: size, height: size, fontSize: size * 0.36 }}
+      aria-hidden
+    >
+      {initials || '?'}
+    </span>
+  )
+}
 
 /** One-line reward preview for a hustle def: ₦range • skill • rep. */
 function rewardPreview(def: HustleDef): string {
   const parts = [
     `${formatNaira(def.reward.cashMin)}–${formatNaira(def.reward.cashMax)}`,
-    `${SKILL_META[def.skill].emoji}+${def.reward.skillXp}`,
-    `⭐+${def.reward.reputation}`,
+    `${SKILL_META[def.skill].label} +${def.reward.skillXp} xp`,
+    `★ +${def.reward.reputation}`,
   ]
   return parts.join(' • ')
 }
@@ -46,9 +91,25 @@ function SkillPill({ skillId }: { skillId: string }) {
   const meta = SKILL_META[skillId as keyof typeof SKILL_META]
   if (!meta) return null
   return (
-    <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-bold text-[var(--lko-ink-soft)]">
-      {meta.emoji} {meta.label}
+    <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-bold text-[var(--lko-ink-soft)]">
+      <SkillIcon name={skillId as 'hustle' | 'smart' | 'social'} size={10} />
+      {meta.label}
     </span>
+  )
+}
+
+/** Shared section heading with the icon language. */
+function SectionTitle({ icon, children, hint }: { icon: React.ReactNode; children: React.ReactNode; hint?: string }) {
+  return (
+    <div className="mb-2 flex items-baseline justify-between gap-2">
+      <h2 className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+        <span className="text-[var(--lko-gold-deep)]" aria-hidden>
+          {icon}
+        </span>
+        {children}
+      </h2>
+      {hint && <span className="lko-num text-[11px] font-bold text-[var(--lko-ink-soft)]">{hint}</span>}
+    </div>
   )
 }
 
@@ -81,40 +142,46 @@ function OfferCard({
   const odds = Math.round(hustleSuccessChance(def, player) * 100)
 
   return (
-    <div className={`lko-card p-4 ${urgent ? 'border-[var(--lko-terra)]/40' : ''}`}>
+    <div className={`lko-card p-4 ${urgent ? 'border-[var(--lko-terra)]/50' : ''}`}>
       {/* npc header */}
       <div className="flex items-center gap-2.5">
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--lko-gold-soft)] text-lg"
-          aria-hidden
-        >
-          {npc?.emoji ?? '🙂'}
-        </span>
+        <NpcDisc name={npc?.name ?? 'Someone'} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-extrabold leading-tight">{npc?.name ?? 'Someone'}</p>
-          <p className="text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-            📍 {loc?.name ?? 'Somewhere'} • ⏛ {urgent ? 'going cold soon!' : `${slotsLeft} slot${slotsLeft === 1 ? '' : 's'} left`}
+          <p className="flex items-center gap-1 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+            <PlaceIcon id={instance.locationId} size={11} />
+            {loc?.name ?? 'Somewhere'}
+            <span className="text-black/25">•</span>
+            <HourglassIcon size={11} className={urgent ? 'text-[var(--lko-terra)]' : ''} />
+            {urgent ? 'going cold soon!' : `${slotsLeft} slot${slotsLeft === 1 ? '' : 's'} left`}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2 py-0.5 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
-          🎯 {odds}%
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--lko-green-soft)] px-2 py-1 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
+          <TargetIcon size={11} />
+          {odds}%
         </span>
       </div>
 
-      {/* the personal message */}
+      {/* the personal message — NPC voice, flavour emoji allowed */}
       <p className="mt-2.5 rounded-xl bg-[var(--lko-cream)] px-3 py-2 text-[13px] italic leading-relaxed text-[var(--lko-ink)]">
         “{def.message}”
       </p>
 
       {/* terms */}
       <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-[var(--lko-ink-soft)]">
-        <span className="rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[#8a5a00]">
+        <span className="lko-num rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[var(--lko-gold-deep)]">
           {formatNaira(def.reward.cashMin)}–{formatNaira(def.reward.cashMax)}
         </span>
         <SkillPill skillId={def.skill} />
-        <span className="rounded-full bg-black/[0.05] px-2 py-0.5">−{def.energyCost} ⚡</span>
+        <span className="inline-flex items-center gap-0.5 rounded-full bg-black/[0.05] px-2 py-0.5">
+          <EnergyIcon size={10} />
+          −{def.energyCost}
+        </span>
         {def.timeSlots > 0 && (
-          <span className="rounded-full bg-black/[0.05] px-2 py-0.5">{def.timeSlots} slot</span>
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-black/[0.05] px-2 py-0.5">
+            <HourglassIcon size={10} />
+            {def.timeSlots} slot{def.timeSlots > 1 ? 's' : ''}
+          </span>
         )}
       </div>
 
@@ -124,25 +191,33 @@ function OfferCard({
           <button
             onClick={onDo}
             disabled={tooTired}
-            className={`lko-press min-h-[46px] rounded-xl border-b-4 px-2 py-2 text-sm font-extrabold ${
+            className={`lko-press flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-extrabold ${
               tooTired
-                ? 'cursor-not-allowed border-black/10 bg-black/10 text-white/70'
-                : 'border-[#0a5c2e] bg-[var(--lko-green)] text-white'
+                ? 'cursor-not-allowed bg-black/10 text-white/70'
+                : 'bg-[var(--lko-green)] text-white shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)]'
             }`}
           >
-            {tooTired ? '🥵 Too tired' : '💪 Do it'}
+            {tooTired ? (
+              'Too tired'
+            ) : (
+              <>
+                <EnergyIcon size={15} />
+                Do it
+              </>
+            )}
           </button>
         ) : (
           <button
             onClick={onGo}
-            className="lko-press min-h-[46px] rounded-xl border-b-4 border-[#b57d0a] bg-[var(--lko-gold)] px-2 py-2 text-sm font-extrabold text-[#3d2a00]"
+            className="lko-press flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl bg-[var(--lko-gold)] px-2 py-2 text-sm font-extrabold text-[#3d2a00] shadow-[inset_0_-3px_0_rgba(0,0,0,0.14)]"
           >
-            🗺️ Take me there
+            <MapIcon size={15} />
+            Take me there
           </button>
         )}
         <button
           onClick={onDrop}
-          className="lko-press min-h-[46px] rounded-xl border-2 border-black/[0.08] bg-white px-2 py-2 text-sm font-bold text-[var(--lko-ink)]"
+          className="lko-press min-h-[46px] rounded-xl border border-black/[0.08] bg-white px-2 py-2 text-sm font-bold text-[var(--lko-ink)]"
         >
           Drop
         </button>
@@ -169,14 +244,9 @@ function FreshOfferCard({
   const handsFull = player.activeOpportunities.length >= HUSTLE.maxActive
 
   return (
-    <div className="lko-card lko-pop border-[var(--lko-gold)]/40 p-4">
+    <div className="lko-card lko-pop border-[var(--lko-gold)]/50 p-4">
       <div className="flex items-center gap-2.5">
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--lko-gold-soft)] text-lg"
-          aria-hidden
-        >
-          {npc?.emoji ?? '🙂'}
-        </span>
+        <NpcDisc name={npc?.name ?? 'Someone'} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-extrabold leading-tight">{npc?.name ?? 'Someone'}</p>
           <p className="truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">{def.title}</p>
@@ -185,22 +255,29 @@ function FreshOfferCard({
       <p className="mt-2.5 rounded-xl bg-[var(--lko-cream)] px-3 py-2 text-[13px] italic leading-relaxed">
         “{def.message}”
       </p>
-      <p className="mt-2 text-[11px] font-bold text-[var(--lko-ink-soft)]">{rewardPreview(def)}</p>
+      <p className="lko-num mt-2 text-[11px] font-bold text-[var(--lko-ink-soft)]">{rewardPreview(def)}</p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           onClick={onAccept}
           disabled={handsFull}
-          className={`lko-press min-h-[46px] rounded-xl border-b-4 px-2 py-2 text-sm font-extrabold ${
+          className={`lko-press flex min-h-[46px] items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-extrabold ${
             handsFull
-              ? 'cursor-not-allowed border-black/10 bg-black/10 text-white/70'
-              : 'border-[#0a5c2e] bg-[var(--lko-green)] text-white'
+              ? 'cursor-not-allowed bg-black/10 text-white/70'
+              : 'bg-[var(--lko-green)] text-white shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)]'
           }`}
         >
-          {handsFull ? `Hands full (${HUSTLE.maxActive})` : '🤝 Accept'}
+          {handsFull ? (
+            `Hands full (${HUSTLE.maxActive})`
+          ) : (
+            <>
+              <CheckIcon size={15} />
+              Accept
+            </>
+          )}
         </button>
         <button
           onClick={onDecline}
-          className="lko-press min-h-[46px] rounded-xl border-2 border-black/[0.08] bg-white px-2 py-2 text-sm font-bold text-[var(--lko-ink)]"
+          className="lko-press min-h-[46px] rounded-xl border border-black/[0.08] bg-white px-2 py-2 text-sm font-bold text-[var(--lko-ink)]"
         >
           Not interested
         </button>
@@ -222,25 +299,44 @@ function JobRow({ job, onOpen }: { job: JobDef; onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
-      className={`lko-press flex w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left ${
-        req.ok ? 'border-[var(--lko-green)]/20 bg-white hover:border-[var(--lko-green)]/50' : 'border-black/[0.06] bg-black/[0.02]'
+      className={`lko-press flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+        req.ok
+          ? 'border-black/[0.06] bg-white hover:border-[var(--lko-green)]/40'
+          : 'border-black/[0.05] bg-black/[0.02]'
       }`}
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-green-soft)] text-xl" aria-hidden>
-        {job.emoji}
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+          req.ok ? 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]' : 'bg-black/[0.05] text-[var(--lko-ink-soft)] opacity-70'
+        }`}
+        aria-hidden
+      >
+        <JobIcon id={job.id} size={20} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-extrabold text-[var(--lko-ink)]">{job.name}</span>
-        <span className="block truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-          {req.ok
-            ? cd > 0
-              ? `⏳ Ready in ${cd} slot${cd > 1 ? 's' : ''}`
-              : `−${job.energyCost} ⚡ • ${job.timeSlots} slot${job.timeSlots > 1 ? 's' : ''}`
-            : req.reasons.join(' • ')}
+        <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+          {req.ok ? (
+            cd > 0 ? (
+              <>
+                <HourglassIcon size={11} />
+                Ready in {cd} slot{cd > 1 ? 's' : ''}
+              </>
+            ) : (
+              <>
+                <EnergyIcon size={11} />−{job.energyCost}
+                <span className="text-black/25">•</span>
+                <HourglassIcon size={11} />
+                {job.timeSlots} slot{job.timeSlots > 1 ? 's' : ''}
+              </>
+            )
+          ) : (
+            req.reasons.join(' • ')
+          )}
         </span>
       </span>
       <span className="shrink-0 text-right">
-        <span className="block text-sm font-extrabold text-[var(--lko-terra)]">~{formatNaira(pay)}</span>
+        <span className="lko-num block text-sm font-extrabold text-[var(--lko-terra)]">~{formatNaira(pay)}</span>
         <SkillPill skillId={job.skillTraining.skill} />
       </span>
     </button>
@@ -259,28 +355,29 @@ function JobSheet({ job, onClose, onStart }: { job: JobDef; onClose: () => void;
   const pay = calculateJobPay(job, player)
   const moodNote =
     player.needs.mood >= WORK.moodBonusHigh.threshold
-      ? '😊 Good vibes — better pay today'
+      ? 'Good vibes — better pay today'
       : player.needs.mood <= WORK.moodPenaltyLow.threshold
-        ? '😞 Low vibes — pay takes a small hit'
+        ? 'Low vibes — pay takes a small hit'
         : null
 
   const blocked = !req.ok || cd > 0 || tooTired
 
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-label={`${job.name} details`}>
-      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/40" />
-      <div className="lko-pop absolute inset-x-0 bottom-0 mx-auto w-full max-w-md">
-        <div className="rounded-t-3xl border-t-2 border-black/[0.08] bg-[#fffdf7] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 shadow-2xl">
+      <button aria-label="Close" onClick={onClose} className="lko-scrim absolute inset-0 bg-black/45" />
+      <div className="lko-sheet absolute inset-x-0 bottom-0 mx-auto w-full max-w-md">
+        <div className="rounded-t-3xl border-t border-black/[0.06] bg-[var(--lko-surface)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 shadow-[var(--lko-shadow-lg)]">
           <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-black/15" aria-hidden />
 
           <div className="flex items-start gap-3">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--lko-green-soft)] text-3xl" aria-hidden>
-              {job.emoji}
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]" aria-hidden>
+              <JobIcon id={job.id} size={28} />
             </span>
             <div className="min-w-0 flex-1">
               <h3 className="lko-display text-lg leading-tight">{job.name}</h3>
-              <p className="text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-                📍 {LOCATION_BY_ID[job.locationId]?.name}
+              <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+                <PlaceIcon id={job.locationId} size={12} />
+                {LOCATION_BY_ID[job.locationId]?.name}
               </p>
             </div>
           </div>
@@ -290,11 +387,13 @@ function JobSheet({ job, onClose, onStart }: { job: JobDef; onClose: () => void;
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Pay (est.)</p>
-              <p className="lko-display text-base text-[var(--lko-terra)]">~{formatNaira(pay)}</p>
+              <p className="lko-display lko-num text-base text-[var(--lko-terra)]">~{formatNaira(pay)}</p>
             </div>
             <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Cost</p>
-              <p className="lko-display text-base">−{job.energyCost} ⚡</p>
+              <p className="lko-display flex items-center gap-1 text-base">
+                <EnergyIcon size={14} />−{job.energyCost}
+              </p>
             </div>
             <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Time</p>
@@ -304,49 +403,53 @@ function JobSheet({ job, onClose, onStart }: { job: JobDef; onClose: () => void;
             </div>
             <div className="rounded-xl bg-[var(--lko-cream)] px-3 py-2">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">Trains</p>
-              <p className="lko-display text-base">
-                {SKILL_META[job.skillTraining.skill].emoji} +{job.skillTraining.xp}
+              <p className="lko-display flex items-center gap-1 text-base">
+                <SkillIcon name={job.skillTraining.skill} size={14} />
+                +{job.skillTraining.xp}
               </p>
             </div>
           </div>
 
-          <p className="mt-2 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-            +{job.xpReward} XP • ⭐+{job.reputationReward} reputation • cooldown:{' '}
+          <p className="lko-num mt-2 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+            +{job.xpReward} XP • ★ +{job.reputationReward} reputation • cooldown:{' '}
             {job.cooldownSlots ?? WORK.defaultCooldownSlots} slot{(job.cooldownSlots ?? WORK.defaultCooldownSlots) > 1 ? 's' : ''}
           </p>
-          {moodNote && <p className="mt-1 text-[11px] font-bold text-[#8a5a00]">{moodNote}</p>}
+          {moodNote && <p className="mt-1 text-[11px] font-bold text-[var(--lko-gold-deep)]">{moodNote}</p>}
 
           {/* blockers */}
           {!req.ok && (
-            <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-              🔒 {req.reasons.join(' • ')}
+            <p className="mt-2 flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+              <WorkIcon size={13} className="shrink-0" />
+              {req.reasons.join(' • ')}
             </p>
           )}
           {req.ok && cd > 0 && (
-            <p className="mt-2 rounded-xl bg-black/[0.04] px-3 py-2 text-xs font-bold text-[var(--lko-ink-soft)]">
-              ⏳ You just worked this — ready in {cd} time slot{cd > 1 ? 's' : ''}.
+            <p className="mt-2 flex items-center gap-1.5 rounded-xl bg-black/[0.04] px-3 py-2 text-xs font-bold text-[var(--lko-ink-soft)]">
+              <HourglassIcon size={13} className="shrink-0" />
+              You just worked this — ready in {cd} time slot{cd > 1 ? 's' : ''}.
             </p>
           )}
           {req.ok && cd === 0 && tooTired && (
-            <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-              🥵 You need {job.energyCost} energy — rest first.
+            <p className="mt-2 flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+              <EnergyIcon size={13} className="shrink-0" />
+              You need {job.energyCost} energy — rest first.
             </p>
           )}
 
           <button
             onClick={onStart}
             disabled={blocked}
-            className={`lko-press mt-3 min-h-[50px] w-full rounded-xl border-b-4 py-3 text-sm font-extrabold ${
+            className={`lko-press mt-3 min-h-[50px] w-full rounded-xl py-3 text-sm font-extrabold ${
               blocked
-                ? 'cursor-not-allowed border-black/10 bg-black/10 text-white/70'
-                : 'border-[#0a5c2e] bg-[var(--lko-green)] text-white'
+                ? 'cursor-not-allowed bg-black/10 text-white/70'
+                : 'bg-[var(--lko-green)] text-white shadow-[inset_0_-3px_0_rgba(0,0,0,0.18)]'
             }`}
           >
-            {blocked ? 'Not available now' : `💼 Start shift • earn ~${formatNaira(pay)}`}
+            {blocked ? 'Not available now' : `Start shift • earn ~${formatNaira(pay)}`}
           </button>
           <button
             onClick={onClose}
-            className="lko-press mt-2 min-h-[48px] w-full rounded-xl border-2 border-black/[0.08] bg-white py-3 text-sm font-extrabold text-[var(--lko-ink)]"
+            className="lko-press mt-2 min-h-[48px] w-full rounded-xl border border-black/[0.08] bg-white py-3 text-sm font-extrabold text-[var(--lko-ink)]"
           >
             Cancel
           </button>
@@ -393,37 +496,51 @@ export function WorkScreen({ onGoToMap }: { onGoToMap: (locationId: string) => v
   const sheetJob = sheetJobId ? JOBS.find((j) => j.id === sheetJobId) ?? null : null
 
   return (
-    <div className="px-4 pt-3">
-      {/* working transition overlay */}
+    <div className="px-4 pt-3 sm:px-6">
+      {/* working transition overlay — calm loader instead of a bouncing pill */}
       {isWorking && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--lko-cream)]/60 backdrop-blur-[2px]">
-          <span className="lko-display animate-bounce rounded-full border-2 border-[var(--lko-gold)]/40 bg-white/95 px-5 py-2.5 text-sm shadow-lg">
-            💼 Working{workingLabel ? ` — ${workingLabel}` : ''}…
-          </span>
+        <div className="lko-scrim fixed inset-0 z-40 flex items-center justify-center bg-[var(--lko-cream)]/70 backdrop-blur-[2px]">
+          <div className="flex items-center gap-3 rounded-2xl border border-black/[0.06] bg-white/95 px-5 py-3.5 shadow-[var(--lko-shadow-lg)]">
+            <span className="relative flex h-9 w-9 items-center justify-center">
+              <span className="absolute inset-0 animate-ping rounded-full bg-[var(--lko-gold)]/25" aria-hidden />
+              <WorkIcon size={20} className="relative text-[var(--lko-gold-deep)]" />
+            </span>
+            <span className="text-sm font-extrabold text-[var(--lko-ink)]">
+              Working{workingLabel ? ` — ${workingLabel}` : ''}…
+            </span>
+          </div>
         </div>
       )}
 
       {/* location header */}
-      <div className="lko-card mb-3 flex items-center justify-between gap-2 px-4 py-2.5">
-        <div className="min-w-0">
-          <p className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            💼 Work • you dey here
+      <div className="lko-card mb-3 flex items-center gap-3 px-4 py-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]" aria-hidden>
+          <WorkIcon size={20} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+            Work • you dey here
           </p>
-          <p className="lko-display truncate text-base">
-            {location.emoji} {location.name}
+          <p className="lko-display flex items-center gap-1.5 truncate text-base">
+            <PlaceIcon id={location.id} size={16} className="shrink-0 text-[var(--lko-terra)]" />
+            {location.name}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[11px] font-bold text-[#8a5a00]">
-          ⏛ slot {abs % 4 + 1}/4
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[11px] font-bold text-[var(--lko-gold-deep)]">
+          <HourglassIcon size={12} />
+          Slot {abs % 4 + 1}/4
         </span>
       </div>
 
       {/* ------------------------- active offers ------------------------- */}
       {player.activeOpportunities.length > 0 && (
         <section aria-label="Active offers" className="mb-4">
-          <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            🤝 Your accepted hustles ({player.activeOpportunities.length}/{HUSTLE.maxActive})
-          </h2>
+          <SectionTitle
+            icon={<SocialIcon size={13} />}
+            hint={`${player.activeOpportunities.length}/${HUSTLE.maxActive}`}
+          >
+            Your accepted hustles
+          </SectionTitle>
           <div className="flex flex-col gap-2.5">
             {player.activeOpportunities.map((o) => (
               <OfferCard
@@ -450,9 +567,7 @@ export function WorkScreen({ onGoToMap }: { onGoToMap: (locationId: string) => v
 
       {/* ------------------------- hustle board ------------------------- */}
       <section aria-label="Hustle board" className="mb-4">
-        <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          🗣️ Hustle board — hear the gist
-        </h2>
+        <SectionTitle icon={<SocialIcon size={13} />}>Hustle board — hear the gist</SectionTitle>
 
         {offers.length > 0 && (
           <div className="mb-2.5 flex flex-col gap-2.5">
@@ -479,13 +594,23 @@ export function WorkScreen({ onGoToMap }: { onGoToMap: (locationId: string) => v
             searchHustles()
           }}
           disabled={searchCd > 0 || isWorking}
-          className={`lko-press min-h-[52px] w-full rounded-xl border-b-4 px-2 py-2.5 text-sm font-extrabold ${
+          className={`lko-press w-full rounded-xl px-2 py-3 text-sm font-extrabold ${
             searchCd > 0 || isWorking
-              ? 'cursor-not-allowed border-black/10 bg-black/10 text-white/70'
-              : 'border-[#b57d0a] bg-[var(--lko-gold)] text-[#3d2a00]'
+              ? 'cursor-not-allowed bg-black/10 text-white/70'
+              : 'bg-[var(--lko-gold)] text-[#3d2a00] shadow-[inset_0_-3px_0_rgba(0,0,0,0.14)]'
           }`}
         >
-          {searchCd > 0 ? `⏳ Streets dey rest — ${searchCd} slot${searchCd > 1 ? 's' : ''}` : '👀 Look around for hustles'}
+          {searchCd > 0 ? (
+            <span className="flex items-center justify-center gap-1.5">
+              <HourglassIcon size={15} />
+              Streets dey rest — {searchCd} slot{searchCd > 1 ? 's' : ''}
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-1.5">
+              <SocialIcon size={15} />
+              Look around for hustles
+            </span>
+          )}
           <span className="mt-0.5 block text-[10px] font-bold opacity-80">
             {searchCd > 0 ? 'Offers turn up when the time moves' : 'Ask around this area • quick errands from real people'}
           </span>
@@ -494,29 +619,33 @@ export function WorkScreen({ onGoToMap }: { onGoToMap: (locationId: string) => v
 
       {/* --------------------------- jobs here --------------------------- */}
       <section aria-label="Jobs here" className="mb-4">
-        <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          🧰 Shifts at {location.shortName} ({jobsHere.length})
-        </h2>
-        <div className="flex flex-col gap-2">
-          {jobsHere.map((job) => (
-            <JobRow
-              key={job.id}
-              job={job}
-              onOpen={() => {
-                audio.play('click')
-                setSheetJobId(job.id)
-              }}
-            />
-          ))}
-        </div>
+        <SectionTitle icon={<WorkIcon size={13} />} hint={`${jobsHere.length}`}>
+          Shifts at {location.shortName}
+        </SectionTitle>
+        {jobsHere.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-black/10 bg-white/50 px-4 py-4 text-center text-xs font-semibold text-[var(--lko-ink-soft)]">
+            No formal shifts here — check the hustle board or explore other areas.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {jobsHere.map((job) => (
+              <JobRow
+                key={job.id}
+                job={job}
+                onOpen={() => {
+                  audio.play('click')
+                  setSheetJobId(job.id)
+                }}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ------------------------ jobs elsewhere ------------------------- */}
       {jobsElsewhere.length > 0 && (
         <section aria-label="Jobs elsewhere" className="mb-4">
-          <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-            🗺️ Work in other parts of Lokoja
-          </h2>
+          <SectionTitle icon={<MapIcon size={13} />}>Work in other parts of Lokoja</SectionTitle>
           <div className="flex flex-col gap-2">
             {jobsElsewhere.map((job) => {
               const loc = LOCATION_BY_ID[job.locationId]
@@ -528,18 +657,27 @@ export function WorkScreen({ onGoToMap }: { onGoToMap: (locationId: string) => v
                     audio.play('click')
                     onGoToMap(job.locationId)
                   }}
-                  className="lko-press flex w-full items-center gap-3 rounded-xl border-2 border-black/[0.05] bg-black/[0.02] px-3 py-2.5 text-left"
+                  className="lko-press flex w-full items-center gap-3 rounded-xl border border-black/[0.05] bg-black/[0.02] px-3 py-2.5 text-left"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/[0.05] text-lg opacity-70" aria-hidden>
-                    {job.emoji}
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/[0.05] text-[var(--lko-ink-soft)] opacity-70" aria-hidden>
+                    <JobIcon id={job.id} size={18} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-bold text-[var(--lko-ink)]">{job.name}</span>
-                    <span className="block truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-                      📍 {loc?.name ?? 'Lokoja'}{lockedLoc ? ` • 🔒 Level ${loc?.unlockLevel}` : ''}
+                    <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+                      <PlaceIcon id={job.locationId} size={11} />
+                      {loc?.name ?? 'Lokoja'}
+                      {lockedLoc && (
+                        <span className="inline-flex items-center gap-0.5 font-bold text-[var(--lko-terra)]">
+                          <span className="text-black/25">•</span>
+                          Level {loc?.unlockLevel}
+                        </span>
+                      )}
                     </span>
                   </span>
-                  <span className="shrink-0 text-[11px] font-extrabold text-[var(--lko-green)]">Go →</span>
+                  <span className="flex shrink-0 items-center gap-0.5 text-[11px] font-extrabold text-[var(--lko-green)]">
+                    Go <span aria-hidden>→</span>
+                  </span>
                 </button>
               )
             })}
@@ -549,18 +687,22 @@ export function WorkScreen({ onGoToMap }: { onGoToMap: (locationId: string) => v
 
       {/* ---------------------------- earnings ---------------------------- */}
       <section aria-label="Earnings" className="mb-4">
-        <h2 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
-          🧾 Money — Day {world.day}
-        </h2>
+        <SectionTitle icon={<CoinsIcon size={13} />}>Money — Day {world.day}</SectionTitle>
         <div className="lko-card p-4">
           <div className="grid grid-cols-2 gap-2 text-center">
-            <div className="rounded-xl bg-[var(--lko-green-soft)] py-2.5">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-green-deep)]">Earned today</p>
-              <p className="lko-display text-lg text-[var(--lko-green-deep)]">+{formatNaira(todayEarned).replace('₦', '₦')}</p>
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-[var(--lko-green-soft)] py-2.5">
+              <TrendUpIcon size={15} className="text-[var(--lko-green-deep)]" aria-hidden />
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--lko-green-deep)]">Earned today</p>
+                <p className="lko-display lko-num text-lg text-[var(--lko-green-deep)]">+{formatNaira(todayEarned)}</p>
+              </div>
             </div>
-            <div className="rounded-xl bg-red-50 py-2.5">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-700">Spent today</p>
-              <p className="lko-display text-lg text-red-700">−{formatNaira(todaySpent)}</p>
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-red-50 py-2.5">
+              <TrendDownIcon size={15} className="text-red-700" aria-hidden />
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-700">Spent today</p>
+                <p className="lko-display lko-num text-lg text-red-700">−{formatNaira(todaySpent)}</p>
+              </div>
             </div>
           </div>
 
@@ -575,12 +717,17 @@ export function WorkScreen({ onGoToMap }: { onGoToMap: (locationId: string) => v
             <ul className="flex flex-col gap-1">
               {player.transactions.slice(0, 5).map((t) => (
                 <li key={t.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 odd:bg-black/[0.03]">
-                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--lko-ink)]">
-                    {t.amount > 0 ? '📈' : '📉'} {t.label}
-                    <span className="ml-1 text-[10px] text-[var(--lko-ink-soft)]">D{t.day}</span>
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-xs font-semibold text-[var(--lko-ink)]">
+                    <span className="shrink-0 text-[var(--lko-ink-soft)]" aria-hidden>
+                      {t.amount > 0 ? <TrendUpIcon size={12} /> : <TrendDownIcon size={12} />}
+                    </span>
+                    <span className="truncate">
+                      {t.label}
+                      <span className="lko-num ml-1 text-[10px] text-[var(--lko-ink-soft)]">D{t.day}</span>
+                    </span>
                   </span>
                   <span
-                    className={`shrink-0 text-xs font-extrabold ${
+                    className={`lko-num shrink-0 text-xs font-extrabold ${
                       t.amount > 0 ? 'text-[var(--lko-green-deep)]' : 'text-[var(--lko-terra)]'
                     }`}
                   >

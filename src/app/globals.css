@@ -122,15 +122,18 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* LOKOJA LIFE — game theme                                            */
+/* LOKOJA LIFE — game theme (R1 visual overhaul)                       */
 /* Warm Nigerian palette: deep green, amber gold, terracotta, cream.   */
+/* Layered, softly-lit surfaces; disciplined accents; gentle motion.   */
 /* ------------------------------------------------------------------ */
 
 :root {
+  /* core identity colours */
   --lko-green: #146b3a;
   --lko-green-deep: #0b3d22;
   --lko-green-soft: #e3f0e6;
   --lko-gold: #e8a317;
+  --lko-gold-deep: #8a5a00;
   --lko-gold-soft: #fdf0d5;
   --lko-terra: #c4562a;
   --lko-river: #1f7a6d;
@@ -139,12 +142,19 @@
   --lko-sand: #f3e3c3;
   --lko-ink: #22271f;
   --lko-ink-soft: #6b6a5c;
+
+  /* surface system — one consistent elevation scale */
+  --lko-surface: #fffdf7;
+  --lko-line: rgba(34, 39, 31, 0.08);
+  --lko-shadow-sm: 0 1px 2px rgba(27, 34, 24, 0.05), 0 1px 6px rgba(27, 34, 24, 0.04);
+  --lko-shadow-md: 0 2px 4px rgba(27, 34, 24, 0.05), 0 8px 20px -6px rgba(27, 34, 24, 0.12);
+  --lko-shadow-lg: 0 4px 10px rgba(27, 34, 24, 0.08), 0 18px 44px -12px rgba(27, 34, 24, 0.22);
 }
 
 .lko-root {
   background:
-    radial-gradient(1200px 500px at 85% -10%, rgba(232, 163, 23, 0.16), transparent 60%),
-    radial-gradient(900px 420px at 0% 110%, rgba(31, 122, 109, 0.14), transparent 55%),
+    radial-gradient(1200px 500px at 85% -10%, rgba(232, 163, 23, 0.13), transparent 60%),
+    radial-gradient(900px 420px at 0% 110%, rgba(31, 122, 109, 0.12), transparent 55%),
     var(--lko-cream);
   color: var(--lko-ink);
   min-height: 100dvh;
@@ -153,27 +163,35 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Chunky playful card — the core Lokoja Life UI primitive */
+/* Layered card — the core Lokoja Life UI primitive (revised: softer,
+   more premium, less "bordered box") */
 .lko-card {
-  background: #fffdf7;
-  border: 2px solid rgba(34, 39, 31, 0.1);
+  background: var(--lko-surface);
+  border: 1px solid var(--lko-line);
   border-radius: 1.25rem;
-  box-shadow: 0 2px 0 0 rgba(34, 39, 31, 0.06);
+  box-shadow: var(--lko-shadow-sm);
 }
 
 /* Press-down button feedback for touch */
 .lko-press {
-  transition: transform 80ms ease, box-shadow 80ms ease, filter 120ms ease;
+  transition: transform 90ms ease, box-shadow 140ms ease, filter 140ms ease,
+    background-color 160ms ease, border-color 160ms ease, opacity 160ms ease;
 }
 .lko-press:active {
-  transform: translateY(2px) scale(0.985);
+  transform: translateY(1.5px) scale(0.99);
   filter: brightness(0.97);
 }
 
 /* Chunky display type for the logo / big numbers */
 .lko-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
   font-weight: 800;
   letter-spacing: -0.02em;
+}
+
+/* Money & stats always align */
+.lko-num {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Subtle float animation for menu art */
@@ -194,13 +212,148 @@
   animation: lko-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Toast notifications */
-@keyframes lko-toast {
-  from { opacity: 0; transform: translateY(-12px); }
+/* Quick fade used for tab content swaps (150–250ms system) */
+@keyframes lko-fade {
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.lko-fade {
+  animation: lko-fade 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Bottom sheets slide up from behind the home indicator */
+@keyframes lko-sheet {
+  from { opacity: 0.4; transform: translateY(48px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lko-sheet {
+  animation: lko-sheet 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Backdrop fade for modal layers */
+@keyframes lko-scrim {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.lko-scrim {
+  animation: lko-scrim 0.18s ease-out both;
+}
+
+/* Toast notifications */
+@keyframes lko-toast {
+  from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .lko-toast {
-  animation: lko-toast 0.25s ease-out both;
+  animation: lko-toast 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ------------------- living-scene ambient motion ------------------- */
+/* Clouds drift slowly across the sky */
+@keyframes lko-drift {
+  from { transform: translateX(-14%); }
+  to { transform: translateX(114%); }
+}
+/* The keke rolls along the shore road, then loops */
+@keyframes lko-drive {
+  0% { transform: translateX(-18%); }
+  100% { transform: translateX(118%); }
+}
+/* Canoe bobs gently on the confluence */
+@keyframes lko-bob {
+  0%, 100% { transform: translateY(0) rotate(-0.6deg); }
+  50% { transform: translateY(-2.6px) rotate(0.8deg); }
+}
+/* Water highlight sweep on the meeting line */
+@keyframes lko-shimmer {
+  0% { opacity: 0.25; }
+  50% { opacity: 0.75; }
+  100% { opacity: 0.25; }
+}
+/* Birds glide across, wings tucked (two-frame flap via scaleY) */
+@keyframes lko-bird {
+  0% { transform: translateX(-10%) translateY(0); }
+  25% { transform: translateX(24%) translateY(-6px); }
+  50% { transform: translateX(52%) translateY(2px); }
+  75% { transform: translateX(80%) translateY(-4px); }
+  100% { transform: translateX(112%) translateY(0); }
+}
+@keyframes lko-wing {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.35); }
+}
+
+.lko-anim-drift { animation: lko-drift 46s linear infinite; }
+.lko-anim-drift-slow { animation: lko-drift 78s linear infinite; }
+.lko-anim-drive { animation: lko-drive 26s linear infinite; }
+.lko-anim-bob { animation: lko-bob 4.2s ease-in-out infinite; transform-origin: center; }
+.lko-anim-shimmer { animation: lko-shimmer 3.4s ease-in-out infinite; }
+.lko-anim-bird { animation: lko-bird 38s linear infinite; }
+.lko-anim-wing { animation: lko-wing 0.9s ease-in-out infinite; transform-origin: center; }
+
+/* SVG-scene motion — px units map to viewBox user units, so groups can
+   traverse the whole scene regardless of the rendered size. */
+@keyframes lko-sv-drive {
+  from { transform: translateX(-190px); }
+  to { transform: translateX(1000px); }
+}
+@keyframes lko-sv-cloud-a {
+  from { transform: translateX(-260px); }
+  to { transform: translateX(1060px); }
+}
+@keyframes lko-sv-cloud-b {
+  from { transform: translateX(1060px); }
+  to { transform: translateX(-260px); }
+}
+@keyframes lko-sv-bird-a {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(430px, -12px); }
+  100% { transform: translate(940px, 2px); }
+}
+@keyframes lko-sv-bird-b {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(400px, 8px); }
+  100% { transform: translate(900px, -4px); }
+}
+.lko-sv-drive { animation: lko-sv-drive 26s linear infinite; }
+.lko-sv-cloud-a { animation: lko-sv-cloud-a 85s linear infinite; }
+.lko-sv-cloud-b { animation: lko-sv-cloud-b 120s linear infinite; }
+.lko-sv-bird-a { animation: lko-sv-bird-a 44s linear infinite; }
+.lko-sv-bird-b { animation: lko-sv-bird-b 57s linear infinite; animation-delay: -18s; }
+.lko-sv-bob { animation: lko-bob 4.6s ease-in-out infinite; }
+.lko-sv-twinkle { animation: lko-shimmer 2.8s ease-in-out infinite; }
+.lko-sv-rain { animation: lko-shimmer 1.1s ease-in-out infinite; }
+
+/* ------------------------- reduced motion -------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .lko-float,
+  .lko-pop,
+  .lko-fade,
+  .lko-sheet,
+  .lko-scrim,
+  .lko-toast,
+  .lko-anim-drift,
+  .lko-anim-drift-slow,
+  .lko-anim-drive,
+  .lko-anim-bob,
+  .lko-anim-shimmer,
+  .lko-anim-bird,
+  .lko-anim-wing,
+  .lko-sv-drive,
+  .lko-sv-cloud-a,
+  .lko-sv-cloud-b,
+  .lko-sv-bird-a,
+  .lko-sv-bird-b,
+  .lko-sv-bob,
+  .lko-sv-twinkle,
+  .lko-sv-rain {
+    animation: none !important;
+  }
+  .lko-press,
+  .lko-press:active {
+    transition: none;
+    transform: none;
+  }
 }
 
 /* Hide scrollbars on horizontal option strips while keeping scroll */

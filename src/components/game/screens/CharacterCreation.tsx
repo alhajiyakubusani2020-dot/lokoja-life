@@ -25,6 +25,7 @@ import {
 } from '@/game/data/flavor'
 import type { AvatarConfig, Gender } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
+import { ArrowLeftIcon, DiceIcon, SparkleIcon } from '../icons'
 
 /** small circular swatch button used for colours */
 function Swatch({
@@ -107,10 +108,10 @@ export function CharacterCreation() {
             audio.play('click')
             setScreen('menu')
           }}
-          className="lko-press lko-card flex h-11 w-11 items-center justify-center rounded-xl text-lg"
+          className="lko-press lko-card flex h-11 w-11 items-center justify-center rounded-xl text-[var(--lko-ink)]"
           aria-label="Back to menu"
         >
-          ←
+          <ArrowLeftIcon size={18} />
         </button>
         <div>
           <h1 className="lko-display text-xl text-[var(--lko-green-deep)]">Create Your Hustler</h1>
@@ -136,17 +137,18 @@ export function CharacterCreation() {
               />
               <button
                 onClick={randomizeName}
-                className="lko-press absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg bg-[var(--lko-gold-soft)] text-lg"
+                className="lko-press absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]"
                 aria-label="Random Nigerian name"
               >
-                🎲
+                <DiceIcon size={16} />
               </button>
             </div>
             <button
               onClick={randomizeLook}
-              className="lko-press mt-2 min-h-[40px] w-full rounded-xl border-2 border-black/[0.08] bg-white px-4 text-sm font-bold text-[var(--lko-ink)]"
+              className="lko-press mt-2 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-black/[0.08] bg-white px-4 text-sm font-bold text-[var(--lko-ink)]"
             >
-              ✨ Surprise me (random look)
+              <SparkleIcon size={15} className="text-[var(--lko-gold-deep)]" />
+              Surprise me (random look)
             </button>
           </div>
         </div>
@@ -167,7 +169,7 @@ export function CharacterCreation() {
                   : 'border-black/10 bg-white text-[var(--lko-ink-soft)]'
               }`}
             >
-              {g === 'male' ? '👨 Man' : '👩 Woman'}
+              {g === 'male' ? 'Man' : 'Woman'}
             </button>
           ))}
         </OptionStrip>
@@ -267,9 +269,16 @@ export function CharacterCreation() {
               startNewGame(name, gender, avatar)
             }}
             disabled={!canStart}
-            className="lko-press min-h-[56px] w-full rounded-2xl border-b-4 border-[#0a5c2e] bg-[var(--lko-green)] text-lg font-extrabold tracking-wide text-white shadow-md disabled:cursor-not-allowed disabled:opacity-45 disabled:[border-b-color:transparent]"
+            className="lko-press flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-[var(--lko-green)] text-lg font-extrabold tracking-wide text-white shadow-[inset_0_-4px_0_rgba(0,0,0,0.18)] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
           >
-            {canStart ? `🚀 Start Life in Lokoja` : 'Enter your name to start'}
+            {canStart ? (
+              <>
+                <SparkleIcon size={18} className="text-[#ffd88a]" />
+                Start Life in Lokoja
+              </>
+            ) : (
+              'Enter your name to start'
+            )}
           </button>
         </div>
       </div>

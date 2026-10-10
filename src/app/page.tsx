@@ -43,12 +43,23 @@ export default function Home() {
   // brief boot splash — avoids save-detection flicker on first paint
   if (!booted) {
     return (
-      <div className="lko-root flex min-h-dvh flex-col items-center justify-center gap-3">
-        <div className="lko-float text-5xl" aria-hidden>
-          🌊
+      <div
+        className="flex min-h-dvh flex-col items-center justify-center gap-4"
+        style={{
+          background:
+            'linear-gradient(180deg, #fbe7b7 0%, #f9d489 46%, #2a8a7a 46%, #1c6b5e 100%)',
+        }}
+      >
+        <div className="lko-float flex h-20 w-20 items-center justify-center rounded-3xl bg-[var(--lko-surface)] shadow-[var(--lko-shadow-lg)]">
+          {/* confluence mark: two rivers meeting */}
+          <svg viewBox="0 0 48 48" className="h-11 w-11" aria-hidden>
+            <path d="M6 12 C 18 16 22 24 24 36" stroke="#1f7a6d" strokeWidth="5" fill="none" strokeLinecap="round" />
+            <path d="M42 20 C 32 22 27 27 24 36" stroke="#e8a317" strokeWidth="5" fill="none" strokeLinecap="round" />
+            <circle cx="24" cy="37" r="3.4" fill="#146b3a" />
+          </svg>
         </div>
-        <p className="lko-display text-xl text-[var(--lko-green-deep)]">LOKOJA LIFE</p>
-        <p className="text-xs text-[var(--lko-ink-soft)]">Loading the Confluence…</p>
+        <p className="lko-display text-2xl tracking-tight text-[var(--lko-green-deep)]">LOKOJA LIFE</p>
+        <p className="text-xs font-semibold text-[var(--lko-ink-soft)]">Loading the Confluence…</p>
       </div>
     )
   }
