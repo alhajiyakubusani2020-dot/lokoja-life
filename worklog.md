@@ -129,3 +129,33 @@ Stage Summary:
 - Key decisions: one shared heightAt() for terrain+actors+roads (nothing floats); interaction radius 8.6 with travel confirm at other districts (economy preserved — walking is free, checking in costs the real fare); device-tier quality (mobile: no shadow maps, lower dpr); window/lamp night glow driven by the real clock via a shared mutable (zero React re-render).
 - Known limitations (honest): NPCs clip buildings occasionally (no NPC collision); traffic ignores junction priorities; camera can clip building corners; no ambient audio in 3D; menu scene is 2D (by design); prod build not runnable in this env; iPhone-touch verified via dispatched events (no real device).
 - Next highest-impact step: interior/interaction depth at locations (walk-into-market job boards) + location-specific ambience (audio + crowd density), then Patti trail activities — after user review of this increment.
+
+---
+Task ID: 3D-2
+Agent: Main Agent (Super Z)
+Task: STAGE 3D INCREMENT 2 — Activity discovery & life density (user: "hacker route / Lagos Life research")
+
+Work Log:
+- Verified increment 1 claims first (post-audit discipline): commit a6fa79b real, files real, 66/66 tests pass.
+- Removed DEAD leftover files from an abandoned earlier attempt: src/components/game/world3d/ (11 files), screens/WorldView.tsx, data/world3d.ts, test-stage35/36.ts — none imported by the live game, all broke tsc (phantom MOVEMENT config). Recoverable in git at a6fa79b. tsc now 100% clean for game code.
+- LAGOS LIFE RESEARCH (user request; techniques only, ZERO assets/brand copied): web-search + page_reader on Vanguard explainer. Findings: browser-based Sims-style life sim by Shalom Rayhamen (Eliy), launched Oct 1 2026, 1.2M players in 4 days; core loop = jobs/money/rent + needs meters; wins through (a) browser-first accessibility, (b) lived-culture detail "not a generic sim with Nigerian names", (c) guided first missions. Saved to download/lagos-life-research-notes.md with a lesson→Lokoja gap table.
+- INC 2 implemented from the research gaps:
+  * config WORLD3D section (energyPer100m .55, freeMeters 150, cap 6, npcGistRadius 24, trafficBaseSpeed 7, onboardingKey) — balance lives in config only.
+  * NEW systems/world3d.ts: pure walkingEnergyCost() + describeWalkSettle() — presentation measures, store applies.
+  * store.settleWorldWalk(meters) — additive action via existing applyNeedsDelta; notify + autosave; no clock change, no save-format change.
+  * controls.ts: walked-meters accumulator + reportPlayerPos + tutorial progress flags wired into REAL input paths (keys/joystick/drag).
+  * layout.ts: NpcZone.locationId (joins NPCS registry), POINTS_OF_INTEREST (job boards at kpata-market + government-area, on land, facing plazas).
+  * collision.ts: slim OBB colliders for POIs (walk up to boards, not through).
+  * Actors.tsx: controller feeds addWalkDistance(speed*dt) + POI proximity (poi: namespaced ids) + district reporting; NPCs carry REAL identities from NPCS by home location and report nearest named resident (gist); DanfoMesh (yellow Lagos bus, Lagos Run homage) joins traffic; vehicle speeds now scale off WORLD3D.trafficBaseSpeed.
+  * CityMesh.tsx: physical JobBoard prop (timber posts, green frame, pinned sheets, gold cap).
+  * WorldScene/WorldTab: onDistrict/onGist pass-through; WorldTab settles walked meters on ANY unmount (safety net), Exit settles + resets.
+  * HudOverlay: 3-step first-visit tour that auto-advances on REAL input (move→look→interact), Skip + localStorage flag (NOT the save); district arrival toasts (once/session); NPC gist chip (name + real hustle title, tap→Work board deep-link, dismissible); poi: id resolution into real location panels; Exit settles energy.
+- Test bridge: __lko.walk(m) dev-only hook (same pattern as teleport, stripped in prod) to E2E the settle wiring without fighting headless terrain.
+- E2E (agent-browser, real browser): tour advanced on real keypress + drag, flag persisted; job board prompt "Read the Kpata Market job board" + E → REAL travel sheet with exact Stage-2 fares (Keke ₦290/8min, Taxi ₦980/4min); gist chip rotated Musa→Hajiya Amina with real hustle titles; __lko.walk(600) → Exit → toast "Long trek around Lokoja (0.6 km on foot) — 2 energy spent" AND HUD energy 100→98 (600−150)×0.55→round=2 EXACT; Continue across reload; iPhone 390×844: joystick + Interact + RUN render, touch Interact opens the sheet; console clean (only three.js deprecation notices).
+- Known honest limitation: headless software-GL runs ~10-15fps → the dt-clamp (max 0.05s) slows simulated movement ~3-4×; natural 150m+ walks are impractical in the test env (real devices unaffected) — hence the walk() bridge; NPC bubbles are HUD chips (not 3D sprites) this increment.
+- Screenshots: download/stage3d/inc2-01…11 (desktop tour/board/gist/travel sheet/energy 98/junction/market + mobile world/food-area/board sheet).
+- Checks: tsc clean, eslint clean, 15 travel + 51 stage3 + 29 world3d = 95/95.
+
+Stage Summary:
+- INC 2 COMPLETE. The world now TEACHES (onboarding), TALKS (real NPC gist), POINTS (physical job boards → real panels/fares) and COSTS (walking settles into the real needs economy) — Lagos Life's three discoverable wins, Lokoja-flavored, all through the EXISTING store/systems. Saves, location ids, R1 visuals untouched.
+- Next highest-impact step: location-specific interior/ambience depth (walk-into market job boards is done; next = enter-able market interior + amala/buka food spots wired to a Stage-4 eating loop), then Patti trail activities + ambient audio.
