@@ -16,6 +16,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
 import { LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
+import { NPCS } from '@/game/data/npcs'
+import { HUSTLES } from '@/game/data/hustles'
+import { WORLD3D } from '@/game/data/config'
+import { POINTS_OF_INTEREST } from '@/game/world3d/layout'
 import { calculateTravel } from '@/game/systems/travel'
 import { formatNaira } from '@/game/systems/progression'
 import type { TransportId } from '@/game/types'
@@ -25,12 +29,24 @@ import {
   LockIcon, MapIcon, MoonIcon, PinIcon, PlaceIcon, TaxiIcon, WalkIcon,
   WeatherIcon, WorkIcon, TimeIcon,
 } from '../icons'
-import { attachControls, consumeInteract, freezeInput, queueInteract, setJoystick, setSprint } from './controls'
+import {
+  attachControls, consumeInteract, freezeInput, getTutProgress, getWalkedMeters,
+  queueInteract, resetTutProgress, resetWalkedMeters, setJoystick, setSprint,
+} from './controls'
 
 const TRANSPORT_ICON: Record<TransportId, (p: { size?: number }) => React.ReactNode> = {
   walk: (p) => <WalkIcon {...p} />,
   keke: (p) => <KekeIcon {...p} />,
   taxi: (p) => <TaxiIcon {...p} />,
+}
+
+/** anchors AND physical props (job boards) resolve to a real location panel */
+function resolveAnchorLoc(id: string): LokojaLocation | null {
+  if (id.startsWith('poi:')) {
+    const poi = POINTS_OF_INTEREST.find((p) => p.id === id.slice(4))
+    return poi ? LOCATION_BY_ID[poi.locationId] ?? null : null
+  }
+  return LOCATION_BY_ID[id] ?? null
 }
 
 /* --------------------------------- joystick --------------------------------- */
@@ -112,12 +128,18 @@ type PanelState =
 
 export function HudOverlay({
   nearestAnchor,
+  district,
+  gistNpc,
   onExit,
   onOpenWork,
   onOpenMap,
 }: {
-  /** anchor currently in interact range (reported by the 3D scene), null = none */
+  /** anchor or `poi:` prop currently in interact range (from the 3D scene), null = none */
   nearestAnchor: string | null
+  /** district the player is inside right now (drives arrival toasts) */
+  district: string | null
+  /** nearest named NPC's registry id (drives the gist chip), null = none */
+  gistNpc: string | null
   onExit: () => void
   onOpenWork: () => void
   onOpenMap: (locationId: string) => void
@@ -127,6 +149,7 @@ export function HudOverlay({
   const isTravelling = useGameStore((s) => s.isTravelling)
   const travelAction = useGameStore((s) => s.travel)
   const restAction = useGameStore((s) => s.rest)
+  const settleWalk = useGameStore((s) => s.settleWorldWalk)
 
   const surfaceRef = useRef<HTMLDivElement>(null)
   const nearestRef = useRef<string | null>(null)
@@ -136,6 +159,52 @@ export function HudOverlay({
   useEffect(() => {
     nearestRef.current = nearestAnchor
   }, [nearestAnchor])
+
+  /* --------------------------- one-time onboarding --------------------------- */
+
+  // lazy init — the tour shows on every first visit (per device, not in the save)
+  const [tutStep, setTutStep] = useState<number | null>(() => {
+    resetTutProgress()
+    if (typeof document === 'undefined') return null
+    try {
+      return localStorage.getItem(WORLD3D.onboardingKey) === '1' ? null : 0
+    } catch {
+      return 0
+    }
+  })
+  const tutStepRef = useRef<number | null>(null)
+  useEffect(() => {
+    tutStepRef.current = tutStep
+  }, [tutStep])
+
+  const finishTut = () => {
+    try {
+      localStorage.setItem(WORLD3D.onboardingKey, '1')
+    } catch {
+      /* storage unavailable — the tour just shows again next visit */
+    }
+    audio.play('chime')
+    setTutStep(null)
+  }
+
+  /* ---------------------------- arrival toasts ----------------------------- */
+
+  const [arrival, setArrival] = useState<string | null>(null)
+  const seenDistricts = useRef<Set<string>>(new Set())
+  const arrivalTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const districtRef = useRef<string | null>(null)
+  const lastDistrictRef = useRef<string | null>(null)
+  useEffect(() => {
+    districtRef.current = district
+  }, [district])
+
+  /* ------------------------------- gist chip ------------------------------- */
+
+  const [dismissedGists, setDismissedGists] = useState<Set<string>>(() => new Set())
+  const npcDef = gistNpc ? NPCS.find((n) => n.id === gistNpc) ?? null : null
+  const npcHustle = gistNpc ? HUSTLES.find((h) => h.npcId === gistNpc) ?? null : null
+  const gistVisible =
+    npcDef !== null && npcHustle !== null && !dismissedGists.has(npcDef.id) && panel.kind === 'none' && !isTravelling
 
   const isTouchDevice = () =>
     typeof window !== 'undefined' &&
@@ -165,16 +234,45 @@ export function HudOverlay({
     return attachControls(el)
   }, [])
 
-  // interact polling (E / Enter / HUD button) + Escape closes sheets
+  // interact polling (E / Enter / HUD button) + Escape closes sheets + tour steps
   useEffect(() => {
     let raf = 0
     const tick = () => {
       if (consumeInteract() && nearestRef.current) {
         const anchorId = nearestRef.current
-        const loc = LOCATION_BY_ID[anchorId]
+        const loc = resolveAnchorLoc(anchorId)
         if (loc) {
           audio.play('click')
-          setPanel({ kind: anchorId === world.currentLocation ? 'activities' : 'travel', loc })
+          setPanel({ kind: loc.id === world.currentLocation ? 'activities' : 'travel', loc })
+        }
+      }
+      // onboarding auto-advance — the tour watches the REAL input layer
+      const step = tutStepRef.current
+      if (step !== null) {
+        const tp = getTutProgress()
+        if (step === 0 && tp.moved) {
+          tutStepRef.current = 1
+          setTutStep(1)
+        } else if (step === 1 && tp.looked) {
+          tutStepRef.current = 2
+          setTutStep(2)
+        } else if (step === 2 && nearestRef.current) {
+          tutStepRef.current = 3
+          setTutStep(3)
+        }
+      }
+      // arrival toast — first entry into each district, once per session
+      const distNow = districtRef.current
+      if (distNow && distNow !== lastDistrictRef.current) {
+        lastDistrictRef.current = distNow
+        if (!seenDistricts.current.has(distNow)) {
+          const loc = LOCATION_BY_ID[distNow]
+          if (loc) {
+            seenDistricts.current.add(distNow)
+            setArrival(loc.name)
+            if (arrivalTimer.current) clearTimeout(arrivalTimer.current)
+            arrivalTimer.current = setTimeout(() => setArrival(null), 2600)
+          }
         }
       }
       raf = requestAnimationFrame(tick)
@@ -197,15 +295,16 @@ export function HudOverlay({
 
   const openPanelFor = (anchorId: string | null) => {
     if (!anchorId) return
-    const loc = LOCATION_BY_ID[anchorId]
+    const loc = resolveAnchorLoc(anchorId)
     if (!loc) return
     audio.play('click')
-    setPanel({ kind: anchorId === world.currentLocation ? 'activities' : 'travel', loc })
+    setPanel({ kind: loc.id === world.currentLocation ? 'activities' : 'travel', loc })
   }
 
   const currentLoc = LOCATION_BY_ID[world.currentLocation]
-  const promptLoc = nearestAnchor ? LOCATION_BY_ID[nearestAnchor] : null
+  const promptLoc = nearestAnchor ? resolveAnchorLoc(nearestAnchor) : null
   const promptAnchor = nearestAnchor
+  const isPoiPrompt = !!promptAnchor?.startsWith('poi:')
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none" style={{ zIndex: 30 }}>
@@ -227,6 +326,9 @@ export function HudOverlay({
           <button
             onClick={() => {
               audio.play('click')
+              // settle the visit's walking into the real needs economy
+              settleWalk(getWalkedMeters())
+              resetWalkedMeters()
               onExit()
             }}
             aria-label="Leave the 3D world"
@@ -263,6 +365,66 @@ export function HudOverlay({
         </div>
       </div>
 
+      {/* ---------- one-time onboarding tour ---------- */}
+      {tutStep !== null && (
+        <div className="pointer-events-auto absolute inset-x-0 top-[4.9rem] z-10 flex justify-center px-4">
+          <div className="lko-pop w-full max-w-sm rounded-2xl border border-white/25 bg-black/55 p-4 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md">
+            <div className="flex items-center justify-between gap-3">
+              <p className="lko-display text-[15px]">Welcome to Lokoja</p>
+              {tutStep < 3 && (
+                <button
+                  onClick={finishTut}
+                  className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-extrabold text-white/85"
+                >
+                  Skip
+                </button>
+              )}
+            </div>
+            {tutStep < 3 ? (
+              <>
+                <p className="mt-1.5 text-[13px] font-semibold leading-snug text-white/90">
+                  {tutStep === 0 &&
+                    (touchMode ? 'Drag the left stick to walk around.' : 'Walk with W A S D or the arrow keys.')}
+                  {tutStep === 1 &&
+                    (touchMode ? 'Drag anywhere on the screen to look around.' : 'Drag with the mouse to look around.')}
+                  {tutStep === 2 && 'Walk to a golden pin — press E or tap the pin button.'}
+                </p>
+                <div className="mt-3 flex items-center gap-1.5">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 w-7 rounded-full transition-colors ${i <= tutStep ? 'bg-[#ffd88a]' : 'bg-white/25'}`}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-1.5 text-[13px] font-semibold leading-snug text-white/90">
+                  You're ready — explore the city, meet people and find work.
+                </p>
+                <button
+                  onClick={finishTut}
+                  className="lko-press mt-3 flex min-h-[44px] w-full items-center justify-center rounded-xl bg-[var(--lko-green)] text-[13px] font-extrabold"
+                >
+                  Start exploring
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---------- district arrival toast ---------- */}
+      {arrival && tutStep === null && (
+        <div className="pointer-events-none absolute inset-x-0 top-[4.9rem] flex justify-center px-4">
+          <p className="lko-pop flex items-center gap-2 rounded-full bg-black/50 px-4 py-2 text-[13px] font-extrabold text-white backdrop-blur-md">
+            <PinIcon size={14} className="text-[#ffd88a]" />
+            Now entering {arrival}
+          </p>
+        </div>
+      )}
+
       {/* ---------- interact prompt ---------- */}
       {promptLoc && panel.kind === 'none' && !isTravelling && (
         <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
@@ -272,14 +434,56 @@ export function HudOverlay({
           >
             <PlaceIcon id={promptLoc.id} size={17} className="shrink-0 text-[#ffd88a]" />
             <span className="truncate text-[14px] font-extrabold">
-              {promptAnchor === world.currentLocation
-                ? `You're at ${promptLoc.name} — tap to see what's here`
-                : `Travel to ${promptLoc.name}`}
+              {isPoiPrompt
+                ? `Read the ${promptLoc.name} job board`
+                : promptAnchor === world.currentLocation
+                  ? `You're at ${promptLoc.name} — tap to see what's here`
+                  : `Travel to ${promptLoc.name}`}
             </span>
             {!touchMode && (
               <kbd className="rounded-md border border-white/30 bg-white/10 px-1.5 py-0.5 text-[10px] font-extrabold">E</kbd>
             )}
           </button>
+        </div>
+      )}
+
+      {/* ---------- NPC gist chip (real registry names + real hustle titles) ---------- */}
+      {gistVisible && npcDef && npcHustle && (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-52 flex justify-center px-6 sm:bottom-[6.75rem]">
+          <div className="lko-pop flex max-w-full items-center gap-2.5 rounded-full border border-white/20 bg-black/55 py-2 pl-2 pr-2 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--lko-gold)] text-[16px]">
+              {npcDef.emoji}
+            </span>
+            <span className="min-w-0 pl-1">
+              <span className="block truncate text-[13px] font-extrabold leading-tight">{npcDef.name} dey around</span>
+              <span className="block max-w-[13.5rem] truncate text-[11px] font-semibold text-white/80 sm:max-w-[18rem]">
+                “{npcHustle.title}” — gist dey Work board
+              </span>
+            </span>
+            <button
+              onClick={() => {
+                audio.play('click')
+                onOpenWork()
+              }}
+              className="lko-press ml-1 flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-[var(--lko-green)] px-3.5 text-[12.5px] font-extrabold"
+            >
+              <WorkIcon size={15} />
+              Work
+            </button>
+            <button
+              aria-label="Dismiss gist"
+              onClick={() =>
+                setDismissedGists((prev) => {
+                  const next = new Set(prev)
+                  next.add(npcDef.id)
+                  return next
+                })
+              }
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[12px] font-extrabold text-white/80"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

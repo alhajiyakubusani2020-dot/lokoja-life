@@ -239,6 +239,8 @@ export function WorldScene({
   weather,
   onReady,
   onNearestAnchor,
+  onDistrict,
+  onGist,
 }: {
   avatar: AvatarConfig
   currentLocationId: string
@@ -246,6 +248,8 @@ export function WorldScene({
   weather: Weather
   onReady?: () => void
   onNearestAnchor?: (anchorId: string | null) => void
+  onDistrict?: (districtId: string | null) => void
+  onGist?: (npcId: string | null) => void
 }) {
   const quality = useMemo(() => detectQuality(), [])
   const sunRef = useRef(new THREE.Vector3(0.3, 0.8, 0.2))
@@ -275,9 +279,10 @@ export function WorldScene({
         avatar={avatar}
         spawnLocationId={currentLocationId}
         onNearestAnchor={onNearestAnchor}
+        onDistrict={onDistrict}
         onPosition={(x, z) => camTarget.current.set(x, 0, z)}
       />
-      <Npcs timeOfDay={timeOfDay} />
+      <Npcs timeOfDay={timeOfDay} onGist={onGist} />
       <Traffic timeOfDay={timeOfDay} />
       <Rain weather={weather} />
     </Canvas>

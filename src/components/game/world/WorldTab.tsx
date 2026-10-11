@@ -17,6 +17,7 @@ import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } 
 import { useGameStore } from '@/game/store/useGameStore'
 import { MapIcon, PinIcon } from '../icons'
 import { audio } from '@/game/systems/audio'
+import { getWalkedMeters, resetWalkedMeters } from './controls'
 import { WorldScene } from './WorldScene'
 import { HudOverlay } from './HudOverlay'
 
@@ -98,10 +99,24 @@ export function WorldTab({
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
   const [nearest, setNearest] = useState<string | null>(null)
+  const [district, setDistrict] = useState<string | null>(null)
+  const [gistNpc, setGistNpc] = useState<string | null>(null)
 
   const handleReady = useCallback(() => setReady(true), [])
   const handleFail = useCallback(() => setFailed(true), [])
   const handleAnchor = useCallback((id: string | null) => setNearest(id), [])
+  const handleDistrict = useCallback((id: string | null) => setDistrict(id), [])
+  const handleGist = useCallback((id: string | null) => setGistNpc(id), [])
+
+  // settle walking energy no matter HOW the world closes (Exit path resets to
+  // zero first, so this only ever catches abnormal unmounts — 0 m is a no-op)
+  const settleWalk = useGameStore((s) => s.settleWorldWalk)
+  useEffect(() => {
+    return () => {
+      settleWalk(getWalkedMeters())
+      resetWalkedMeters()
+    }
+  }, [settleWalk])
 
   // keep the "leave world" action reliable even if the scene died
   const exit = useCallback(() => {
@@ -119,9 +134,11 @@ export function WorldTab({
         weather={world.weather}
         onReady={handleReady}
         onNearestAnchor={handleAnchor}
+        onDistrict={handleDistrict}
+        onGist={handleGist}
       />
     )
-  }, [canWebGL, failed, player.avatar, world.currentLocation, world.timeOfDay, world.weather, handleReady, handleAnchor])
+  }, [canWebGL, failed, player.avatar, world.currentLocation, world.timeOfDay, world.weather, handleReady, handleAnchor, handleDistrict, handleGist])
 
   return (
     <div className="fixed inset-0 z-30 bg-[#0e1524]" aria-label="3D Lokoja world">
@@ -151,6 +168,8 @@ export function WorldTab({
           {ready && !failed && (
             <HudOverlay
               nearestAnchor={nearest}
+              district={district}
+              gistNpc={gistNpc}
               onExit={exit}
               onOpenWork={onOpenWork}
               onOpenMap={onOpenMap}

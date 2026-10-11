@@ -50,6 +50,8 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') sprintHeld = true
   // stop page scroll on arrows/space while exploring
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault()
+  // tutorial: any movement key counts as "moved"
+  if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) markMoved()
 }
 
 function onKeyUp(e: KeyboardEvent) {
@@ -67,6 +69,7 @@ function onBlur() {
 let dragging = false
 let lastX = 0
 let lastY = 0
+let dragTotal = 0
 
 function onPointerDown(e: PointerEvent) {
   if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -77,10 +80,17 @@ function onPointerDown(e: PointerEvent) {
 
 function onPointerMove(e: PointerEvent) {
   if (!dragging) return
-  lookDx += e.clientX - lastX
-  lookDy += e.clientY - lastY
+  const dx = e.clientX - lastX
+  const dy = e.clientY - lastY
+  lookDx += dx
+  lookDy += dy
   lastX = e.clientX
   lastY = e.clientY
+  // tutorial: a meaningful drag counts as "looked around"
+  if (Math.hypot(dx, dy) > 2) {
+    dragTotal += Math.hypot(dx, dy)
+    if (dragTotal > 30) tut.looked = true
+  }
 }
 
 function onPointerUp() {
@@ -121,6 +131,7 @@ export function attachControls(surface: HTMLElement): () => void {
 export function setJoystick(x: number, y: number) {
   joy = { x, y }
   joyActive = Math.hypot(x, y) > 0.01
+  if (joyActive) markMoved()
 }
 
 export function setSprint(on: boolean) {
@@ -202,4 +213,53 @@ export function isInputFrozen(): boolean {
 
 export function isAttached(): boolean {
   return attached
+}
+
+/* ------------------------- walk measurement + tutorial ------------------------ */
+
+/**
+ * Stage 3D increment 2 — presentation MEASURES, the store APPLIES.
+ * The player controller reports metres actually walked each frame;
+ * the WorldTab settles them into the real needs economy on exit via
+ * store.settleWorldWalk(). Nothing here touches money/time directly.
+ */
+let walkedMeters = 0
+
+export function addWalkDistance(meters: number) {
+  if (Number.isFinite(meters) && meters > 0) walkedMeters += meters
+}
+
+export function getWalkedMeters(): number {
+  return walkedMeters
+}
+
+export function resetWalkedMeters() {
+  walkedMeters = 0
+}
+
+/** the player's last known world position (NPC proximity checks read this) */
+export const playerPos = { x: 0, z: 0 }
+
+export function reportPlayerPos(x: number, z: number) {
+  playerPos.x = x
+  playerPos.z = z
+}
+
+/* --------------------------- one-time onboarding ------------------------------ */
+
+/** tutorial progress flags — the HUD drives a 3-step first-visit tour */
+const tut = { moved: false, looked: false }
+
+/** called by the input layer itself so ANY input path (touch/keyboard) counts */
+function markMoved() {
+  tut.moved = true
+}
+
+export function getTutProgress(): { moved: boolean; looked: boolean } {
+  return { ...tut }
+}
+
+export function resetTutProgress() {
+  tut.moved = false
+  tut.looked = false
 }

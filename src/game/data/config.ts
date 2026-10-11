@@ -242,3 +242,27 @@ export const AUTOSAVE = {
   /** Debounce window for autosave after state changes (ms). */
   debounceMs: 1200,
 } as const
+
+/* --------------------------------- 3D World ---------------------------------- */
+
+/**
+ * Stage 3D — tuning for the walkable 3D world's connection to the
+ * real economy. All balance values live HERE (never in components).
+ * Walking is free sightseeing up to the free allowance; beyond it,
+ * long treks cost a little energy, settled through the store so the
+ * ledger/clock stay the ONLY authorities.
+ */
+export const WORLD3D = {
+  /** energy cost per 100 m actually walked on foot */
+  energyPer100m: 0.55,
+  /** metres per world visit that are always free (strolling one spot) */
+  freeMeters: 150,
+  /** maximum energy one world visit can drain (anti-idle safety cap) */
+  maxEnergyPerVisit: 6,
+  /** radius (m) at which a nearby NPC's gist chip appears */
+  npcGistRadius: 24,
+  /** metres of road a keke/okada/danfo travels per second (traffic feel) */
+  trafficBaseSpeed: 7,
+  /** localStorage key for the one-time 3D onboarding (NOT part of the save) */
+  onboardingKey: 'lko-world-tut-v1',
+} as const

@@ -580,6 +580,8 @@ export const STALLS: StallDef[] = (() => {
 /* ------------------------------- NPC walk zones ------------------------------ */
 
 export interface NpcZone {
+  /** stable location id this zone belongs to (joins NPCS registry) */
+  locationId: string
   x: number
   z: number
   y: number
@@ -591,7 +593,46 @@ export const NPC_ZONES: NpcZone[] = [
   'kpata-market', 'food-area', 'ganaja-junction', 'home', 'transport-area', 'university-area', 'historic-lokoja',
 ].map((id) => {
   const a = ANCHOR_BY_ID[id]
-  return { x: a.x, z: a.z, y: a.y, radius: 11 }
+  return { locationId: id, x: a.x, z: a.z, y: a.y, radius: 11 }
+})
+
+/* ---------------------------- points of interest ----------------------------- */
+
+/**
+ * Physical interactable props that are NOT location anchors — extra
+ * "eyes-on" objects that deep-link into the real location panel
+ * (e.g. the Kpata Market job board). Ids are namespaced `poi:` in the
+ * HUD so they never collide with location anchor ids.
+ */
+export interface PoiDef {
+  id: string
+  kind: 'jobboard'
+  /** the location whose panel this prop opens */
+  locationId: string
+  x: number
+  z: number
+  y: number
+  rotY: number
+}
+
+export const POINTS_OF_INTEREST: PoiDef[] = (
+  [
+    { locationId: 'kpata-market', dx: 3.4, dz: 3.2 },
+    { locationId: 'government-area', dx: -3.6, dz: 3.4 },
+  ] as { locationId: string; dx: number; dz: number }[]
+).map(({ locationId, dx, dz }) => {
+  const a = ANCHOR_BY_ID[locationId]
+  const x = a.x + dx
+  const z = a.z + dz
+  return {
+    id: `board-${locationId}`,
+    kind: 'jobboard' as const,
+    locationId,
+    x,
+    z,
+    y: heightAt(x, z),
+    rotY: Math.atan2(a.x - x, a.z - z), // face the plaza
+  }
 })
 
 /* ------------------------------- traffic loops ------------------------------- */

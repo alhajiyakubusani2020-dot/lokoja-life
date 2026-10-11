@@ -26,7 +26,8 @@ import type {
   TransportId,
   WorldState,
 } from '../types'
-import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE } from '../data/config'
+import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D } from '../data/config'
+import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
 import { DEFAULT_AVATAR } from '../data/avatar'
 import { LOCATION_BY_ID } from '../data/locations'
 import { JOB_BY_ID } from '../data/jobs'
@@ -78,6 +79,8 @@ interface GameStore {
   /* needs / time actions (Stage 1: rest; Stage 2: travel — both use the same clock) */
   rest: (kind: 'nap' | 'sleep') => void
   advanceTime: (slots?: number) => void
+  /** Stage 3D — settle the energy cost of one 3D-world visit's walking (0 → no-op) */
+  settleWorldWalk: (meters: number) => void
 
   /* travel (Stage 2) */
   isTravelling: boolean
@@ -267,6 +270,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!world) return
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, slots)
     set({ world: { ...world, ...clock } })
+    scheduleAutosave(get)
+  },
+
+  /** Stage 3D — walking in the 3D world costs a little energy past the free
+   *  allowance. Pure system computes the cost from WORLD3D config; the needs
+   *  engine applies it. No clock change (walking is not travelling). */
+  settleWorldWalk: (meters) => {
+    const { player } = get()
+    if (!player) return
+    const cost = walkingEnergyCost(meters)
+    if (cost <= 0) return
+    const needs = applyNeedsDelta(player.needs, { energy: -cost })
+    set({ player: { ...player, needs } })
+    const label = describeWalkSettle(meters, cost)
+    if (label) {
+      get().notify({ icon: '🚶', text: `${label} — ${cost} energy spent.`, tone: 'neutral' })
+    }
     scheduleAutosave(get)
   },
 

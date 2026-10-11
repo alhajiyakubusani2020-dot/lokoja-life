@@ -10,7 +10,7 @@
  * resolve() every frame with its intended position and gets a legal one.
  */
 
-import { BUILDINGS, BRIDGES, RIVERS, WALK_BOUND, type BuildingDef } from './layout'
+import { BUILDINGS, BRIDGES, POINTS_OF_INTEREST, RIVERS, WALK_BOUND, type BuildingDef } from './layout'
 
 /* ---------------------------- building colliders ---------------------------- */
 
@@ -37,7 +37,19 @@ function boxFor(b: BuildingDef): BoxCollider {
   }
 }
 
-const BOXES: BoxCollider[] = BUILDINGS.map(boxFor)
+const BOXES: BoxCollider[] = [
+  ...BUILDINGS.map(boxFor),
+  // points of interest get a slim collider so you walk UP TO a job board, not through it
+  ...POINTS_OF_INTEREST.map((p) => ({
+    cx: p.x,
+    cz: p.z,
+    hw: 0.85,
+    hd: 0.22,
+    cos: Math.cos(-p.rotY),
+    sin: Math.sin(-p.rotY),
+    rotY: p.rotY,
+  })),
+]
 
 /** push a circle out of an oriented box (no-op if not overlapping) */
 function resolveBox(x: number, z: number, r: number, b: BoxCollider): [number, number] {

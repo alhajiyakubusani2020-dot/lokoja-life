@@ -21,11 +21,14 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
 import {
-  ANCHOR_BY_ID, heightAt, NPC_ZONES, TRAFFIC_LOOPS,
+  ANCHOR_BY_ID, DISTRICTS, heightAt, NPC_ZONES, POINTS_OF_INTEREST, TRAFFIC_LOOPS,
 } from '@/game/world3d/layout'
 import { bridgeDeckY, resolvePosition } from '@/game/world3d/collision'
+import { NPCS } from '@/game/data/npcs'
+import { WORLD3D } from '@/game/data/config'
 import {
-  consumeLook, consumeZoom, isInputFrozen, MOVE, readMoveInput,
+  addWalkDistance, consumeLook, consumeZoom, isInputFrozen, MOVE, playerPos,
+  readMoveInput, reportPlayerPos,
 } from './controls'
 
 /* --------------------------- shared character parts -------------------------- */
@@ -153,11 +156,13 @@ export function PlayerController({
   spawnLocationId,
   onPosition,
   onNearestAnchor,
+  onDistrict,
 }: {
   avatar: AvatarConfig
   spawnLocationId: string
   onPosition?: (x: number, z: number) => void
   onNearestAnchor?: (anchorId: string | null) => void
+  onDistrict?: (districtId: string | null) => void
 }) {
   const group = useRef<THREE.Group>(null)
   const playerSpeed = useRef(0)
@@ -173,6 +178,7 @@ export function PlayerController({
     camDist: MOVE.cameraDistance as number,
     speed: 0,
     anchorId: null as string | null,
+    districtId: null as string | null,
     teleport: null as { x: number; z: number } | null,
   })
 
@@ -209,6 +215,9 @@ export function PlayerController({
         anchors: Object.fromEntries(
           Object.entries(ANCHOR_BY_ID).map(([id, an]) => [id, { x: an.x, z: an.z }]),
         ),
+        // E2E: feed the walked-meters accumulator directly (the frame loop
+        // feeds it via addWalkDistance(s.speed*dt) — this skips terrain fights)
+        walk: (m: number) => addWalkDistance(m),
       }
     }
     return () => {
@@ -267,6 +276,10 @@ export function PlayerController({
     s.z = nz
     s.speed = Math.hypot(s.vx, s.vz)
 
+    // presentation MEASURES (the store APPLIES on exit) — metres walked
+    if (!frozen) addWalkDistance(s.speed * dt)
+    reportPlayerPos(s.x, s.z)
+
     // slide dampening when blocked
     if (s.speed > 0.01) {
       const dot = (s.vx * tx + s.vz * tz) / (s.speed * (targetSpeed || 1) + 1e-6)
@@ -291,7 +304,7 @@ export function PlayerController({
     }
     g.rotation.y = s.yaw
 
-    // ---- nearest anchor (interaction discovery) ----
+    // ---- nearest anchor / point of interest (interaction discovery) ----
     let nearestId: string | null = null
     let nearestD = Infinity
     for (const [id, a] of Object.entries(ANCHOR_BY_ID)) {
@@ -301,10 +314,31 @@ export function PlayerController({
         nearestId = id
       }
     }
+    // physical props (job boards) are interactables too — namespaced ids
+    for (const p of POINTS_OF_INTEREST) {
+      const d = Math.hypot(p.x - s.x, p.z - s.z)
+      if (d < MOVE.interactRadius * 0.62 && d < nearestD) {
+        nearestD = d
+        nearestId = `poi:${p.id}`
+      }
+    }
     const changed = nearestId !== s.anchorId
     s.anchorId = nearestId
     if (onNearestAnchor && changed) {
       onNearestAnchor(nearestId)
+    }
+
+    // ---- district awareness (the HUD shows arrival toasts) ----
+    let districtNow: string | null = null
+    for (const d of DISTRICTS) {
+      if (Math.hypot(d.x - s.x, d.z - s.z) <= d.radius) {
+        districtNow = d.id
+        break
+      }
+    }
+    if (onDistrict && districtNow !== s.districtId) {
+      s.districtId = districtNow
+      onDistrict(districtNow)
     }
 
     if (onPosition) onPosition(s.x, s.z)
@@ -348,16 +382,27 @@ export function PlayerController({
 const NPC_SKINS = ['#4A2C17', '#5C3A21', '#6E4326', '#8A5A32', '#A9714B']
 const NPC_CLOTHES = ['#c94f2e', '#2e7d5b', '#d99a2b', '#3a6ea3', '#8a5aa3', '#b03a5b', '#e8dcc3']
 
-export function Npcs({ timeOfDay }: { timeOfDay: TimeOfDay }) {
+export function Npcs({
+  timeOfDay,
+  onGist,
+}: {
+  timeOfDay: TimeOfDay
+  /** reports the nearest named NPC's id (real NPCS registry) — null when none near */
+  onGist?: (npcId: string | null) => void
+}) {
   const COUNT = 12
   const refs = useRef<(THREE.Group | null)[]>([])
+  const gistRef = useRef<string | null>(null)
   const data = useMemo(
     () =>
       Array.from({ length: COUNT }, (_, i) => {
         const zone = NPC_ZONES[i % NPC_ZONES.length]
         const rng = Math.random
+        // real identities — the same registry that powers hustle offers
+        const pool = NPCS.filter((n) => n.homeLocationId === zone.locationId)
         return {
           zone,
+          identity: pool.length ? pool[i % pool.length] : null,
           ang0: rng() * Math.PI * 2,
           radius: 5 + rng() * (zone.radius - 7),
           speed: 0.25 + rng() * 0.4,
@@ -388,6 +433,28 @@ export function Npcs({ timeOfDay }: { timeOfDay: TimeOfDay }) {
       if (!g.visible) continue
       g.position.set(x, heightAt(x, z), z)
       g.rotation.y = -ang + (d.dir > 0 ? Math.PI / 2 : -Math.PI / 2)
+    }
+
+    // gist discovery — the nearest NAMED resident to the player
+    if (onGist) {
+      let best: string | null = null
+      let bestD: number = WORLD3D.npcGistRadius
+      for (let i = 0; i < COUNT; i++) {
+        if (i >= activeCount) break
+        const d = data[i]
+        if (!d.identity) continue
+        const g = refs.current[i]
+        if (!g) continue
+        const dist = Math.hypot(g.position.x - playerPos.x, g.position.z - playerPos.z)
+        if (dist < bestD) {
+          bestD = dist
+          best = d.identity.id
+        }
+      }
+      if (best !== gistRef.current) {
+        gistRef.current = best
+        onGist(best)
+      }
     }
   })
 
@@ -529,21 +596,84 @@ function TaxiMesh({ night }: { night: boolean }) {
   )
 }
 
+function DanfoMesh({ night }: { night: boolean }) {
+  const wheel = useRef<THREE.Group>(null)
+  useFrame((_, dt) => {
+    if (wheel.current) wheel.current.children.forEach((w) => (w.rotation.x += dt * 5.5))
+  })
+  return (
+    <group>
+      {/* body — the classic yellow Lagos danfo silhouette (Lagos Run homage) */}
+      <mesh position={[0, 0.95, 0]} castShadow>
+        <boxGeometry args={[1.9, 1.3, 4.2]} />
+        <meshStandardMaterial color="#e8b820" roughness={0.55} metalness={0.1} />
+      </mesh>
+      {/* roof */}
+      <mesh position={[0, 1.66, 0]} castShadow>
+        <boxGeometry args={[1.7, 0.14, 3.4]} />
+        <meshStandardMaterial color="#f2ead8" roughness={0.8} />
+      </mesh>
+      {/* green side stripes */}
+      {[1, -1].map((sx) => (
+        <mesh key={sx} position={[sx * 0.96, 0.72, 0]}>
+          <boxGeometry args={[0.03, 0.26, 3.9]} />
+          <meshStandardMaterial color="#1c5c3a" roughness={0.7} />
+        </mesh>
+      ))}
+      {/* windshield band */}
+      <mesh position={[0, 1.35, 2.11]}>
+        <boxGeometry args={[1.7, 0.5, 0.05]} />
+        <meshStandardMaterial color="#28323a" roughness={0.25} metalness={0.4} />
+      </mesh>
+      {/* side windows */}
+      {[1, -1].map((sx) =>
+        [0.95, -0.45].map((z, i) => (
+          <mesh key={`${sx}-${i}`} position={[sx * 0.96, 1.4, z]}>
+            <boxGeometry args={[0.03, 0.42, 1.05]} />
+            <meshStandardMaterial color="#28323a" roughness={0.3} metalness={0.35} />
+          </mesh>
+        )),
+      )}
+      {/* headlights */}
+      {[0.6, -0.6].map((x) => (
+        <mesh key={x} position={[x, 0.75, 2.12]}>
+          <sphereGeometry args={[0.12, 8, 8]} />
+          <meshStandardMaterial color="#fff6d8" emissive="#ffe9a8" emissiveIntensity={night ? 2.2 : 0.35} />
+        </mesh>
+      ))}
+      {/* wheels */}
+      <group ref={wheel}>
+        {[[-0.92, 1.4], [0.92, 1.4], [-0.92, -1.35], [0.92, -1.35]].map(([x, z], i) => (
+          <mesh key={i} position={[x, 0.38, z]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.38, 0.38, 0.22, 10]} />
+            <meshStandardMaterial color="#1c1c1c" roughness={1} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  )
+}
+
 interface Vehicle {
   loop: number
   s: number
   speed: number
-  kind: 'keke' | 'okada' | 'taxi'
+  kind: 'keke' | 'okada' | 'taxi' | 'danfo'
   offset: number
 }
 
+// speeds are presentation feel, scaled off the shared config base
+const BASE = WORLD3D.trafficBaseSpeed
+
 const VEHICLES: Vehicle[] = [
-  { loop: 0, s: 0.05, speed: 7.5, kind: 'keke', offset: 1.6 },
-  { loop: 0, s: 0.55, speed: 6.4, kind: 'keke', offset: -1.6 },
-  { loop: 1, s: 0.2, speed: 8.2, kind: 'okada', offset: 1.4 },
-  { loop: 1, s: 0.75, speed: 7.0, kind: 'keke', offset: -1.4 },
-  { loop: 2, s: 0.3, speed: 9.0, kind: 'taxi', offset: 1.8 },
-  { loop: 2, s: 0.8, speed: 6.2, kind: 'okada', offset: -1.8 },
+  { loop: 0, s: 0.05, speed: 1.07 * BASE, kind: 'keke', offset: 1.6 },
+  { loop: 0, s: 0.55, speed: 0.91 * BASE, kind: 'keke', offset: -1.6 },
+  { loop: 1, s: 0.2, speed: 1.17 * BASE, kind: 'okada', offset: 1.4 },
+  { loop: 1, s: 0.75, speed: 1.0 * BASE, kind: 'keke', offset: -1.4 },
+  { loop: 2, s: 0.3, speed: 1.29 * BASE, kind: 'taxi', offset: 1.8 },
+  { loop: 2, s: 0.8, speed: 0.89 * BASE, kind: 'okada', offset: -1.8 },
+  { loop: 0, s: 0.33, speed: 0.86 * BASE, kind: 'danfo', offset: 1.9 },
+  { loop: 1, s: 0.62, speed: 0.8 * BASE, kind: 'danfo', offset: -1.9 },
 ]
 
 /** position along a loop polyline at arc-length s */
@@ -598,6 +728,7 @@ export function Traffic({ timeOfDay }: { timeOfDay: TimeOfDay }) {
           {v.kind === 'keke' && <KekeMesh night={night} />}
           {v.kind === 'okada' && <OkadaMesh night={night} />}
           {v.kind === 'taxi' && <TaxiMesh night={night} />}
+          {v.kind === 'danfo' && <DanfoMesh night={night} />}
           <BlobShadow scale={1.6} />
         </group>
       ))}

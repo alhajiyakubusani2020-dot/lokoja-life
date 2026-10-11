@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  ANCHORS, BUILDINGS, heightAt, LAMPS, ROOF_TONES, STALLS, STALL_TONES,
+  ANCHORS, BUILDINGS, heightAt, LAMPS, POINTS_OF_INTEREST, ROOF_TONES, STALLS, STALL_TONES,
   TREE_TONES, TREES, WALL_TONES, WATER_Y, type WorldAnchor,
 } from '@/game/world3d/layout'
 import { atmoLive } from './atmosphere'
@@ -631,6 +631,50 @@ function AnchorStructures() {
   )
 }
 
+/* ----------------------------- points of interest ----------------------------- */
+
+/** physical job board — walk up and read the REAL work board of that district */
+function JobBoard({ x, y, z, rotY }: { x: number; y: number; z: number; rotY: number }) {
+  return (
+    <group position={[x, y, z]} rotation={[0, rotY, 0]}>
+      {/* timber posts */}
+      {[-0.7, 0.7].map((px) => (
+        <mesh key={px} position={[px, 1.05, 0]} castShadow>
+          <boxGeometry args={[0.14, 2.1, 0.14]} />
+          <meshStandardMaterial color="#6a5138" roughness={0.95} />
+        </mesh>
+      ))}
+      {/* board frame */}
+      <mesh position={[0, 1.9, 0.04]} castShadow>
+        <boxGeometry args={[1.9, 1.3, 0.08]} />
+        <meshStandardMaterial color="#1c5c3a" roughness={0.8} />
+      </mesh>
+      {/* notice sheets — slightly staggered, hand-pinned feel */}
+      {[0.42, 0, -0.42].map((sx, i) => (
+        <mesh key={sx} position={[sx, 1.84 - (i % 2) * 0.14, 0.1]}>
+          <boxGeometry args={[0.52, 0.7, 0.03]} />
+          <meshStandardMaterial color={i === 1 ? '#f2ead8' : '#e8dcc3'} roughness={1} />
+        </mesh>
+      ))}
+      {/* gold header cap */}
+      <mesh position={[0, 2.58, 0.02]} castShadow>
+        <boxGeometry args={[2.06, 0.3, 0.12]} />
+        <meshStandardMaterial color="#e8a317" roughness={0.6} />
+      </mesh>
+    </group>
+  )
+}
+
+function PointOfInterestProps() {
+  return (
+    <group>
+      {POINTS_OF_INTEREST.map((p) =>
+        p.kind === 'jobboard' ? <JobBoard key={p.id} x={p.x} y={p.y} z={p.z} rotY={p.rotY} /> : null,
+      )}
+    </group>
+  )
+}
+
 /* ---------------------------------- labels ----------------------------------- */
 
 function LocationLabels() {
@@ -673,6 +717,7 @@ export function CityMesh() {
       <Trees />
       <Lamps />
       <AnchorStructures />
+      <PointOfInterestProps />
       <LocationLabels />
     </group>
   )
