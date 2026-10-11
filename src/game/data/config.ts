@@ -265,4 +265,38 @@ export const WORLD3D = {
   trafficBaseSpeed: 7,
   /** localStorage key for the one-time 3D onboarding (NOT part of the save) */
   onboardingKey: 'lko-world-tut-v1',
+  /** localStorage key for district discovery progress (NOT part of the save) */
+  discoveryKey: 'lko-world-disc-v1',
 } as const
+
+/* ------------------------------- food & eating -------------------------------- */
+
+/**
+ * Stage 4 goes live — the eating loop. A real meal: costs cash, fills
+ * hunger, lifts mood a little, advances the clock one slot (eating takes
+ * time). Values live here so balance never hides in components.
+ */
+export interface MealDef {
+  key: string
+  label: string
+  /** short flavour line shown on the menu row */
+  detail: string
+  price: number
+  hunger: number
+  mood: number
+  energy: number
+}
+
+export const FOOD: { meals: MealDef[] } = {
+  meals: [
+    { key: 'amala', label: 'Amala + ewedu + goat', detail: 'Mama T’s Thursday special — swallow that holds you', price: 450, hunger: 34, mood: 6, energy: 4 },
+    { key: 'jollof', label: 'Party jollof + chicken', detail: 'Smoky bottom-pot jollof, fried chicken on top', price: 700, hunger: 46, mood: 10, energy: 5 },
+    { key: 'suya', label: 'Suya wrap', detail: 'Hot off the grill, extra yaji pepper', price: 300, hunger: 18, mood: 8, energy: 2 },
+    { key: 'bread-akara', label: 'Bread + akara', detail: 'The classic roadside combo that never fails', price: 250, hunger: 20, mood: 4, energy: 3 },
+    { key: 'groceries', label: 'Fresh foodstuff basket', detail: 'Tomatoes, peppers, rice, groundnut oil — for the pot at home', price: 350, hunger: 26, mood: 3, energy: 2 },
+  ],
+}
+
+export const MEAL_BY_KEY: Record<string, MealDef> = Object.fromEntries(
+  FOOD.meals.map((m) => [m.key, m]),
+)

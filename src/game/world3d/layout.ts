@@ -65,10 +65,10 @@ export const ANCHORS: WorldAnchor[] = LOCATIONS.map((l) => {
   let z = worldZ(l.mapY)
   // the Confluence marker sits ON the meeting of the rivers (map-accurate),
   // but you cannot stand in water — the 3D viewpoint nudges onto the bluff
-  // above the north-west bank, overlooking the meeting point
+  // SOUTH-WEST of the meeting point, overlooking it across the water
   if (l.id === 'confluence') {
-    x -= 9
-    z -= 18.5
+    x -= 30
+    z += 18
   }
   return { id: l.id, location: l, x, z, plateauH: 0, y: 0 }
 })
@@ -88,24 +88,36 @@ export interface RiverDef {
   width: number
 }
 
+/**
+ * Real Lokoja geography, stylised to the world grid (north-up):
+ *  • River Niger enters from the NORTH-WEST and curves east north of the
+ *    city and Mount Patti.
+ *  • River Benue arrives from the EAST.
+ *  • They meet at the Confluence NORTH-EAST of the town.
+ *  • The combined Niger flows SOUTH along the town's eastern side —
+ *    Lokoja is sandwiched between the Niger (east) and Mount Patti (west).
+ */
 export const RIVERS: RiverDef[] = [
   {
     id: 'niger',
     width: 15,
     points: [
-      [-150, -158], [-118, -84], [-96, -18], [-76, 30], [-40, 42],
-      [10, 48], [58, 52], [96, 54],
+      [-150, -152], [-116, -144], [-88, -134], [-58, -124],
+      [-24, -118], [8, -116], [32, -115], [54, -114],
     ],
   },
   {
     id: 'benue',
     width: 13,
-    points: [[164, 42], [128, 45], [96, 54]],
+    points: [[160, -122], [122, -118], [86, -116], [54, -114]],
   },
   {
     id: 'outflow',
     width: 17,
-    points: [[96, 54], [102, 88], [96, 132], [88, 170]],
+    points: [
+      [54, -114], [60, -90], [64, -62], [66, -30], [66, 4],
+      [62, 40], [58, 76], [54, 110], [52, 140], [52, 162],
+    ],
   },
 ]
 
@@ -147,32 +159,34 @@ export function riverInfo(x: number, z: number): { d: number; halfWidth: number 
 export type RoadPath = [number, number][]
 
 /**
- * The road graph — same connectivity the 2D map implies (routes radiating
- * from Ganaja Junction), expressed in world coordinates.
+ * The road graph — named after the real Lokoja road spine, expressed in
+ * world coordinates. Same connectivity the 2D map implies.
  */
 export const ROADS: RoadPath[] = [
-  // 0: home ↔ food strip
-  [[0, 66], [-4, 52], [-12, 36]],
-  // 1: food strip ↔ kpata
-  [[-12, 36], [-34, 22], [-60, 6]],
-  // 2: kpata ↔ patti trail (switchbacks up the mount)
-  [[-60, 6], [-70, -30], [-80, -64], [-88, -78], [-96, -90]],
-  // 3: kpata ↔ historic
-  [[-60, 6], [-44, -24], [-24, -60]],
-  // 4: historic ↔ GRA
-  [[-24, -60], [0, -80], [24, -96]],
-  // 5: historic ↔ university
-  [[-24, -60], [24, -62], [72, -66]],
-  // 6: university ↔ ganaja junction
-  [[72, -66], [66, -40], [54, -18]],
-  // 7: ganaja junction ↔ kpata
-  [[54, -18], [20, -8], [-16, 0], [-60, 6]],
-  // 8: home ↔ motor park
-  [[0, 66], [14, 80], [30, 90]],
-  // 9: motor park ↔ confluence viewpoint (stays on the west bank)
-  [[30, 90], [56, 74], [74, 56], [87, 36]],
-  // 10: ganaja junction ↔ motor park
-  [[54, -18], [48, 30], [30, 90]],
+  // 0: IBB Way — food strip ↔ kpata ↔ ganaja junction (the E-W spine)
+  [[-18, 15], [0, 10], [18, 6], [30, 12], [42, 24]],
+  // 1: town spine — kpata ↔ home ↔ motor park (Murtala Mohammed Way)
+  [[18, 6], [10, 26], [-6, 48], [4, 66], [18, 84]],
+  // 2: Ganaja Road — ganaja junction ↘ river road, hugging the west bank
+  [[42, 24], [46, 34], [48, 46], [46, 58], [44, 70], [44, 82]],
+  // 3: Nataco/university road — ganaja junction ↔ university area
+  [[42, 24], [46, -10], [44, -44], [36, -78]],
+  // 4: Confluence road — university area ↗ the bluff viewpoint
+  [[36, -78], [28, -88], [24, -96]],
+  // 5: Kogi Bridge road — ganaja junction → east across the Niger
+  [[42, 24], [54, 28], [66, 30], [80, 30], [96, 28]],
+  // 6: southern bypass — motor park → east across the Niger (Felele side)
+  [[18, 84], [34, 92], [48, 96], [62, 94], [76, 88]],
+  // 7: Patti foot road — kpata ↔ historic Lokoja
+  [[18, 6], [2, 0], [-30, -14], [-60, -24]],
+  // 8: Patti trail — switchbacks up the mount to the summit
+  [[-60, -24], [-70, -30], [-80, -38], [-88, -50], [-84, -60], [-94, -56], [-100, -50], [-102, -48]],
+  // 9: GRA road — historic ↔ government area
+  [[-60, -24], [-42, -44], [-18, -60]],
+  // 10: GRA ↔ IBB Way link (the western spine)
+  [[-18, -60], [-20, -24], [-18, 15]],
+  // 11: Felele road — motor park → southern rim
+  [[18, 84], [24, 100], [28, 116], [32, 134]],
 ]
 
 export function roadDistance(x: number, z: number): number {
@@ -202,7 +216,7 @@ function baseNoise(x: number, z: number): number {
 
 // plateau heights must exist before heightAt is ever called
 for (const a of ANCHORS) {
-  a.plateauH = Math.max(0.4, baseNoise(a.x, a.z) * 0.55 + (a.id === 'mount-patti' ? 24 : 0))
+  a.plateauH = Math.max(0.4, baseNoise(a.x, a.z) * 0.55 + (a.id === 'mount-patti' ? 30 : 0))
 }
 
 /**
@@ -219,12 +233,13 @@ export function heightAt(x: number, z: number): number {
   const rim = Math.hypot(x, z)
   h += smoothstep(WALK_BOUND - 26, WALK_BOUND + 14, rim) * 14
 
-  // Mount Patti — the guardian mound (west)
-  const pdx = x - (MOUNT_PATTI.x - 6)
+  // Mount Patti — the guardian ridge (west). Bigger and steeper: the real
+  // Patti plateau dominates the town's skyline
+  const pdx = x - (MOUNT_PATTI.x - 4)
   const pdz = z - (MOUNT_PATTI.z - 2)
   const pd = Math.hypot(pdx, pdz)
-  const pattiRise = smoothstep(64, 6, pd) // 1 at summit → 0 at edge
-  h += Math.pow(pattiRise, 1.35) * 24
+  const pattiRise = smoothstep(78, 8, pd) // 1 at summit → 0 at the plains
+  h += Math.pow(pattiRise, 1.3) * 30
 
   // anchor plateaus — flat buildable/walkable sites
   for (const a of ANCHORS) {
@@ -471,27 +486,32 @@ export const BUILDINGS: BuildingDef[] = DISTRICTS.flatMap((d) =>
 
 /* --------------------------------- trees ----------------------------------- */
 
+export type TreeKind = 'tree' | 'palm'
+
 export interface TreeDef {
   x: number
   z: number
   y: number
   scale: number
   tone: number
+  kind: TreeKind
 }
 
 export const TREE_TONES = ['#3d6b2f', '#4c7a2e', '#5d8a37', '#6ea344', '#446e3a']
+export const PALM_TONES = ['#5d8a37', '#6ea344', '#4c7a2e']
 
 function scatterTrees(): TreeDef[] {
   const rng = makeRng(51197)
   const out: TreeDef[] = []
   let guard = 0
-  while (out.length < 210 && guard < 6000) {
+  while (out.length < 280 && guard < 9000) {
     guard++
     const x = (rng() * 2 - 1) * (WALK_BOUND - 4)
     const z = (rng() * 2 - 1) * (WALK_BOUND - 4)
     const y = heightAt(x, z)
-    if (y > 13) continue // sparse above the Patti slopes' treeline
-    if (riverInfo(x, z).d < 13) continue
+    if (y > 24) continue // sparse above the Patti slopes' treeline
+    const nearRiver = riverInfo(x, z)
+    if (nearRiver.d < 13) continue
     if (roadDistance(x, z) < 6.5) continue
     if (Math.hypot(x, z) > WALK_BOUND) continue
     // keep anchor sites readable
@@ -500,16 +520,68 @@ function scatterTrees(): TreeDef[] {
     // denser around Patti + riversides, thinner downtown
     const pattiBoost = Math.max(0, 1 - Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z) / 90)
     if (rng() > 0.34 + pattiBoost * 0.5) continue
+    // riverside riverine vegetation — palms line the watersides
+    const riverside = nearRiver.d < nearRiver.halfWidth + 26
     out.push({
       x, z, y,
       scale: 0.75 + rng() * 0.8,
-      tone: Math.floor(rng() * TREE_TONES.length),
+      tone: Math.floor(rng() * (riverside ? PALM_TONES.length : TREE_TONES.length)),
+      kind: riverside && rng() < 0.55 ? 'palm' : 'tree',
     })
   }
   return out
 }
 
 export const TREES: TreeDef[] = scatterTrees()
+
+/* --------------------------------- grass ----------------------------------- */
+
+/**
+ * Instanced savanna grass tufts — the Lokoja ground cover. Placed in the
+ * layout (not the component) so the scatter is deterministic and testable.
+ * Tone encodes moisture: lush green near the rivers, dry savanna gold away
+ * from them (the real Guinea-savanna gradient around Lokoja).
+ */
+export interface GrassDef {
+  x: number
+  z: number
+  y: number
+  scale: number
+  tone: number
+}
+
+export const GRASS_TONES = ['#7a9a3a', '#8aa844', '#9db050', '#b3b45c', '#c2b45f']
+
+export const GRASS: GrassDef[] = (() => {
+  const rng = makeRng(90210)
+  const out: GrassDef[] = []
+  let guard = 0
+  while (out.length < 3200 && guard < 30000) {
+    guard++
+    const x = (rng() * 2 - 1) * (WALK_BOUND - 2)
+    const z = (rng() * 2 - 1) * (WALK_BOUND - 2)
+    const y = heightAt(x, z)
+    if (y < WATER_Y + 0.4) continue
+    if (y > 26) continue // rocky Patti crown stays bare
+    // steep ground sheds the terrain mesh's faceting — tufts would float
+    const slope = (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
+    if (slope > 0.45) continue
+    const river = riverInfo(x, z)
+    if (river.d < river.halfWidth + 2.5) continue
+    if (roadDistance(x, z) < 5.2) continue
+    if (ANCHORS.some((a) => Math.hypot(a.x - x, a.z - z) < 12.5)) continue
+    if (BUILDINGS.some((b) => Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) * 0.7 + 1.5)) continue
+    // moisture gradient — greener close to water
+    const moisture = Math.max(0, 1 - river.d / 60)
+    const tone = Math.min(
+      GRASS_TONES.length - 1,
+      Math.floor((1 - moisture) * GRASS_TONES.length * (0.75 + rng() * 0.5)),
+    )
+    // sink tufts: the crown pokes out, the base is safely under the mesh
+    out.push({ x, z, y: y - 0.35 * slope - 0.1, scale: 0.7 + rng() * 0.7, tone })
+  }
+  return out
+})()
 
 /* ---------------------------------- lamps ----------------------------------- */
 
@@ -619,6 +691,8 @@ export const POINTS_OF_INTEREST: PoiDef[] = (
   [
     { locationId: 'kpata-market', dx: 3.4, dz: 3.2 },
     { locationId: 'government-area', dx: -3.6, dz: 3.4 },
+    { locationId: 'food-area', dx: -3.2, dz: -3.6 },
+    { locationId: 'transport-area', dx: 3.6, dz: 3.2 },
   ] as { locationId: string; dx: number; dz: number }[]
 ).map(({ locationId, dx, dz }) => {
   const a = ANCHOR_BY_ID[locationId]
@@ -639,27 +713,30 @@ export const POINTS_OF_INTEREST: PoiDef[] = (
 
 /** concatenate road point lists into closed loops for keke/okada traffic */
 export const TRAFFIC_LOOPS: [number, number][][] = [
-  // loop A: kpata ↔ food ↔ home ↔ motor park ↔ ganaja ↔ kpata
+  // loop A: food strip ↔ kpata ↔ ganaja junction ↔ food strip (IBB ring)
   [
-    ...ROADS[1].slice(0, -1),
-    ...ROADS[0].slice(0, -1),
-    ...ROADS[8].slice(0, -1),
-    ...ROADS[10].slice(0, -1),
-    ...ROADS[7].slice(0, -1),
+    ...ROADS[0],
+    ...ROADS[0].slice().reverse().slice(1),
   ],
-  // loop B: kpata ↔ historic ↔ university ↔ ganaja ↔ kpata
+  // loop B: kpata ↔ home ↔ motor park ↔ bypass ↔ back (southern ring)
   [
-    ...ROADS[3].slice(0, -1),
-    ...ROADS[4].slice(0, -1),
-    ...ROADS[5].slice(0, -1),
-    ...ROADS[6].slice(0, -1),
-    ...ROADS[7].slice(0, -1),
+    ...ROADS[1],
+    ...ROADS[6],
+    ...ROADS[6].slice().reverse().slice(1),
+    ...ROADS[1].slice().reverse().slice(1),
   ],
-  // loop C: home ↔ motor park ↔ confluence (out and back)
+  // loop C: kpata ↔ historic ↔ GRA ↔ food strip ↔ kpata (western ring)
   [
-    ...ROADS[8].slice(0, -1),
+    ...ROADS[7],
     ...ROADS[9],
-    ...ROADS[9].slice().reverse().slice(1),
-    ...ROADS[8].slice(1),
+    ...ROADS[10],
+    ...ROADS[0].slice(0, 3),
+  ],
+  // loop D: ganaja junction ↔ university ↔ confluence viewpoint (out + back)
+  [
+    ...ROADS[3],
+    ...ROADS[4],
+    ...ROADS[4].slice().reverse().slice(1),
+    ...ROADS[3].slice().reverse().slice(1),
   ],
 ]

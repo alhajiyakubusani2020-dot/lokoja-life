@@ -18,7 +18,7 @@ import { MapCanvas } from '../MapCanvas'
 import { audio } from '@/game/systems/audio'
 import { formatNaira } from '@/game/systems/progression'
 import { calculateTravel, type TravelPlan } from '@/game/systems/travel'
-import { ECONOMY, TRAVEL } from '@/game/data/config'
+import { ECONOMY, TRAVEL, WORLD3D, FOOD } from '@/game/data/config'
 import { LOCATIONS, LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -173,8 +173,40 @@ export function MapScreen({
   const world = useGameStore((s) => s.world)!
   const isTravelling = useGameStore((s) => s.isTravelling)
   const travel = useGameStore((s) => s.travel)
+  const eatMeal = useGameStore((s) => s.eatMeal)
 
   const [userSelectedId, setUserSelectedId] = useState<string | null>(focusLocationId ?? null)
+
+  /* ---------------- exploration progress (session-spanning, not in the save) ---------------- */
+
+  const [discovered, setDiscovered] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(WORLD3D.discoveryKey)
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
+  const [recordedLoc, setRecordedLoc] = useState(world.currentLocation)
+
+  // visiting a place counts too — travelling IS discovering
+  // (adjust-state-during-render: syncs discovery to the live location)
+  if (recordedLoc !== world.currentLocation) {
+    setRecordedLoc(world.currentLocation)
+    setDiscovered((prev) => {
+      if (prev.has(world.currentLocation)) return prev
+      const next = new Set(prev)
+      next.add(world.currentLocation)
+      try {
+        localStorage.setItem(WORLD3D.discoveryKey, JSON.stringify([...next]))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }
+
+  const undiscovered = LOCATIONS.filter((l) => !discovered.has(l.id))
 
   // consume the focus request (parent clears it) — the selection itself was
   // already captured in the state initializer above
@@ -240,6 +272,33 @@ export function MapScreen({
           {WEATHER_HINT[world.weather]}
         </p>
       )}
+
+      {/* exploration progress — walk the 3D city or travel to fill the atlas */}
+      <div className="lko-card mb-3 px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
+            Lokoja atlas
+          </p>
+          <span className="lko-num rounded-full bg-[var(--lko-river-soft)] px-2.5 py-0.5 text-[11px] font-extrabold text-[var(--lko-river)]">
+            {discovered.size}/{LOCATIONS.length} explored
+          </span>
+        </div>
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/[0.06]">
+          <div
+            className="h-full rounded-full bg-[var(--lko-green)] transition-[width] duration-500"
+            style={{ width: `${(discovered.size / LOCATIONS.length) * 100}%` }}
+          />
+        </div>
+        {undiscovered.length > 0 ? (
+          <p className="mt-2 text-[11.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+            Still out there: {undiscovered.map((l) => l.name).join(', ')}. Walk there in the 3D city to discover it.
+          </p>
+        ) : (
+          <p className="mt-2 text-[11.5px] font-semibold leading-snug text-[var(--lko-green-deep)]">
+            You don find every corner of Lokoja. The whole city sabi your face. 🏙️
+          </p>
+        )}
+      </div>
 
       {/* map canvas + markers — square art, width-capped and centred on desktop */}
       <div className="mx-auto w-full max-w-[560px] lg:max-w-[600px]">
@@ -323,11 +382,52 @@ export function MapScreen({
               {/* activities */}
               {!isSelectedLocked && (
                 <>
+                  {/* the eating loop — live here too, same store action as the 3D world */}
+                  {(selected.id === 'food-area' || selected.id === 'kpata-market') && (
+                    <div className="mt-3 rounded-xl border border-black/[0.06] bg-[var(--lko-gold-soft)]/40 p-3">
+                      <p className="mb-2 flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
+                        {selected.id === 'food-area' ? '🍲 Eat a proper meal' : '🧺 Market fresh'}
+                        <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-[9.5px] font-bold normal-case text-[var(--lko-ink-soft)]">
+                          hunger {Math.round(player.needs.hunger)}%
+                        </span>
+                      </p>
+                      <div className="flex flex-col gap-1.5">
+                        {FOOD.meals.map((m) => {
+                          const afford = player.cash >= m.price
+                          return (
+                            <button
+                              key={m.key}
+                              disabled={!afford || isTravelling}
+                              onClick={() => {
+                                audio.play('click')
+                                eatMeal(m.key, selected.id)
+                              }}
+                              className={`lko-press flex min-h-[48px] items-center gap-2.5 rounded-lg border border-black/[0.05] bg-white px-2.5 py-1.5 text-left ${
+                                afford ? '' : 'cursor-not-allowed opacity-55'
+                              }`}
+                            >
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[12.5px] font-extrabold leading-tight">{m.label}</span>
+                                <span className="block truncate text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">{m.detail}</span>
+                              </span>
+                              <span className="flex shrink-0 flex-col items-end">
+                                <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(m.price)}</span>
+                                <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">+{m.hunger} hunger</span>
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <h4 className="mb-1.5 mt-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
                     Activities here
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
                     {selected.activities.map((a) => {
+                      // eat / shop-food render as the meal menu above
+                      if ((a.key === 'eat' || a.key === 'shop-food') && (selected.id === 'food-area' || selected.id === 'kpata-market')) return null
                       // Stage 3: work content is live — chips deep-link to the Work tab
                       const isLive = a.stage <= 3
                       const isWork = a.key.startsWith('job-') || a.key === 'hustle'

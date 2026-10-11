@@ -26,7 +26,7 @@ import type {
   TransportId,
   WorldState,
 } from '../types'
-import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D } from '../data/config'
+import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, MEAL_BY_KEY } from '../data/config'
 import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
 import { DEFAULT_AVATAR } from '../data/avatar'
 import { LOCATION_BY_ID } from '../data/locations'
@@ -79,6 +79,10 @@ interface GameStore {
   /* needs / time actions (Stage 1: rest; Stage 2: travel — both use the same clock) */
   rest: (kind: 'nap' | 'sleep') => void
   advanceTime: (slots?: number) => void
+  /** Stage 4 — buy and eat a real meal (cash → hunger/mood, clock moves).
+   *  atLocationId: which spot's menu was used — when it differs from where
+   *  the player actually is, the ledger records it as a delivery. */
+  eatMeal: (mealKey: string, atLocationId?: string) => boolean
   /** Stage 3D — settle the energy cost of one 3D-world visit's walking (0 → no-op) */
   settleWorldWalk: (meters: number) => void
 
@@ -288,6 +292,54 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().notify({ icon: '🚶', text: `${label} — ${cost} energy spent.`, tone: 'neutral' })
     }
     scheduleAutosave(get)
+  },
+
+  /** Stage 4 — the eating loop. A meal costs REAL cash (ledger entry), fills
+   *  hunger, lifts mood, tops a little energy, and the clock moves one slot
+   *  (eating takes time). Same authority pattern as rest/travel. */
+  eatMeal: (mealKey, atLocationId) => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const meal = MEAL_BY_KEY[mealKey]
+    if (!meal) return false
+    if (!canAfford(player.cash, meal.price)) {
+      get().notify({
+        icon: '🍲',
+        text: `${meal.label} costs ${formatNaira(meal.price)} — you no carry enough cash.`,
+        tone: 'bad',
+      })
+      return false
+    }
+    // ledger label: eaten there, or delivered to where you actually are
+    const spotName = LOCATION_BY_ID[atLocationId ?? world.currentLocation]?.name ?? 'Lokoja'
+    const delivered = atLocationId !== undefined && atLocationId !== world.currentLocation
+    const label = delivered
+      ? `${meal.label} — delivery to ${LOCATION_BY_ID[world.currentLocation]?.name ?? 'home'}`
+      : `${meal.label} at ${spotName}`
+    // pay first — the ledger remembers every plate
+    const ok = get().removeMoney(meal.price, {
+      label,
+      category: 'shop',
+    })
+    if (!ok) return false
+    // re-read AFTER payment — removeMoney already updated the player object
+    const paid = get().player
+    if (!paid) return false
+    const needs = applyNeedsDelta(paid.needs, {
+      hunger: meal.hunger,
+      mood: meal.mood,
+      energy: meal.energy,
+    })
+    const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
+    set({ player: { ...paid, needs }, world: { ...world, ...clock } })
+    get().notify({
+      icon: '🍲',
+      text: `${meal.label} — hunger restored. You feel better.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
   },
 
   /* ------------------------------- travel ------------------------------- */

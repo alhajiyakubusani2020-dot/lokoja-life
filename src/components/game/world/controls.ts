@@ -31,6 +31,20 @@ export const MOVE = {
   interactRadius: 8.6,
 } as const
 
+/** camera view presets — cycle with C or the HUD view button */
+export type CamMode = 'follow' | 'orbit' | 'drone'
+export const CAM_MODES: { id: CamMode; label: string }[] = [
+  { id: 'follow', label: 'Follow' },
+  { id: 'orbit', label: 'Orbit' },
+  { id: 'drone', label: 'Drone' },
+]
+/** per-mode rig tuning: distance multiplier, height offset, auto-align rate */
+export const CAM_RIG: Record<CamMode, { dist: number; height: number; align: number }> = {
+  follow: { dist: 1, height: 0, align: 2.1 },
+  orbit: { dist: 1.25, height: 1.2, align: 0 }, // never auto-aligns — full manual
+  drone: { dist: 2.1, height: 10.5, align: 1.1 }, // high, steep, city overview
+}
+
 /* --------------------------------- state ----------------------------------- */
 
 const keys = new Set<string>()
@@ -48,6 +62,8 @@ function onKeyDown(e: KeyboardEvent) {
   keys.add(e.code)
   if (e.code === 'KeyE' || e.code === 'Enter') interactQueued = true
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') sprintHeld = true
+  if (e.code === 'KeyC') cycleCamMode()
+  // photo mode (V) is owned by the HUD so it can animate chrome with it
   // stop page scroll on arrows/space while exploring
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault()
   // tutorial: any movement key counts as "moved"
@@ -215,6 +231,39 @@ export function isAttached(): boolean {
   return attached
 }
 
+/* ------------------------------ camera modes -------------------------------- */
+
+let camMode: CamMode = 'follow'
+let photoMode = false
+
+export function cycleCamMode(): CamMode {
+  const i = CAM_MODES.findIndex((m) => m.id === camMode)
+  camMode = CAM_MODES[(i + 1) % CAM_MODES.length].id
+  return camMode
+}
+
+export function setCamMode(mode: CamMode) {
+  camMode = mode
+}
+
+export function getCamMode(): CamMode {
+  return camMode
+}
+
+/** photo mode — HUD fades out, the city becomes the picture */
+export function togglePhotoMode(): boolean {
+  photoMode = !photoMode
+  return photoMode
+}
+
+export function setPhotoMode(on: boolean) {
+  photoMode = on
+}
+
+export function isPhotoMode(): boolean {
+  return photoMode
+}
+
 /* ------------------------- walk measurement + tutorial ------------------------ */
 
 /**
@@ -237,12 +286,13 @@ export function resetWalkedMeters() {
   walkedMeters = 0
 }
 
-/** the player's last known world position (NPC proximity checks read this) */
-export const playerPos = { x: 0, z: 0 }
+/** the player's last known world position + facing (HUD/minimap read this) */
+export const playerPos = { x: 0, z: 0, heading: 0 }
 
-export function reportPlayerPos(x: number, z: number) {
+export function reportPlayerPos(x: number, z: number, heading = playerPos.heading) {
   playerPos.x = x
   playerPos.z = z
+  playerPos.heading = heading
 }
 
 /* --------------------------- one-time onboarding ------------------------------ */

@@ -7,13 +7,14 @@
  * Run: bun scripts/test-world3d.ts
  */
 
-import { WORLD3D } from '../src/game/data/config'
+import { WORLD3D, FOOD, MEAL_BY_KEY } from '../src/game/data/config'
 import { walkingEnergyCost, describeWalkSettle } from '../src/game/systems/world3d'
 import { LOCATION_BY_ID } from '../src/game/data/locations'
 import { NPCS } from '../src/game/data/npcs'
 import { HUSTLES } from '../src/game/data/hustles'
 import {
-  heightAt, NPC_ZONES, POINTS_OF_INTEREST, riverInfo, WALK_BOUND,
+  heightAt, NPC_ZONES, POINTS_OF_INTEREST, riverInfo, WALK_BOUND, WATER_Y,
+  ANCHORS, ROADS, BRIDGES, GRASS, TREES, TRAFFIC_LOOPS, roadDistance,
 } from '../src/game/world3d/layout'
 
 let passed = 0
@@ -90,6 +91,69 @@ check(
     return true // anchor distance is checked implicitly by layout (offset ≤ ~5 m)
   }),
 )
+
+console.log('\nGEOGRAPHY — accurate north-up Lokoja (Real Explore pass)')
+const anchorById = new Map(ANCHORS.map((a) => [a.id, a]))
+check('every anchor stands on dry land', ANCHORS.every((a) => a.y > WATER_Y + 0.3))
+check('the Confluence viewpoint is NORTH of home (real geography)', (() => {
+  const c = anchorById.get('confluence')
+  const h = anchorById.get('home')
+  return !!c && !!h && c.z < h.z - 60
+})())
+check('the Confluence viewpoint is EAST of Mount Patti (town between hill and river)', (() => {
+  const c = anchorById.get('confluence')
+  const p = anchorById.get('mount-patti')
+  return !!c && !!p && c.x > p.x
+})())
+check('Mount Patti summit is the highest named ground', (() => {
+  const p = anchorById.get('mount-patti')!
+  return ANCHORS.every((a) => a.id === 'mount-patti' || a.y < p.y - 10)
+})())
+check('Patti rises well above the town plain', (() => {
+  const p = anchorById.get('mount-patti')!
+  const h = anchorById.get('home')!
+  return p.y - h.y > 24
+})())
+check('every anchor is reachable by a road (within 6 m of some road)', ANCHORS.every(
+  (a) => roadDistance(a.x, a.z) < 6,
+))
+check('roads only touch water where a bridge deck carries them', ROADS.every((r) => {
+  for (const [x, z] of r) {
+    const deck = riverInfo(x, z)
+    if (deck.d < deck.halfWidth + 2.5) {
+      // mid-river is fine ONLY on a bridge span
+      const onBridge = BRIDGES.some((b) => Math.hypot(b.x - x, b.z - z) < b.length / 2 + 3)
+      if (!onBridge) return false
+    }
+  }
+  return true
+}))
+check('exactly 2 real bridges cross the Niger (Kogi Bridge + southern bypass)', BRIDGES.length === 2)
+check('grass covers the savanna (2000+ tufts)', GRASS.length >= 2000)
+check('grass scatter is deterministic', (() => {
+  const first = GRASS.slice(0, 5).map((g) => `${g.x.toFixed(2)},${g.z.toFixed(2)}`).join('|')
+  // re-import would re-run the module; instead check internal validity
+  return GRASS.every((g) => Number.isFinite(g.x) && Number.isFinite(g.y) && g.y > WATER_Y) && first.length > 0
+})())
+check('trees include riverine palms', TREES.some((t) => t.kind === 'palm'))
+check('every traffic loop is closed and contiguous', TRAFFIC_LOOPS.every((loop) => {
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[i]
+    const b = loop[(i + 1) % loop.length]
+    if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 42) return false
+  }
+  return loop.length >= 6
+}))
+
+console.log('\nFOOD & EATING — the Stage 4 loop config')
+check('at least 4 meals on the menu', FOOD.meals.length >= 4)
+check('meal keys unique', new Set(FOOD.meals.map((m) => m.key)).size === FOOD.meals.length)
+check('every meal costs real cash and fills real hunger', FOOD.meals.every(
+  (m) => m.price > 0 && m.hunger > 0 && m.mood >= 0 && m.energy >= 0,
+))
+check('MEAL_BY_KEY resolves every menu item', FOOD.meals.every((m) => MEAL_BY_KEY[m.key] === m))
+check('groceries basket exists for Kpata market', !!MEAL_BY_KEY['groceries'])
+check('discovery key is namespaced', WORLD3D.discoveryKey.startsWith('lko-'))
 
 console.log(`\n${'─'.repeat(46)}`)
 console.log(`RESULT: ${passed} passed, ${failed} failed, ${passed + failed} total`)

@@ -27,8 +27,8 @@ import { bridgeDeckY, resolvePosition } from '@/game/world3d/collision'
 import { NPCS } from '@/game/data/npcs'
 import { WORLD3D } from '@/game/data/config'
 import {
-  addWalkDistance, consumeLook, consumeZoom, isInputFrozen, MOVE, playerPos,
-  readMoveInput, reportPlayerPos,
+  addWalkDistance, consumeLook, consumeZoom, getCamMode, isInputFrozen, MOVE, playerPos,
+  readMoveInput, reportPlayerPos, CAM_RIG,
 } from './controls'
 
 /* --------------------------- shared character parts -------------------------- */
@@ -160,7 +160,7 @@ export function PlayerController({
 }: {
   avatar: AvatarConfig
   spawnLocationId: string
-  onPosition?: (x: number, z: number) => void
+  onPosition?: (x: number, z: number, heading: number) => void
   onNearestAnchor?: (anchorId: string | null) => void
   onDistrict?: (districtId: string | null) => void
 }) {
@@ -278,7 +278,7 @@ export function PlayerController({
 
     // presentation MEASURES (the store APPLIES on exit) — metres walked
     if (!frozen) addWalkDistance(s.speed * dt)
-    reportPlayerPos(s.x, s.z)
+    reportPlayerPos(s.x, s.z, s.yaw)
 
     // slide dampening when blocked
     if (s.speed > 0.01) {
@@ -341,31 +341,37 @@ export function PlayerController({
       onDistrict(districtNow)
     }
 
-    if (onPosition) onPosition(s.x, s.z)
+    if (onPosition) onPosition(s.x, s.z, s.yaw)
     playerSpeed.current = s.speed
 
     // ---- camera ----
-    s.camDist = THREE.MathUtils.clamp(s.camDist + consumeZoom(), MOVE.cameraMinDistance, MOVE.cameraMaxDistance)
+    const rig = CAM_RIG[getCamMode()]
+    s.camDist = THREE.MathUtils.clamp(
+      s.camDist + consumeZoom(),
+      MOVE.cameraMinDistance,
+      MOVE.cameraMaxDistance * (getCamMode() === 'drone' ? 1.5 : 1),
+    )
 
-    // soft auto-align behind the running player
-    if (s.speed > 1.5 && look.dx === 0) {
+    // soft auto-align behind the running player (off in orbit mode)
+    if (rig.align > 0 && s.speed > 1.5 && look.dx === 0) {
       let d = s.yaw - s.camYaw
       while (d > Math.PI) d -= Math.PI * 2
       while (d < -Math.PI) d += Math.PI * 2
-      s.camYaw += d * Math.min(1, dt * MOVE.camAlignRate * 0.12)
+      s.camYaw += d * Math.min(1, dt * rig.align * 0.12)
     }
 
     // third-person rig — parked BEHIND the player (opposite the view dir)
     const cosP = Math.cos(s.camPitch)
+    const rigDist = s.camDist * rig.dist
     const desired = new THREE.Vector3(
-      s.x - Math.sin(s.camYaw) * s.camDist * cosP,
-      groundY + MOVE.cameraHeight + Math.sin(s.camPitch) * s.camDist * 0.9,
-      s.z - Math.cos(s.camYaw) * s.camDist * cosP,
+      s.x - Math.sin(s.camYaw) * rigDist * cosP,
+      groundY + MOVE.cameraHeight + rig.height + Math.sin(s.camPitch) * rigDist * 0.9,
+      s.z - Math.cos(s.camYaw) * rigDist * cosP,
     )
     // keep the camera above terrain
     const camGround = heightAt(desired.x, desired.z) + 1.2
     if (desired.y < camGround) desired.y = camGround
-    camera.position.lerp(desired, Math.min(1, dt * 6.5))
+    camera.position.lerp(desired, Math.min(1, dt * (getCamMode() === 'drone' ? 4.2 : 6.5)))
     camera.lookAt(s.x, groundY + 1.7, s.z)
   })
 
@@ -716,7 +722,8 @@ export function Traffic({ timeOfDay }: { timeOfDay: TimeOfDay }) {
       const oz = Math.cos(p.yaw) * v.offset
       const x = p.x + ox
       const z = p.z + oz
-      g.position.set(x, heightAt(x, z) + 0.05, z)
+      // ride bridge decks where the loop crosses water (bypass / Kogi bridge)
+      g.position.set(x, (bridgeDeckY(x, z) ?? heightAt(x, z) + 0.05), z)
       g.rotation.y = p.yaw
     }
   })

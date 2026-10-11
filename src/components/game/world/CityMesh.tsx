@@ -17,8 +17,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  ANCHORS, BUILDINGS, heightAt, LAMPS, POINTS_OF_INTEREST, ROOF_TONES, STALLS, STALL_TONES,
-  TREE_TONES, TREES, WALL_TONES, WATER_Y, type WorldAnchor,
+  ANCHORS, ANCHOR_BY_ID, BUILDINGS, heightAt, LAMPS, PALM_TONES, POINTS_OF_INTEREST, ROOF_TONES,
+  RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type WorldAnchor,
 } from '@/game/world3d/layout'
 import { atmoLive } from './atmosphere'
 
@@ -313,14 +313,18 @@ function Stalls() {
 
 /* ---------------------------------- trees ------------------------------------ */
 
+/** savanna trees + riverine palms, two instanced families */
 function Trees() {
+  const palms = useMemo(() => TREES.filter((t) => t.kind === 'palm'), [])
+  const trees = useMemo(() => TREES.filter((t) => t.kind === 'tree'), [])
   return (
     <group>
+      {/* --- broadleaf savanna trees --- */}
       <InstancedGroup
-        count={TREES.length}
+        count={trees.length}
         castShadow
         setup={(i, m) => {
-          const t = TREES[i]
+          const t = trees[i]
           m.position.set(t.x, t.y + 1.1 * t.scale, t.z)
           m.rotation.set(0, 0, 0)
           m.scale.set(t.scale, t.scale * 1.25, t.scale)
@@ -330,10 +334,10 @@ function Trees() {
         <meshStandardMaterial color="#6a4a2e" roughness={1} flatShading />
       </InstancedGroup>
       <InstancedGroup
-        count={TREES.length}
+        count={trees.length}
         castShadow
         setup={(i, m, color) => {
-          const t = TREES[i]
+          const t = trees[i]
           m.position.set(t.x, t.y + (2.2 + 0.9) * t.scale, t.z)
           m.rotation.set(i * 0.61, i * 0.83, 0)
           m.scale.setScalar(t.scale * (1 + (i % 3) * 0.12))
@@ -342,6 +346,49 @@ function Trees() {
       >
         <icosahedronGeometry args={[1.55, 1]} />
         <meshStandardMaterial roughness={0.95} flatShading />
+      </InstancedGroup>
+
+      {/* --- riverine palms: leaning trunk + radial fronds --- */}
+      <InstancedGroup
+        count={palms.length}
+        castShadow
+        setup={(i, m) => {
+          const t = palms[i]
+          m.position.set(t.x, t.y + 2.2 * t.scale, t.z)
+          m.rotation.set(0.09 * ((i % 5) - 2), 0, 0.07 * ((i % 3) - 1))
+          m.scale.set(t.scale, t.scale * 1.6, t.scale)
+        }}
+      >
+        <cylinderGeometry args={[0.09, 0.17, 3.1, 5]} />
+        <meshStandardMaterial color="#8a6a44" roughness={1} flatShading />
+      </InstancedGroup>
+      <InstancedGroup
+        count={palms.length * 6}
+        castShadow
+        setup={(i, m, color) => {
+          const t = palms[Math.floor(i / 6)]
+          const frond = i % 6
+          const ang = frond * (Math.PI / 3) + (i % 2) * 0.4
+          m.position.set(t.x, t.y + 4.5 * t.scale, t.z)
+          m.rotation.set(0, ang, -0.62)
+          m.scale.set(t.scale, t.scale * 0.8, t.scale * 0.16)
+          color.set(PALM_TONES[t.tone % PALM_TONES.length])
+        }}
+      >
+        <boxGeometry args={[1.5, 0.06, 0.5]} />
+        <meshStandardMaterial roughness={0.9} flatShading side={THREE.DoubleSide} />
+      </InstancedGroup>
+      <InstancedGroup
+        count={palms.length}
+        setup={(i, m) => {
+          const t = palms[i]
+          m.position.set(t.x, t.y + 4.48 * t.scale, t.z)
+          m.rotation.set(0, 0, 0)
+          m.scale.setScalar(t.scale)
+        }}
+      >
+        <sphereGeometry args={[0.16, 6, 6]} />
+        <meshStandardMaterial color="#a3752e" roughness={1} />
       </InstancedGroup>
     </group>
   )
@@ -606,6 +653,263 @@ function GatePosts(a: WorldAnchor) {
   )
 }
 
+/**
+ * Lord Lugard's Rest House — the colonial bungalow on Patti's summit
+ * (the real hilltop is where the 1900-era administrator overlooked the
+ * confluence). White walls, wide shaded veranda, flag pole.
+ */
+function LugardRestHouse(a: WorldAnchor) {
+  return (
+    <group position={[a.x - 6.5, a.y, a.z + 4.5]} rotation={[0, 0.5, 0]}>
+      <mesh position={[0, 1.5, 0]} castShadow receiveShadow>
+        <boxGeometry args={[7, 3, 5]} />
+        <meshStandardMaterial color="#f2ead8" roughness={0.95} />
+      </mesh>
+      {/* wide hipped roof */}
+      <mesh position={[0, 3.7, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+        <coneGeometry args={[5.4, 1.8, 4]} />
+        <meshStandardMaterial color="#6e4530" roughness={0.85} flatShading />
+      </mesh>
+      {/* veranda deck + posts */}
+      <mesh position={[0, 0.32, 3.4]} receiveShadow>
+        <boxGeometry args={[7.6, 0.3, 2.6]} />
+        <meshStandardMaterial color="#b9a06a" roughness={1} />
+      </mesh>
+      {[-3, -1, 1, 3].map((px) => (
+        <mesh key={px} position={[px, 1.75, 4.5]}>
+          <boxGeometry args={[0.18, 2.7, 0.18]} />
+          <meshStandardMaterial color="#e8dcc3" roughness={1} />
+        </mesh>
+      ))}
+      <mesh position={[0, 3.25, 3.4]}>
+        <boxGeometry args={[7.8, 0.16, 3]} />
+        <meshStandardMaterial color="#8a4a2a" roughness={0.9} />
+      </mesh>
+      {/* chimney — the old fireplace still stands */}
+      <mesh position={[2.2, 4.6, -1.2]} castShadow>
+        <boxGeometry args={[0.7, 1.8, 0.7]} />
+        <meshStandardMaterial color="#b9b2a2" roughness={1} />
+      </mesh>
+    </group>
+  )
+}
+
+/** Township Stadium — oval stands + green pitch + floodlights, south of the motor park */
+function TownStadium() {
+  const base = ANCHOR_BY_ID['transport-area']
+  const x = base.x - 2
+  const z = base.z + 16
+  const y = heightAt(x, z)
+  return (
+    <group position={[x, y, z]} rotation={[0, 0.35, 0]}>
+      {/* pitch */}
+      <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[10, 20]} />
+        <meshStandardMaterial color="#5d8a37" roughness={1} />
+      </mesh>
+      <mesh position={[0, 0.14, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[8.6, 9, 20]} />
+        <meshStandardMaterial color="#e8dcc3" roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+      {/* oval stands — two ring steps */}
+      <mesh position={[0, 0.55, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <cylinderGeometry args={[12.4, 12.4, 1.1, 24, 1, true]} />
+        <meshStandardMaterial color="#c9a96b" roughness={1} side={THREE.DoubleSide} flatShading />
+      </mesh>
+      <mesh position={[0, 1.35, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <cylinderGeometry args={[13.8, 13.8, 1, 24, 1, true]} />
+        <meshStandardMaterial color="#b98a4a" roughness={1} side={THREE.DoubleSide} flatShading />
+      </mesh>
+      {/* floodlight pylons */}
+      {[45, 135, 225, 315].map((deg) => {
+        const rad = (deg * Math.PI) / 180
+        return (
+          <group key={deg} position={[Math.cos(rad) * 14.6, 0, Math.sin(rad) * 14.6]}>
+            <mesh position={[0, 4.4, 0]} castShadow>
+              <cylinderGeometry args={[0.14, 0.2, 8.8, 5]} />
+              <meshStandardMaterial color="#3a3f3a" roughness={0.7} metalness={0.4} />
+            </mesh>
+            <mesh position={[0, 9, 0]} rotation={[0.5, 0, 0]}>
+              <boxGeometry args={[1.7, 0.7, 0.25]} />
+              <meshStandardMaterial color="#e8e4d0" emissive="#fff2c0" emissiveIntensity={0.25} />
+            </mesh>
+          </group>
+        )
+      })}
+    </group>
+  )
+}
+
+/** Central Mosque — dome + minaret, near the Kpata road */
+function CentralMosque() {
+  const base = ANCHOR_BY_ID['kpata-market']
+  const x = base.x + 14
+  const z = base.z - 6
+  const y = heightAt(x, z)
+  return (
+    <group position={[x, y, z]} rotation={[0, -0.4, 0]}>
+      <mesh position={[0, 1.6, 0]} castShadow receiveShadow>
+        <boxGeometry args={[7, 3.2, 6]} />
+        <meshStandardMaterial color="#e8dcc3" roughness={0.95} />
+      </mesh>
+      {/* dome */}
+      <mesh position={[0, 4.4, 0]} castShadow>
+        <sphereGeometry args={[2.5, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color="#2e7d5b" roughness={0.6} metalness={0.15} />
+      </mesh>
+      <mesh position={[0, 7, 0]}>
+        <coneGeometry args={[0.24, 0.8, 6]} />
+        <meshStandardMaterial color="#e8a317" roughness={0.5} metalness={0.3} />
+      </mesh>
+      {/* minaret */}
+      <group position={[4.6, 0, 3.4]}>
+        <mesh position={[0, 4.5, 0]} castShadow>
+          <cylinderGeometry args={[0.55, 0.7, 9, 8]} />
+          <meshStandardMaterial color="#e8dcc3" roughness={0.95} />
+        </mesh>
+        <mesh position={[0, 9.4, 0]}>
+          <coneGeometry args={[0.85, 1.4, 8]} />
+          <meshStandardMaterial color="#2e7d5b" roughness={0.6} />
+        </mesh>
+        <mesh position={[0, 10.4, 0]}>
+          <sphereGeometry args={[0.14, 6, 6]} />
+          <meshStandardMaterial color="#e8a317" metalness={0.4} roughness={0.4} />
+        </mesh>
+      </group>
+      {/* arched doorway band */}
+      <mesh position={[0, 0.9, 3.02]}>
+        <boxGeometry args={[2.4, 1.8, 0.1]} />
+        <meshStandardMaterial color="#3a4a3e" roughness={0.9} />
+      </mesh>
+    </group>
+  )
+}
+
+/** A church hall near the university quarter */
+function ChurchHall() {
+  const base = ANCHOR_BY_ID['university-area']
+  const x = base.x - 10
+  const z = base.z + 6
+  const y = heightAt(x, z)
+  return (
+    <group position={[x, y, z]} rotation={[0, 0.9, 0]}>
+      {/* nave */}
+      <mesh position={[0, 1.9, 0]} castShadow receiveShadow>
+        <boxGeometry args={[4.4, 3.8, 7.5]} />
+        <meshStandardMaterial color="#d8cbb0" roughness={0.95} />
+      </mesh>
+      {/* gable roof — two slabs */}
+      <mesh position={[-1.35, 4.45, 0]} rotation={[0, 0, 0.52]} castShadow>
+        <boxGeometry args={[2.4, 0.14, 8]} />
+        <meshStandardMaterial color="#7a6a55" roughness={0.85} />
+      </mesh>
+      <mesh position={[1.35, 4.45, 0]} rotation={[0, 0, -0.52]} castShadow>
+        <boxGeometry args={[2.4, 0.14, 8]} />
+        <meshStandardMaterial color="#7a6a55" roughness={0.85} />
+      </mesh>
+      {/* tower + simple cross */}
+      <mesh position={[0, 2.6, 4.6]} castShadow>
+        <boxGeometry args={[2, 5.2, 2]} />
+        <meshStandardMaterial color="#e8dcc3" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 5.6, 0]} rotation={[0, Math.PI / 4, 0]}>
+        <coneGeometry args={[1.5, 1.1, 4]} />
+        <meshStandardMaterial color="#7a6a55" roughness={0.85} flatShading />
+      </mesh>
+      <mesh position={[0, 6.9, 4.6]}>
+        <boxGeometry args={[0.12, 1.1, 0.12]} />
+        <meshStandardMaterial color="#e8a317" roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 7.1, 4.6]}>
+        <boxGeometry args={[0.55, 0.12, 0.12]} />
+        <meshStandardMaterial color="#e8a317" roughness={0.5} />
+      </mesh>
+    </group>
+  )
+}
+
+/* ---------------------------------- boats ------------------------------------ */
+
+interface BoatPath {
+  points: [number, number][]
+  from: number
+  to: number
+  speed: number
+}
+
+/**
+ * River life — fishing canoes and a laden ferry drifting the Niger and
+ * Benue along the real river courses. Each boat slides along a window of
+ * its river polyline (deterministic loop, no physics).
+ */
+const BOAT_PATHS: BoatPath[] = [
+  { points: RIVERS[0].points, from: 0.15, to: 0.95, speed: 1.4 },  // upstream Niger
+  { points: RIVERS[0].points, from: 0.05, to: 0.85, speed: 1.1 },  // slower canoe
+  { points: RIVERS[1].points, from: 0.1, to: 0.9, speed: 1.2 },    // Benue
+  { points: RIVERS[2].points, from: 0.04, to: 0.9, speed: 1.7 },   // outflow ferry
+  { points: RIVERS[2].points, from: 0.15, to: 0.98, speed: 1.25 }, // outflow canoe
+]
+
+function riverPoint(points: [number, number][], t: number): { x: number; z: number; yaw: number } {
+  const clamped = Math.max(0, Math.min(0.9999, t))
+  const target = clamped * (points.length - 1)
+  const i = Math.min(points.length - 2, Math.floor(target))
+  const f = target - i
+  const [ax, az] = points[i]
+  const [bx, bz] = points[i + 1]
+  return {
+    x: ax + (bx - ax) * f,
+    z: az + (bz - az) * f,
+    yaw: Math.atan2(bx - ax, bz - az),
+  }
+}
+
+function Boats() {
+  const refs = useRef<(THREE.Group | null)[]>([])
+  const phases = useMemo(() => BOAT_PATHS.map((_, i) => i * 0.37), [])
+
+  useFrame((state, dt) => {
+    const t = state.clock.elapsedTime
+    for (let i = 0; i < BOAT_PATHS.length; i++) {
+      const g = refs.current[i]
+      if (!g) continue
+      const bp = BOAT_PATHS[i]
+      const span = bp.to - bp.from
+      const u = (phases[i] + t * (bp.speed / (span * 60))) % 1
+      // ping-pong drift so boats come and go
+      const tri = u < 0.5 ? u * 2 : 2 - u * 2
+      const p = riverPoint(bp.points, bp.from + tri * span)
+      g.position.set(p.x, WATER_Y + 0.16 + Math.sin(t * 1.2 + i) * 0.07, p.z)
+      g.rotation.y = p.yaw + (tri > 0.5 ? Math.PI : 0)
+      g.rotation.z = Math.sin(t * 1.05 + i * 2) * 0.035
+    }
+    void dt
+  })
+
+  return (
+    <group>
+      {BOAT_PATHS.map((_, i) => (
+        <group key={i} ref={(el) => { refs.current[i] = el }}>
+          <mesh castShadow>
+            <capsuleGeometry args={[0.42, i === 3 ? 4.6 : 3, 4, 8]} />
+            <meshStandardMaterial color={i === 3 ? '#3a6ea3' : i % 2 ? '#5a4028' : '#4a6a3a'} roughness={1} />
+          </mesh>
+          <mesh position={[0, 0.2, 0]} scale={[0.6, 0.45, 1]}>
+            <capsuleGeometry args={[0.38, i === 3 ? 3.8 : 2.4, 4, 8]} />
+            <meshStandardMaterial color="#2a1e12" roughness={1} />
+          </mesh>
+          {i === 3 && (
+            <mesh position={[0, 0.85, -0.6]} castShadow>
+              <boxGeometry args={[1.3, 0.9, 1.6]} />
+              <meshStandardMaterial color="#c94f2e" roughness={0.85} />
+            </mesh>
+          )}
+        </group>
+      ))}
+    </group>
+  )
+}
+
 function AnchorStructures() {
   return (
     <group>
@@ -627,6 +931,12 @@ function AnchorStructures() {
             return null
         }
       })}
+      {/* district-adjacent landmarks (not anchors themselves) */}
+      <LugardRestHouse {...ANCHOR_BY_ID['mount-patti']} />
+      <TownStadium />
+      <CentralMosque />
+      <ChurchHall />
+      <Boats />
     </group>
   )
 }

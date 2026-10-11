@@ -8,11 +8,11 @@
  * their confluence foam, laterite roads, and the confluence bridge.
  */
 
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  BRIDGES, heightAt, riverInfo, ROADS, RIVERS, WATER_Y, WORLD_HALF,
+  BRIDGES, GRASS, GRASS_TONES, heightAt, riverInfo, ROADS, RIVERS, WATER_Y, WORLD_HALF,
 } from '@/game/world3d/layout'
 
 /* -------------------------------- terrain ---------------------------------- */
@@ -42,7 +42,11 @@ function TerrainMesh() {
       const n = Math.sin(x * 0.11 + z * 0.07) * 0.5 + Math.sin(x * 0.031 - z * 0.043) * 0.5
       const c = cGrass.clone().lerp(cDry, Math.max(0, n) * 0.45)
       if (y > 7) c.lerp(cHigh, Math.min(1, (y - 7) / 10))
-      if (y > 14) c.lerp(cRock, Math.min(1, (y - 14) / 12))
+      // rocky slopes — steeper ground reveals the Patti laterite stone
+      const slope =
+        (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
+      if (slope > 0.32) c.lerp(cRock, Math.min(1, (slope - 0.32) * 2.2))
+      if (y > 16) c.lerp(cRock, Math.min(1, (y - 16) / 14))
       // sandy river banks
       const { d, halfWidth } = riverInfo(x, z)
       const bankT = 1 - Math.min(1, Math.abs(d - (halfWidth + 1)) / 5)
@@ -245,12 +249,68 @@ function Bridges() {
   )
 }
 
+/* ---------------------------------- grass ----------------------------------- */
+
+/**
+ * Savanna ground cover — one InstancedMesh of low tufts, per-instance
+ * colour from the layout's moisture gradient. No shadows, no per-frame
+ * work: 3.2k tufts for a single draw call.
+ */
+function Grass() {
+  const ref = useRef<THREE.InstancedMesh>(null)
+
+  const { geometry, material } = useMemo(
+    () => ({
+      geometry: new THREE.ConeGeometry(0.55, 1.35, 4, 1, true),
+      material: new THREE.MeshStandardMaterial({
+        roughness: 1,
+        metalness: 0,
+        flatShading: true,
+      }),
+    }),
+    [],
+  )
+
+  useEffect(() => {
+    // fill instance matrices once after mount
+    const mesh = ref.current
+    if (!mesh) return
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const s = new THREE.Vector3()
+    const p = new THREE.Vector3()
+    const color = new THREE.Color()
+    GRASS.forEach((g, i) => {
+      e.set((g.scale - 0.7) * 0.4, (g.x + g.z) % Math.PI, (g.z - g.x) * 0.13)
+      q.setFromEuler(e)
+      s.setScalar(g.scale)
+      p.set(g.x, g.y + 0.3 * g.scale, g.z)
+      m.compose(p, q, s)
+      mesh.setMatrixAt(i, m)
+      color.set(GRASS_TONES[g.tone])
+      mesh.setColorAt(i, color)
+    })
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  }, [])
+
+  return (
+    <instancedMesh
+      ref={ref}
+      args={[geometry, material, GRASS.length]}
+      frustumCulled={false}
+    />
+  )
+}
+
 /* ---------------------------------- export ---------------------------------- */
 
 export function WorldTerrain() {
   return (
     <group>
       <TerrainMesh />
+      <Grass />
       <Rivers />
       <Roads />
       <Bridges />
