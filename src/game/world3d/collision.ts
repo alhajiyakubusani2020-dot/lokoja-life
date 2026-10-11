@@ -209,3 +209,53 @@ export function bridgeDeckY(x: number, z: number): number | null {
   }
   return null
 }
+
+/* --------------------------- camera obstruction ---------------------------- */
+
+/**
+ * INC 4 — the known "camera clips building corners" fix. Samples the
+ * segment player → camera against the building OBBs (2D footprint +
+ * real height) and returns the FRACTION t (0..1] along the segment of
+ * the first blocked sample, or null when the view is clear. The camera
+ * rig pulls in to just before t so walls never swallow the view.
+ */
+const CAM_SAMPLES = 10
+
+/** buildings only, with real top height — the camera obstruction world */
+const CAM_BOXES: (BoxCollider & { topY: number })[] = BUILDINGS.map((b) => ({
+  ...boxFor(b),
+  topY: b.y + b.h,
+}))
+
+export function cameraObstructionT(
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  camY: number,
+): number | null {
+  let hit: number | null = null
+  for (let s = 1; s <= CAM_SAMPLES; s++) {
+    const t = s / CAM_SAMPLES
+    const x = x0 + (x1 - x0) * t
+    const z = z0 + (z1 - z0) * t
+    let blocked = false
+    for (const b of CAM_BOXES) {
+      if (camY >= b.topY) continue // camera flies over this roof
+      const dx = x - b.cx
+      const dz = z - b.cz
+      if (dx * dx + dz * dz > (b.hw + b.hd + 0.3) ** 2) continue
+      const lx = dx * b.cos - dz * b.sin
+      const lz = dx * b.sin + dz * b.cos
+      if (Math.abs(lx) <= b.hw && Math.abs(lz) <= b.hd) {
+        blocked = true
+        break
+      }
+    }
+    if (blocked) {
+      hit = Math.max(0.08, t - 1 / CAM_SAMPLES)
+      break
+    }
+  }
+  return hit
+}

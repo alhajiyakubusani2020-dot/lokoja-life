@@ -159,3 +159,242 @@ console.log(`\n${'─'.repeat(46)}`)
 console.log(`RESULT: ${passed} passed, ${failed} failed, ${passed + failed} total`)
 if (failed > 0) process.exit(1)
 console.log('ALL WORLD3D TESTS PASSED ✅\n')
+
+/* ============================ INC 4 — LIFE INSIDE ============================ */
+
+import {
+  INTERIORS, INTERIOR_BY_ID, interiorColliders, resolveInteriorPosition, FURN_FOOTPRINT,
+  INTERIOR_PLAYER_RADIUS,
+} from '../src/game/world3d/interiors'
+import { DOORS } from '../src/game/world3d/layout'
+import { cameraObstructionT } from '../src/game/world3d/collision'
+import { applySlotDecay } from '../src/game/systems/needs'
+import { INTERIOR as INTERIOR_CFG, NEEDS } from '../src/game/data/config'
+import type { Needs } from '../src/game/types'
+
+console.log('\nINC 4 — INTERIOR DATA VALIDITY')
+check('exactly the three launch interiors', INTERIORS.length === 3)
+check('interior ids unique', new Set(INTERIORS.map((i) => i.id)).size === INTERIORS.length)
+check('every interior belongs to a real location', INTERIORS.every((i) => !!LOCATION_BY_ID[i.locationId]))
+check('INTERIOR_BY_ID is a full index', INTERIORS.every((i) => INTERIOR_BY_ID[i.id] === i))
+check(
+  'every furniture kind has a footprint entry',
+  INTERIORS.every((i) => i.furniture.every((f) => !!FURN_FOOTPRINT[f.kind])),
+)
+check(
+  'every hotspot sits inside the room bounds',
+  INTERIORS.every((i) =>
+    i.hotspots.every(
+      (h) =>
+        Math.abs(h.x) < i.size.w / 2 - 0.2 &&
+        Math.abs(h.z) < i.size.d / 2 - 0.2,
+    ),
+  ),
+)
+check(
+  'every interior has exactly one exit hotspot',
+  INTERIORS.every((i) => i.hotspots.filter((h) => h.kind === 'exit').length === 1),
+)
+check(
+  'meal/shop flags match their hotspots',
+  INTERIORS.every((i) => {
+    const kinds = new Set(i.hotspots.map((h) => h.kind))
+    return i.mealSpot === kinds.has('menu') && i.shopSpot === kinds.has('shop')
+  }),
+)
+check(
+  'Mama\u2019s serves meals, Kpata shops, home does neither',
+  INTERIOR_BY_ID['mamas-kitchen'].mealSpot === true &&
+    INTERIOR_BY_ID['kpata-shop'].shopSpot === true &&
+    INTERIOR_BY_ID['home-interior'].mealSpot === false &&
+    INTERIOR_BY_ID['home-interior'].shopSpot === false,
+)
+check(
+  'home has the four living hotspots (bed/stove/tv/bath)',
+  (() => {
+    const kinds = INTERIOR_BY_ID['home-interior'].hotspots.map((h) => h.kind)
+    return ['bed', 'stove', 'tv', 'bath'].every((k) => kinds.includes(k as never))
+  })(),
+)
+
+console.log('\nINC 4 — INTERIOR COLLISION RESPECTS THE PLAYER')
+for (const def of INTERIORS) {
+  const boxes = interiorColliders(def)
+  check(`${def.id} has walls + solid furniture colliders`, boxes.length > 5)
+  // spawn must resolve cleanly
+  const [sx, sz] = resolveInteriorPosition(def, def.spawn.x, def.spawn.z)
+  const inside = Math.abs(sx) < def.size.w / 2 && Math.abs(sz) < def.size.d / 2
+  check(`${def.id} spawn resolves inside bounds`, inside)
+  // resolved positions never escape bounds even when pushed from far outside
+  const [fx, fz] = resolveInteriorPosition(def, 999, -999)
+  check(
+    `${def.id} hard clamp holds`,
+    Math.abs(fx) <= def.size.w / 2 - INTERIOR_PLAYER_RADIUS &&
+      Math.abs(fz) <= def.size.d / 2 - INTERIOR_PLAYER_RADIUS,
+  )
+  // walking into a wall from the inside pushes you back, not through
+  check(`${def.id} wall north blocks passage`, (() => {
+    let z = 0
+    for (let step = 0; step < 400; step++) {
+      ;[, z] = resolveInteriorPosition(def, 0, -def.size.d / 2 + 3 - step * 0.05)
+    }
+    return z > -def.size.d / 2 + 0.2 // never reached the outer skin
+  })())
+}
+
+console.log('\nINC 4 — BFS PATHABILITY (spawn → every hotspot & door)')
+/**
+ * Rasterise the interior at a fine grid, mark cells blocked by any solid
+ * box (walls + furniture, inflated by the player radius), then BFS from
+ * the spawn cell. EVERY hotspot and the exit door must be reachable —
+ * this is the test that catches a bad doorway gap or a furniture jam.
+ */
+function pathableCells(defId: string): { reach: Set<string>; key: (x: number, z: number) => string } {
+  const def = INTERIOR_BY_ID[defId]
+  const step = 0.15
+  const nx = Math.floor(def.size.w / step)
+  const nz = Math.floor(def.size.d / 2 === 0 ? 1 : def.size.d / step)
+  const boxes = interiorColliders(def)
+  const blocked = new Set<string>()
+  const key = (ix: number, iz: number) => `${ix},${iz}`
+  const toIdx = (x: number) => Math.floor((x + def.size.w / 2) / step)
+  const toIdz = (z: number) => Math.floor((z + def.size.d / 2) / step)
+  for (let ix = 0; ix < nx; ix++) {
+    for (let iz = 0; iz < nz; iz++) {
+      const x = -def.size.w / 2 + (ix + 0.5) * step
+      const z = -def.size.d / 2 + (iz + 0.5) * step
+      for (const b of boxes) {
+        const dx = x - b.cx
+        const dz = z - b.cz
+        if (dx * dx + dz * dz > (b.hw + b.hd + INTERIOR_PLAYER_RADIUS) ** 2) continue
+        const lx = dx * b.cos - dz * b.sin
+        const lz = dx * b.sin + dz * b.cos
+        if (Math.abs(lx) <= b.hw + INTERIOR_PLAYER_RADIUS && Math.abs(lz) <= b.hd + INTERIOR_PLAYER_RADIUS) {
+          blocked.add(key(ix, iz))
+          break
+        }
+      }
+    }
+  }
+  // BFS from spawn
+  const startIx = toIdx(resolveInteriorPosition(def, def.spawn.x, def.spawn.z)[0])
+  const startIz = toIdz(resolveInteriorPosition(def, def.spawn.x, def.spawn.z)[1])
+  const reach = new Set<string>()
+  const queue: [number, number][] = [[startIx, startIz]]
+  reach.add(key(startIx, startIz))
+  while (queue.length) {
+    const [cx, cz] = queue.shift()!
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const tx = cx + dx
+      const tz = cz + dz
+      if (tx < 0 || tz < 0 || tx >= nx || tz >= nz) continue
+      const k = key(tx, tz)
+      if (reach.has(k) || blocked.has(k)) continue
+      reach.add(k)
+      queue.push([tx, tz])
+    }
+  }
+  return { reach, key }
+}
+
+for (const def of INTERIORS) {
+  const { reach, key } = pathableCells(def.id)
+  const toIdx = (x: number) => Math.floor((x + def.size.w / 2) / 0.15)
+  const toIdz = (z: number) => Math.floor((z + def.size.d / 2) / 0.15)
+  for (const h of def.hotspots) {
+    // a hotspot counts as reachable when any cell within 0.45 m of it is reachable
+    let ok = false
+    for (let ox = -3; ox <= 3 && !ok; ox++) {
+      for (let oz = -3; oz <= 3 && !ok; oz++) {
+        const k = key(toIdx(h.x) + ox, toIdz(h.z) + oz)
+        if (reach.has(k)) ok = true
+      }
+    }
+    check(`${def.id} → ${h.id} reachable on foot`, ok)
+  }
+}
+
+console.log('\nINC 4 — EXTERIOR DOORS')
+check('one door per interior', DOORS.length === INTERIORS.length)
+check(
+  'door interiorIds all resolve',
+  DOORS.every((d) => !!INTERIOR_BY_ID[d.interiorId]),
+)
+check('door ids unique', new Set(DOORS.map((d) => d.interiorId)).size === DOORS.length)
+check(
+  'every door stands on dry land',
+  DOORS.every((d) => heightAt(d.x, d.z) > WATER_Y + 0.5),
+)
+check(
+  'every door is inside the walk boundary',
+  DOORS.every((d) => Math.hypot(d.x, d.z) < WALK_BOUND),
+)
+check(
+  'every door matches its interior\u2019s exterior location',
+  DOORS.every((d) => INTERIOR_BY_ID[d.interiorId].locationId === d.locationId),
+)
+check(
+  'door yaw is finite',
+  DOORS.every((d) => Number.isFinite(d.rotY)),
+)
+
+console.log('\nINC 4 — CAMERA OBSTRUCTION')
+import { BUILDINGS } from '../src/game/world3d/layout'
+check('clear street view is unobstructed', cameraObstructionT(0, 0, 6, 6, 5.5) === null)
+// boom straight through the middle of a real building, camera below its roof
+const camB = BUILDINGS[0]
+check(
+  'boom through a building is blocked',
+  cameraObstructionT(camB.x, camB.z, camB.x - 40, camB.z, 1.5) !== null,
+)
+check(
+  'flying above the rooftops is never blocked',
+  cameraObstructionT(camB.x, camB.z, camB.x - 40, camB.z, camB.y + camB.h + 5) === null,
+)
+check('obstruction t stays in (0..1)', (() => {
+  const t = cameraObstructionT(camB.x, camB.z, camB.x - 40, camB.z, 1.5)
+  return t === null || (t > 0 && t < 1)
+})())
+
+console.log('\nINC 4 — LIVING-WORLD DECAY')
+const freshNeeds: Needs = { health: 100, energy: 100, hunger: 100, mood: 100 }
+const decayed1 = applySlotDecay(freshNeeds, 1)
+check(
+  'one slot drains hunger/energy/mood from config',
+  decayed1.hunger === 100 - NEEDS.decay.hunger &&
+    decayed1.energy === 100 - NEEDS.decay.energy &&
+    decayed1.mood === 100 - NEEDS.decay.mood &&
+    decayed1.health === 100,
+)
+const decayed3 = applySlotDecay(freshNeeds, 3)
+check(
+  'three slots drain 3×',
+  decayed3.hunger === 100 - NEEDS.decay.hunger * 3 && decayed3.energy === 100 - NEEDS.decay.energy * 3,
+)
+const nearlyEmpty: Needs = { health: 40, energy: 0.4, hunger: 1, mood: 0.3 }
+const decayedFloor = applySlotDecay(nearlyEmpty, 2)
+check('decay clamps at zero, never negative', decayedFloor.energy === 0 && decayedFloor.hunger === 0 && decayedFloor.mood === 0)
+check('zero slots is a no-op', applySlotDecay(freshNeeds, 0) === freshNeeds)
+check('fractional slots floor to whole slots', applySlotDecay(freshNeeds, 2.9).hunger === 100 - NEEDS.decay.hunger * 2)
+check(
+  'hungry consequence still fires through decay (mood drains harder)',
+  (() => {
+    const hungry: Needs = { health: 90, energy: 60, hunger: 21, mood: 50 }
+    const after = applySlotDecay(hungry, 1)
+    return after.hunger === 21 - NEEDS.decay.hunger && after.mood < 50 - NEEDS.decay.mood
+  })(),
+)
+
+console.log('\nINC 4 — INTERIOR CONFIG')
+check('hotspot radius is a sane interact distance', INTERIOR_CFG.hotspotRadius > 1 && INTERIOR_CFG.hotspotRadius < 4)
+check('tv relax lifts mood more than bath', INTERIOR_CFG.relax.tv.mood > INTERIOR_CFG.relax.bath.mood)
+check('bath restores more energy than tv', INTERIOR_CFG.relax.bath.energy > INTERIOR_CFG.relax.tv.energy)
+check(
+  'relax hunger cost is a gentle drain',
+  INTERIOR_CFG.relax.tv.hunger < 0 && INTERIOR_CFG.relax.tv.hunger >= -6,
+)
+check(
+  'interior camera keeps a closer rig than the street',
+  INTERIOR_CFG.camera.distance < 6 && INTERIOR_CFG.camera.pitchMin > 0.1 && INTERIOR_CFG.camera.pitchMax < 1.2,
+)
+check('door radius is tight (deliberate entry)', INTERIOR_CFG.doorRadius > 1.5 && INTERIOR_CFG.doorRadius < 6)

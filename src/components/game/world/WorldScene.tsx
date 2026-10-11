@@ -17,7 +17,7 @@ import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
 import { atmoLive, getAtmosphere, sunVec } from './atmosphere'
 import { WorldTerrain } from './WorldTerrain'
 import { CityMesh } from './CityMesh'
-import { Npcs, PlayerController, Rain, Traffic } from './Actors'
+import { Birds, Npcs, PlayerController, Rain, SmokeWisps, Traffic } from './Actors'
 
 /* --------------------------------- device tier -------------------------------- */
 
@@ -285,6 +285,9 @@ export function WorldScene({
       <Npcs timeOfDay={timeOfDay} onGist={onGist} />
       <Traffic timeOfDay={timeOfDay} />
       <Rain weather={weather} />
+      {/* INC 4 — the city breathes: birds by day, cooking smoke at the food strip */}
+      <Birds timeOfDay={timeOfDay} />
+      <SmokeWisps />
     </Canvas>
   )
 }

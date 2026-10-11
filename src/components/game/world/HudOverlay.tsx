@@ -18,10 +18,12 @@ import { useGameStore } from '@/game/store/useGameStore'
 import { LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
 import { NPCS } from '@/game/data/npcs'
 import { HUSTLES } from '@/game/data/hustles'
-import { WORLD3D, FOOD } from '@/game/data/config'
-import { ANCHORS, POINTS_OF_INTEREST } from '@/game/world3d/layout'
+import { WORLD3D, FOOD, INTERIOR } from '@/game/data/config'
+import { ANCHORS, ANCHOR_BY_ID, POINTS_OF_INTEREST } from '@/game/world3d/layout'
+import { INTERIOR_BY_ID, type HotspotKind, type InteriorDef } from '@/game/world3d/interiors'
 import { calculateTravel } from '@/game/systems/travel'
 import { formatNaira } from '@/game/systems/progression'
+import { ambience } from '@/game/systems/ambience'
 import type { TransportId } from '@/game/types'
 import { audio } from '@/game/systems/audio'
 import {
@@ -208,24 +210,35 @@ type PanelState =
   | { kind: 'none' }
   | { kind: 'activities'; loc: LokojaLocation }
   | { kind: 'travel'; loc: LokojaLocation }
+  | { kind: 'interior'; hotspot: HotspotKind }
 
 export function HudOverlay({
   nearestAnchor,
   district,
   gistNpc,
+  interior,
+  hotspot,
   onExit,
   onOpenWork,
   onOpenMap,
+  onEnterInterior,
+  onExitInterior,
 }: {
-  /** anchor or `poi:` prop currently in interact range (from the 3D scene), null = none */
+  /** anchor / `poi:` prop / `door:` interior door in interact range (3D scene), null = none */
   nearestAnchor: string | null
   /** district the player is inside right now (drives arrival toasts) */
   district: string | null
   /** nearest named NPC's registry id (drives the gist chip), null = none */
   gistNpc: string | null
+  /** when non-null the HUD is in interior mode (INC 4) */
+  interior: InteriorDef | null
+  /** active interior hotspot id, null = none */
+  hotspot: string | null
   onExit: () => void
   onOpenWork: () => void
   onOpenMap: (locationId: string) => void
+  onEnterInterior: (interiorId: string) => void
+  onExitInterior: () => void
 }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
@@ -234,10 +247,30 @@ export function HudOverlay({
   const restAction = useGameStore((s) => s.rest)
   const settleWalk = useGameStore((s) => s.settleWorldWalk)
   const eatAction = useGameStore((s) => s.eatMeal)
+  const relaxAction = useGameStore((s) => s.relaxIndoors)
 
   const surfaceRef = useRef<HTMLDivElement>(null)
   const nearestRef = useRef<string | null>(null)
   const [panel, setPanel] = useState<PanelState>({ kind: 'none' })
+
+  // INC 4 — interior mode: refs so the rAF poll can read them without re-subscribing
+  const interiorRef = useRef<InteriorDef | null>(interior)
+  const hotspotRef = useRef<string | null>(hotspot)
+  useEffect(() => {
+    interiorRef.current = interior
+  }, [interior])
+  useEffect(() => {
+    hotspotRef.current = hotspot
+  }, [hotspot])
+  // keep the poll's copies of the callbacks fresh too
+  const enterRef = useRef(onEnterInterior)
+  const exitInteriorRef = useRef(onExitInterior)
+  useEffect(() => {
+    enterRef.current = onEnterInterior
+  }, [onEnterInterior])
+  useEffect(() => {
+    exitInteriorRef.current = onExitInterior
+  }, [onExitInterior])
 
   /* ----------------------- views: camera modes + photo mode ----------------------- */
 
@@ -324,7 +357,7 @@ export function HudOverlay({
   const npcDef = gistNpc ? NPCS.find((n) => n.id === gistNpc) ?? null : null
   const npcHustle = gistNpc ? HUSTLES.find((h) => h.npcId === gistNpc) ?? null : null
   const gistVisible =
-    npcDef !== null && npcHustle !== null && !dismissedGists.has(npcDef.id) && panel.kind === 'none' && !isTravelling
+    npcDef !== null && npcHustle !== null && !dismissedGists.has(npcDef.id) && panel.kind === 'none' && !isTravelling && !interior
 
   const isTouchDevice = () =>
     typeof window !== 'undefined' &&
@@ -357,14 +390,46 @@ export function HudOverlay({
   // interact polling (E / Enter / HUD button) + Escape closes sheets + tour steps
   useEffect(() => {
     let raf = 0
+    let lastAmbience = 0
     const tick = () => {
-      if (consumeInteract() && nearestRef.current) {
-        const anchorId = nearestRef.current
-        const loc = resolveAnchorLoc(anchorId)
-        if (loc) {
-          audio.play('click')
-          setPanel({ kind: loc.id === world.currentLocation ? 'activities' : 'travel', loc })
+      if (consumeInteract()) {
+        // INC 4 — inside: the nearest hotspot drives the panel
+        const hot = hotspotRef.current
+        const inside = interiorRef.current
+        if (hot && inside) {
+          const h = inside.hotspots.find((x) => x.id === hot)
+          if (h) {
+            audio.play('click')
+            if (h.kind === 'exit') exitInteriorRef.current()
+            else setPanel({ kind: 'interior', hotspot: h.kind })
+          }
+        } else if (nearestRef.current) {
+          const anchorId = nearestRef.current
+          if (anchorId.startsWith('door:')) {
+            audio.play('click')
+            enterRef.current(anchorId.slice(5))
+          } else {
+            const loc = resolveAnchorLoc(anchorId)
+            if (loc) {
+              audio.play('click')
+              setPanel({ kind: loc.id === world.currentLocation ? 'activities' : 'travel', loc })
+            }
+          }
         }
+      }
+      // ambience proximity blend — throttled to ~2 Hz, zero React work
+      const nowMs = performance.now()
+      if (nowMs - lastAmbience > 500) {
+        lastAmbience = nowMs
+        const riverA = ANCHOR_BY_ID['confluence']
+        const marketA = ANCHOR_BY_ID['kpata-market']
+        ambience.update({
+          night: world.timeOfDay === 'night',
+          rain: world.weather === 'rain',
+          indoors: interiorRef.current !== null,
+          river: Math.hypot(riverA.x - playerPos.x, riverA.z - playerPos.z),
+          market: Math.hypot(marketA.x - playerPos.x, marketA.z - playerPos.z),
+        })
       }
       // onboarding auto-advance — the tour watches the REAL input layer
       const step = tutStepRef.current
@@ -411,7 +476,7 @@ export function HudOverlay({
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKey)
     }
-  }, [world.currentLocation])
+  }, [world.currentLocation, world.timeOfDay, world.weather])
 
   // freeze walking while a sheet is open
   useEffect(() => {
@@ -420,6 +485,21 @@ export function HudOverlay({
 
   const openPanelFor = (anchorId: string | null) => {
     if (!anchorId) return
+    // INC 4 — doors and interior hotspots speak their own protocol
+    if (interior && hotspot) {
+      const h = interior.hotspots.find((x) => x.id === hotspot)
+      if (h) {
+        audio.play('click')
+        if (h.kind === 'exit') onExitInterior()
+        else setPanel({ kind: 'interior', hotspot: h.kind })
+      }
+      return
+    }
+    if (anchorId.startsWith('door:')) {
+      audio.play('click')
+      onEnterInterior(anchorId.slice(5))
+      return
+    }
     const loc = resolveAnchorLoc(anchorId)
     if (!loc) return
     audio.play('click')
@@ -427,7 +507,9 @@ export function HudOverlay({
   }
 
   const currentLoc = LOCATION_BY_ID[world.currentLocation]
-  const promptLoc = nearestAnchor ? resolveAnchorLoc(nearestAnchor) : null
+  const hotDef = interior && hotspot ? interior.hotspots.find((h) => h.id === hotspot) ?? null : null
+  const doorDef = !interior && nearestAnchor?.startsWith('door:') ? INTERIOR_BY_ID[nearestAnchor.slice(5)] ?? null : null
+  const promptLoc = !interior && !doorDef && nearestAnchor ? resolveAnchorLoc(nearestAnchor) : null
   const promptAnchor = nearestAnchor
   const isPoiPrompt = !!promptAnchor?.startsWith('poi:')
 
@@ -451,20 +533,31 @@ export function HudOverlay({
           <button
             onClick={() => {
               audio.play('click')
+              if (interior) {
+                // stepping back outside — WorldTab settles the interior visit
+                onExitInterior()
+                return
+              }
               // settle the visit's walking into the real needs economy
               settleWalk(getWalkedMeters())
               resetWalkedMeters()
               onExit()
             }}
-            aria-label="Leave the 3D world"
+            aria-label={interior ? 'Step back outside' : 'Leave the 3D world'}
             className="lko-press flex h-10 items-center gap-1.5 rounded-full bg-black/40 px-3.5 text-[13px] font-extrabold text-white backdrop-blur-md"
           >
             <ArrowLeftIcon size={15} />
-            Exit
+            {interior ? 'Outside' : 'Exit'}
           </button>
           <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-black/40 px-3 py-2 backdrop-blur-md">
-            <PlaceIcon id={currentLoc.id} size={14} className="shrink-0 text-[#ffd88a]" />
-            <span className="truncate text-[13px] font-extrabold text-white">{currentLoc.name}</span>
+            {interior ? (
+              <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] bg-[#ffd88a]/90 text-[8px] font-black text-[#3d2a00]">in</span>
+            ) : (
+              <PlaceIcon id={currentLoc.id} size={14} className="shrink-0 text-[#ffd88a]" />
+            )}
+            <span className="truncate text-[13px] font-extrabold text-white">
+              {interior ? interior.name : currentLoc.name}
+            </span>
           </span>
         </div>
 
@@ -491,24 +584,26 @@ export function HudOverlay({
             <PinIcon size={10} className="shrink-0 text-[#ffd88a]" />
             {discovered.size}/{ANCHORS.length} places found
           </span>
-          {/* view mode + photo mode */}
+          {/* view mode + photo mode — camera presets are an outdoor thing */}
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                audio.play('click')
-                cycleCamMode()
-                setCamModeState(getCamMode())
-              }}
-              aria-label="Cycle camera view (C)"
-              title="Cycle view — C"
-              className="lko-press flex h-8 items-center gap-1 rounded-full bg-black/40 px-2.5 text-[10.5px] font-extrabold text-white backdrop-blur-md"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M23 7l-7 5 7 5V7z" />
-                <rect x="1" y="5" width="15" height="14" rx="2" />
-              </svg>
-              {CAM_MODES.find((m) => m.id === camMode)?.label ?? 'View'}
-            </button>
+            {!interior && (
+              <button
+                onClick={() => {
+                  audio.play('click')
+                  cycleCamMode()
+                  setCamModeState(getCamMode())
+                }}
+                aria-label="Cycle camera view (C)"
+                title="Cycle view — C"
+                className="lko-press flex h-8 items-center gap-1 rounded-full bg-black/40 px-2.5 text-[10.5px] font-extrabold text-white backdrop-blur-md"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M23 7l-7 5 7 5V7z" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" />
+                </svg>
+                {CAM_MODES.find((m) => m.id === camMode)?.label ?? 'View'}
+              </button>
+            )}
             <button
               onClick={togglePhoto}
               aria-label="Photo mode (V)"
@@ -521,8 +616,8 @@ export function HudOverlay({
               </svg>
             </button>
           </div>
-          {/* live minimap — north-up, discovered pins in colour */}
-          <MiniMap discovered={discovered} />
+          {/* live minimap — north-up, discovered pins in colour (outdoors only) */}
+          {!interior && <MiniMap discovered={discovered} />}
         </div>
       </div>
 
@@ -603,7 +698,39 @@ export function HudOverlay({
       )}
 
       {/* ---------- interact prompt ---------- */}
-      {promptLoc && panel.kind === 'none' && !isTravelling && !photo && (
+      {interior && hotDef && panel.kind === 'none' && !photo && (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
+          <button
+            onClick={() => openPanelFor(hotDef.id)}
+            className="lko-press lko-pop flex max-w-full items-center gap-2.5 rounded-full border border-white/25 bg-black/55 px-5 py-3 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ffd88a] text-[11px] font-black text-[#3d2a00]">
+              {hotDef.kind === 'exit' ? '→' : hotDef.kind === 'bed' ? '🛏' : hotDef.kind === 'stove' ? '🍲' : hotDef.kind === 'tv' ? '📺' : hotDef.kind === 'bath' ? '🚿' : hotDef.kind === 'shop' ? '🧺' : '📋'}
+            </span>
+            <span className="truncate text-[14px] font-extrabold">{hotDef.label}</span>
+            {!touchMode && (
+              <kbd className="rounded-md border border-white/30 bg-white/10 px-1.5 py-0.5 text-[10px] font-extrabold">E</kbd>
+            )}
+          </button>
+        </div>
+      )}
+      {!interior && doorDef && panel.kind === 'none' && !isTravelling && !photo && (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
+          <button
+            onClick={() => openPanelFor(promptAnchor)}
+            className="lko-press lko-pop flex max-w-full items-center gap-2.5 rounded-full border border-[#ffd88a]/45 bg-black/60 px-5 py-3 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#e8a317] text-[11px] font-black text-white">→</span>
+            <span className="truncate text-[14px] font-extrabold">
+              Enter {doorDef.name}
+            </span>
+            {!touchMode && (
+              <kbd className="rounded-md border border-white/30 bg-white/10 px-1.5 py-0.5 text-[10px] font-extrabold">E</kbd>
+            )}
+          </button>
+        </div>
+      )}
+      {promptLoc && panel.kind === 'none' && !isTravelling && !photo && !interior && !doorDef && (
         <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
           <button
             onClick={() => openPanelFor(promptAnchor)}
@@ -709,24 +836,49 @@ export function HudOverlay({
           <section
             className="lko-sheet pointer-events-auto absolute inset-x-0 bottom-0 mx-auto w-full max-w-md rounded-t-3xl border-t border-black/[0.08] bg-[var(--lko-surface)] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--lko-shadow-lg)] sm:max-w-lg"
             role="dialog"
-            aria-label={panel.kind === 'travel' ? `Travel to ${panel.loc.name}` : `${panel.loc.name} activities`}
+            aria-label={
+              panel.kind === 'travel'
+                ? `Travel to ${panel.loc.name}`
+                : panel.kind === 'interior'
+                  ? `${interior?.name ?? 'Indoors'} — inside`
+                  : `${panel.loc.name} activities`
+            }
           >
             <div className="mx-auto mt-2.5 h-1.5 w-10 rounded-full bg-black/10" aria-hidden />
 
             {/* header */}
             <div className="flex items-start gap-3 px-5 pt-3">
-              <span
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
-                style={{ backgroundColor: panel.loc.color }}
-              >
-                <PlaceIcon id={panel.loc.id} size={22} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="lko-display truncate text-lg leading-tight">{panel.loc.name}</h2>
-                <p className="truncate text-[11.5px] font-semibold italic text-[var(--lko-ink-soft)]">
-                  “{panel.loc.tagline}”
-                </p>
-              </div>
+              {panel.kind === 'interior' ? (
+                <>
+                  <span
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-[15px] font-black text-white"
+                    style={{ backgroundColor: interior?.palette.accent ?? '#2e7d5b' }}
+                  >
+                    {panel.hotspot === 'bed' ? '🛏' : panel.hotspot === 'stove' ? '🍲' : panel.hotspot === 'tv' ? '📺' : panel.hotspot === 'bath' ? '🚿' : panel.hotspot === 'shop' ? '🧺' : '📋'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="lko-display truncate text-lg leading-tight">{interior?.name ?? 'Indoors'}</h2>
+                    <p className="truncate text-[11.5px] font-semibold italic text-[var(--lko-ink-soft)]">
+                      Inside your own four walls
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+                    style={{ backgroundColor: panel.loc.color }}
+                  >
+                    <PlaceIcon id={panel.loc.id} size={22} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="lko-display truncate text-lg leading-tight">{panel.loc.name}</h2>
+                    <p className="truncate text-[11.5px] font-semibold italic text-[var(--lko-ink-soft)]">
+                      “{panel.loc.tagline}”
+                    </p>
+                  </div>
+                </>
+              )}
               <button
                 onClick={() => setPanel({ kind: 'none' })}
                 aria-label="Close"
@@ -742,6 +894,23 @@ export function HudOverlay({
                 onConfirm={(t) => {
                   setPanel({ kind: 'none' })
                   travelAction(panel.loc.id, t)
+                }}
+              />
+            ) : panel.kind === 'interior' ? (
+              <InteriorSheet
+                def={interior!}
+                hotspotKind={panel.hotspot}
+                onClose={() => setPanel({ kind: 'none' })}
+                onRest={(k) => {
+                  setPanel({ kind: 'none' })
+                  restAction(k)
+                }}
+                onEat={(mealKey, locId) => {
+                  eatAction(mealKey, locId)
+                }}
+                onRelax={(k) => {
+                  setPanel({ kind: 'none' })
+                  relaxAction(k)
                 }}
               />
             ) : (
@@ -885,41 +1054,12 @@ function ActivitiesSheet({
           ? loc.activities.filter((a) => a.key === 'eat')
           : loc.activities.filter((a) => a.key === 'shop-food')
         ).map((a) => (
-          <div key={a.key} className="rounded-xl border border-black/[0.06] bg-[var(--lko-gold-soft)]/40 p-2.5">
-            <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
-              {loc.id === 'food-area' ? '🍲 Mama’s menu — eat now' : '🧺 Market fresh — buy foodstuff'}
-              <span className="ml-auto rounded-full bg-black/[0.06] px-2 py-0.5 text-[9.5px] font-bold normal-case text-[var(--lko-ink-soft)]">
-                hunger {Math.round(hunger)}%
-              </span>
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {FOOD.meals.map((m) => {
-                const afford = cash >= m.price
-                return (
-                  <button
-                    key={m.key}
-                    disabled={!afford}
-                    onClick={() => {
-                      audio.play('click')
-                      onEat(m.key)
-                    }}
-                    className={`lko-press flex min-h-[48px] items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left ${
-                      afford ? 'lko-card' : 'cursor-not-allowed opacity-55'
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12.5px] font-extrabold leading-tight">{m.label}</span>
-                      <span className="block truncate text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">{m.detail}</span>
-                    </span>
-                    <span className="flex shrink-0 flex-col items-end">
-                      <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(m.price)}</span>
-                      <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">+{m.hunger} 🍲</span>
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          <MealMenu
+            key={a.key}
+            title={loc.id === 'food-area' ? '🍲 Mama’s menu — eat now' : '🧺 Market fresh — buy foodstuff'}
+            atLocationId={loc.id}
+            onEat={onEat}
+          />
         ))}
 
       {loc.activities.map((a) => {
@@ -1008,6 +1148,186 @@ function ActivitiesSheet({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/* -------------------------------- meal menu --------------------------------- */
+
+/**
+ * Shared FOOD.meals list — one store action (eatMeal) behind every row,
+ * used by the outdoor activities sheet AND the interior surfaces (stove,
+ * Mama's counter, the provisions store).
+ */
+function MealMenu({
+  title,
+  atLocationId,
+  onEat,
+}: {
+  title: string
+  atLocationId: string
+  onEat: (mealKey: string, atLocationId?: string) => void
+}) {
+  const cash = useGameStore((s) => s.player?.cash ?? 0)
+  const hunger = useGameStore((s) => s.player?.needs.hunger ?? 100)
+  return (
+    <div className="rounded-xl border border-black/[0.06] bg-[var(--lko-gold-soft)]/40 p-2.5">
+      <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
+        {title}
+        <span className="ml-auto rounded-full bg-black/[0.06] px-2 py-0.5 text-[9.5px] font-bold normal-case text-[var(--lko-ink-soft)]">
+          hunger {Math.round(hunger)}%
+        </span>
+      </p>
+      <div className="flex flex-col gap-1.5">
+        {FOOD.meals.map((m) => {
+          const afford = cash >= m.price
+          return (
+            <button
+              key={m.key}
+              disabled={!afford}
+              onClick={() => {
+                audio.play('click')
+                onEat(m.key, atLocationId)
+              }}
+              className={`lko-press flex min-h-[48px] items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left ${
+                afford ? 'lko-card' : 'cursor-not-allowed opacity-55'
+              }`}
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12.5px] font-extrabold leading-tight">{m.label}</span>
+                <span className="block truncate text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">{m.detail}</span>
+              </span>
+              <span className="flex shrink-0 flex-col items-end">
+                <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(m.price)}</span>
+                <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">+{m.hunger} 🍲</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------- interior sheet ------------------------------- */
+
+const INTERIOR_ICON: Record<HotspotKind, string> = {
+  bed: '🛏',
+  stove: '🍲',
+  tv: '📺',
+  bath: '🚿',
+  menu: '📋',
+  shop: '🧺',
+  exit: '→',
+}
+
+const INTERIOR_COPY: Record<HotspotKind, { title: string; sub: string }> = {
+  bed: { title: 'Rest a while', sub: 'Sleep till morning restores the most; naps top you up.' },
+  stove: { title: 'Cook at the stove', sub: 'The pot at home is the cheapest belly filler.' },
+  tv: { title: 'Watch some TV', sub: 'One slot — mood up, small energy back.' },
+  bath: { title: 'Freshen up', sub: 'A quick bath — energy and mood, one slot.' },
+  menu: { title: 'Mama’s menu', sub: 'Hot plates straight from the pot.' },
+  shop: { title: 'Provisions counter', sub: 'Foodstuff and small chops for the pot.' },
+  exit: { title: 'Step outside', sub: '' },
+}
+
+function InteriorSheet({
+  def,
+  hotspotKind,
+  onClose,
+  onRest,
+  onEat,
+  onRelax,
+}: {
+  def: InteriorDef
+  hotspotKind: HotspotKind
+  onClose: () => void
+  onRest: (k: 'nap' | 'sleep') => void
+  onEat: (mealKey: string, atLocationId?: string) => void
+  onRelax: (k: 'tv' | 'bath') => void
+}) {
+  const cash = useGameStore((s) => s.player?.cash ?? 0)
+  const relax = INTERIOR.relax
+  const copy = INTERIOR_COPY[hotspotKind]
+
+  return (
+    <div className="flex flex-col gap-2 px-5 pb-4 pt-3">
+      <p className="text-[12px] font-semibold leading-snug text-[var(--lko-ink-soft)]">{copy.sub}</p>
+
+      {/* the bed — real rest through the one store action */}
+      {hotspotKind === 'bed' && (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => {
+              audio.play('click')
+              onRest('nap')
+            }}
+            className="lko-press flex min-h-[52px] items-center gap-2 rounded-xl bg-[var(--lko-gold)] px-3 text-left text-[13px] font-extrabold text-[#3d2a00]"
+          >
+            <ClockIcon size={17} /> Nap
+          </button>
+          <button
+            onClick={() => {
+              audio.play('click')
+              onRest('sleep')
+            }}
+            className="lko-press flex min-h-[52px] items-center gap-2 rounded-xl bg-[var(--lko-green)] px-3 text-left text-[13px] font-extrabold text-white"
+          >
+            <MoonIcon size={17} /> Sleep till morning
+          </button>
+        </div>
+      )}
+
+      {/* TV / bath — honest downtime: one clock slot + config-tuned shift */}
+      {(hotspotKind === 'tv' || hotspotKind === 'bath') && (
+        <button
+          onClick={() => {
+            audio.play('click')
+            onRelax(hotspotKind)
+          }}
+          className="lko-press lko-card flex min-h-[56px] items-center gap-3 p-3 text-left"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-river-soft)] text-lg">
+            {INTERIOR_ICON[hotspotKind]}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13.5px] font-extrabold leading-tight">{copy.title}</span>
+            <span className="block text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+              +{relax[hotspotKind].mood} mood · +{relax[hotspotKind].energy} energy · −{Math.abs(relax[hotspotKind].hunger)} hunger · 1 slot
+            </span>
+          </span>
+          <CheckIcon size={16} className="text-[var(--lko-green)]" />
+        </button>
+      )}
+
+      {/* cook at home — same meal menu, ledger labels it "at Your Place" */}
+      {hotspotKind === 'stove' && (
+        <MealMenu title="🍲 Cook at home" atLocationId={def.locationId} onEat={onEat} />
+      )}
+
+      {/* Mama's counter + Kpata provisions — the same eating loop, indoors */}
+      {(hotspotKind === 'menu' || hotspotKind === 'shop') && (
+        <MealMenu
+          title={hotspotKind === 'menu' ? '🍲 Mama’s menu — eat now' : '🧺 Market fresh — buy foodstuff'}
+          atLocationId={def.locationId}
+          onEat={onEat}
+        />
+      )}
+
+      {/* cash strip so the player always sees affordability context */}
+      {(hotspotKind === 'stove' || hotspotKind === 'menu' || hotspotKind === 'shop') && (
+        <p className="flex items-center justify-between rounded-lg bg-black/[0.04] px-3 py-2 text-[11px] font-bold text-[var(--lko-ink-soft)]">
+          <span>Wallet</span>
+          <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(cash)}</span>
+        </p>
+      )}
+
+      <button
+        onClick={onClose}
+        className="lko-press mt-1 flex min-h-[44px] items-center justify-center rounded-xl bg-black/[0.05] text-[13px] font-extrabold text-[var(--lko-ink-soft)]"
+      >
+        Close
+      </button>
     </div>
   )
 }

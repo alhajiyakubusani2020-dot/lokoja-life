@@ -44,6 +44,49 @@ export const NEEDS = {
     /** Full night sleep (advances to next morning). */
     sleep: { energy: 100, hunger: -22, mood: 12, health: 8 },
   },
+
+  /**
+   * INC 4 — living-world decay. Every time slot that passes OUTSIDE of
+   * rest quietly drains the body: meals now matter on a schedule and a
+   * full day of hustling leaves its mark. Applied by the store on the
+   * non-rest clock paths (travel, work, eating, home downtime) through
+   * systems/needs.applySlotDecay — never hand-rolled in components.
+   */
+  decay: {
+    hunger: 2,
+    energy: 1,
+    mood: 1,
+    health: 0,
+  },
+} as const
+
+/* ------------------------------ home interiors ------------------------------ */
+
+/**
+ * INC 4 — "life inside". Tuning for the enterable interiors (your flat,
+ * Mama's buka, the Kpata provision store). Interiors are 3D presentation;
+ * every effect they apply flows through these config values + the same
+ * store actions the rest of the game uses.
+ */
+export const INTERIOR = {
+  /** interaction radius for furniture hotspots, in interior metres */
+  hotspotRadius: 2.1,
+  /** unwind actions — each honestly advances one clock slot (time passes) */
+  relax: {
+    tv: { mood: 8, energy: 3, hunger: -3 },
+    bath: { mood: 5, energy: 5, hunger: -3 },
+  },
+  /** interior camera rig tuning (presentation-only) */
+  camera: {
+    distance: 4.6,
+    minDistance: 2.6,
+    maxDistance: 7,
+    height: 3.1,
+    pitchMin: 0.22,
+    pitchMax: 0.95,
+  },
+  /** exterior door interact radius (world units) */
+  doorRadius: 3.2,
 } as const
 
 /* --------------------------------- Progression ------------------------------ */

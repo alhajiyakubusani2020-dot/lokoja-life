@@ -21,101 +21,32 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
 import {
-  ANCHOR_BY_ID, DISTRICTS, heightAt, NPC_ZONES, POINTS_OF_INTEREST, TRAFFIC_LOOPS,
+  ANCHOR_BY_ID, DISTRICTS, DOORS, heightAt, NPC_ZONES, POINTS_OF_INTEREST, TRAFFIC_LOOPS,
 } from '@/game/world3d/layout'
-import { bridgeDeckY, resolvePosition } from '@/game/world3d/collision'
+import { bridgeDeckY, cameraObstructionT, resolvePosition } from '@/game/world3d/collision'
 import { NPCS } from '@/game/data/npcs'
-import { WORLD3D } from '@/game/data/config'
+import { INTERIOR, WORLD3D } from '@/game/data/config'
 import {
   addWalkDistance, consumeLook, consumeZoom, getCamMode, isInputFrozen, MOVE, playerPos,
   readMoveInput, reportPlayerPos, CAM_RIG,
 } from './controls'
+import { HumanRig, MidRig, type RigColors } from './HumanRig'
 
-/* --------------------------- shared character parts -------------------------- */
+/* ------------------------------ rig colour mapping ---------------------------- */
 
-/** lightweight stylised Lokoja resident */
-function CharacterMesh({
-  skin, cloth, hair, hairStyle, dress, speedRef,
-}: {
-  skin: string
-  cloth: string
-  hair: string
-  hairStyle: 'none' | 'cap' | 'volume'
-  dress: boolean
-  /** live movement speed (units/s) — drives the walk cycle; 0 = idle */
-  speedRef: { current: number }
-}) {
-  const leftArm = useRef<THREE.Mesh>(null)
-  const rightArm = useRef<THREE.Mesh>(null)
-  const leftLeg = useRef<THREE.Mesh>(null)
-  const rightLeg = useRef<THREE.Mesh>(null)
-  const body = useRef<THREE.Group>(null)
-  const phase = useMemo(() => Math.random() * Math.PI * 2, [])
+const VOLUME_HAIR = new Set(['afro', 'puffs', 'dreads', 'braids'])
+const CAP_HAIR = new Set(['low-cut', 'waves', 'cornrows'])
+const DRESS_STYLES = new Set(['kaftan'])
 
-  useFrame((state) => {
-    const t = state.clock.elapsedTime + phase
-    const s = speedRef.current
-    const walk = Math.min(1, s / 4)
-    const swing = Math.sin(t * 9) * walk * 0.55
-    if (leftArm.current) leftArm.current.rotation.x = swing
-    if (rightArm.current) rightArm.current.rotation.x = -swing
-    if (leftLeg.current) leftLeg.current.rotation.x = -swing
-    if (rightLeg.current) rightLeg.current.rotation.x = swing
-    if (body.current) body.current.position.y = Math.abs(Math.sin(t * 9)) * walk * 0.06
-  })
-
-  return (
-    <group ref={body}>
-      {/* legs */}
-      <mesh ref={leftLeg} position={[-0.13, 0.42, 0]} castShadow>
-        <capsuleGeometry args={[0.09, 0.5, 3, 6]} />
-        <meshStandardMaterial color="#2e2a26" roughness={1} />
-      </mesh>
-      <mesh ref={rightLeg} position={[0.13, 0.42, 0]} castShadow>
-        <capsuleGeometry args={[0.09, 0.5, 3, 6]} />
-        <meshStandardMaterial color="#2e2a26" roughness={1} />
-      </mesh>
-      {/* dress cone over legs */}
-      {dress && (
-        <mesh position={[0, 0.62, 0]} castShadow>
-          <coneGeometry args={[0.42, 0.72, 10]} />
-          <meshStandardMaterial color={cloth} roughness={0.9} />
-        </mesh>
-      )}
-      {/* torso */}
-      <mesh position={[0, dress ? 1.14 : 1.02, 0]} castShadow>
-        <capsuleGeometry args={[dress ? 0.2 : 0.24, dress ? 0.4 : 0.52, 4, 8]} />
-        <meshStandardMaterial color={cloth} roughness={0.9} />
-      </mesh>
-      {/* arms */}
-      <mesh ref={leftArm} position={[-0.34, dress ? 1.2 : 1.12, 0]} castShadow>
-        <capsuleGeometry args={[0.07, 0.46, 3, 6]} />
-        <meshStandardMaterial color={cloth} roughness={0.9} />
-      </mesh>
-      <mesh ref={rightArm} position={[0.34, dress ? 1.2 : 1.12, 0]} castShadow>
-        <capsuleGeometry args={[0.07, 0.46, 3, 6]} />
-        <meshStandardMaterial color={cloth} roughness={0.9} />
-      </mesh>
-      {/* head */}
-      <mesh position={[0, dress ? 1.66 : 1.56, 0]} castShadow>
-        <sphereGeometry args={[0.21, 12, 12]} />
-        <meshStandardMaterial color={skin} roughness={0.75} />
-      </mesh>
-      {/* hair */}
-      {hairStyle === 'cap' && (
-        <mesh position={[0, dress ? 1.74 : 1.64, -0.02]} scale={[1.04, 0.7, 1.04]}>
-          <sphereGeometry args={[0.21, 10, 10]} />
-          <meshStandardMaterial color={hair} roughness={1} />
-        </mesh>
-      )}
-      {hairStyle === 'volume' && (
-        <mesh position={[0, dress ? 1.82 : 1.72, 0]}>
-          <sphereGeometry args={[0.27, 10, 10]} />
-          <meshStandardMaterial color={hair} roughness={1} />
-        </mesh>
-      )}
-    </group>
-  )
+export function playerRigColors(avatar: AvatarConfig): RigColors {
+  return {
+    skin: avatar.skinTone,
+    cloth: avatar.clothingColor,
+    clothAlt: avatar.clothingColor,
+    hair: avatar.hairColor,
+    hairStyle: VOLUME_HAIR.has(avatar.hairstyle) ? 'volume' : CAP_HAIR.has(avatar.hairstyle) ? 'cap' : 'none',
+    dress: DRESS_STYLES.has(avatar.clothingStyle),
+  }
 }
 
 /** soft blob shadow — reads as contact shadow, costs one quad */
@@ -130,23 +61,8 @@ function BlobShadow({ scale = 1 }: { scale?: number }) {
 
 /* ------------------------------- player character ----------------------------- */
 
-const VOLUME_HAIR = new Set(['afro', 'puffs', 'dreads', 'braids'])
-const CAP_HAIR = new Set(['low-cut', 'waves', 'cornrows'])
-const DRESS_STYLES = new Set(['kaftan'])
-
 export function PlayerAvatar({ avatar, speedRef }: { avatar: AvatarConfig; speedRef: { current: number } }) {
-  return (
-    <CharacterMesh
-      skin={avatar.skinTone}
-      cloth={avatar.clothingColor}
-      hair={avatar.hairColor}
-      hairStyle={
-        VOLUME_HAIR.has(avatar.hairstyle) ? 'volume' : CAP_HAIR.has(avatar.hairstyle) ? 'cap' : 'none'
-      }
-      dress={DRESS_STYLES.has(avatar.clothingStyle)}
-      speedRef={speedRef}
-    />
-  )
+  return <HumanRig colors={playerRigColors(avatar)} speedRef={speedRef} castShadow />
 }
 
 /* -------------------------------- player controller ---------------------------- */
@@ -322,6 +238,14 @@ export function PlayerController({
         nearestId = `poi:${p.id}`
       }
     }
+    // interior doors (INC 4) — tight radius so stepping inside feels deliberate
+    for (const dr of DOORS) {
+      const d = Math.hypot(dr.x - s.x, dr.z - s.z)
+      if (d < INTERIOR.doorRadius && d < nearestD) {
+        nearestD = d
+        nearestId = `door:${dr.interiorId}`
+      }
+    }
     const changed = nearestId !== s.anchorId
     s.anchorId = nearestId
     if (onNearestAnchor && changed) {
@@ -371,6 +295,12 @@ export function PlayerController({
     // keep the camera above terrain
     const camGround = heightAt(desired.x, desired.z) + 1.2
     if (desired.y < camGround) desired.y = camGround
+    // INC 4 — never let a building swallow the view: pull the boom in
+    // to just before the first obstructed sample (known clipping fix)
+    const obsT = cameraObstructionT(s.x, s.z, desired.x, desired.z, desired.y)
+    if (obsT !== null) {
+      desired.lerpVectors(new THREE.Vector3(s.x, groundY + 1.7, s.z), desired, obsT)
+    }
     camera.position.lerp(desired, Math.min(1, dt * (getCamMode() === 'drone' ? 4.2 : 6.5)))
     camera.lookAt(s.x, groundY + 1.7, s.z)
   })
@@ -406,6 +336,8 @@ export function Npcs({
         const rng = Math.random
         // real identities — the same registry that powers hustle offers
         const pool = NPCS.filter((n) => n.homeLocationId === zone.locationId)
+        const skin = NPC_SKINS[Math.floor(rng() * NPC_SKINS.length)]
+        const cloth = NPC_CLOTHES[Math.floor(rng() * NPC_CLOTHES.length)]
         return {
           zone,
           identity: pool.length ? pool[i % pool.length] : null,
@@ -413,10 +345,14 @@ export function Npcs({
           radius: 5 + rng() * (zone.radius - 7),
           speed: 0.25 + rng() * 0.4,
           dir: rng() > 0.5 ? 1 : -1,
-          skin: NPC_SKINS[Math.floor(rng() * NPC_SKINS.length)],
-          cloth: NPC_CLOTHES[Math.floor(rng() * NPC_CLOTHES.length)],
-          hairStyle: (['none', 'cap', 'volume'] as const)[Math.floor(rng() * 3)],
-          dress: rng() > 0.6,
+          rig: {
+            skin,
+            cloth,
+            clothAlt: NPC_CLOTHES[Math.floor(rng() * NPC_CLOTHES.length)],
+            hair: '#1A1714',
+            hairStyle: (['none', 'cap', 'volume'] as const)[Math.floor(rng() * 3)],
+            dress: rng() > 0.6,
+          } as RigColors,
           walk: { current: 1.2 + rng() * 0.6 },
         }
       }),
@@ -433,8 +369,10 @@ export function Npcs({
       if (!g) continue
       const d = data[i]
       const ang = d.ang0 + t * d.speed * d.dir
-      const x = d.zone.x + Math.cos(ang) * d.radius
-      const z = d.zone.z + Math.sin(ang) * d.radius
+      let x = d.zone.x + Math.cos(ang) * d.radius
+      let z = d.zone.z + Math.sin(ang) * d.radius
+      // INC 4 — residents now respect walls & rivers (was: stroll through buildings)
+      ;[x, z] = resolvePosition(x, z)
       g.visible = i < activeCount
       if (!g.visible) continue
       g.position.set(x, heightAt(x, z), z)
@@ -468,14 +406,7 @@ export function Npcs({
     <group>
       {data.map((d, i) => (
         <group key={i} ref={(el) => { refs.current[i] = el }}>
-          <CharacterMesh
-            skin={d.skin}
-            cloth={d.cloth}
-            hair="#1A1714"
-            hairStyle={d.hairStyle}
-            dress={d.dress}
-            speedRef={d.walk}
-          />
+          <MidRig colors={d.rig} speedRef={d.walk} />
           <BlobShadow scale={0.9} />
         </group>
       ))}
@@ -795,3 +726,131 @@ export function Rain({ weather }: { weather: Weather }) {
 
 /** The HUD joystick writes straight into controls.setJoystick(); both input
  *  paths (touch + keyboard) meet in controls.ts and are read here. */
+
+/* ----------------------------------- birds ------------------------------------- */
+
+/**
+ * INC 4 — life in the sky: three flocks of flapping birds circling the
+ * Confluence, Mount Patti and the market by day. Cheap primitives, no
+ * shadows, hidden at night — the city breathes without costing frames.
+ */
+export function Birds({ timeOfDay }: { timeOfDay: TimeOfDay }) {
+  const night = timeOfDay === 'night'
+  const flocks = useMemo(
+    () => [
+      { c: ANCHOR_BY_ID['confluence'], n: 7, r: 15, h: 11, speed: 0.16 },
+      { c: ANCHOR_BY_ID['mount-patti'], n: 6, r: 19, h: 34, speed: 0.11 },
+      { c: ANCHOR_BY_ID['kpata-market'], n: 5, r: 11, h: 9, speed: 0.21 },
+    ],
+    [],
+  )
+  const birds = useMemo(() => {
+    const out: { flock: number; phase: number; rad: number }[] = []
+    flocks.forEach((f, fi) => {
+      for (let i = 0; i < f.n; i++) {
+        out.push({ flock: fi, phase: (i / f.n) * Math.PI * 2 + fi * 1.7, rad: f.r + (i % 3) * 2.4 })
+      }
+    })
+    return out
+  }, [flocks])
+  const refs = useRef<(THREE.Group | null)[]>([])
+  const wings = useRef<(THREE.Group | null)[]>([])
+
+  useFrame((s) => {
+    const t = s.clock.elapsedTime
+    for (let i = 0; i < birds.length; i++) {
+      const g = refs.current[i]
+      if (!g) continue
+      const b = birds[i]
+      const f = flocks[b.flock]
+      const ang = b.phase + t * f.speed
+      const x = f.c.x + Math.cos(ang) * b.rad
+      const z = f.c.z + Math.sin(ang) * b.rad
+      g.position.set(x, f.c.y + f.h + Math.sin(t * 0.7 + i) * 1.6, z)
+      g.rotation.y = -ang + Math.PI / 2
+      const w = wings.current[i]
+      if (w) w.rotation.z = Math.sin(t * 9 + i * 1.31) * 0.6
+    }
+  })
+
+  return (
+    <group visible={!night}>
+      {birds.map((_, i) => (
+        <group key={i} ref={(el) => { refs.current[i] = el }}>
+          {/* body */}
+          <mesh scale={[1.5, 0.8, 0.9]}>
+            <sphereGeometry args={[0.075, 6, 6]} />
+            <meshStandardMaterial color="#2a2620" roughness={1} />
+          </mesh>
+          {/* flapping wings */}
+          <group ref={(el) => { wings.current[i] = el }}>
+            {[-1, 1].map((sd) => (
+              <mesh key={sd} position={[sd * 0.21, 0.02, 0]} rotation={[0, 0, sd * 0.18]}>
+                <planeGeometry args={[0.36, 0.15]} />
+                <meshStandardMaterial color="#2a2620" roughness={1} side={THREE.DoubleSide} />
+              </mesh>
+            ))}
+          </group>
+        </group>
+      ))}
+    </group>
+  )
+}
+
+/* -------------------------------- cooking smoke -------------------------------- */
+
+const SMOKE_PUFFS = 7
+
+/** cooking smoke at the food strip + the market grills — cheap looping sprites */
+export function SmokeWisps() {
+  const emitters = useMemo(
+    () => [
+      { x: ANCHOR_BY_ID['food-area'].x + 4.4, z: ANCHOR_BY_ID['food-area'].z - 3.6 },
+      { x: ANCHOR_BY_ID['kpata-market'].x - 8.6, z: ANCHOR_BY_ID['kpata-market'].z - 4.2 },
+    ].map((e) => ({ ...e, y: heightAt(e.x, e.z) })),
+    [],
+  )
+  const refs = useRef<(THREE.Sprite | null)[]>([])
+  const tex = useMemo(() => {
+    const c = document.createElement('canvas')
+    c.width = 64
+    c.height = 64
+    const ctx = c.getContext('2d')!
+    const g = ctx.createRadialGradient(32, 32, 4, 32, 32, 30)
+    g.addColorStop(0, 'rgba(238,233,224,0.6)')
+    g.addColorStop(1, 'rgba(238,233,224,0)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 64, 64)
+    return new THREE.CanvasTexture(c)
+  }, [])
+
+  useFrame((s) => {
+    const t = s.clock.elapsedTime
+    for (let e = 0; e < emitters.length; e++) {
+      for (let p = 0; p < SMOKE_PUFFS; p++) {
+        const sp = refs.current[e * SMOKE_PUFFS + p]
+        if (!sp) continue
+        const life = (t * 0.32 + p / SMOKE_PUFFS + e * 0.37) % 1
+        sp.position.set(
+          emitters[e].x + Math.sin(life * 8 + p) * 0.4,
+          emitters[e].y + 0.7 + life * 2.8,
+          emitters[e].z + Math.cos(life * 6.4 + p) * 0.3,
+        )
+        sp.scale.setScalar(0.55 + life * 1.6)
+        ;(sp.material as THREE.SpriteMaterial).opacity = 0.42 * (1 - life) * Math.min(1, life * 4)
+      }
+    }
+  })
+
+  return (
+    <group>
+      {emitters.map((_, e) =>
+        Array.from({ length: SMOKE_PUFFS }, (_, p) => (
+          <sprite key={`${e}-${p}`} ref={(el) => { refs.current[e * SMOKE_PUFFS + p] = el }}>
+            <spriteMaterial map={tex} transparent depthWrite={false} opacity={0.4} />
+          </sprite>
+        )),
+      )}
+    </group>
+  )
+}

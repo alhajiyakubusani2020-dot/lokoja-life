@@ -484,6 +484,66 @@ export const BUILDINGS: BuildingDef[] = DISTRICTS.flatMap((d) =>
   buildDistrictBuildings(d, makeRng(1860 + d.x * 7 + d.z)),
 )
 
+/* ----------------------------- interior doors ------------------------------- */
+
+/**
+ * INC 4 — exterior doors into the enterable interiors. Each door is
+ * derived FROM the building it belongs to (front-face centre, pushed
+ * 0.95u outward along the wall normal) so the prop and the geometry
+ * can never drift apart. Fallback: a doorway arch offset from the
+ * district anchor when the seeded building placement failed.
+ */
+export interface DoorDef {
+  /** interior id this door leads into (INTERIOR_BY_ID) */
+  interiorId: string
+  locationId: string
+  x: number
+  z: number
+  y: number
+  /** yaw facing OUTWARD from the building wall */
+  rotY: number
+}
+
+function doorFor(
+  interiorId: string,
+  locationId: string,
+  b: BuildingDef | null,
+  fallback: { dx: number; dz: number },
+): DoorDef {
+  if (b) {
+    const out = 0.95 + b.d / 2
+    const x = b.x + Math.sin(b.rotY) * out
+    const z = b.z + Math.cos(b.rotY) * out
+    return { interiorId, locationId, x, z, y: heightAt(x, z), rotY: b.rotY }
+  }
+  const a = ANCHOR_BY_ID[locationId]
+  const x = a.x + fallback.dx
+  const z = a.z + fallback.dz
+  return { interiorId, locationId, x, z, y: heightAt(x, z), rotY: 0 }
+}
+
+export const DOORS: DoorDef[] = (() => {
+  // the player's house — pushed directly at this exact offset in the home district
+  const homeA = ANCHOR_BY_ID['home']
+  const homeHouse =
+    BUILDINGS.find(
+      (b) => b.kind === 'house' && b.tone === 5 && Math.hypot(b.x - (homeA.x + 6.5), b.z - (homeA.z - 5)) < 1,
+    ) ?? null
+  // Mama's buka — the first shop placed in the food district
+  const foodShop = BUILDINGS.find(
+    (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['food-area'].x, b.z - ANCHOR_BY_ID['food-area'].z) < 16,
+  ) ?? null
+  // the provision store — the first shed in the market district
+  const marketShed = BUILDINGS.find(
+    (b) => b.kind === 'shed' && Math.hypot(b.x - ANCHOR_BY_ID['kpata-market'].x, b.z - ANCHOR_BY_ID['kpata-market'].z) < 16,
+  ) ?? null
+  return [
+    doorFor('home-interior', 'home', homeHouse, { dx: 5, dz: 2 }),
+    doorFor('mamas-kitchen', 'food-area', foodShop, { dx: -4, dz: -4.5 }),
+    doorFor('kpata-shop', 'kpata-market', marketShed, { dx: -10, dz: -6 }),
+  ]
+})()
+
 /* --------------------------------- trees ----------------------------------- */
 
 export type TreeKind = 'tree' | 'palm'

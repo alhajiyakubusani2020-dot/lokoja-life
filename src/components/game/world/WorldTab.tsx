@@ -1,24 +1,31 @@
 'use client'
 
 /**
- * LOKOJA LIFE — World Tab (Stage 3D)
- * -----------------------------------
+ * LOKOJA LIFE — World Tab (Stage 3D + INC 4)
+ * -------------------------------------------
  * The container that mounts the 3D world: WebGL capability detection,
  * a first-frame loading veil, an error boundary so a failed 3D scene
  * can NEVER take the working 2D game down, and the HUD wiring between
  * the canvas and the store-driven sheets.
+ *
+ * INC 4 — interiors: the tab owns the exterior ⇄ interior swap with a
+ * short fade. Interior state is presentation-only (never in the save);
+ * leaving the world always returns you outside.
  *
  * Fallback contract: if the world can't start, the player gets a clear
  * explanation plus working buttons into the Map/Home tabs — the game
  * remains 100% usable without WebGL.
  */
 
-import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
 import { MapIcon, PinIcon } from '../icons'
 import { audio } from '@/game/systems/audio'
+import { ambience } from '@/game/systems/ambience'
+import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
 import { getWalkedMeters, resetWalkedMeters } from './controls'
 import { WorldScene } from './WorldScene'
+import { InteriorScene } from './InteriorScene'
 import { HudOverlay } from './HudOverlay'
 
 /* ------------------------------ capability check ------------------------------ */
@@ -92,6 +99,7 @@ export function WorldTab({
 }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
+  const soundOn = useGameStore((s) => s.settings.sound)
 
   const [canWebGL, setCanWebGL] = useState<boolean | null>(() =>
     typeof document === 'undefined' ? null : webglAvailable(),
@@ -102,11 +110,60 @@ export function WorldTab({
   const [district, setDistrict] = useState<string | null>(null)
   const [gistNpc, setGistNpc] = useState<string | null>(null)
 
+  // INC 4 — interior mode (presentation-only state, never in the save)
+  const [interiorId, setInteriorId] = useState<string | null>(null)
+  const [hotspot, setHotspot] = useState<string | null>(null)
+  const [fade, setFade] = useState(false)
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+
   const handleReady = useCallback(() => setReady(true), [])
   const handleFail = useCallback(() => setFailed(true), [])
   const handleAnchor = useCallback((id: string | null) => setNearest(id), [])
   const handleDistrict = useCallback((id: string | null) => setDistrict(id), [])
   const handleGist = useCallback((id: string | null) => setGistNpc(id), [])
+  const handleHotspot = useCallback((id: string | null) => setHotspot(id), [])
+
+  // fade out → swap scene → fade back in
+  const swapTo = useCallback((id: string | null) => {
+    setFade(true)
+    setNearest(null)
+    setHotspot(null)
+    timers.current.push(
+      setTimeout(() => {
+        setInteriorId(id)
+        setReady(false)
+      }, 240),
+    )
+    timers.current.push(setTimeout(() => setFade(false), 620))
+  }, [])
+
+  const enterInterior = useCallback(
+    (id: string) => {
+      if (!INTERIOR_BY_ID[id] || interiorId) return
+      audio.play('chime')
+      swapTo(id)
+    },
+    [interiorId, swapTo],
+  )
+
+  const exitInterior = useCallback(() => {
+    if (!interiorId) return
+    audio.play('click')
+    swapTo(null)
+  }, [interiorId, swapTo])
+
+  // clear any pending swap timers on unmount
+  useEffect(() => {
+    const t = timers.current
+    return () => t.forEach(clearTimeout)
+  }, [])
+
+  // procedural ambience — starts with the world, follows the sound setting
+  useEffect(() => {
+    ambience.setEnabled(soundOn)
+    if (soundOn) ambience.start()
+    return () => ambience.stop()
+  }, [soundOn])
 
   // settle walking energy no matter HOW the world closes (Exit path resets to
   // zero first, so this only ever catches abnormal unmounts — 0 m is a no-op)
@@ -124,8 +181,21 @@ export function WorldTab({
     onExit()
   }, [onExit])
 
+  const interiorDef = interiorId ? INTERIOR_BY_ID[interiorId] ?? null : null
+
   const scene = useMemo(() => {
     if (canWebGL !== true || failed) return null
+    if (interiorDef) {
+      return (
+        <InteriorScene
+          def={interiorDef}
+          avatar={player.avatar}
+          timeOfDay={world.timeOfDay}
+          onReady={handleReady}
+          onHotspot={handleHotspot}
+        />
+      )
+    }
     return (
       <WorldScene
         avatar={player.avatar}
@@ -138,7 +208,10 @@ export function WorldTab({
         onGist={handleGist}
       />
     )
-  }, [canWebGL, failed, player.avatar, world.currentLocation, world.timeOfDay, world.weather, handleReady, handleAnchor, handleDistrict, handleGist])
+  }, [
+    canWebGL, failed, interiorDef, player.avatar, world.currentLocation, world.timeOfDay, world.weather,
+    handleReady, handleAnchor, handleDistrict, handleGist, handleHotspot,
+  ])
 
   return (
     <div className="fixed inset-0 z-30 bg-[#0e1524]" aria-label="3D Lokoja world">
@@ -150,29 +223,41 @@ export function WorldTab({
           <WorldErrorBoundary onFail={handleFail}>{scene}</WorldErrorBoundary>
 
           {/* loading veil — disappears at the first rendered frame */}
-          {!ready && (
+          {!ready && !fade && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-gradient-to-b from-[#f6d489] via-[#e8a355] to-[#1c6b5e]">
               <div className="lko-float flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--lko-surface)] shadow-[var(--lko-shadow-lg)]">
                 <PinIcon size={26} className="text-[var(--lko-green)]" />
               </div>
               <p className="lko-display text-xl text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
-                Entering Lokoja…
+                {interiorId ? 'Stepping inside…' : 'Entering Lokoja…'}
               </p>
               <p className="text-[12px] font-semibold text-white/85">
-                Building the confluence, Mount Patti and your streets
+                {interiorId ? 'Opening the door' : 'Building the confluence, Mount Patti and your streets'}
               </p>
             </div>
           )}
 
+          {/* scene swap fade */}
+          <div
+            className={`pointer-events-none absolute inset-0 z-20 bg-[#100e0a] transition-opacity duration-300 ${
+              fade ? 'opacity-100' : 'opacity-0'
+            }`}
+            aria-hidden
+          />
+
           {/* the HUD */}
           {ready && !failed && (
             <HudOverlay
-              nearestAnchor={nearest}
+              nearestAnchor={interiorId ? null : nearest}
               district={district}
               gistNpc={gistNpc}
+              interior={interiorDef}
+              hotspot={hotspot}
               onExit={exit}
               onOpenWork={onOpenWork}
               onOpenMap={onOpenMap}
+              onEnterInterior={enterInterior}
+              onExitInterior={exitInterior}
             />
           )}
         </>

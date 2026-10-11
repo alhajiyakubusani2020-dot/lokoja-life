@@ -55,6 +55,23 @@ export function canDoStrenuous(needs: Needs): boolean {
   return needs.energy > NEEDS.energyCritical
 }
 
+/**
+ * INC 4 — living-world decay. Needs drain a little for every time slot
+ * that passes outside of rest (travel, work, eating, home downtime), so
+ * meals and sleep matter on a schedule. Pure: the store calls this on
+ * the same paths that advance the clock — never a second clock.
+ */
+export function applySlotDecay(current: Needs, slots: number): Needs {
+  const n = Math.max(0, Math.floor(slots))
+  if (n === 0) return current
+  return applyNeedsDelta(current, {
+    hunger: -NEEDS.decay.hunger * n,
+    energy: -NEEDS.decay.energy * n,
+    mood: -NEEDS.decay.mood * n,
+    health: -(NEEDS.decay.health ?? 0) * n,
+  })
+}
+
 /** One-line human summary of the player's condition, for HUD hints. */
 export function conditionSummary(needs: Needs): { text: string; tone: 'good' | 'ok' | 'bad' } {
   if (needs.health <= 15) return { text: 'You need to see a doctor…', tone: 'bad' }

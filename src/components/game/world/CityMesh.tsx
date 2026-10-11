@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  ANCHORS, ANCHOR_BY_ID, BUILDINGS, heightAt, LAMPS, PALM_TONES, POINTS_OF_INTEREST, ROOF_TONES,
+  ANCHORS, ANCHOR_BY_ID, BUILDINGS, DOORS, heightAt, LAMPS, PALM_TONES, POINTS_OF_INTEREST, ROOF_TONES,
   RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type WorldAnchor,
 } from '@/game/world3d/layout'
 import { atmoLive } from './atmosphere'
@@ -1017,6 +1017,58 @@ function LocationLabels() {
   )
 }
 
+/* ------------------------------ interior doors ------------------------------- */
+
+/**
+ * INC 4 — visible exterior doorways into the enterable interiors: step,
+ * frame, door slab, awning and a small hanging sign. Positioned from the
+ * SAME DOORS data the interact system uses — walk to the prop, press E,
+ * you're inside.
+ */
+function Doorways() {
+  return (
+    <group>
+      {DOORS.map((d) => (
+        <group key={d.interiorId} position={[d.x, d.y, d.z]} rotation={[0, d.rotY, 0]}>
+          {/* step */}
+          <mesh position={[0, 0.06, 0.35]} receiveShadow>
+            <boxGeometry args={[1.7, 0.12, 0.9]} />
+            <meshStandardMaterial color="#b9a98d" roughness={1} />
+          </mesh>
+          {/* frame posts + lintel */}
+          {[-0.62, 0.62].map((x) => (
+            <mesh key={x} position={[x, 1.05, 0]} castShadow>
+              <boxGeometry args={[0.13, 2.1, 0.13]} />
+              <meshStandardMaterial color="#6a4c30" roughness={1} />
+            </mesh>
+          ))}
+          <mesh position={[0, 2.14, 0]} castShadow>
+            <boxGeometry args={[1.42, 0.14, 0.15]} />
+            <meshStandardMaterial color="#6a4c30" roughness={1} />
+          </mesh>
+          {/* the door slab, ajar */}
+          <mesh position={[0.45, 1.02, 0.16]} rotation={[0, -0.62, 0]} castShadow>
+            <boxGeometry args={[0.86, 1.94, 0.055]} />
+            <meshStandardMaterial color="#2e7d5b" roughness={0.75} />
+          </mesh>
+          {/* awning */}
+          <mesh position={[0, 2.32, 0.42]} rotation={[0.34, 0, 0]} castShadow>
+            <boxGeometry args={[1.6, 0.05, 0.95]} />
+            <meshStandardMaterial color="#c94f2e" roughness={0.85} />
+          </mesh>
+          {/* hanging sign plate */}
+          <mesh position={[0, 1.88, 0.3]}>
+            <boxGeometry args={[0.5, 0.34, 0.03]} />
+            <meshStandardMaterial color="#e8dcc3" roughness={0.9} emissive="#e8a317" emissiveIntensity={atmoLive.nightGlow * 0.35} />
+          </mesh>
+          {/* warm doorstep glow at night */}
+          <pointLight position={[0, 2.0, 0.5]} color="#ffd9a0" intensity={atmoLive.nightGlow * 6} distance={6} decay={1.8} />
+        </group>
+      ))}
+    </group>
+  )
+}
+
 /* ---------------------------------- export ----------------------------------- */
 
 export function CityMesh() {
@@ -1028,6 +1080,7 @@ export function CityMesh() {
       <Lamps />
       <AnchorStructures />
       <PointOfInterestProps />
+      <Doorways />
       <LocationLabels />
     </group>
   )

@@ -26,12 +26,12 @@ import type {
   TransportId,
   WorldState,
 } from '../types'
-import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, MEAL_BY_KEY } from '../data/config'
+import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY } from '../data/config'
 import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
 import { DEFAULT_AVATAR } from '../data/avatar'
 import { LOCATION_BY_ID } from '../data/locations'
 import { JOB_BY_ID } from '../data/jobs'
-import { applyNeedsDelta } from '../systems/needs'
+import { applyNeedsDelta, applySlotDecay } from '../systems/needs'
 import { addXp as processXp, formatNaira } from '../systems/progression'
 import { recordTransaction, pushTransaction, canAfford, rewardCash, describeReward } from '../systems/economy'
 import { addSkillXp as applySkillXp, SKILL_META } from '../systems/skills'
@@ -79,6 +79,8 @@ interface GameStore {
   /* needs / time actions (Stage 1: rest; Stage 2: travel — both use the same clock) */
   rest: (kind: 'nap' | 'sleep') => void
   advanceTime: (slots?: number) => void
+  /** INC 4 — unwind at home (TV / bath): small needs shift + one honest clock slot */
+  relaxIndoors: (kind: 'tv' | 'bath') => void
   /** Stage 4 — buy and eat a real meal (cash → hunger/mood, clock moves).
    *  atLocationId: which spot's menu was used — when it differs from where
    *  the player actually is, the ledger records it as a delivery. */
@@ -270,10 +272,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   advanceTime: (slots = 1) => {
-    const { world } = get()
+    const { player, world } = get()
     if (!world) return
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, slots)
-    set({ world: { ...world, ...clock } })
+    // INC 4 — the body quietly spends itself while the clock runs
+    const player2 = player
+      ? { ...player, needs: applySlotDecay(player.needs, slots) }
+      : player
+    set({ player: player2, world: { ...world, ...clock } })
+    scheduleAutosave(get)
+  },
+
+  /** INC 4 — home downtime: watch TV or freshen up. Costs one honest clock
+   *  slot (time really passes) + small needs shift from INTERIOR config. */
+  relaxIndoors: (kind) => {
+    const { player, world } = get()
+    if (!player || !world) return
+    const r = INTERIOR.relax[kind]
+    const needs = applyNeedsDelta(applySlotDecay(player.needs, 1), r)
+    const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
+    set({ player: { ...player, needs }, world: { ...world, ...clock } })
+    get().notify({
+      icon: kind === 'tv' ? '📺' : '🚿',
+      text: kind === 'tv' ? 'You relaxed with some TV.' : 'You freshened up. Feeling sharp.',
+      tone: 'good',
+    })
+    audio.play('notify')
     scheduleAutosave(get)
   },
 
@@ -325,11 +349,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // re-read AFTER payment — removeMoney already updated the player object
     const paid = get().player
     if (!paid) return false
-    const needs = applyNeedsDelta(paid.needs, {
+    const needs = applySlotDecay(applyNeedsDelta(paid.needs, {
       hunger: meal.hunger,
       mood: meal.mood,
       energy: meal.energy,
-    })
+    }), 1)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...paid, needs }, world: { ...world, ...clock } })
     get().notify({
@@ -396,10 +420,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (!p || !w) return
 
       const cash = Math.max(0, p.cash - plan.cost + (event?.cashDelta ?? 0))
-      const needs = applyNeedsDelta(p.needs, {
+      const needs = applySlotDecay(applyNeedsDelta(p.needs, {
         energy: -(plan.energyCost + (event?.energyDelta ?? 0)),
         mood: event?.moodDelta ?? 0,
-      })
+      }), plan.slots)
       const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, plan.slots)
 
       // Stage 3: record the fare (and any event tip) in the player's ledger
@@ -602,7 +626,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const { player: p, world: w } = get()
       if (!p || !w) return
 
-      const needs = applyNeedsDelta(p.needs, { energy: -job.energyCost })
+      const needs = applySlotDecay(applyNeedsDelta(p.needs, { energy: -job.energyCost }), job.timeSlots)
       const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, job.timeSlots)
       const afterSlot = absoluteSlot(clock.day, clock.timeOfDay)
       const cooldownSlots = job.cooldownSlots ?? WORK.defaultCooldownSlots
@@ -750,10 +774,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const { player: p, world: w } = get()
       if (!p || !w) return
 
-      const needs = applyNeedsDelta(p.needs, {
+      const needs = applySlotDecay(applyNeedsDelta(p.needs, {
         energy: -def.energyCost,
         mood: result.outcome === 'fail' ? WORK.fail.moodDelta : 0,
-      })
+      }), def.timeSlots)
       const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, def.timeSlots)
       const afterSlot = absoluteSlot(clock.day, clock.timeOfDay)
 
