@@ -16,6 +16,7 @@ import {
   heightAt, NPC_ZONES, POINTS_OF_INTEREST, riverInfo, WALK_BOUND, WATER_Y,
   ANCHORS, ROADS, BRIDGES, GRASS, TREES, TRAFFIC_LOOPS, roadDistance,
   ROAD_RENDER_W, CONFLUENCE_POINT, WORLD_HALF, MAP_SCALE,
+  BUILDINGS, STALLS, LAMPS, roadGap, inSchoolYard,
 } from '../src/game/world3d/layout'
 
 let passed = 0
@@ -406,20 +407,20 @@ check(
 )
 
 console.log('\nINC 4 — CAMERA OBSTRUCTION')
-import { BUILDINGS } from '../src/game/world3d/layout'
 check('clear street view is unobstructed', cameraObstructionT(0, 0, 6, 6, 5.5) === null)
-// boom straight through the middle of a real building, camera below its roof
+// boom straight through a real building — the ray ENTERS from outside and
+// must be blocked (position-independent: works wherever pushSafe placed it)
 const camB = BUILDINGS[0]
 check(
   'boom through a building is blocked',
-  cameraObstructionT(camB.x, camB.z, camB.x - 40, camB.z, 1.5) !== null,
+  cameraObstructionT(camB.x + 8, camB.z, camB.x - 40, camB.z, 1.5) !== null,
 )
 check(
   'flying above the rooftops is never blocked',
-  cameraObstructionT(camB.x, camB.z, camB.x - 40, camB.z, camB.y + camB.h + 5) === null,
+  cameraObstructionT(camB.x + 8, camB.z, camB.x - 40, camB.z, camB.y + camB.h + 5) === null,
 )
 check('obstruction t stays in (0..1)', (() => {
-  const t = cameraObstructionT(camB.x, camB.z, camB.x - 40, camB.z, 1.5)
+  const t = cameraObstructionT(camB.x + 8, camB.z, camB.x - 40, camB.z, 1.5)
   return t === null || (t > 0 && t < 1)
 })())
 
@@ -465,3 +466,84 @@ check(
   INTERIOR_CFG.camera.distance < 6 && INTERIOR_CFG.camera.pitchMin > 0.1 && INTERIOR_CFG.camera.pitchMax < 1.2,
 )
 check('door radius is tight (deliberate entry)', INTERIOR_CFG.doorRadius > 1.5 && INTERIOR_CFG.doorRadius < 6)
+
+console.log('\nM1 — THE ROAD-CLEARANCE LAW (nothing stands on the road)')
+const cornerGapWorst = (b: { x: number; z: number; w: number; d: number; rotY: number }): number => {
+  const c = Math.cos(b.rotY)
+  const s = Math.sin(b.rotY)
+  let worst = Infinity
+  for (const [hw, hd] of [[b.w / 2, b.d / 2], [-b.w / 2, b.d / 2], [b.w / 2, -b.d / 2], [-b.w / 2, -b.d / 2]]) {
+    const cx = b.x + c * hw + s * hd
+    const cz = b.z - s * hw + c * hd
+    worst = Math.min(worst, roadGap(cx, cz))
+  }
+  return worst
+}
+check(
+  'no building corner stands on any carriageway',
+  BUILDINGS.every((b) => cornerGapWorst(b) >= 0.15),
+  `worst=${Math.min(...BUILDINGS.map(cornerGapWorst)).toFixed(2)}`,
+)
+check('no market stall stands on any carriageway', STALLS.every((st) => roadGap(st.x, st.z) >= 0.3))
+check(
+  'no street light stands inside a carriageway',
+  LAMPS.every((l) => roadGap(l.x, l.z) >= 0.25),
+)
+
+console.log('\nM1 — STREET LIGHTS OF LOKOJA')
+check('street lights blanket the city arteries (350+)', LAMPS.length >= 350, `count=${LAMPS.length}`)
+check('every lamp faces the road it serves', LAMPS.every((l) => Number.isFinite(l.rotY)))
+check(
+  'highway masts are the tall ones',
+  LAMPS.filter((l) => l.tall).length > 0 && LAMPS.filter((l) => l.tall).length < LAMPS.length,
+)
+check(
+  'no lamp stands in the water (dry ground under every mast)',
+  LAMPS.every((l) => heightAt(l.x, l.z) > WATER_Y + 0.15),
+)
+check(
+  'no lamp inside a school yard',
+  LAMPS.every((l) => !inSchoolYard(l.x, l.z)),
+)
+
+console.log('\nM1 — BRIDGES WELL BUILT')
+check('the real crossings exist (16 bridges)', BRIDGES.length === 16, `count=${BRIDGES.length}`)
+check(
+  'every bridge deck lands on solid banks',
+  BRIDGES.every((b) => {
+    const dirX = Math.sin(b.rotY)
+    const dirZ = Math.cos(b.rotY)
+    const L = b.length + 3
+    return (
+      heightAt(b.x + dirX * (L / 2), b.z + dirZ * (L / 2)) > WATER_Y + 0.2 &&
+      heightAt(b.x - dirX * (L / 2), b.z - dirZ * (L / 2)) > WATER_Y + 0.2
+    )
+  }),
+)
+check(
+  'every URBAN bridge is lit at its abutments (rural culverts exempt)',
+  BRIDGES.every((b) => {
+    if (Math.hypot(b.x, b.z) > WALK_BOUND - 2) return true // beyond the playable rim
+    // urban = within reach of a district's lit fabric
+    const urban = ANCHORS.some((a) => Math.hypot(a.x - b.x, a.z - b.z) < 90)
+    if (!urban) return true // a bush culvert honestly needs no street light
+    const dirX = Math.sin(b.rotY)
+    const dirZ = Math.cos(b.rotY)
+    let total = 0
+    for (const end of [-1, 1]) {
+      const ex = b.x + dirX * ((b.length + 3) / 2) * end
+      const ez = b.z + dirZ * ((b.length + 3) / 2) * end
+      const nearEnd = LAMPS.filter((l) => Math.hypot(l.x - ex, l.z - ez) < 7.5).length
+      if (nearEnd === 0) return false
+      total += nearEnd
+    }
+    return total >= 2
+  }),
+)
+check('bridge decks ride above the waterline', BRIDGES.every((b) => b.y > WATER_Y + 0.8))
+
+// FINAL VERDICT — the mid-file summary predates the INC-4 sections; this one
+// counts every check in the file and is the one that gates the suite
+console.log(`\nFINAL: ${passed} passed, ${failed} failed, ${passed + failed} total`)
+if (failed > 0) process.exit(1)
+console.log('ALL WORLD3D TESTS PASSED (final) ✅')

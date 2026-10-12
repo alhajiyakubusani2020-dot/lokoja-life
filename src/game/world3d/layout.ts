@@ -25,7 +25,6 @@ import {
   GEO_RIVERS,
   GEO_BRIDGES,
   GEO_LOOPS,
-  GEO_LAMPS,
   GEO_WORLD_HALF,
   type GeoRoad,
 } from './geo'
@@ -233,6 +232,7 @@ interface RoadSeg {
   az: number
   bx: number
   bz: number
+  half: number
   major: boolean
 }
 
@@ -257,10 +257,11 @@ function gridAdd(s: RoadSeg): void {
 }
 
 for (const r of ROADS) {
+  const half = (ROAD_RENDER_W[r.cls] ?? 2.2) / 2
   for (let i = 0; i < r.pts.length - 1; i++) {
     const [ax, az] = r.pts[i]
     const [bx, bz] = r.pts[i + 1]
-    gridAdd({ ax, az, bx, bz, major: r.major })
+    gridAdd({ ax, az, bx, bz, half, major: r.major })
   }
 }
 
@@ -313,6 +314,42 @@ export function roadDistanceMajors(x: number, z: number): number {
     if (d < best) best = d
   }
   return best
+}
+
+/**
+ * GAP to the nearest RENDERED carriageway edge — centreline distance minus
+ * the road's render half-width. Negative = inside the tarmac. This is the
+ * one number the whole "nothing stands on the road" law is written in:
+ * buildings, lamps, stalls and trees must all keep a positive gap.
+ */
+export function roadGap(x: number, z: number, radius = ROAD_Q_CAP): number {
+  let best = radius
+  for (const s of segsNear(x, z, radius)) {
+    const d = segDist(s, x, z) - s.half
+    if (d < best) best = d
+  }
+  return best
+}
+
+/** gap to the nearest MAJOR carriageway edge (the strict clearance class) */
+export function roadGapMajors(x: number, z: number, radius = ROAD_Q_CAP): number {
+  let best = radius
+  for (const s of segsNear(x, z, radius)) {
+    if (!s.major) continue
+    const d = segDist(s, x, z) - s.half
+    if (d < best) best = d
+  }
+  return best
+}
+
+/**
+ * THE ROAD-CLEARANCE LAW — a building's whole footprint keeps a positive gap
+ * to every rendered carriageway. The worst-case corner (the diagonal) must
+ * clear the tarmac edge with margin; majors additionally keep shoulder room.
+ */
+export function buildingClearOfRoad(x: number, z: number, w: number, d: number): boolean {
+  const cornerR = Math.hypot(w, d) * 0.5
+  return roadGap(x, z) >= cornerR + 0.3 && roadGapMajors(x, z) >= cornerR + 0.7
 }
 
 /**
@@ -602,20 +639,48 @@ export interface BuildingDef {
 export const WALL_TONES = ['#e8dcc3', '#d9b98a', '#c96f3b', '#9fb98a', '#b9a06a', '#d8cbb0', '#a8683f', '#cbb682']
 export const ROOF_TONES = ['#8a4a2a', '#6e4530', '#7a6a55', '#96543a', '#5a6e5c', '#8a3a28']
 
-function isClearOf(x: number, z: number, r: number): boolean {
+function isClearOf(x: number, z: number, r: number, w: number, d: number): boolean {
   if (riverInfo(x, z).d < 16) return false
   // school compounds own their ground — never scatter a generic house inside
   if (SCHOOL_SITES.some((sp) => Math.hypot(sp.x - x, sp.z - z) < sp.plateauR + r)) return false
-  // majors need full breathing room; the dense minor fabric only demands
-  // the building not straddle the rendered carriageway
-  if (roadDistanceMajors(x, z) < r + 2.6) return false
-  if (roadDistance(x, z) < r * 0.55 + 2.2) return false
-  return true
+  // THE ROAD-CLEARANCE LAW — the whole footprint stays off the tarmac
+  return buildingClearOfRoad(x, z, w, d)
 }
 
 function buildDistrictBuildings(d: District, rng: () => number): BuildingDef[] {
   const out: BuildingDef[] = []
   const push = (b: Omit<BuildingDef, 'y'>) => out.push({ ...b, y: heightAt(b.x, b.z) })
+
+  /**
+   * Anchor-placed signature buildings (the family house, market sheds, the
+   * civic block…) get the SAME road-clearance law as everything else — if
+   * their hand-set spot would touch a carriageway they slide outward along
+   * a deterministic spoke scan until the whole footprint is clear.
+   */
+  const pushSafe = (b: Omit<BuildingDef, 'y'>): void => {
+    const ok = (x: number, z: number): boolean =>
+      riverInfo(x, z).d >= 16 &&
+      !SCHOOL_SITES.some((sp) => Math.hypot(sp.x - x, sp.z - z) < sp.plateauR + Math.max(b.w, b.d) * 0.72) &&
+      buildingClearOfRoad(x, z, b.w, b.d) &&
+      !out.some((o) => Math.hypot(o.x - x, o.z - z) < (Math.max(o.w, o.d) + Math.max(b.w, b.d)) * 0.62) &&
+      Math.hypot(x, z) <= WALK_BOUND - 6
+    if (!ok(b.x, b.z)) {
+      outer: for (let step = 1; step <= 14; step++) {
+        for (let k = 0; k < 12; k++) {
+          const dir = (k / 12) * Math.PI * 2 + 0.2617
+          const x = b.x + Math.cos(dir) * step * 1.5
+          const z = b.z + Math.sin(dir) * step * 1.5
+          if (ok(x, z)) {
+            b = { ...b, x, z }
+            break outer
+          }
+        }
+      }
+    }
+    // absolute law: if even the spoke scan found no clear spot, the building
+    // does not get built standing on the road — it is skipped entirely
+    if (ok(b.x, b.z)) push(b)
+  }
 
   const tryPlace = (
     radiusMin: number,
@@ -627,23 +692,27 @@ function buildDistrictBuildings(d: District, rng: () => number): BuildingDef[] {
     roof: BuildingDef['roof'],
     rotJitter = 0.5,
   ): void => {
-    for (let attempt = 0; attempt < 16; attempt++) {
-      const ang = rng() * Math.PI * 2
-      const rad = radiusMin + rng() * (radiusMax - radiusMin)
-      const x = d.x + Math.cos(ang) * rad
-      const z = d.z + Math.sin(ang) * rad
-      if (Math.hypot(x, z) > WALK_BOUND - 6) continue
-      if (!isClearOf(x, z, Math.max(w, dd) * 0.72)) continue
-      // avoid overlapping earlier buildings
-      if (out.some((b) => Math.hypot(b.x - x, b.z - z) < (Math.max(b.w, b.d) + Math.max(w, dd)) * 0.62)) continue
-      push({
-        x, z, w, d: dd, h,
-        rotY: ang + Math.PI / 2 + (rng() - 0.5) * rotJitter,
-        kind, tone: Math.floor(rng() * WALL_TONES.length),
-        roof,
-        roofTone: Math.floor(rng() * ROOF_TONES.length),
-      })
-      return
+    // DETERMINISTIC RING SCAN — exhaustive first-fit: every radius step from
+    // the anchor outward, 24 spokes around, the first fully-legal spot wins.
+    // The road-clearance law is absolute, so density yields to correctness.
+    for (let rad = radiusMin; rad <= radiusMax; rad += 1.5) {
+      for (let k = 0; k < 24; k++) {
+        const ang = (k / 24) * Math.PI * 2
+        const x = d.x + Math.cos(ang) * rad
+        const z = d.z + Math.sin(ang) * rad
+        if (Math.hypot(x, z) > WALK_BOUND - 6) continue
+        if (!isClearOf(x, z, Math.max(w, dd) * 0.72, w, dd)) continue
+        // avoid overlapping earlier buildings
+        if (out.some((b) => Math.hypot(b.x - x, b.z - z) < (Math.max(b.w, b.d) + Math.max(w, dd)) * 0.62)) continue
+        push({
+          x, z, w, d: dd, h,
+          rotY: ang + Math.PI / 2 + (rng() - 0.5) * rotJitter,
+          kind, tone: Math.floor(rng() * WALL_TONES.length),
+          roof,
+          roofTone: Math.floor(rng() * ROOF_TONES.length),
+        })
+        return
+      }
     }
   }
 
@@ -651,14 +720,14 @@ function buildDistrictBuildings(d: District, rng: () => number): BuildingDef[] {
     case 'home': {
       // the player's place — proud compound beside the anchor clearing
       // (roads terminate at the anchor, so the centre stays open)
-      push({ x: d.x + 6.5, z: d.z - 5, w: 6.4, d: 5.4, h: 3.4, rotY: -0.5, kind: 'house', tone: 5, roof: 'hip', roofTone: 0 })
+      pushSafe({ x: d.x + 6.5, z: d.z - 5, w: 6.4, d: 5.4, h: 3.4, rotY: -0.5, kind: 'house', tone: 5, roof: 'hip', roofTone: 0 })
       for (let i = 0; i < 5; i++) tryPlace(13, 28, 4.6 + rng() * 1.6, 4 + rng(), 2.9, 'house', 'hip')
       break
     }
     case 'market': {
       // permanent sheds beside the clearing; dense stall rows are placed separately
-      push({ x: d.x - 10, z: d.z - 6, w: 9, d: 5.6, h: 3.8, rotY: 0.4, kind: 'shed', tone: 2, roof: 'shed', roofTone: 4 })
-      push({ x: d.x + 11, z: d.z + 7, w: 8, d: 5, h: 3.4, rotY: -0.3, kind: 'shed', tone: 1, roof: 'shed', roofTone: 3 })
+      pushSafe({ x: d.x - 10, z: d.z - 6, w: 9, d: 5.6, h: 3.8, rotY: 0.4, kind: 'shed', tone: 2, roof: 'shed', roofTone: 4 })
+      pushSafe({ x: d.x + 11, z: d.z + 7, w: 8, d: 5, h: 3.4, rotY: -0.3, kind: 'shed', tone: 1, roof: 'shed', roofTone: 3 })
       for (let i = 0; i < 5; i++) tryPlace(14, 30, 4.4, 4, 3, 'shop', 'flat')
       break
     }
@@ -672,24 +741,24 @@ function buildDistrictBuildings(d: District, rng: () => number): BuildingDef[] {
       break
     }
     case 'park': {
-      push({ x: d.x, z: d.z, w: 12, d: 6.4, h: 4, rotY: 0.2, kind: 'shed', tone: 3, roof: 'shed', roofTone: 1 })
+      pushSafe({ x: d.x, z: d.z, w: 12, d: 6.4, h: 4, rotY: 0.2, kind: 'shed', tone: 3, roof: 'shed', roofTone: 1 })
       for (let i = 0; i < 4; i++) tryPlace(14, 29, 4.8, 4, 3, 'shop', 'flat')
       break
     }
     case 'historic': {
       // colonial relics — pale walls, dark hip roofs
-      push({ x: d.x - 6, z: d.z + 2, w: 8.4, d: 6, h: 4.6, rotY: 0.9, kind: 'colonial', tone: 0, roof: 'hip', roofTone: 2 })
-      push({ x: d.x + 7, z: d.z - 4, w: 6.6, d: 5.4, h: 4.1, rotY: -0.6, kind: 'colonial', tone: 5, roof: 'hip', roofTone: 2 })
+      pushSafe({ x: d.x - 6, z: d.z + 2, w: 8.4, d: 6, h: 4.6, rotY: 0.9, kind: 'colonial', tone: 0, roof: 'hip', roofTone: 2 })
+      pushSafe({ x: d.x + 7, z: d.z - 4, w: 6.6, d: 5.4, h: 4.1, rotY: -0.6, kind: 'colonial', tone: 5, roof: 'hip', roofTone: 2 })
       for (let i = 0; i < 2; i++) tryPlace(14, 28, 5.4, 4.8, 3.6, 'colonial', 'hip', 0.3)
       break
     }
     case 'gov': {
-      push({ x: d.x, z: d.z, w: 12.5, d: 7.5, h: 6.2, rotY: 0, kind: 'block', tone: 6, roof: 'flat', roofTone: 4 })
+      pushSafe({ x: d.x, z: d.z, w: 12.5, d: 7.5, h: 6.2, rotY: 0, kind: 'block', tone: 6, roof: 'flat', roofTone: 4 })
       for (let i = 0; i < 2; i++) tryPlace(15, 29, 6, 5, 4.4, 'block', 'flat', 0.2)
       break
     }
     case 'university': {
-      push({ x: d.x - 5, z: d.z + 3, w: 10.5, d: 6, h: 5.4, rotY: 0.3, kind: 'hostel', tone: 4, roof: 'flat', roofTone: 5 })
+      pushSafe({ x: d.x - 5, z: d.z + 3, w: 10.5, d: 6, h: 5.4, rotY: 0.3, kind: 'hostel', tone: 4, roof: 'flat', roofTone: 5 })
       for (let i = 0; i < 5; i++) tryPlace(13, 29, 4.4, 4, 3.1, 'shop', 'flat')
       break
     }
@@ -751,12 +820,16 @@ function doorFor(
 }
 
 export const DOORS: DoorDef[] = (() => {
-  // the player's house — pushed directly at this exact offset in the home district
+  // the player's house — the signature home building nearest its design spot
+  // (pushSafe may have nudged it off a road, so match by nearest, not exact)
   const homeA = ANCHOR_BY_ID['home']
-  const homeHouse =
-    BUILDINGS.find(
-      (b) => b.kind === 'house' && b.tone === 5 && Math.hypot(b.x - (homeA.x + 6.5), b.z - (homeA.z - 5)) < 1,
-    ) ?? null
+  const homeSpot = BUILDINGS.filter(
+    (b) => b.kind === 'house' && b.tone === 5 && Math.hypot(b.x - (homeA.x + 6.5), b.z - (homeA.z - 5)) < 14,
+  ).sort(
+    (a, b) =>
+      Math.hypot(a.x - (homeA.x + 6.5), a.z - (homeA.z - 5)) -
+      Math.hypot(b.x - (homeA.x + 6.5), b.z - (homeA.z - 5)),
+  )[0] ?? null
   // Mama's buka — the first shop placed in the food district
   const foodShop = BUILDINGS.find(
     (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['food-area'].x, b.z - ANCHOR_BY_ID['food-area'].z) < 34,
@@ -772,16 +845,16 @@ export const DOORS: DoorDef[] = (() => {
   // Stage 5-b — the microfinance bank: the civic block standing at the gov anchor
   const govA = ANCHOR_BY_ID['government-area']
   const govBlock =
-    BUILDINGS.find(
-      (b) => b.kind === 'block' && Math.hypot(b.x - govA.x, b.z - govA.z) < 2,
-    ) ?? null
+    BUILDINGS.filter((b) => b.kind === 'block' && Math.hypot(b.x - govA.x, b.z - govA.z) < 16).sort(
+      (a, b) => Math.hypot(a.x - govA.x, a.z - govA.z) - Math.hypot(b.x - govA.x, b.z - govA.z),
+    )[0] ?? null
   // Stage 5-b — the lounge: the SECOND shop in the food strip (the first is Mama's)
   const foodShop2 =
     BUILDINGS.filter(
       (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['food-area'].x, b.z - ANCHOR_BY_ID['food-area'].z) < 34,
     )[1] ?? null
   return [
-    doorFor('home-interior', 'home', homeHouse, { dx: 5, dz: 2 }),
+    doorFor('home-interior', 'home', homeSpot, { dx: 5, dz: 2 }),
     doorFor('mamas-kitchen', 'food-area', foodShop, { dx: -4, dz: -4.5 }),
     doorFor('kpata-shop', 'kpata-market', marketShed, { dx: -10, dz: -6 }),
     doorFor('peak-gym', 'university-area', uniGym, { dx: 6.5, dz: -4.5 }),
@@ -898,13 +971,110 @@ export interface LampDef {
   x: number
   z: number
   y: number
+  /** yaw the light ARM points — always across the carriageway it serves */
+  rotY: number
+  /** highway masts: taller pole, bigger head */
+  tall: boolean
 }
 
 /**
- * Street lights along the REAL major roads (emitted by the geo pipeline
- * from the OSM trunk/major/secondary network — the lit arteries of Lokoja).
+ * THE STREET LIGHTS OF LOKOJA — every lit class of the real road network:
+ * the arteries (highway/major/secondary) end to end, and the residential
+ * minor fabric through the built-up core around each district. Lamps stand
+ * ON THE SHOULDER (renderHalf + 0.62), alternate sides of the street, face
+ * the carriageway with their arm, skip school yards and open water, and the
+ * 16 real bridges get corner masts at both abutments. Deterministic.
  */
-export const LAMPS: LampDef[] = GEO_LAMPS.map(([x, z]) => ({ x, z, y: heightAt(x, z) }))
+export const LAMPS: LampDef[] = (() => {
+  const SPACING: Record<string, number> = { highway: 13, major: 14, secondary: 15, minor: 19 }
+  const out: LampDef[] = []
+  const seen = new Set<string>()
+  const put = (x: number, z: number, rotY: number, tall: boolean, force = false): void => {
+    const k = `${Math.round(x / 3.5)}:${Math.round(z / 3.5)}`
+    if (!force && seen.has(k)) return
+    if (heightAt(x, z) <= WATER_Y + 0.15) return // never standing in carved water ground
+    if (inSchoolYard(x, z)) return // yards clip mapped streets — no lamps either
+    if (Math.hypot(x, z) > WALK_BOUND) return
+    // THE LAW: the lamp must clear EVERY carriageway — its own shoulder spot
+    // is invalid where a highway/feeder road runs through it (dual carriageways)
+    if (roadGap(x, z) < 0.3) return
+    seen.add(k)
+    out.push({ x, z, y: heightAt(x, z), rotY, tall })
+  }
+  // corner masts on every real bridge — on dry bank ground just past each
+  // abutment, arms over the deck so the crossing is lit. Stream valleys carve
+  // wide, so each mast searches a small along×across grid for a spot that is
+  // dry AND clear of every carriageway.
+  for (const b of BRIDGES) {
+    const dirX = Math.sin(b.rotY)
+    const dirZ = Math.cos(b.rotY)
+    const nx = -dirZ
+    const nz = dirX
+    for (const end of [-1, 1]) {
+      for (const sd of [-1, 1]) {
+        for (let along = 1.0; along <= 5.6; along += 0.9) {
+          let placed = false
+          for (let side = b.width / 2 + 0.55; side <= b.width / 2 + 4.6; side += 0.5) {
+            const lx = b.x + dirX * ((b.length + 3) / 2 + along) * end + nx * side * sd
+            const lz = b.z + dirZ * ((b.length + 3) / 2 + along) * end + nz * side * sd
+            if (heightAt(lx, lz) <= WATER_Y + 0.15) continue
+            if (roadGap(lx, lz) < 0.3) continue
+            if (inSchoolYard(lx, lz)) continue
+            put(lx, lz, Math.atan2(-nx * sd, -nz * sd), b.cls === 'asphalt', true)
+            placed = true
+            break
+          }
+          if (placed) break
+        }
+      }
+    }
+  }
+  for (const r of ROADS) {
+    const spacing = SPACING[r.cls]
+    if (!spacing) continue
+    const half = (ROAD_RENDER_W[r.cls] ?? 2.2) / 2
+    const offset = half + 0.62
+    const tall = r.cls === 'highway'
+    let side = 1
+    let acc = spacing * 0.45
+    for (let i = 0; i < r.pts.length - 1; i++) {
+      const [ax, az] = r.pts[i]
+      const [bx, bz] = r.pts[i + 1]
+      const seg = Math.hypot(bx - ax, bz - az)
+      const nx = -(bz - az) / Math.max(seg, 1e-6)
+      const nz = (bx - ax) / Math.max(seg, 1e-6)
+      while (acc < seg) {
+        const t = acc / seg
+        const px = ax + (bx - ax) * t
+        const pz = az + (bz - az) * t
+        // minors only through the built-up fabric around the districts
+        if (r.cls !== 'minor' || DISTRICTS.some((dd) => Math.hypot(dd.x - px, dd.z - pz) < 58)) {
+          // candidate shoulders: near rim first, then farther out on either
+          // side — dual carriageways swallow the inner shoulders, so their
+          // lighting lands on the outer rim (exactly how real ones are lit)
+          const rims: [number, number][] = [
+            [nx * offset * side, nz * offset * side],
+            [-nx * offset * side, -nz * offset * side],
+            [nx * (offset + 0.6) * side, nz * (offset + 0.6) * side],
+            [nx * (offset + 1.3) * side, nz * (offset + 1.3) * side],
+            [-nx * (offset + 0.7) * side, -nz * (offset + 0.7) * side],
+          ]
+          for (const [ox, oz] of rims) {
+            const lx = px + ox
+            const lz = pz + oz
+            if (roadGap(lx, lz) < 0.3) continue
+            put(lx, lz, Math.atan2(px - lx, pz - lz), tall)
+            break
+          }
+          side = -side
+        }
+        acc += spacing
+      }
+      acc -= seg
+    }
+  }
+  return out.slice(0, 1500)
+})()
 
 /* ---------------------------------- stalls ---------------------------------- */
 
@@ -933,7 +1103,7 @@ export const STALLS: StallDef[] = (() => {
       const gz = Math.floor(i / 4) - 1
       const x = row.cx + Math.cos(row.rot) * (gx * 4.6) - Math.sin(row.rot) * (gz * 5.4)
       const z = row.cz + Math.sin(row.rot) * (gx * 4.6) + Math.cos(row.rot) * (gz * 5.4)
-      if (roadDistance(x, z) < 2.6) continue
+      if (roadGap(x, z) < 0.45) continue
       out.push({
         x, z, y: heightAt(x, z),
         rotY: row.rot + (rng() - 0.5) * 0.3,

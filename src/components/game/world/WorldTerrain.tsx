@@ -416,6 +416,67 @@ function junctionDiscs(): THREE.BufferGeometry | null {
 }
 
 function Roads() {
+  /**
+   * Lane markings — worn white paint: dashed centrelines along the asphalt
+   * arteries (highway/major/secondary) and solid edge lines on the highway.
+   * Markings clip at school fences (the renderer's own law) and skip bridge
+   * spans (each bridge deck carries its own surface).
+   */
+  const markings = useMemo(() => {
+    const dashes: THREE.BufferGeometry[] = []
+    const edges: THREE.BufferGeometry[] = []
+    for (const r of ROADS) {
+      if (r.style !== 'asphalt') continue
+      if (r.cls !== 'highway' && r.cls !== 'major' && r.cls !== 'secondary') continue
+      const hw = (ROAD_RENDER_W[r.cls] ?? 4.2) / 2
+      for (let i = 0; i < r.pts.length - 1; i++) {
+        const [ax, az] = r.pts[i]
+        const [bx, bz] = r.pts[i + 1]
+        const seg = Math.hypot(bx - ax, bz - az)
+        if (seg < 2.4) continue
+        const yaw = Math.atan2(bx - ax, bz - az)
+        const nx = -(bz - az) / seg
+        const nz = (bx - ax) / seg
+        // dashed centreline
+        let acc = 1.6
+        while (acc + 1.5 <= seg) {
+          const t = (acc + 0.75) / seg
+          const x = ax + (bx - ax) * t
+          const z = az + (bz - az) * t
+          acc += 3.7
+          if (inSchoolYard(x, z)) continue
+          const ri = riverInfo(x, z)
+          if (ri.d < ri.halfWidth + 1.2) continue
+          const dash = new THREE.PlaneGeometry(0.1, 1.5)
+          dash.rotateX(-Math.PI / 2)
+          dash.rotateY(yaw)
+          dash.translate(x, heightAt(x, z) + 0.1, z)
+          dashes.push(dash)
+        }
+        // solid edge lines — the dual-carriageway highway reads as engineered
+        if (r.cls === 'highway') {
+          for (let eAcc = 0.75; eAcc < seg; eAcc += 3) {
+            const t = eAcc / seg
+            const x = ax + (bx - ax) * t
+            const z = az + (bz - az) * t
+            if (inSchoolYard(x, z)) continue
+            const ri = riverInfo(x, z)
+            if (ri.d < ri.halfWidth + 1.2) continue
+            for (const side of [-1, 1]) {
+              const edge = new THREE.PlaneGeometry(0.09, 3)
+              edge.rotateX(-Math.PI / 2)
+              edge.rotateY(yaw)
+              edge.translate(x + nx * (hw - 0.42) * side, heightAt(x + nx * (hw - 0.42) * side, z + nz * (hw - 0.42) * side) + 0.1, z + nz * (hw - 0.42) * side)
+              edges.push(edge)
+            }
+          }
+        }
+      }
+    }
+    const all = [...dashes, ...edges]
+    return all.length ? mergeGeoms(all) : null
+  }, [])
+
   const { shoulder, asphalt, laterite, trail, fabric, junctions } = useMemo(() => {
     const shoulders: THREE.BufferGeometry[] = []
     const byClass: Record<RoadClass, THREE.BufferGeometry[]> = {
@@ -471,6 +532,12 @@ function Roads() {
       {trail && (
         <mesh geometry={trail} receiveShadow>
           <meshStandardMaterial map={tex.laterite} color="#b08c68" roughness={1} metalness={0} />
+        </mesh>
+      )}
+      {/* lane markings — worn white paint on the arteries */}
+      {markings && (
+        <mesh geometry={markings} receiveShadow>
+          <meshStandardMaterial color="#ddd8c4" roughness={0.85} metalness={0} polygonOffset polygonOffsetFactor={-2} />
         </mesh>
       )}
       {/* junction patches — one worn-earth disc per shared endpoint */}

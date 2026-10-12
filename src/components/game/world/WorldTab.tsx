@@ -25,6 +25,7 @@ import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
 import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen } from './controls'
 import { ALL_DOORS } from '@/game/world3d/schools'
+import { BRIDGES } from '@/game/world3d/layout'
 import { WorldScene } from './WorldScene'
 import { InteriorScene } from './InteriorScene'
 import { HudOverlay } from './HudOverlay'
@@ -176,6 +177,12 @@ export function WorldTab({
       enter: (id: string) => e2eApi.current.enter(id),
       scene: () => e2eApi.current.scene(),
       interior: () => e2eApi.current.interior(),
+      /** M1 E2E — advance the world clock honestly through the rest system */
+      rest: (kind: 'nap' | 'sleep') => useGameStore.getState().rest(kind),
+      /** M1 E2E — the real bridge crossings (deck centres) for the bridge walk */
+      bridges: () => BRIDGES.map((b) => ({ x: b.x, z: b.z, len: b.length, w: b.width, cls: b.cls })),
+      /** M1 E2E — the current world clock slot (night screenshots) */
+      timeOfDay: () => useGameStore.getState().world?.timeOfDay ?? 'morning',
     }
     return () => {
       delete (window as unknown as { __lkl?: unknown }).__lkl

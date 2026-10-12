@@ -438,3 +438,25 @@ Work Log:
 Stage Summary:
 - Root cause: platform stopped the boot-time dev server during the previous session's handoff; agent-spawned listeners are policy-killed between tool calls, so the preview cannot be revived from inside the session.
 - Fix: user restarts the sandbox (restart button) -> start.sh reruns .zscripts/dev.sh -> dev server returns on 3000 sanctioned and stable. All code/data verified safe for restart (clean tree, committed Stage 8).
+
+---
+Task ID: 10
+Agent: Main Agent (Super Z)
+Task: MILESTONE 1 (partial — roads first) — "begin with the roads, perfect them with street lights, no houses on the road, add the bridges, well routed and built"
+
+Work Log:
+- DIAGNOSTIC FIRST (scripts/diag-road-clearance.ts): measured the state the user complained about — 10 of 18 buildings had corners ON the rendered carriageway (worst −3.0u inside), and 235 of 244 street lamps stood INSIDE the carriageway (lamp offset 2.6u < highway render half-width 3.1u). The user's eye was right.
+- ROAD-CLEARANCE LAW (layout.ts): new roadGap/roadGapMajors (distance to nearest RENDERED carriageway edge, render-width-aware) + buildingClearOfRoad (worst-case corner radius must clear every edge). isClearOf rewritten on top; tryPlace rewritten as a deterministic exhaustive ring scan (24 spokes × radius steps, first legal fit — placement density survived the stricter law).
+- pushSafe for every anchor-placed signature building (family house, market sheds, civic block, colonial relics, hostel): if the hand-set spot violates the law it slides outward on a deterministic spoke scan (14 steps × 12 dirs); if no legal spot exists the building is SKIPPED — nothing stands on the road, period.
+- STREET LIGHTS OF LOKOJA rebuilt in layout.ts (replaced thin GEO_LAMPS): every lit road class end-to-end (highway 13u spacing, major 14, secondary 15, minor 19 through the built-up fabric within 58u of districts), alternating sides, offset = renderHalf + 0.62, arm yaw facing the carriageway, tall masts on highways. Rim-fallback ladder (near rim → far rim → opposite side) so dual-carriageway highways keep their lighting on the outer rim. Dry-ground check (heightAt > WATER_Y + 0.15) + global roadGap ≥ 0.3 + school-yard clip + dedupe. Bridge abutment masts: every bridge corner searched on an along×across grid for a dry, clear spot (masts placed before road lamps, dedupe-bypassed). Result: 440 lamps (was 244), 0 inside any carriageway (was 235).
+- CityMesh Lamps() renderer upgraded: pole + arm reaching OVER the road + cowl + sodium head + warm ground pool at the arm tip (was: bare pole + head). Tall highway masts 5.1u/1.5u arm. Both head materials glow at night (found + fixed: mast heads previously had no emissive ref — never glowed).
+- LANE MARKINGS (WorldTerrain Roads()): worn-white dashed centrelines on every asphalt highway/major/secondary (1.5u dash / 2.2u gap) + solid dual edge lines on highways; clipped at school fences, skipped over bridge spans and water. One merged draw call.
+- E2E hook: __lkl.rest / bridges / timeOfDay added (honest clock slots + real bridge data for test drives).
+- Tests: world3d suite extended with the M1 law blocks — road clearance (0 building corners on tarmac, stalls, lamps), street lights (≥350, facing, tall-mast split, dry ground, school-yard clip), bridges (16 real crossings, decks land on solid banks, decks above waterline, urban bridges lit at both abutments). Fixed a latent suite bug: checks after the mid-file summary never counted — added a FINAL verdict that gates the file. Boom-through-camera test made position-independent (enters the building from outside).
+- E2E screenshots (download/m1-roads-shots/, mobile 390×844, zero console errors): 01-street-day (lanes + clear carriageway + shoulder lamps), 02-highway-marks (junction + marked road), 03-confluence-lights (lamp forest at the riverfront), 04-street-night (night roads, glowing markings, lamp silhouettes). The dedicated bridge-deck walk proved impractical in headless (~7× slow + browser wall) — bridge geometry/lighting is locked by 4 deterministic tests instead.
+- Platform note: dev servers spawned by the agent are killed between tool calls (verified: any TCP listener dies at invocation end, non-listeners survive); E2E runs must boot the server inside the same invocation. Headless browser also self-destructs after ~100-180s of 3D — drives the short-walk shot strategy.
+- ALL GREEN: world3d 672/672, schools 232/232, stage3 ✓, stage5 36/36, travel ✓; tsc back to the 9 pre-existing errors (0 new), eslint clean.
+
+Stage Summary:
+- The user's four asks are code-law now: roads marked and well-routed (lane paint + real network), street lights blanket the city (440, correct shoulder placement, night glow incl. highway masts), ZERO buildings/stalls/lamps on any carriageway (enforced by tests, not good intentions), 16 real bridges standing on their banks, above the waterline, lit at their abutments.
+- Remaining M1 items for next round: mountain/terrain art polish, tree species mix pass, then Milestone 2 (Civic Mesh).

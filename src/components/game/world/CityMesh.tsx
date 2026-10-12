@@ -21,7 +21,7 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
   ANCHORS, ANCHOR_BY_ID, BUILDINGS, heightAt, LAMPS, makeRng, PALM_TONES, POINTS_OF_INTEREST, ROOF_TONES,
-  RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type BuildingDef, type WorldAnchor,
+  RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type BuildingDef, type LampDef, type WorldAnchor,
 } from '@/game/world3d/layout'
 import { ALL_DOORS, SCHOOL_TREES } from '@/game/world3d/schools'
 import { atmoLive } from './atmosphere'
@@ -902,68 +902,126 @@ function Trees() {
 
 /* ---------------------------------- lamps ------------------------------------ */
 
+/**
+ * Street lights: pole + curved arm reaching OVER the carriageway + cowl +
+ * sodium head that glows at night + a warm pool of light on the road under
+ * the head. Highway masts are taller with a longer reach. All instanced.
+ */
 function Lamps() {
   const glowRef = useRef<THREE.MeshStandardMaterial>(null)
+  const glowRefMast = useRef<THREE.MeshStandardMaterial>(null)
   const poolRef = useRef<THREE.MeshBasicMaterial>(null)
   const poolTex = useMemo(() => bakeGlowPool(), [])
   useEffect(() => () => poolTex.dispose(), [poolTex])
 
+  const poles = useMemo(() => LAMPS.filter((l) => !l.tall), [])
+  const masts = useMemo(() => LAMPS.filter((l) => l.tall), [])
+  const armLen = (l: LampDef) => (l.tall ? 1.5 : 1.05)
+  const headAt = (l: LampDef): [number, number, number] => {
+    const a = armLen(l)
+    return [l.x + Math.sin(l.rotY) * a, l.y + (l.tall ? 5.45 : 4.55), l.z + Math.cos(l.rotY) * a]
+  }
+
   useFrame(() => {
     const g = atmoLive.nightGlow
-    if (glowRef.current) glowRef.current.emissiveIntensity = 0.1 + g * 2.4
-    if (poolRef.current) poolRef.current.opacity = g * 0.5
+    if (glowRef.current) glowRef.current.emissiveIntensity = 0.1 + g * 2.6
+    if (glowRefMast.current) glowRefMast.current.emissiveIntensity = 0.1 + g * 2.6
+    if (poolRef.current) poolRef.current.opacity = g * 0.55
   })
 
   return (
     <group>
+      {/* poles — standard streets + taller highway masts */}
+      {[
+        { arr: poles, h: 3.8, r: 0.08 },
+        { arr: masts, h: 5.1, r: 0.1 },
+      ].map((grp, gi) => (
+        <InstancedGroup
+          key={gi}
+          count={grp.arr.length}
+          setup={(i, m) => {
+            const l = grp.arr[i]
+            m.position.set(l.x, l.y + grp.h / 2, l.z)
+            m.rotation.set(0, 0, 0)
+            m.scale.set(1, 1, 1)
+          }}
+        >
+          <cylinderGeometry args={[grp.r, grp.r * 1.4, grp.h, 6]} />
+          <meshStandardMaterial color="#3a3f3a" roughness={0.7} metalness={0.4} />
+        </InstancedGroup>
+      ))}
+      {/* arms reaching out over the carriageway */}
+      {[
+        { arr: poles, h: 3.8, arm: 1.05 },
+        { arr: masts, h: 5.1, arm: 1.5 },
+      ].map((grp, gi) => (
+        <InstancedGroup
+          key={`arm-${gi}`}
+          count={grp.arr.length}
+          setup={(i, m) => {
+            const l = grp.arr[i]
+            const a = grp.arm * 0.5
+            m.position.set(l.x + Math.sin(l.rotY) * a, l.y + grp.h + 0.12, l.z + Math.cos(l.rotY) * a)
+            m.rotation.set(0, l.rotY, 0)
+            m.scale.set(1, 1, 1)
+          }}
+        >
+          <boxGeometry args={[0.09, 0.09, 1]} />
+          <meshStandardMaterial color="#3a3f3a" roughness={0.7} metalness={0.4} />
+        </InstancedGroup>
+      ))}
+      {/* cowls over the heads, at the arm tips */}
+      {[
+        { arr: poles, head: 4.55, arm: 1.05 },
+        { arr: masts, head: 5.45, arm: 1.5 },
+      ].map((grp, gi) => (
+        <InstancedGroup
+          key={`cowl-${gi}`}
+          count={grp.arr.length}
+          setup={(i, m) => {
+            const l = grp.arr[i]
+            const [hx, hy, hz] = headAt(l)
+            m.position.set(hx, hy + 0.14, hz)
+            m.rotation.set(0, l.rotY, 0)
+            m.scale.setScalar(l.tall ? 1.25 : 1)
+          }}
+        >
+          <coneGeometry args={[0.32, 0.2, 8]} />
+          <meshStandardMaterial color="#2c312e" roughness={0.65} metalness={0.35} />
+        </InstancedGroup>
+      ))}
+      {/* sodium heads */}
+      {[
+        { arr: poles, head: 4.55 },
+        { arr: masts, head: 5.45 },
+      ].map((grp, gi) => (
+        <InstancedGroup
+          key={`head-${gi}`}
+          count={grp.arr.length}
+          setup={(i, m) => {
+            const l = grp.arr[i]
+            const [hx, hy, hz] = headAt(l)
+            m.position.set(hx, hy, hz)
+            m.rotation.set(0, 0, 0)
+            m.scale.setScalar(l.tall ? 1.25 : 1)
+          }}
+        >
+          <sphereGeometry args={[0.16, 8, 6]} />
+          <meshStandardMaterial ref={gi === 0 ? glowRef : glowRefMast} color="#ffe9c0" emissive="#ffca7a" emissiveIntensity={0.1} />
+        </InstancedGroup>
+      ))}
+      {/* warm sodium pools of light on the ground under each head at night */}
       <InstancedGroup
         count={LAMPS.length}
         setup={(i, m) => {
           const l = LAMPS[i]
-          m.position.set(l.x, l.y + 1.9, l.z)
-          m.rotation.set(0, 0, 0)
-          m.scale.set(1, 1, 1)
-        }}
-      >
-        <cylinderGeometry args={[0.07, 0.09, 3.8, 6]} />
-        <meshStandardMaterial color="#3a3f3a" roughness={0.7} metalness={0.4} />
-      </InstancedGroup>
-      {/* cowl over the lamp head */}
-      <InstancedGroup
-        count={LAMPS.length}
-        setup={(i, m) => {
-          const l = LAMPS[i]
-          m.position.set(l.x, l.y + 3.98, l.z)
-          m.rotation.set(0, i * 0.8, 0)
-          m.scale.setScalar(1)
-        }}
-      >
-        <coneGeometry args={[0.3, 0.2, 8]} />
-        <meshStandardMaterial color="#2c312e" roughness={0.65} metalness={0.35} />
-      </InstancedGroup>
-      <InstancedGroup
-        count={LAMPS.length}
-        setup={(i, m) => {
-          const l = LAMPS[i]
-          m.position.set(l.x, l.y + 3.82, l.z)
-          m.rotation.set(0, 0, 0)
-          m.scale.setScalar(1)
-        }}
-      >
-        <sphereGeometry args={[0.15, 8, 6]} />
-        <meshStandardMaterial ref={glowRef} color="#ffe9c0" emissive="#ffca7a" emissiveIntensity={0.1} />
-      </InstancedGroup>
-      {/* warm sodium pools of light on the ground at night (soft radial falloff) */}
-      <InstancedGroup
-        count={LAMPS.length}
-        setup={(i, m) => {
-          const l = LAMPS[i]
-          m.position.set(l.x, l.y + 0.09, l.z)
+          const [hx, , hz] = headAt(l)
+          m.position.set(hx, l.y + 0.09, hz)
           m.rotation.set(-Math.PI / 2, 0, 0)
-          m.scale.setScalar(1)
+          m.scale.setScalar(l.tall ? 1.3 : 1)
         }}
       >
-        <circleGeometry args={[2.3, 18]} />
+        <circleGeometry args={[2.4, 18]} />
         <meshBasicMaterial
           ref={poolRef}
           color="#ffb45c"
