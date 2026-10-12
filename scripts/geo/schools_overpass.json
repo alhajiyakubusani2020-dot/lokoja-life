@@ -1,0 +1,236 @@
+[
+ {
+  "type": "node",
+  "osm_id": 6046476879,
+  "lat": 7.6670074,
+  "lon": 6.7015757,
+  "poly": null,
+  "name": null,
+  "tags": {
+   "amenity": "school"
+  }
+ },
+ {
+  "type": "node",
+  "osm_id": 8851563682,
+  "lat": 7.7921375,
+  "lon": 6.7319975,
+  "poly": null,
+  "name": "Federal University Lokoja",
+  "tags": {
+   "amenity": "university",
+   "name": "Federal University Lokoja"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 852462914,
+  "lat": 7.8699667,
+  "lon": 6.6841925,
+  "poly": null,
+  "name": "central for atomspheric research national space research and development agency",
+  "tags": {
+   "building": "university",
+   "name": "central for atomspheric research national space research and development agency"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 852794567,
+  "lat": 7.8534327,
+  "lon": 6.684163,
+  "poly": null,
+  "name": "Gate",
+  "tags": {
+   "building": "university",
+   "image": "https://drive.google.com/file/d/1ZM8q-FgJKxhdeZVXI3oRP_nhlNejIK3s/view?usp=drive_link",
+   "name": "Gate"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1111264659,
+  "lat": 7.8609991,
+  "lon": 6.6832233,
+  "poly": null,
+  "name": "Faculty of Education",
+  "tags": {
+   "building": "university",
+   "name": "Faculty of Education"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1111966945,
+  "lat": 7.8626111,
+  "lon": 6.683197,
+  "poly": null,
+  "name": "Twin Theatre",
+  "tags": {
+   "building": "university",
+   "name": "Twin Theatre"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1111966946,
+  "lat": 7.8627781,
+  "lon": 6.6821171,
+  "poly": null,
+  "name": "LT A",
+  "tags": {
+   "building": "university",
+   "name": "LT A"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1111966950,
+  "lat": 7.8609886,
+  "lon": 6.6825594,
+  "poly": null,
+  "name": "Faculty of Law",
+  "tags": {
+   "building": "university",
+   "name": "Faculty of Law"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1111966953,
+  "lat": 7.859557,
+  "lon": 6.683127,
+  "poly": null,
+  "name": "Faculty of Art",
+  "tags": {
+   "building": "university",
+   "image": "https://drive.google.com/file/d/1jxV8UOwZ7T6ZbHTrBCTlawmMjUV-nCR9/view?usp=drive_link",
+   "name": "Faculty of Art"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1111967744,
+  "lat": 7.863485,
+  "lon": 6.6821837,
+  "poly": null,
+  "name": "E-Learning",
+  "tags": {
+   "building": "university",
+   "name": "E-Learning"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1111976483,
+  "lat": 7.8642467,
+  "lon": 6.6830907,
+  "poly": null,
+  "name": "LT B",
+  "tags": {
+   "building": "university",
+   "name": "LT B"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1111976485,
+  "lat": 7.8642312,
+  "lon": 6.6826171,
+  "poly": null,
+  "name": "Student Affairs",
+  "tags": {
+   "building": "university",
+   "name": "Student Affairs"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1117081061,
+  "lat": 7.7533669,
+  "lon": 6.7385753,
+  "poly": null,
+  "name": "Faithview Academy",
+  "tags": {
+   "addr:city": "Lokoja",
+   "addr:housenumber": "No. 1",
+   "addr:street": "Faithview Avenue",
+   "building": "school",
+   "building:levels": "1",
+   "name": "Faithview Academy"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1545832025,
+  "lat": 7.8609217,
+  "lon": 6.6841832,
+  "poly": null,
+  "name": "EDS",
+  "tags": {
+   "building": "university",
+   "name": "EDS"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1545832026,
+  "lat": 7.8615271,
+  "lon": 6.6841088,
+  "poly": null,
+  "name": "Media and Studio",
+  "tags": {
+   "building": "university",
+   "name": "Media and Studio"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1545832027,
+  "lat": 7.8619429,
+  "lon": 6.6824336,
+  "poly": null,
+  "name": "Faculty of Management Science",
+  "tags": {
+   "building": "university",
+   "name": "Faculty of Management Science"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1545832028,
+  "lat": 7.8603128,
+  "lon": 6.682536,
+  "poly": null,
+  "name": "Islamic Studies",
+  "tags": {
+   "building": "university",
+   "name": "Islamic Studies"
+  }
+ },
+ {
+  "type": "way",
+  "osm_id": 1545832040,
+  "lat": 7.869654,
+  "lon": 6.6832517,
+  "poly": null,
+  "name": "Faculty of Engineering",
+  "tags": {
+   "building": "university",
+   "name": "Faculty of Engineering"
+  }
+ },
+ {
+  "type": "relation",
+  "osm_id": 14868236,
+  "lat": 7.8631939,
+  "lon": 6.6829987,
+  "poly": null,
+  "name": "Social Science",
+  "tags": {
+   "building": "university",
+   "name": "Social Science",
+   "type": "multipolygon"
+  }
+ }
+]

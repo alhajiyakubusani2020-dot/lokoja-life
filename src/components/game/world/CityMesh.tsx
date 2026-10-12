@@ -20,9 +20,10 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  ANCHORS, ANCHOR_BY_ID, BUILDINGS, DOORS, heightAt, LAMPS, makeRng, PALM_TONES, POINTS_OF_INTEREST, ROOF_TONES,
+  ANCHORS, ANCHOR_BY_ID, BUILDINGS, heightAt, LAMPS, makeRng, PALM_TONES, POINTS_OF_INTEREST, ROOF_TONES,
   RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type BuildingDef, type WorldAnchor,
 } from '@/game/world3d/layout'
+import { ALL_DOORS, SCHOOL_TREES } from '@/game/world3d/schools'
 import { atmoLive } from './atmosphere'
 import {
   ANTENNAS, AWNINGS, AWNING_TONES, BARRELS, BASKETS, CLOTH_TONES, CRATES, GATE_LEAVES, LAUNDRY_LINES,
@@ -770,8 +771,10 @@ function makeFrondGeometry(): THREE.BufferGeometry {
  * fronds, coconut clusters). Instanced per part — 5 draw calls total.
  */
 function Trees() {
-  const palms = useMemo(() => TREES.filter((t) => t.kind === 'palm'), [])
-  const trees = useMemo(() => TREES.filter((t) => t.kind === 'tree'), [])
+  // Stage 7 — compound trees (mango/neem rows + gate palms) join the scatter
+  const ALL_TREE_DEFS = useMemo(() => [...TREES, ...SCHOOL_TREES], [])
+  const palms = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'palm'), [ALL_TREE_DEFS])
+  const trees = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'tree'), [ALL_TREE_DEFS])
 
   // per-tree character, decided once by the seeded RNG
   const treeVars = useMemo(() => {
@@ -1817,7 +1820,7 @@ function LocationLabels() {
 function Doorways() {
   return (
     <group>
-      {DOORS.map((d) => (
+      {ALL_DOORS.map((d) => (
         <group key={d.interiorId} position={[d.x, d.y, d.z]} rotation={[0, d.rotY, 0]}>
           {/* step */}
           <mesh position={[0, 0.06, 0.35]} receiveShadow>
@@ -1850,8 +1853,11 @@ function Doorways() {
             <boxGeometry args={[0.5, 0.34, 0.03]} />
             <meshStandardMaterial color="#e8dcc3" roughness={0.9} emissive="#e8a317" emissiveIntensity={atmoLive.nightGlow * 0.35} />
           </mesh>
-          {/* warm doorstep glow at night */}
-          <pointLight position={[0, 2.0, 0.5]} color="#ffd9a0" intensity={atmoLive.nightGlow * 6} distance={6} decay={1.8} />
+          {/* warm doorstep glow at night (city doors only — the 24 school
+              doors keep their light budget for the compound floodlamps) */}
+          {d.light !== false && (
+            <pointLight position={[0, 2.0, 0.5]} color="#ffd9a0" intensity={atmoLive.nightGlow * 6} distance={6} decay={1.8} />
+          )}
         </group>
       ))}
     </group>

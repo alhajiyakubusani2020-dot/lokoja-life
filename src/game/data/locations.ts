@@ -258,3 +258,55 @@ export const LOCATIONS: LokojaLocation[] = [
 export const LOCATION_BY_ID = Object.fromEntries(
   LOCATIONS.map((l) => [l.id, l]),
 ) as Record<string, LokojaLocation>
+
+/* ------------------------------ school locations -----------------------------
+ * Stage 7 — the schools of Lokoja join the SAME registry (additive only —
+ * every existing id keeps its exact identity). Geometry comes from
+ * schools.ts (real coordinates, same projection as the 3D world), so the
+ * map pin, the 3D gate and the travel fare can never disagree.
+ * --------------------------------------------------------------------------- */
+
+import { SCHOOL_SITES_PROJECTED, type SchoolKind } from './schools'
+
+const SCHOOL_ACTIVITIES: Record<SchoolKind, LocationActivity[]> = {
+  university: [
+    { key: 'attend-lecture', label: 'Attend a lecture', stage: 3 },
+    { key: 'study-library', label: 'Read in the library', stage: 3 },
+    { key: 'network', label: 'Meet students', stage: 3 },
+  ],
+  polytechnic: [
+    { key: 'attend-lecture', label: 'Attend a lecture', stage: 3 },
+    { key: 'workshop', label: 'Hang around the workshops', stage: 3 },
+    { key: 'network', label: 'Meet students', stage: 3 },
+  ],
+  secondary: [
+    { key: 'attend-class', label: 'Attend a class', stage: 3 },
+    { key: 'gist', label: 'Hear the school gist', stage: 3 },
+  ],
+  college: [
+    { key: 'attend-class', label: 'Attend a class', stage: 3 },
+    { key: 'study-library', label: 'Study in the hall', stage: 3 },
+  ],
+}
+
+const SCHOOL_LOCATIONS: LokojaLocation[] = SCHOOL_SITES_PROJECTED.map((s) => ({
+  id: s.id,
+  name: s.name,
+  shortName: s.shortName,
+  tagline: s.tagline,
+  description: s.description,
+  color: s.color,
+  accent: s.accent,
+  emoji: s.emoji,
+  unlockLevel: s.unlockLevel,
+  mapX: s.mapX,
+  mapY: s.mapY,
+  transport: s.transport,
+  travelModifier: s.travelModifier,
+  activities: SCHOOL_ACTIVITIES[s.kind],
+}))
+
+LOCATIONS.push(...SCHOOL_LOCATIONS)
+
+// rebuild the id map so schools are first-class citizens everywhere
+for (const l of SCHOOL_LOCATIONS) LOCATION_BY_ID[l.id] = l

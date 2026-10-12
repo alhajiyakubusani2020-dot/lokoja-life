@@ -18,6 +18,7 @@ import { makeRng } from '@/game/world3d/layout'
 import { atmoLive, getAtmosphere, sunVec } from './atmosphere'
 import { WorldTerrain } from './WorldTerrain'
 import { CityMesh } from './CityMesh'
+import { SchoolMesh } from './SchoolMesh'
 import { Birds, Npcs, PlayerController, Rain, SmokeWisps, Traffic } from './Actors'
 import { DriveSystem } from './DriveSystem'
 
@@ -279,6 +280,8 @@ export function WorldScene({
 
       <WorldTerrain />
       <CityMesh />
+      {/* STAGE 7 — the schools of Lokoja, inside and out */}
+      <SchoolMesh />
 
       <PlayerController
         avatar={avatar}

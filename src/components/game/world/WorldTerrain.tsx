@@ -26,7 +26,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  BRIDGES, CONFLUENCE_POINT, DISTRICTS, GRASS, GRASS_TONES, heightAt, riverInfo, ROADS,
+  BRIDGES, CONFLUENCE_POINT, DISTRICTS, GRASS, GRASS_TONES, heightAt, inSchoolYard, riverInfo, ROADS,
   ROAD_RENDER_W, RIVERS,
   WATER_Y, WORLD_HALF, roadDistance, roadDistanceMajors,
 } from '@/game/world3d/layout'
@@ -348,6 +348,9 @@ function roadGeometry(
   const uvs: number[] = []
   const idx: number[] = []
   let cursor = 0
+  // Stage 7 — mapped streets stop at the school fence (the swept yard owns
+  // its ground, exactly like a real satellite view of a Lokoja school)
+  const yard = dense.map(([x, z]) => inSchoolYard(x, z))
   for (let i = 0; i < dense.length; i++) {
     const [x, z] = dense[i]
     const prev = dense[Math.max(0, i - 1)]
@@ -363,7 +366,7 @@ function roadGeometry(
     verts.push(x - nx, yR, z - nz)
     uvs.push(0, cursor * vScale, 1, cursor * vScale)
     cursor += 1
-    if (i < dense.length - 1) {
+    if (i < dense.length - 1 && !yard[i] && !yard[i + 1]) {
       const a = i * 2
       idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
     }
@@ -388,6 +391,7 @@ function junctionDiscs(): THREE.BufferGeometry | null {
   const geos: THREE.BufferGeometry[] = []
   for (let i = 0; i < pts.length; i++) {
     if (used[i]) continue
+    if (inSchoolYard(pts[i][0], pts[i][1])) continue // yard owns its ground
     used[i] = true
     let cx = pts[i][0]
     let cz = pts[i][1]

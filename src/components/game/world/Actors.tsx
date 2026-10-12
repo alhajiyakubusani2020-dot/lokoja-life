@@ -20,9 +20,9 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
-import {
-  ANCHOR_BY_ID, DISTRICTS, DOORS, heightAt, makeRng, NPC_ZONES, POINTS_OF_INTEREST, TRAFFIC_LOOPS,
+import { ANCHOR_BY_ID, DISTRICTS, heightAt, makeRng, NPC_ZONES, POINTS_OF_INTEREST, TRAFFIC_LOOPS,
 } from '@/game/world3d/layout'
+import { ALL_DOORS } from '@/game/world3d/schools'
 import { bridgeDeckY, cameraObstructionT, resolvePosition } from '@/game/world3d/collision'
 import {
   applyVehicleNight, buildDanfo, buildKeke, buildOkada, buildSedan, headlightConeMaterial,
@@ -266,7 +266,7 @@ export function PlayerController({
       }
     }
     // interior doors (INC 4) — tight radius so stepping inside feels deliberate
-    for (const dr of DOORS) {
+    for (const dr of ALL_DOORS) {
       const d = Math.hypot(dr.x - s.x, dr.z - s.z)
       if (d < INTERIOR.doorRadius && d < nearestD) {
         nearestD = d

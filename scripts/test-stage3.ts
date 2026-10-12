@@ -73,7 +73,10 @@ function makePlayer(over: Partial<PlayerState> = {}): PlayerState {
 /* ------------------------------- data sanity ------------------------------- */
 console.log('\n— Data integrity —')
 {
-  check('10 jobs, all reference real locations', JOBS.length === 10 && JOBS.every((j) => LOCATIONS.some((l) => l.id === j.locationId)))
+  check(
+    `10 launch jobs + 8 school jobs (Stage 7), all reference real locations`,
+    JOBS.length === 18 && JOBS.every((j) => LOCATIONS.some((l) => l.id === j.locationId)),
+  )
   check('all hustles reference real NPCs + locations', HUSTLES.every((h) => NPCS.some((n) => n.id === h.npcId) && LOCATIONS.some((l) => l.id === h.locationId)))
   check('every location except home offers work (home = rest)', LOCATIONS.filter((l) => l.id !== 'home').every((l) => HUSTLES.some((h) => h.locationId === l.id) || JOBS.some((j) => j.locationId === l.id)))
   check('jobs are not pay-identical', new Set(JOBS.map((j) => j.basePay)).size > 6)

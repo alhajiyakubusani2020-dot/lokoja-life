@@ -23,6 +23,8 @@ export type FurnKind =
   | 'dumbbell-rack' | 'bench-press' | 'treadmill' | 'mirror-strip'
   | 'sign' | 'ceilingfan' | 'vault' | 'partition' | 'queueboard'
   | 'booth' | 'bottle-shelf' | 'dj-deck' | 'speaker' | 'drink-table'
+  // Stage 7 — school fittings (the classroom experience)
+  | 'school-desk' | 'blackboard' | 'wallmap' | 'computer'
 
 export interface FurnFootprint {
   /** local width (x) at scale 1 */
@@ -70,6 +72,11 @@ export const FURN_FOOTPRINT: Record<FurnKind, FurnFootprint> = {
   'dj-deck': { w: 1.7, d: 0.85, solid: true, h: 1.05 },
   speaker: { w: 0.55, d: 0.55, solid: true, h: 1.45 },
   'drink-table': { w: 0.85, d: 0.85, solid: true, h: 0.78 },
+  // Stage 7 — school fittings
+  'school-desk': { w: 1.5, d: 0.62, solid: true, h: 0.75 },
+  blackboard: { w: 2.6, d: 0.14, solid: false, h: 1.25 },
+  wallmap: { w: 1.5, d: 0.1, solid: false, h: 1.0 },
+  computer: { w: 0.85, d: 0.62, solid: false, h: 0.95 },
 }
 
 export interface FurnDef {
@@ -118,14 +125,13 @@ export interface HotspotDef {
   label: string
 }
 
-/**
- * Stage 5-b — self-service action hotspots (gym workout, bank teller,
- * lounge night-out, home wardrobe). Kept as a SEPARATE array + union so
- * the HUD's existing HotspotKind-driven sheet contract stays untouched:
+/** Stage 5-b — self-service action hotspots (gym workout, bank teller,
+ * lounge night-out, home wardrobe, school study). Kept as a SEPARATE array +
+ * union so the HUD's existing HotspotKind-driven sheet contract stays untouched:
  * the InteriorScene layer owns the whole interaction for these (its own
  * prompt chip + panels) and reports `null` to the HUD while one is near.
  */
-export type ActionKind = 'workout' | 'bank-teller' | 'night-out' | 'wardrobe'
+export type ActionKind = 'workout' | 'bank-teller' | 'night-out' | 'wardrobe' | 'study'
 
 export interface ActionDef {
   id: string
@@ -506,6 +512,15 @@ const LOUNGE: InteriorDef = (() => {
 })()
 
 export const INTERIORS: InteriorDef[] = [HOME, MAMAS, KPATA_SHOP, GYM, BANK, LOUNGE]
+
+/* ------------------------- school interiors (Stage 7) -------------------------
+ * Registered here so INTERIOR_BY_ID stays the single source every consumer
+ * already trusts. The type-only import above erased at runtime means this
+ * adds no import cycle (schools → layout happens on the value side).
+ * --------------------------------------------------------------------------- */
+import { SCHOOL_INTERIORS } from './schools'
+
+INTERIORS.push(...SCHOOL_INTERIORS)
 
 export const INTERIOR_BY_ID: Record<string, InteriorDef> = Object.fromEntries(
   INTERIORS.map((i) => [i.id, i]),

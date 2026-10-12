@@ -23,7 +23,8 @@ import { MapIcon, PinIcon } from '../icons'
 import { audio } from '@/game/systems/audio'
 import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
-import { getWalkedMeters, resetWalkedMeters } from './controls'
+import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen } from './controls'
+import { ALL_DOORS } from '@/game/world3d/schools'
 import { WorldScene } from './WorldScene'
 import { InteriorScene } from './InteriorScene'
 import { HudOverlay } from './HudOverlay'
@@ -146,6 +147,27 @@ export function WorldTab({
     },
     [interiorId, swapTo],
   )
+
+  // E2E TEST HOOK — active ONLY when the URL carries ?e2e=1. Gives the
+  // automated browser a honest steering wheel (travel / position / stick /
+  // door list) because driving a follow-cam world blind with synthetic
+  // keystrokes is impractical. Normal play never touches this.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!window.location.search.includes('e2e=1')) return
+    ;(window as unknown as { __lkl: unknown }).__lkl = {
+      travel: (id: string) => useGameStore.getState().travel(id, 'walk'),
+      pos: () => ({ ...playerPos }),
+      stick: (x: number, y: number) => setJoystick(x, y),
+      frozen: () => isInputFrozen(),
+      doors: () => ALL_DOORS.map((d) => ({ id: d.interiorId, x: d.x, z: d.z })),
+      enter: (id: string) => enterInterior(id),
+      scene: () => (interiorId ? 'interior' : 'world'),
+    }
+    return () => {
+      delete (window as unknown as { __lkl?: unknown }).__lkl
+    }
+  }, [enterInterior, interiorId])
 
   const exitInterior = useCallback(() => {
     if (!interiorId) return

@@ -78,6 +78,8 @@ export const INTERIOR = {
   },
   /** Stage 5 — gym session (one clock slot, leaves you properly tired) */
   gym: { energy: -14, mood: 8, health: 6, hunger: -8 },
+  /** Stage 7 — school study hour (one clock slot, sharpens the mind) */
+  study: { energy: -7, mood: 3, health: 0, hunger: -6, smartXp: 14 },
   /** Stage 5 — night out at the lounge: mood bomb, wallet hit (cash in NIGHT_OUT.cost) */
   lounge: { energy: -6, mood: 14, hunger: -4 },
   /** Stage 5 — night-out economy */

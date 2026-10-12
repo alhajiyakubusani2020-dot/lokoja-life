@@ -10,7 +10,10 @@
  * resolve() every frame with its intended position and gets a legal one.
  */
 
-import { BUILDINGS, BRIDGES, POINTS_OF_INTEREST, RIVERS, WALK_BOUND, type BuildingDef } from './layout'
+import { BUILDINGS, BRIDGES, inSchoolYard, POINTS_OF_INTEREST, RIVERS, WALK_BOUND, type BuildingDef } from './layout'
+import { SCHOOL_BOXES, isSchoolCollider, type SchoolBox } from './schools'
+
+/** (layout.inSchoolYard re-exported locally for the river override) */
 
 /* ---------------------------- building colliders ---------------------------- */
 
@@ -37,8 +40,24 @@ function boxFor(b: BuildingDef): BoxCollider {
   }
 }
 
+function boxForSchool(b: SchoolBox): BoxCollider {
+  const pad = b.kind === 'flag' ? 0.3 : 0.45
+  return {
+    cx: b.x,
+    cz: b.z,
+    hw: b.w / 2 + pad,
+    hd: b.d / 2 + pad,
+    cos: Math.cos(-b.rotY),
+    sin: Math.sin(-b.rotY),
+    rotY: b.rotY,
+  }
+}
+
 const BOXES: BoxCollider[] = [
   ...BUILDINGS.map(boxFor),
+  // Stage 7 — school compounds (walls, blocks, gatehouses… the open gate gap
+  // is real: the wall runs leave a walkable gap and the arch itself collides not)
+  ...SCHOOL_BOXES.filter(isSchoolCollider).map(boxForSchool),
   // points of interest get a slim collider so you walk UP TO a job board, not through it
   ...POINTS_OF_INTEREST.map((p) => ({
     cx: p.x,
@@ -171,8 +190,8 @@ export function resolvePosition(x: number, z: number): [number, number] {
     ;[x, z] = resolveBox(x, z, PLAYER_RADIUS, b)
   }
 
-  // rivers — blocked unless standing on a bridge deck
-  if (!onBridge(x, z)) {
+  // rivers — blocked unless standing on a bridge deck (or inside a school yard)
+  if (!onBridge(x, z) && !inSchoolYard(x, z)) {
     const { d, halfWidth, cx, cz } = riverDistance(x, z)
     const limit = halfWidth + PLAYER_RADIUS * 0.4
     if (d < limit && d > 1e-4) {
@@ -222,10 +241,10 @@ export function bridgeDeckY(x: number, z: number): number | null {
 const CAM_SAMPLES = 10
 
 /** buildings only, with real top height — the camera obstruction world */
-const CAM_BOXES: (BoxCollider & { topY: number })[] = BUILDINGS.map((b) => ({
-  ...boxFor(b),
-  topY: b.y + b.h,
-}))
+const CAM_BOXES: (BoxCollider & { topY: number })[] = [
+  ...BUILDINGS.map((b) => ({ ...boxFor(b), topY: b.y + b.h })),
+  ...SCHOOL_BOXES.filter(isSchoolCollider).map((b) => ({ ...boxForSchool(b), topY: b.y + b.h })),
+]
 
 export function cameraObstructionT(
   x0: number,

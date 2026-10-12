@@ -24,6 +24,7 @@ import {
   ROADS,
   STALLS,
   heightAt,
+  inSchoolYard,
   makeRng,
   riverInfo,
   roadDistance,
@@ -312,6 +313,7 @@ export const ANTENNAS: AntennaDef[] = []
         const z = cz - dirX * side * 3.9
         if (!clearOfWater(x, z, 5)) continue
         if (roadDistance(x, z) < 2.4) continue
+        if (inSchoolYard(x, z)) continue // no poles inside school compounds
         if (!clearOfBuildings(x, z, 0.8)) continue
         if (Math.hypot(x, z) > WALK_BOUND - 24) continue
         const y = heightAt(x, z)

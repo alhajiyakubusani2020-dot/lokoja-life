@@ -771,6 +771,113 @@ function Furniture({ f, night }: { f: FurnDef; night: boolean }) {
           ))}
         </group>
       )
+    case 'school-desk':
+      // the long shared desk with its attached bench seat — the Nigerian
+      // classroom unit: hardwood top, steel frame, two pupils per desk
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* desk top */}
+          <mesh position={[0, 0.72, -0.06]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.05, fp.d * s * 0.55]} />
+            <meshStandardMaterial color={WOOD[tone % WOOD.length]} roughness={0.8} />
+          </mesh>
+          {/* steel legs */}
+          {[-0.62, 0.62].map((x) => (
+            <mesh key={x} position={[x * (fp.w * s / 1.5), 0.35, -0.06]}>
+              <boxGeometry args={[0.05, 0.7, 0.05]} />
+              <meshStandardMaterial color="#7d8288" metalness={0.55} roughness={0.4} />
+            </mesh>
+          ))}
+          {/* attached bench seat behind */}
+          <mesh position={[0, 0.44, fp.d * s * 0.34]} castShadow>
+            <boxGeometry args={[fp.w * s * 0.96, 0.05, fp.d * s * 0.42]} />
+            <meshStandardMaterial color={WOOD[(tone + 1) % WOOD.length]} roughness={1} />
+          </mesh>
+          {[0.55, 1.25].map((dz) => (
+            <mesh key={dz} position={[0, 0.22, fp.d * s * dz / 1.6]}>
+              <boxGeometry args={[fp.w * s * 0.8, 0.05, 0.05]} />
+              <meshStandardMaterial color="#7d8288" metalness={0.55} roughness={0.4} />
+            </mesh>
+          ))}
+        </group>
+      )
+    case 'blackboard':
+      // framed board + chalk tray (tone 1 renders as a whiteboard)
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, 1.32, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, fp.h, 0.05]} />
+            <meshStandardMaterial color={tone === 1 ? '#f2f4f2' : '#2f4234'} roughness={0.85} />
+          </mesh>
+          <mesh position={[0, 1.32, 0.032]}>
+            <boxGeometry args={[fp.w * s + 0.12, fp.h + 0.12, 0.02]} />
+            <meshStandardMaterial color={WOOD[1]} roughness={1} />
+          </mesh>
+          {/* chalk tray with chalk sticks */}
+          <mesh position={[0, 0.66, 0.09]} castShadow>
+            <boxGeometry args={[fp.w * s * 0.8, 0.05, 0.1]} />
+            <meshStandardMaterial color={WOOD[2]} roughness={1} />
+          </mesh>
+          {[-0.35, -0.1, 0.3].map((x) => (
+            <mesh key={x} position={[x, 0.71, 0.09]} rotation={[0, x, 0]}>
+              <cylinderGeometry args={[0.012, 0.012, 0.11, 6]} />
+              <meshStandardMaterial color="#f4f1e6" roughness={0.9} />
+            </mesh>
+          ))}
+        </group>
+      )
+    case 'wallmap':
+      // classroom wall chart — painted map poster with a wooden batten
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, 1.5, 0]}>
+            <boxGeometry args={[fp.w * s, fp.h, 0.03]} />
+            <meshStandardMaterial
+              color={tone === 0 ? '#dfe8d2' : '#d6e4ec'} roughness={0.9}
+            />
+          </mesh>
+          {/* land masses — simplified blobs in the school colours */}
+          <mesh position={[-fp.w * s * 0.16, 1.62, 0.02]}>
+            <boxGeometry args={[fp.w * s * 0.4, fp.h * 0.5, 0.012]} />
+            <meshStandardMaterial color="#7da35c" roughness={0.9} />
+          </mesh>
+          <mesh position={[fp.w * s * 0.2, 1.4, 0.02]}>
+            <boxGeometry args={[fp.w * s * 0.3, fp.h * 0.34, 0.012]} />
+            <meshStandardMaterial color="#c8a45c" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 1.98, 0.025]}>
+            <boxGeometry args={[fp.w * s + 0.06, 0.05, 0.02]} />
+            <meshStandardMaterial color={WOOD[2]} roughness={1} />
+          </mesh>
+        </group>
+      )
+    case 'computer':
+      // desk computer — monitor box + keyboard + glowing screen at night
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, 0.62, 0]} castShadow>
+            <boxGeometry args={[fp.w * s * 0.62, 0.36, 0.05]} />
+            <meshStandardMaterial color="#26221e" roughness={0.5} />
+          </mesh>
+          <mesh
+            position={[0, 0.62, 0.028]}
+          >
+            <boxGeometry args={[fp.w * s * 0.56, 0.3, 0.005]} />
+            <meshStandardMaterial
+              color="#9fd4e8" roughness={0.2}
+              emissive="#bfe8f4" emissiveIntensity={night ? 0.9 : 0.12}
+            />
+          </mesh>
+          <mesh position={[0, 0.45, 0]}>
+            <boxGeometry args={[0.07, 0.16, 0.07]} />
+            <meshStandardMaterial color="#26221e" roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 0.47, 0.18]} rotation={[-0.06, 0, 0]}>
+            <boxGeometry args={[0.34, 0.02, 0.12]} />
+            <meshStandardMaterial color="#3a352e" roughness={0.6} />
+          </mesh>
+        </group>
+      )
     default:
       return null
   }
@@ -1190,6 +1297,7 @@ const ACTION_ICON: Record<ActionDef['kind'], string> = {
   'bank-teller': '🏦',
   'night-out': '🍾',
   wardrobe: '👕',
+  study: '📚',
 }
 
 export function InteriorScene({
@@ -1241,6 +1349,10 @@ export function InteriorScene({
       case 'workout':
         // the store applies the slot + needs and shows its own toast
         useGameStore.getState().workout()
+        break
+      case 'study':
+        // Stage 7 — school hours: the store applies slot + needs + smart XP
+        useGameStore.getState().study(a.label)
         break
       case 'bank-teller':
         setSheet({ owner: def.id, kind: 'bank' })

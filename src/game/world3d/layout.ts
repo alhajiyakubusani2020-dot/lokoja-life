@@ -18,7 +18,8 @@
  * fixed seed so every player sees the same Lokoja.
  */
 
-import { LOCATIONS, type LokojaLocation } from '../data/locations'
+import { LOCATIONS, LOCATION_BY_ID, type LokojaLocation } from '../data/locations'
+import { SCHOOL_SITES_PROJECTED, LEGACY_ANCHOR_XY, type SchoolSite } from '../data/schools'
 import {
   GEO_ROADS,
   GEO_RIVERS,
@@ -314,6 +315,18 @@ export function roadDistanceMajors(x: number, z: number): number {
   return best
 }
 
+/**
+ * Inside a school compound the swept yard owns the ground — mapped minor
+ * streets that cross the fence simply stop at it (exactly what a satellite
+ * view of a real Lokoja school shows). Road/prop renderers use this to clip.
+ */
+export function inSchoolYard(x: number, z: number): boolean {
+  for (const sp of SCHOOL_SITES) {
+    if (Math.hypot(sp.x - x, sp.z - z) < sp.plateauR * 0.92) return true
+  }
+  return false
+}
+
 /* --------------------------------- terrain --------------------------------- */
 
 function smoothstep(a: number, b: number, t: number): number {
@@ -333,6 +346,97 @@ function baseNoise(x: number, z: number): number {
 // plateau heights must exist before heightAt is ever called
 for (const a of ANCHORS) {
   a.plateauH = Math.max(0.4, baseNoise(a.x, a.z) * 0.55 + (a.id === 'mount-patti' ? 30 : 0))
+}
+
+/* --------------------------- school site relaxation ---------------------------
+ * Final school-site placement runs HERE (it needs the legacy anchor geometry
+ * this module owns): campus-vs-campus separation, clearance from the legacy
+ * anchors, and a rim clamp that keeps every compound fully inside the
+ * playable circle — iterated together so the clamp can never re-bunch the
+ * Felele-corridor campuses. The 2D map grid derives from the FINAL positions.
+ * --------------------------------------------------------------------------- */
+
+function relaxSchoolSites(): SchoolSite[] {
+  const sites = SCHOOL_SITES_PROJECTED.map((s) => ({ ...s }))
+  // the CENTER must sit far enough in that the whole compound (gate, front
+  // wall, doors, gate palms) stays inside the playable circle
+  const rimFor = (s: SchoolSite): number => 272 - s.d / 2 - 1.5
+  const outerR = (s: SchoolSite): number => Math.max(s.plateauR, Math.hypot(s.w, s.d) / 2) + 4
+
+  for (let sweep = 0; sweep < 14; sweep++) {
+    // campus ↔ campus separation
+    for (let i = 0; i < sites.length; i++) {
+      for (let j = i + 1; j < sites.length; j++) {
+        const a = sites[i]
+        const b = sites[j]
+        const minD = outerR(a) + outerR(b) + 6
+        const dx = b.x - a.x
+        const dz = b.z - a.z
+        const d = Math.hypot(dx, dz)
+        if (d >= minD || d < 1e-4) continue
+        const push = (minD - d) / 2
+        const ux = dx / d
+        const uz = dz / d
+        a.x -= ux * push
+        a.z -= uz * push
+        b.x += ux * push
+        b.z += uz * push
+      }
+    }
+    // school plateaus must not stomp the legacy anchors
+    for (const s of sites) {
+      for (const a of LEGACY_ANCHOR_XY) {
+        const dx = s.x - a.x
+        const dz = s.z - a.z
+        const d = Math.hypot(dx, dz)
+        const minD = s.plateauR + 17
+        if (d >= minD || d < 1e-4) continue
+        const push = minD - d
+        s.x += (dx / d) * push
+        s.z += (dz / d) * push
+      }
+    }
+    // rim clamp INSIDE the loop so separation survives
+    for (const s of sites) {
+      const rim = Math.hypot(s.x, s.z)
+      const limit = rimFor(s)
+      if (rim > limit) {
+        s.x = (s.x / rim) * limit
+        s.z = (s.z / rim) * limit
+      }
+    }
+  }
+  // final map grid from the FINAL positions — map pin and 3D gate agree forever
+  for (const s of sites) {
+    s.mapX = 50 + s.x / MAP_SCALE
+    s.mapY = 50 + s.z / MAP_SCALE
+  }
+  return sites
+}
+
+/** final school sites — the one true positions every consumer shares */
+export const SCHOOL_SITES: SchoolSite[] = relaxSchoolSites()
+
+// the school ANCHORS (same stable ids) and the 2D map registry adopt the
+// final relaxed positions — anchors, map pins, travel fares and the 3D
+// gate all read the one truth
+for (const a of ANCHORS) {
+  const s = SCHOOL_SITES.find((sp) => sp.id === a.id)
+  if (!s) continue
+  a.x = s.x
+  a.z = s.z
+  a.plateauH = Math.max(0.4, baseNoise(a.x, a.z) * 0.55)
+  const loc = LOCATION_BY_ID[s.id]
+  if (loc) {
+    loc.mapX = s.mapX
+    loc.mapY = s.mapY
+  }
+}
+
+/** school sites get their own flat buildable plateau (Stage 7 compounds) */
+const SCHOOL_PLATEAU_H: Record<string, number> = {}
+for (const sp of SCHOOL_SITES) {
+  SCHOOL_PLATEAU_H[sp.id] = Math.max(0.4, baseNoise(sp.x, sp.z) * 0.55)
 }
 
 /**
@@ -372,6 +476,18 @@ export function heightAt(x: number, z: number): number {
   if (d < halfWidth + margin) {
     const carve = 1 - smoothstep(halfWidth - 2, halfWidth + margin, d)
     h = h * (1 - carve) + (WATER_Y - 1.7) * carve
+  }
+
+  // school compound plateaus — carved AFTER the rivers so no mapped stream
+  // can gully through a school yard (a stream that meets a compound simply
+  // runs to its fence; the yard itself stays honest, flat and dry).
+  // Fully flat across the whole compound footprint, fading to the plain beyond.
+  for (const sp of SCHOOL_SITES) {
+    const dS = Math.hypot(x - sp.x, z - sp.z)
+    if (dS < sp.plateauR * 2.0) {
+      const w = 1 - smoothstep(sp.plateauR * 1.02, sp.plateauR * 2.0, dS)
+      h = h * (1 - w) + SCHOOL_PLATEAU_H[sp.id] * w
+    }
   }
 
   return h
@@ -416,7 +532,7 @@ export const BRIDGES: BridgeDef[] = GEO_BRIDGES.map((b) => ({
 /* -------------------------------- districts -------------------------------- */
 
 export type DistrictKind =
-  | 'home' | 'market' | 'food' | 'junction' | 'park'
+  | 'home' | 'market' | 'food' | 'junction' | 'park' | 'school'
   | 'landmark-river' | 'landmark-hill' | 'historic' | 'gov' | 'university'
 
 const KIND_BY_ID: Record<string, DistrictKind> = {
@@ -430,6 +546,19 @@ const KIND_BY_ID: Record<string, DistrictKind> = {
   'university-area': 'university',
   'food-area': 'food',
   'transport-area': 'park',
+  // Stage 7 — the schools are their own district kind (bespoke compounds)
+  'ful-felele': 'school',
+  'ful-adankolo': 'school',
+  'ksp-felele': 'school',
+  'salem-university': 'school',
+  'college-nursing': 'school',
+  'crowther-memorial': 'school',
+  'gyb-model-adankolo': 'school',
+  'faithview-academy': 'school',
+  'al-azhar-college': 'school',
+  'baptist-high': 'school',
+  'julitola-intl': 'school',
+  'christfield-school': 'school',
 }
 
 export interface District {
@@ -475,6 +604,8 @@ export const ROOF_TONES = ['#8a4a2a', '#6e4530', '#7a6a55', '#96543a', '#5a6e5c'
 
 function isClearOf(x: number, z: number, r: number): boolean {
   if (riverInfo(x, z).d < 16) return false
+  // school compounds own their ground — never scatter a generic house inside
+  if (SCHOOL_SITES.some((sp) => Math.hypot(sp.x - x, sp.z - z) < sp.plateauR + r)) return false
   // majors need full breathing room; the dense minor fabric only demands
   // the building not straddle the rendered carriageway
   if (roadDistanceMajors(x, z) < r + 2.6) return false
@@ -562,6 +693,11 @@ function buildDistrictBuildings(d: District, rng: () => number): BuildingDef[] {
       for (let i = 0; i < 5; i++) tryPlace(13, 29, 4.4, 4, 3.1, 'shop', 'flat')
       break
     }
+    case 'school': {
+      // the compound builder owns everything here — the anchor clearing
+      // stays open so the gate, yard and blocks read clean
+      break
+    }
     case 'landmark-river':
     case 'landmark-hill':
       // landmarks get bespoke anchor structures (CityMesh), not generic fill
@@ -592,6 +728,8 @@ export interface DoorDef {
   y: number
   /** yaw facing OUTWARD from the building wall */
   rotY: number
+  /** false = skip the per-door night point light (school doors opt out) */
+  light?: boolean
 }
 
 function doorFor(
@@ -684,6 +822,8 @@ function scatterTrees(): TreeDef[] {
     if (Math.hypot(x, z) > WALK_BOUND) continue
     // keep anchor sites readable
     if (ANCHORS.some((a) => Math.hypot(a.x - x, a.z - z) < 13)) continue
+    // school compounds plant their own trees — no wild scatter inside
+    if (SCHOOL_SITES.some((sp) => Math.hypot(sp.x - x, sp.z - z) < sp.plateauR + 2)) continue
     if (BUILDINGS.some((b) => Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) * 0.75 + 2)) continue
     // denser around Patti + riversides, thinner downtown
     const pattiBoost = Math.max(0, 1 - Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z) / 110)
@@ -738,6 +878,7 @@ export const GRASS: GrassDef[] = (() => {
     if (river.d < river.halfWidth + 2.5) continue
     if (roadDistance(x, z) < 5.2) continue
     if (ANCHORS.some((a) => Math.hypot(a.x - x, a.z - z) < 12.5)) continue
+    if (SCHOOL_SITES.some((sp) => Math.hypot(sp.x - x, sp.z - z) < sp.plateauR + 1.5)) continue
     if (BUILDINGS.some((b) => Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) * 0.7 + 1.5)) continue
     // moisture gradient — greener close to water
     const moisture = Math.max(0, 1 - river.d / 60)
@@ -814,9 +955,11 @@ export interface NpcZone {
   radius: number
 }
 
-/** NPCs stroll around the livelier districts (not the lonely landmarks). */
+/** NPCs stroll around the livelier districts + the school compounds (Stage 7). */
 export const NPC_ZONES: NpcZone[] = [
   'kpata-market', 'food-area', 'ganaja-junction', 'home', 'transport-area', 'university-area', 'historic-lokoja',
+  // the schools — students in the yard, teachers at the block
+  'ful-felele', 'ful-adankolo', 'ksp-felele', 'crowther-memorial', 'gyb-model-adankolo', 'college-nursing',
 ].map((id) => {
   const a = ANCHOR_BY_ID[id]
   return { locationId: id, x: a.x, z: a.z, y: a.y, radius: 15 }

@@ -102,6 +102,8 @@ interface GameStore {
   setAvatar: (avatar: AvatarConfig) => void
   /** Gym workout — needs shift + one honest clock slot. */
   workout: () => void
+  /** School study hour — needs shift + smart-skill XP + one clock slot. */
+  study: (label?: string) => void
   /** Night out at the lounge — cash cost, big mood, one clock slot. */
   nightOut: () => void
   /** Bank: pocket cash → bankBalance. */
@@ -409,6 +411,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...player, needs }, world: { ...world, ...clock } })
     get().notify({ icon: '💪', text: 'Gym session done. Body dey thank you.', tone: 'good' })
+    audio.play('notify')
+    scheduleAutosave(get)
+  },
+
+  study: (label) => {
+    const { player, world } = get()
+    if (!player || !world) return
+    const cfg = INTERIOR.study
+    const needs = applySlotDecay(applyNeedsDelta(player.needs, cfg), 1)
+    const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
+    set({ player: { ...player, needs }, world: { ...world, ...clock } })
+    // the skill gain flows through the SAME authority every other XP uses
+    get().addSkillXp('smart', cfg.smartXp)
+    get().notify({ icon: '📚', text: `${label ?? 'Lesson'} done. Brain dey sharp.`, tone: 'good' })
     audio.play('notify')
     scheduleAutosave(get)
   },

@@ -105,6 +105,39 @@ export const NPCS: NpcDef[] = [
     bio: 'Trail guide. Him leg don climb Patti ten thousand times.',
     speech: 'respectful',
   },
+  // Stage 7 — the school crowd (same stable-location-id rule)
+  {
+    id: 'hauwa',
+    name: 'Hauwa',
+    emoji: '🧪',
+    homeLocationId: 'gyb-model-adankolo',
+    bio: 'Science student wey sabi every formula for WAEC.',
+    speech: 'playful',
+  },
+  {
+    id: 'chidi',
+    name: 'Chidi',
+    emoji: '🎓',
+    homeLocationId: 'ful-felele',
+    bio: 'FUL guy. Permanent site na him second house.',
+    speech: 'friendly',
+  },
+  {
+    id: 'miss-grace',
+    name: 'Miss Grace',
+    emoji: '📖',
+    homeLocationId: 'crowther-memorial',
+    bio: 'The strict-but-fair literature teacher under the hill.',
+    speech: 'respectful',
+  },
+  {
+    id: 'abubakar',
+    name: 'Abubakar',
+    emoji: '🛠️',
+    homeLocationId: 'ksp-felele',
+    bio: 'Poly student. Engine parts dey always for him pocket.',
+    speech: 'business',
+  },
 ]
 
 export const NPC_BY_ID = Object.fromEntries(NPCS.map((n) => [n.id, n])) as Record<string, NpcDef>

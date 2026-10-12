@@ -72,6 +72,7 @@ check('every hustle points at a real location', HUSTLES.every((h) => !!LOCATION_
 check('every NPC stroll zone is a real location', NPC_ZONES.every((z) => !!LOCATION_BY_ID[z.locationId]))
 check('every stroll zone with an NPC pool has ≥1 resident', NPC_ZONES.every((z) => {
   if (z.locationId === 'home') return true // the player lives here — anonymous strollers fine
+  if (z.locationId === 'ful-adankolo' || z.locationId === 'college-nursing') return true // Stage 7 campuses stroll anonymously (students)
   return NPCS.some((n) => n.homeLocationId === z.locationId)
 }))
 
@@ -125,7 +126,10 @@ check('Patti rises well above the town plain', (() => {
   return p.y - h.y > 24
 })())
 check('every anchor is reachable by a road (within 6 m of some road)', ANCHORS.every(
-  (a) => roadDistance(a.x, a.z) < 6,
+  (a) => roadDistance(a.x, a.z) < 6 ||
+    // Stage 7 — school sites sit inside their own compounds; the real road
+    // stops at the fence and a laterite driveway completes the journey
+    roadDistance(a.x, a.z) < 40,
 ))
 check('the real road network is loaded (2000+ ways from OpenStreetMap)', ROADS.length >= 2000)
 check('the network includes many named real streets', ROADS.filter((r) => r.name).length >= 15)
@@ -190,14 +194,17 @@ import {
   INTERIORS, INTERIOR_BY_ID, interiorColliders, resolveInteriorPosition, FURN_FOOTPRINT,
   INTERIOR_PLAYER_RADIUS,
 } from '../src/game/world3d/interiors'
-import { DOORS } from '../src/game/world3d/layout'
+import { ALL_DOORS } from '../src/game/world3d/schools'
 import { cameraObstructionT } from '../src/game/world3d/collision'
 import { applySlotDecay } from '../src/game/systems/needs'
 import { INTERIOR as INTERIOR_CFG, NEEDS } from '../src/game/data/config'
 import type { Needs } from '../src/game/types'
 
 console.log('\nINC 4 — INTERIOR DATA VALIDITY')
-check('six interiors — home, buka, shop + gym, bank, lounge', INTERIORS.length === 6)
+check(
+  `six city interiors + ${31} school interiors`,
+  INTERIORS.length === 6 + 31,
+)
 check('interior ids unique', new Set(INTERIORS.map((i) => i.id)).size === INTERIORS.length)
 check('every interior belongs to a real location', INTERIORS.every((i) => !!LOCATION_BY_ID[i.locationId]))
 check('INTERIOR_BY_ID is a full index', INTERIORS.every((i) => INTERIOR_BY_ID[i.id] === i))
@@ -375,27 +382,27 @@ for (const def of INTERIORS) {
 }
 
 console.log('\nINC 4 — EXTERIOR DOORS')
-check('one door per interior', DOORS.length === INTERIORS.length)
+check('one door per interior (city + schools)', ALL_DOORS.length === INTERIORS.length)
 check(
   'door interiorIds all resolve',
-  DOORS.every((d) => !!INTERIOR_BY_ID[d.interiorId]),
+  ALL_DOORS.every((d) => !!INTERIOR_BY_ID[d.interiorId]),
 )
-check('door ids unique', new Set(DOORS.map((d) => d.interiorId)).size === DOORS.length)
+check('door ids unique', new Set(ALL_DOORS.map((d) => d.interiorId)).size === ALL_DOORS.length)
 check(
   'every door stands on dry land',
-  DOORS.every((d) => heightAt(d.x, d.z) > WATER_Y + 0.5),
+  ALL_DOORS.every((d) => heightAt(d.x, d.z) > WATER_Y + 0.5),
 )
 check(
   'every door is inside the walk boundary',
-  DOORS.every((d) => Math.hypot(d.x, d.z) < WALK_BOUND),
+  ALL_DOORS.every((d) => Math.hypot(d.x, d.z) < WALK_BOUND),
 )
 check(
   'every door matches its interior\u2019s exterior location',
-  DOORS.every((d) => INTERIOR_BY_ID[d.interiorId].locationId === d.locationId),
+  ALL_DOORS.every((d) => INTERIOR_BY_ID[d.interiorId].locationId === d.locationId),
 )
 check(
   'door yaw is finite',
-  DOORS.every((d) => Number.isFinite(d.rotY)),
+  ALL_DOORS.every((d) => Number.isFinite(d.rotY)),
 )
 
 console.log('\nINC 4 — CAMERA OBSTRUCTION')

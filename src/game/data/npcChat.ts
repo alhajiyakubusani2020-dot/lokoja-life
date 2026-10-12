@@ -204,4 +204,76 @@ export const NPC_CHAT: Record<string, NpcChatLines> = {
       'I don climb Patti ten thousand times — but with you, e still dey sweet me.',
     ],
   },
+  hauwa: {
+    stranger: [
+      'Ah-ah, visitor for our school! You wan see the chemistry lab or you dey find somebody?',
+      'I no waste time o — break don nearly finish. Wetin you want?',
+    ],
+    acquaintance: [
+      'Na you again! How market? I hope say you bring gist, no be only books.',
+      'Our WAEC prep na fire these days. Sometimes I go just dey dream of formulas.',
+    ],
+    paddy: [
+      'My friend! Come make we sit under the mango tree — the gist plenty today.',
+      'You sabi say after WAEC, na university next. FUL or nothing!',
+    ],
+    'close-paddy': [
+      'See my day-one paddy! When I turn scientist, no forget say na here we start.',
+      'I even keep jollof for you from the social. You too no dey come school on time!',
+    ],
+  },
+  chidi: {
+    stranger: [
+      'Welcome to the permanent site o. The sun no dey pity anybody here — carry water.',
+      'You be fresh student? Abeg no miss LT B, that lecturer no dey forgive.',
+    ],
+    acquaintance: [
+      'My guy! You don dey adapt to campus life. The shuttle wahala no easy sha.',
+      'Exams dey come. Library go full this week — if you see seat, hold am tight.',
+    ],
+    paddy: [
+      'Padi mi! Come make we hustle this school life together — notes, runs, everything.',
+      'One day after NYSC, na big things we go do. Just dey watch.',
+    ],
+    'close-paddy': [
+      'My brother from another mother! Anything for FUL, I get plug.',
+      'Graduation go sweet — and you must sit front row that day. Na family matter.',
+    ],
+  },
+  'miss-grace': {
+    stranger: [
+      'Good day. This is a place of learning — please keep your voice low and your manners high.',
+      'Visitors sign at the office first. That is how we have run this college since 1956.',
+    ],
+    acquaintance: [
+      'Ah, our friend again. The students behave better when you are around — interesting.',
+      'Crowther built this college on discipline. I am only keeping the flame.',
+    ],
+    paddy: [
+      'Come in, come in. You know you are always welcome in this compound.',
+      'I have watched many children pass through these gates. Some of them now greet ME as colleagues.',
+    ],
+    'close-paddy': [
+      'My dear! Sit. The kettle is on. Even principals need somebody to talk to.',
+      'When they write the history of this school, your name will be in the kind part.',
+    ],
+  },
+  abubakar: {
+    stranger: [
+      'You reach the poly? Mind the generators — the workshop boys dey weld.',
+      'ND or HND? Everybody for this road na one family, no shy.',
+    ],
+    acquaintance: [
+      'Ah my guy! See the engine wey we rebuild yesterday — she dey sound like new.',
+      'Poly no be joke o, but the hands-on sense? Nobody fit beat am.',
+    ],
+    paddy: [
+      'Come make we check this alternator — you go learn something wey go serve you for life.',
+      'When my workshop open for real, na you be my first customer. I swear.',
+    ],
+    'close-paddy': [
+      'My paddy for life! Any vehicle wahala, bring am — family work, family price.',
+      'We go blow together — you with your sense, me with my hands. Watch us.',
+    ],
+  },
 }
