@@ -1632,11 +1632,11 @@ interface BoatPath {
  * its river polyline (deterministic loop, no physics).
  */
 const BOAT_PATHS: BoatPath[] = [
-  { points: RIVERS[0].points, from: 0.15, to: 0.95, speed: 1.4 },  // upstream Niger
+  { points: RIVERS[0].points, from: 0.15, to: 0.95, speed: 1.4 },  // Niger — the long real course
   { points: RIVERS[0].points, from: 0.05, to: 0.85, speed: 1.1 },  // slower canoe
   { points: RIVERS[1].points, from: 0.1, to: 0.9, speed: 1.2 },    // Benue
-  { points: RIVERS[2].points, from: 0.04, to: 0.9, speed: 1.7 },   // outflow ferry
-  { points: RIVERS[2].points, from: 0.15, to: 0.98, speed: 1.25 }, // outflow canoe
+  { points: RIVERS[0].points, from: 0.4, to: 0.99, speed: 1.7 },   // lower Niger ferry (Ganaja run)
+  { points: RIVERS[1].points, from: 0.15, to: 0.98, speed: 1.25 }, // Benue canoe
 ]
 
 function riverPoint(points: [number, number][], t: number): { x: number; z: number; yaw: number } {

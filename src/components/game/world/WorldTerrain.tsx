@@ -26,8 +26,9 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  BRIDGES, DISTRICTS, GRASS, GRASS_TONES, heightAt, riverInfo, ROADS, RIVERS,
-  WATER_Y, WORLD_HALF, roadDistance,
+  BRIDGES, CONFLUENCE_POINT, DISTRICTS, GRASS, GRASS_TONES, heightAt, riverInfo, ROADS,
+  ROAD_RENDER_W, RIVERS,
+  WATER_Y, WORLD_HALF, roadDistance, roadDistanceMajors,
 } from '@/game/world3d/layout'
 import { hash1, mergeGeoms, makeGroundGrainTexture, roadTextures } from '@/game/world3d/terrainArt'
 
@@ -38,7 +39,7 @@ function smoothstep(a: number, b: number, t: number): number {
 
 /* -------------------------------- terrain ---------------------------------- */
 
-const SEG = 128
+const SEG = 160
 
 /** districts that kick up real dust: market, motor park, junction, food strip */
 const DUSTY_DISTRICTS = DISTRICTS.filter((d) =>
@@ -48,7 +49,7 @@ const DUSTY_DISTRICTS = DISTRICTS.filter((d) =>
 function TerrainMesh() {
   const grain = useMemo(() => {
     const t = makeGroundGrainTexture(256)
-    t.repeat.set(26, 26)
+    t.repeat.set(96, 96)
     return t
   }, [])
 
@@ -94,12 +95,14 @@ function TerrainMesh() {
       const moist = 1 - smoothstep(2, 26, d - halfWidth)
       if (moist > 0) c.lerp(lush, moist * 0.6)
 
-      // dusty laterite halos along the roads (wide soft, packed near centre)
+      // dusty laterite halos: a wide soft band along the MAJOR roads (smooth
+      // on the coarse mesh) plus a tight packed-earth rim on every street
       const rd = roadDistance(x, z)
-      const halo = 1 - smoothstep(2.2, 10.5, rd)
-      if (halo > 0) c.lerp(dust, halo * 0.72)
-      const packed = 1 - smoothstep(1.2, 3.4, rd)
-      if (packed > 0) c.lerp(dustD, packed * 0.8)
+      const rm = roadDistanceMajors(x, z)
+      const halo = 1 - smoothstep(2.4, 13, rm)
+      if (halo > 0) c.lerp(dust, halo * 0.6)
+      const packed = 1 - smoothstep(1.0, 2.8, rd)
+      if (packed > 0) c.lerp(dustD, packed * 0.75)
 
       // dust bowls around the market / motor park / junction / food strip
       for (const dd of DUSTY_DISTRICTS) {
@@ -138,7 +141,7 @@ function TerrainMesh() {
 
   return (
     <mesh geometry={geometry} receiveShadow>
-      <meshStandardMaterial vertexColors flatShading map={grain} roughness={0.95} metalness={0} />
+      <meshStandardMaterial vertexColors map={grain} roughness={0.95} metalness={0} />
     </mesh>
   )
 }
@@ -285,7 +288,7 @@ function Rivers() {
     }
   })
 
-  const confluence = RIVERS[0].points[RIVERS[0].points.length - 1]
+  const confluence = CONFLUENCE_POINT
 
   return (
     <group>
@@ -322,21 +325,12 @@ function Rivers() {
 
 type RoadClass = 'asphalt' | 'laterite' | 'trail'
 
-/** width + surface hierarchy: trunk asphalt → secondary/minor laterite → trail */
-const ROAD_STYLE: { w: number; cls: RoadClass }[] = [
-  { w: 6.5, cls: 'asphalt' }, // 0 IBB Way — the E-W spine (trunk)
-  { w: 6.5, cls: 'asphalt' }, // 1 Murtala Mohammed Way — town spine (trunk)
-  { w: 5.5, cls: 'laterite' }, // 2 Ganaja Road
-  { w: 5.5, cls: 'laterite' }, // 3 Nataco/university road
-  { w: 4.5, cls: 'laterite' }, // 4 Confluence viewpoint road
-  { w: 5.5, cls: 'laterite' }, // 5 Kogi Bridge road
-  { w: 6.5, cls: 'asphalt' }, // 6 Southern bypass (trunk)
-  { w: 4.5, cls: 'laterite' }, // 7 Patti foot road
-  { w: 3.6, cls: 'trail' }, // 8 Patti switchback trail
-  { w: 4.5, cls: 'laterite' }, // 9 GRA road
-  { w: 4.5, cls: 'laterite' }, // 10 GRA ↔ IBB link
-  { w: 5.5, cls: 'laterite' }, // 11 Felele road
-]
+/** data style → render class (asphalt / laterite / trail) */
+function roadClassOf(style: string): RoadClass {
+  if (style === 'asphalt') return 'asphalt'
+  if (style === 'laterite') return 'laterite'
+  return 'trail'
+}
 
 /**
  * Road ribbon draping the terrain via heightAt. Resampled every 3 u so it
@@ -382,12 +376,13 @@ function roadGeometry(
   return geo
 }
 
-/** darker worn-earth discs where road endpoints meet, so seams don't show */
+/** darker worn-earth discs where MAJOR road endpoints meet, so seams don't show */
 function junctionDiscs(): THREE.BufferGeometry | null {
   const pts: [number, number][] = []
   for (const r of ROADS) {
-    pts.push(r[0])
-    pts.push(r[r.length - 1])
+    if (!r.major) continue
+    pts.push(r.pts[0])
+    pts.push(r.pts[r.pts.length - 1])
   }
   const used = pts.map(() => false)
   const geos: THREE.BufferGeometry[] = []
@@ -417,21 +412,31 @@ function junctionDiscs(): THREE.BufferGeometry | null {
 }
 
 function Roads() {
-  const { shoulder, asphalt, laterite, trail, junctions } = useMemo(() => {
+  const { shoulder, asphalt, laterite, trail, fabric, junctions } = useMemo(() => {
     const shoulders: THREE.BufferGeometry[] = []
     const byClass: Record<RoadClass, THREE.BufferGeometry[]> = {
       asphalt: [], laterite: [], trail: [],
     }
-    ROADS.forEach((pts, i) => {
-      const st = ROAD_STYLE[i] ?? { w: 4.5, cls: 'laterite' as const }
-      shoulders.push(roadGeometry(pts, st.w + 2.4, 0.05 + (i % 4) * 0.003, 0.25))
-      byClass[st.cls].push(roadGeometry(pts, st.w, 0.09 + (i % 5) * 0.004, 1 / 7.2))
+    const fabricGeos: THREE.BufferGeometry[] = []
+    ROADS.forEach((r, i) => {
+      const st = { w: ROAD_RENDER_W[r.cls] ?? 4.2, cls: roadClassOf(r.style) }
+      // the dense residential fabric (2,700+ real minor streets) renders as
+      // one flat earthen surface — textured stripes at every street angle
+      // would tile over each other into visual mush
+      if (r.cls === 'minor' || r.cls === 'foot') {
+        fabricGeos.push(roadGeometry(r.pts, st.w, 0.07 + (i % 5) * 0.004, 0.25))
+        return
+      }
+      // dirt shoulders only on the sparse arteries
+      shoulders.push(roadGeometry(r.pts, st.w + 2.4, 0.05 + (i % 4) * 0.003, 0.25))
+      byClass[st.cls].push(roadGeometry(r.pts, st.w, 0.09 + (i % 5) * 0.004, 1 / 7.2))
     })
     return {
       shoulder: mergeGeoms(shoulders),
       asphalt: byClass.asphalt.length ? mergeGeoms(byClass.asphalt) : null,
       laterite: byClass.laterite.length ? mergeGeoms(byClass.laterite) : null,
       trail: byClass.trail.length ? mergeGeoms(byClass.trail) : null,
+      fabric: fabricGeos.length ? mergeGeoms(fabricGeos) : null,
       junctions: junctionDiscs(),
     }
   }, [])
@@ -439,10 +444,16 @@ function Roads() {
 
   return (
     <group>
-      {/* dirt casing/shoulder under every road, blending into the dust halo */}
+      {/* dirt casing/shoulder under the arteries, blending into the dust halo */}
       <mesh geometry={shoulder} receiveShadow>
         <meshStandardMaterial color="#a9885c" roughness={1} metalness={0} />
       </mesh>
+      {/* the residential street fabric — one flat earthen tone */}
+      {fabric && (
+        <mesh geometry={fabric} receiveShadow>
+          <meshStandardMaterial color="#a5825a" roughness={1} metalness={0} />
+        </mesh>
+      )}
       {asphalt && (
         <mesh geometry={asphalt} receiveShadow>
           <meshStandardMaterial map={tex.asphalt} roughness={0.94} metalness={0} />
@@ -488,19 +499,7 @@ function Bridges() {
       // (collision uses length/2 + 1.5) — ends land on the bank, not mid-water
       const L = b.length + 3
       const W = b.width
-      // which road does this bridge carry? nearest road polyline to its centre
-      let best = 0
-      let bestD = Infinity
-      ROADS.forEach((pts, i) => {
-        for (const [px, pz] of pts) {
-          const d = Math.hypot(px - b.x, pz - b.z)
-          if (d < bestD) {
-            bestD = d
-            best = i
-          }
-        }
-      })
-      const cls = ROAD_STYLE[best]?.cls ?? 'laterite'
+      const cls: RoadClass = b.cls === 'asphalt' ? 'asphalt' : b.cls === 'laterite' ? 'laterite' : 'trail'
       e.set(0, b.rotY, 0)
       q.setFromEuler(e)
       p.set(b.x, b.y, b.z)

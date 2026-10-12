@@ -21,7 +21,7 @@
 
 import * as THREE from 'three'
 import {
-  ANCHORS, BRIDGES, BUILDINGS, DOORS, LAMPS, POINTS_OF_INTEREST, ROADS, STALLS, WALK_BOUND,
+  ANCHOR_BY_ID, ANCHORS, BRIDGES, BUILDINGS, DOORS, LAMPS, POINTS_OF_INTEREST, ROADS, STALLS, WALK_BOUND,
   heightAt, makeRng, riverInfo,
 } from './layout'
 import type { VehicleModel } from '../types'
@@ -671,9 +671,9 @@ export function findPlayerVehicleSpot(px: number, pz: number, fallbackYaw: numbe
   let byaw = 0
   let bd = Infinity
   for (const road of ROADS) {
-    for (let i = 0; i < road.length - 1; i++) {
-      const [ax, az] = road[i]
-      const [cx, cz] = road[i + 1]
+    for (let i = 0; i < road.pts.length - 1; i++) {
+      const [ax, az] = road.pts[i]
+      const [cx, cz] = road.pts[i + 1]
       const dx = cx - ax
       const dz = cz - az
       const len2 = dx * dx + dz * dz || 1e-6
@@ -715,12 +715,13 @@ export function findPlayerVehicleSpot(px: number, pz: number, fallbackYaw: numbe
 /* ------------------------------ parked vehicles -------------------------------- */
 
 /** arc position along a road polyline (t = fraction of total length) */
-function roadPointAt(road: readonly [number, number][], t: number): { x: number; z: number; yaw: number } {
-  const n = road.length - 1
+function roadPointAt(road: { pts: [number, number][] }, t: number): { x: number; z: number; yaw: number } {
+  const roadPts = road.pts
+  const n = roadPts.length - 1
   const lens: number[] = []
   let total = 0
   for (let i = 0; i < n; i++) {
-    const l = Math.hypot(road[i + 1][0] - road[i][0], road[i + 1][1] - road[i][1])
+    const l = Math.hypot(roadPts[i + 1][0] - roadPts[i][0], roadPts[i + 1][1] - roadPts[i][1])
     lens.push(l)
     total += l
   }
@@ -728,29 +729,64 @@ function roadPointAt(road: readonly [number, number][], t: number): { x: number;
   for (let i = 0; i < n; i++) {
     if (rem <= lens[i]) {
       const k = lens[i] === 0 ? 0 : rem / lens[i]
-      const dx = road[i + 1][0] - road[i][0]
-      const dz = road[i + 1][1] - road[i][1]
-      return { x: road[i][0] + dx * k, z: road[i][1] + dz * k, yaw: Math.atan2(dx, dz) }
+      const dx = roadPts[i + 1][0] - roadPts[i][0]
+      const dz = roadPts[i + 1][1] - roadPts[i][1]
+      return { x: roadPts[i][0] + dx * k, z: roadPts[i][1] + dz * k, yaw: Math.atan2(dx, dz) }
     }
     rem -= lens[i]
   }
-  const last = road[n]
-  const prev = road[n - 1]
+  const last = roadPts[n]
+  const prev = roadPts[n - 1]
   return { x: last[0], z: last[1], yaw: Math.atan2(last[0] - prev[0], last[1] - prev[1]) }
 }
 
 const BAY_CLEARANCE_ATTEMPTS = [0, 0.045, -0.045, 0.09, -0.09, 0.15, -0.15, 0.22, -0.22]
 const BAY_LATERALS = [4.8, 5.2, 4.5, 5.5, 4.3]
 
-/** Bays along real road edges near the market, food strip and motor park. */
-const BAY_SPECS: { road: number; t: number; side: 1 | -1; build: 'keke' | 'sedan'; variant: SedanVariant }[] = [
-  { road: 0, t: 0.33, side: -1, build: 'sedan', variant: 'silver' },   // IBB Way, between food strip and Kpata
-  { road: 2, t: 0.35, side: 1, build: 'sedan', variant: 'taxi' },      // Ganaja Road shoulder (west bank side)
-  { road: 1, t: 0.42, side: 1, build: 'sedan', variant: 'white' },     // town spine below home
-  { road: 6, t: 0.34, side: 1, build: 'sedan', variant: 'darkblue' },  // bypass at the motor-park edge
-  { road: 7, t: 0.24, side: -1, build: 'keke', variant: 'white' },     // Patti foot road — a resting keke
-  { road: 10, t: 0.5, side: 1, build: 'sedan', variant: 'maroon' },    // GRA link road
+/**
+ * Bays along real major-road edges near the named game districts. Each
+ * spec snaps to the nearest MAJOR road point by the district anchor, so
+ * parked cars sit on real street shoulders (IBB Way, the market streets,
+ * the motor-park road) wherever the graph actually runs.
+ */
+const BAY_SPECS: { anchor: string; dx: number; dz: number; side: 1 | -1; build: 'keke' | 'sedan'; variant: SedanVariant }[] = [
+  { anchor: 'kpata-market', dx: -16, dz: 8, side: -1, build: 'sedan', variant: 'silver' },  // market street
+  { anchor: 'ganaja-junction', dx: 8, dz: -14, side: 1, build: 'sedan', variant: 'taxi' },  // junction shoulder
+  { anchor: 'home', dx: 2, dz: 18, side: 1, build: 'sedan', variant: 'white' },             // street below home
+  { anchor: 'transport-area', dx: 16, dz: 4, side: 1, build: 'sedan', variant: 'darkblue' }, // motor-park road
+  { anchor: 'historic-lokoja', dx: -12, dz: 6, side: -1, build: 'keke', variant: 'white' }, // Patti foot road — a resting keke
+  { anchor: 'food-area', dx: 14, dz: -10, side: 1, build: 'sedan', variant: 'maroon' },     // food strip
 ]
+
+/** nearest point on any MAJOR road to (px,pz) */
+function nearestMajorPoint(px: number, pz: number): { x: number; z: number; yaw: number } {
+  let bd = Infinity
+  let bx = 0
+  let bz = 0
+  let byaw = 0
+  for (const road of ROADS) {
+    if (!road.major) continue
+    for (let i = 0; i < road.pts.length - 1; i++) {
+      const [ax, az] = road.pts[i]
+      const [cx, cz] = road.pts[i + 1]
+      const dx = cx - ax
+      const dz = cz - az
+      const len2 = dx * dx + dz * dz || 1e-6
+      let t = ((px - ax) * dx + (pz - az) * dz) / len2
+      t = Math.max(0, Math.min(1, t))
+      const qx = ax + dx * t
+      const qz = az + dz * t
+      const d = Math.hypot(px - qx, pz - qz)
+      if (d < bd) {
+        bd = d
+        bx = qx
+        bz = qz
+        byaw = Math.atan2(dx, dz)
+      }
+    }
+  }
+  return { x: bx, z: bz, yaw: byaw }
+}
 
 function bayIsClear(x: number, z: number, taken: ParkedVehicleDef[]): boolean {
   if (Math.hypot(x, z) > WALK_BOUND - 8) return false
@@ -774,22 +810,25 @@ export const PARKED_VEHICLES: ParkedVehicleDef[] = (() => {
   const rng = makeRng(4711)
   const out: ParkedVehicleDef[] = []
   for (const spec of BAY_SPECS) {
-    const road = ROADS[spec.road]
-    for (let a = 0; a < BAY_CLEARANCE_ATTEMPTS.length; a++) {
-      const tOff = BAY_CLEARANCE_ATTEMPTS[a]
-      const lat = BAY_LATERALS[a % BAY_LATERALS.length]
-      const p = roadPointAt(road, spec.t + tOff)
+    const a = ANCHOR_BY_ID[spec.anchor]
+    if (!a) continue
+    const ref = nearestMajorPoint(a.x + spec.dx, a.z + spec.dz)
+    const dirX = Math.sin(ref.yaw)
+    const dirZ = Math.cos(ref.yaw)
+    for (let ai = 0; ai < BAY_CLEARANCE_ATTEMPTS.length; ai++) {
+      const along = BAY_CLEARANCE_ATTEMPTS[ai] * 60
+      const lat = BAY_LATERALS[ai % BAY_LATERALS.length]
       // right of travel = (-cos yaw, sin yaw); side -1 parks on the left shoulder
-      const rx = -Math.cos(p.yaw) * spec.side
-      const rz = Math.sin(p.yaw) * spec.side
-      const x = p.x + rx * lat
-      const z = p.z + rz * lat
+      const rx = -Math.cos(ref.yaw) * spec.side
+      const rz = Math.sin(ref.yaw) * spec.side
+      const x = ref.x + dirX * along + rx * lat
+      const z = ref.z + dirZ * along + rz * lat
       if (!bayIsClear(x, z, out)) continue
       out.push({
         x,
         z,
         y: heightAt(x, z),
-        rotY: p.yaw + (spec.side < 0 ? Math.PI : 0) + (rng() - 0.5) * 0.12,
+        rotY: ref.yaw + (spec.side < 0 ? Math.PI : 0) + (rng() - 0.5) * 0.12,
         build: spec.build,
         variant: spec.variant,
       })

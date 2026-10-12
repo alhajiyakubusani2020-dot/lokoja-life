@@ -1,11 +1,17 @@
 /**
- * LOKOJA LIFE — 3D World Layout (Stage 3D)
- * ------------------------------------------
- * Deterministic, data-driven layout of the 3D Lokoja world.
+ * LOKOJA LIFE — 3D World Layout (Stage 6: Real Geography)
+ * ---------------------------------------------------------
+ * The world is now built on the REAL Lokoja road network (OpenStreetMap,
+ * ODbL — the same dataset Google Maps/Earth render). `world3d/geo.ts` is
+ * GENERATED from raw OSM tiles by `scripts/geo/` and holds every mapped
+ * road (3,000+ ways, ~930 km), the Niger/Benue/streams, bridges and place
+ * names, projected so that 1 world unit = 26 m and north = -Z.
  *
- * Every district anchor is derived from the EXISTING LOCATIONS registry
- * (same ids, same mapX/mapY grid the 2D map uses) — the 3D world and the
- * map screen can never disagree about where places are.
+ * This file fuses that real geography with the GAMEPLAY layer:
+ *  - district anchors derived from the LOCATIONS registry (same ids, same
+ *    mapX/mapY grid the 2D map uses — 3D world and map can never disagree)
+ *  - the Patti summit trail (the real hike route, gameplay-walkable)
+ *  - plateaus, buildings, trees, grass, lamps, stalls, traffic loops
  *
  * Nothing in this file mutates game state and nothing here knows about
  * the economy: it is pure geometry + placement, generated once from a
@@ -13,15 +19,24 @@
  */
 
 import { LOCATIONS, type LokojaLocation } from '../data/locations'
+import {
+  GEO_ROADS,
+  GEO_RIVERS,
+  GEO_BRIDGES,
+  GEO_LOOPS,
+  GEO_LAMPS,
+  GEO_WORLD_HALF,
+  type GeoRoad,
+} from './geo'
 
 /* ------------------------------ world constants ---------------------------- */
 
-/** map grid (0–100) → world units */
-export const MAP_SCALE = 3.0
-/** terrain half-extent in world units */
-export const WORLD_HALF = 160
+/** map grid (0–100) → world units (the map grid spans the whole real city) */
+export const MAP_SCALE = (GEO_WORLD_HALF * 2) / 100
+/** terrain half-extent in world units (620 × 620 m at 26 m/u ≈ 16 km across) */
+export const WORLD_HALF = GEO_WORLD_HALF
 /** hard walk boundary radius from the map centre */
-export const WALK_BOUND = 148
+export const WALK_BOUND = WORLD_HALF - 18
 /** water surface height */
 export const WATER_Y = -1.1
 
@@ -58,20 +73,22 @@ export interface WorldAnchor {
 }
 
 /** flat plateau radius so every anchor has a buildable, walkable site */
-const PLATEAU_R = 13
+const PLATEAU_R = 14
 
-export const ANCHORS: WorldAnchor[] = LOCATIONS.map((l) => {
-  let x = worldX(l.mapX)
-  let z = worldZ(l.mapY)
-  // the Confluence marker sits ON the meeting of the rivers (map-accurate),
-  // but you cannot stand in water — the 3D viewpoint nudges onto the bluff
-  // SOUTH-WEST of the meeting point, overlooking it across the water
-  if (l.id === 'confluence') {
-    x -= 30
-    z += 18
-  }
-  return { id: l.id, location: l, x, z, plateauH: 0, y: 0 }
-})
+/**
+ * Anchors derive from LOCATIONS.mapX/mapY. The Stage 6 coordinates are the
+ * REAL positions (road-snapped to the OSM network by the geo pipeline), so
+ * Kpata Market stands in the real market core, Mount Patti on the real
+ * summit plateau, the Confluence viewpoint on the real west-bank bluff.
+ */
+export const ANCHORS: WorldAnchor[] = LOCATIONS.map((l) => ({
+  id: l.id,
+  location: l,
+  x: worldX(l.mapX),
+  z: worldZ(l.mapY),
+  plateauH: 0,
+  y: 0,
+}))
 
 export const ANCHOR_BY_ID: Record<string, WorldAnchor> = Object.fromEntries(
   ANCHORS.map((a) => [a.id, a]),
@@ -82,46 +99,33 @@ const MOUNT_PATTI = ANCHOR_BY_ID['mount-patti']
 /* --------------------------------- rivers ---------------------------------- */
 
 export interface RiverDef {
-  id: 'niger' | 'benue' | 'outflow'
-  /** world-space centreline, sampled downstream */
-  points: [number, number][]
+  id: string
+  name: string | null
+  /** real-width scaled channel (world units) */
   width: number
+  /** world-space centreline */
+  points: [number, number][]
 }
 
 /**
- * Real Lokoja geography, stylised to the world grid (north-up):
- *  • River Niger enters from the NORTH-WEST and curves east north of the
- *    city and Mount Patti.
- *  • River Benue arrives from the EAST.
- *  • They meet at the Confluence NORTH-EAST of the town.
- *  • The combined Niger flows SOUTH along the town's eastern side —
- *    Lokoja is sandwiched between the Niger (east) and Mount Patti (west).
+ * The REAL waters of Lokoja from OSM: the River Niger flows down the town's
+ * eastern side (with the great bend at the waterfront), the River Benue
+ * arrives from the east-north-east, and they meet at the true Confluence
+ * south-east of the town — exactly as a local knows them. Smaller entries
+ * are the mapped streams (Ofe/Odagbo etc.) that the highways bridge over.
  */
-export const RIVERS: RiverDef[] = [
-  {
-    id: 'niger',
-    width: 15,
-    points: [
-      [-150, -152], [-116, -144], [-88, -134], [-58, -124],
-      [-24, -118], [8, -116], [32, -115], [54, -114],
-    ],
-  },
-  {
-    id: 'benue',
-    width: 13,
-    points: [[160, -122], [122, -118], [86, -116], [54, -114]],
-  },
-  {
-    id: 'outflow',
-    width: 17,
-    points: [
-      [54, -114], [60, -90], [64, -62], [66, -30], [66, 4],
-      [62, 40], [58, 76], [54, 110], [52, 140], [52, 162],
-    ],
-  },
-]
+export const RIVERS: RiverDef[] = GEO_RIVERS.map((r) => ({
+  id: r.id,
+  name: r.name,
+  width: r.w,
+  points: r.pts,
+}))
 
-/** distance from (x,z) to a polyline, plus progress along it (0..1) */
+/** where the Benue kisses the Niger — the famous confluence landmark */
+export const CONFLUENCE_POINT: [number, number] =
+  RIVERS[1].points[RIVERS[1].points.length - 1]
+
+/** distance from (x,z) to a polyline */
 function polylineDistance(x: number, z: number, pts: [number, number][]): { d: number } {
   let best = Infinity
   for (let i = 0; i < pts.length - 1; i++) {
@@ -156,46 +160,158 @@ export function riverInfo(x: number, z: number): { d: number; halfWidth: number 
 
 /* ---------------------------------- roads ---------------------------------- */
 
-export type RoadPath = [number, number][]
+export type RoadStyle = GeoRoad['style']
+
+export interface RoadDef {
+  osm: number
+  name: string | null
+  cls: string
+  style: RoadStyle
+  /** REAL carriageway width in world units (1u = 26 m) */
+  w: number
+  /** trunk/major road — lamps, poles, traffic, building clearance */
+  major: boolean
+  pts: [number, number][]
+}
+
+/** the real hike/touring route up Mount Patti — switchbacks to the summit */
+const PATTI_TRAIL: RoadDef = {
+  osm: 0,
+  name: 'Patti Road',
+  cls: 'track',
+  style: 'dirt',
+  w: 0.26,
+  major: false,
+  pts: [
+    [-51.7, -85.2], [-60, -91], [-69, -100], [-66, -111],
+    [-75, -119], [-83, -129], [-85, -136],
+  ],
+}
 
 /**
- * The road graph — named after the real Lokoja road spine, expressed in
- * world coordinates. Same connectivity the 2D map implies.
+ * The road graph of Lokoja — REAL, from OpenStreetMap: every trunk (A2
+ * Okene/Abuja roads), the IBB Way, Marine Road, Lugard Road, Taiwo Road,
+ * Hassan Usman Katsina Road, the Lokoja–Otukpo road out to the Ganaja
+ * ferry, plus the full residential fabric. The Patti trail is appended.
  */
-export const ROADS: RoadPath[] = [
-  // 0: IBB Way — food strip ↔ kpata ↔ ganaja junction (the E-W spine)
-  [[-18, 15], [0, 10], [18, 6], [30, 12], [42, 24]],
-  // 1: town spine — kpata ↔ home ↔ motor park (Murtala Mohammed Way)
-  [[18, 6], [10, 26], [-6, 48], [4, 66], [18, 84]],
-  // 2: Ganaja Road — ganaja junction ↘ river road, hugging the west bank
-  [[42, 24], [46, 34], [48, 46], [46, 58], [44, 70], [44, 82]],
-  // 3: Nataco/university road — ganaja junction ↔ university area
-  [[42, 24], [46, -10], [44, -44], [36, -78]],
-  // 4: Confluence road — university area ↗ the bluff viewpoint
-  [[36, -78], [28, -88], [24, -96]],
-  // 5: Kogi Bridge road — ganaja junction → east across the Niger
-  [[42, 24], [54, 28], [66, 30], [80, 30], [96, 28]],
-  // 6: southern bypass — motor park → east across the Niger (Felele side)
-  [[18, 84], [34, 92], [48, 96], [62, 94], [76, 88]],
-  // 7: Patti foot road — kpata ↔ historic Lokoja
-  [[18, 6], [2, 0], [-30, -14], [-60, -24]],
-  // 8: Patti trail — switchbacks up the mount to the summit
-  [[-60, -24], [-70, -30], [-80, -38], [-88, -50], [-84, -60], [-94, -56], [-100, -50], [-102, -48]],
-  // 9: GRA road — historic ↔ government area
-  [[-60, -24], [-42, -44], [-18, -60]],
-  // 10: GRA ↔ IBB Way link (the western spine)
-  [[-18, -60], [-20, -24], [-18, 15]],
-  // 11: Felele road — motor park → southern rim
-  [[18, 84], [24, 100], [28, 116], [32, 134]],
+export const ROADS: RoadDef[] = [
+  ...GEO_ROADS.map((r) => ({
+    osm: r.osm,
+    name: r.name,
+    cls: r.cls,
+    style: r.style,
+    w: r.w,
+    major: r.major,
+    pts: r.pts,
+  })),
+  PATTI_TRAIL,
 ]
 
-export function roadDistance(x: number, z: number): number {
-  let d = Infinity
-  for (const r of ROADS) {
-    const { d: rd } = polylineDistance(x, z, r)
-    if (rd < d) d = rd
+/**
+ * Gameplay render width per road class. The world compresses 26 m into one
+ * unit, so real widths (RoadDef.w) would be sub-unit — the RENDERED
+ * carriageway uses arcade widths a player can walk and drive on, exactly
+ * like every city-compression game.
+ */
+export const ROAD_RENDER_W: Record<string, number> = {
+  highway: 6.2,
+  major: 5.2,
+  secondary: 4.6,
+  minor: 2.6,
+  track: 2.8,
+  path: 1.6,
+  foot: 1.6,
+}
+
+/* ------------------------- road spatial grid (fast) ------------------------ */
+
+const GRID_CELL = 16
+
+interface RoadSeg {
+  ax: number
+  az: number
+  bx: number
+  bz: number
+  major: boolean
+}
+
+const SEG_GRID: Map<string, RoadSeg[]> = new Map()
+
+function gridAdd(s: RoadSeg): void {
+  const minX = Math.floor(Math.min(s.ax, s.bx) / GRID_CELL)
+  const maxX = Math.floor(Math.max(s.ax, s.bx) / GRID_CELL)
+  const minZ = Math.floor(Math.min(s.az, s.bz) / GRID_CELL)
+  const maxZ = Math.floor(Math.max(s.az, s.bz) / GRID_CELL)
+  for (let cx = minX; cx <= maxX; cx++) {
+    for (let cz = minZ; cz <= maxZ; cz++) {
+      const k = `${cx}:${cz}`
+      let arr = SEG_GRID.get(k)
+      if (!arr) {
+        arr = []
+        SEG_GRID.set(k, arr)
+      }
+      arr.push(s)
+    }
   }
-  return d
+}
+
+for (const r of ROADS) {
+  for (let i = 0; i < r.pts.length - 1; i++) {
+    const [ax, az] = r.pts[i]
+    const [bx, bz] = r.pts[i + 1]
+    gridAdd({ ax, az, bx, bz, major: r.major })
+  }
+}
+
+const ROAD_Q_CAP = 30
+
+function segsNear(x: number, z: number, radius: number): RoadSeg[] {
+  const out: RoadSeg[] = []
+  const minX = Math.floor((x - radius) / GRID_CELL)
+  const maxX = Math.floor((x + radius) / GRID_CELL)
+  const minZ = Math.floor((z - radius) / GRID_CELL)
+  const maxZ = Math.floor((z + radius) / GRID_CELL)
+  for (let cx = minX; cx <= maxX; cx++) {
+    for (let cz = minZ; cz <= maxZ; cz++) {
+      const arr = SEG_GRID.get(`${cx}:${cz}`)
+      if (arr) out.push(...arr)
+    }
+  }
+  return out
+}
+
+function segDist(s: RoadSeg, x: number, z: number): number {
+  const dx = s.bx - s.ax
+  const dz = s.bz - s.az
+  const len2 = dx * dx + dz * dz
+  let t = len2 === 0 ? 0 : ((x - s.ax) * dx + (z - s.az) * dz) / len2
+  t = Math.max(0, Math.min(1, t))
+  return Math.hypot(x - (s.ax + dx * t), z - (s.az + dz * t))
+}
+
+/**
+ * Distance to the nearest road centreline (capped at 30u — callers only
+ * reason about nearby streets). Used by driving grip, dust halos,
+ * building/tree/grass clearance, lamps and props.
+ */
+export function roadDistance(x: number, z: number): number {
+  let best = ROAD_Q_CAP
+  for (const s of segsNear(x, z, ROAD_Q_CAP)) {
+    const d = segDist(s, x, z)
+    if (d < best) best = d
+  }
+  return best
+}
+
+/** distance to the nearest MAJOR road centreline (trunk/major/secondary) */
+export function roadDistanceMajors(x: number, z: number): number {
+  let best = ROAD_Q_CAP
+  for (const s of segsNear(x, z, ROAD_Q_CAP)) {
+    if (!s.major) continue
+    const d = segDist(s, x, z)
+    if (d < best) best = d
+  }
+  return best
 }
 
 /* --------------------------------- terrain --------------------------------- */
@@ -221,7 +337,8 @@ for (const a of ANCHORS) {
 
 /**
  * Terrain height at any world position.
- * Layers: rolling base → Mount Patti mound → anchor plateaus → river carving.
+ * Layers: rolling base → Mount Patti mound (real summit position) →
+ * anchor plateaus → river carving (wide for the Niger, narrow for streams).
  * The SAME function drapes roads/buildings and grounds the player,
  * so nothing can float or sink.
  */
@@ -233,13 +350,12 @@ export function heightAt(x: number, z: number): number {
   const rim = Math.hypot(x, z)
   h += smoothstep(WALK_BOUND - 26, WALK_BOUND + 14, rim) * 14
 
-  // Mount Patti — the guardian ridge (west). Bigger and steeper: the real
-  // Patti plateau dominates the town's skyline
-  const pdx = x - (MOUNT_PATTI.x - 4)
-  const pdz = z - (MOUNT_PATTI.z - 2)
-  const pd = Math.hypot(pdx, pdz)
-  const pattiRise = smoothstep(78, 8, pd) // 1 at summit → 0 at the plains
-  h += Math.pow(pattiRise, 1.3) * 30
+  // Mount Patti — the guardian ridge at its REAL position north-west of
+  // the town, ~480 m above the Niger plain. The plateau top carries the
+  // summit anchor (Lugard's rest house site).
+  const pd = Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z)
+  const pattiRise = smoothstep(85, 8, pd) // 1 at summit → 0 at the plains
+  h += Math.pow(pattiRise, 1.3) * 34
 
   // anchor plateaus — flat buildable/walkable sites
   for (const a of ANCHORS) {
@@ -250,10 +366,11 @@ export function heightAt(x: number, z: number): number {
     }
   }
 
-  // river carving — smooth banks down to below water level
+  // river carving — big rivers carve wide valleys, streams cut narrow gullies
   const { d, halfWidth } = riverInfo(x, z)
-  if (d < halfWidth + 9) {
-    const carve = 1 - smoothstep(halfWidth - 2, halfWidth + 9, d)
+  const margin = Math.min(9, 2 + halfWidth)
+  if (d < halfWidth + margin) {
+    const carve = 1 - smoothstep(halfWidth - 2, halfWidth + margin, d)
     h = h * (1 - carve) + (WATER_Y - 1.7) * carve
   }
 
@@ -275,56 +392,26 @@ export interface BridgeDef {
   rotY: number
   length: number
   width: number
+  /** surface style of the carrying road */
+  cls: RoadStyle
 }
 
-function findCrossings(): BridgeDef[] {
-  const bridges: BridgeDef[] = []
-  for (const road of ROADS) {
-    for (let i = 0; i < road.length - 1; i++) {
-      const [ax, az] = road[i]
-      const [bx, bz] = road[i + 1]
-      const segLen = Math.hypot(bx - ax, bz - az)
-      const steps = Math.max(2, Math.round(segLen / 2))
-      for (let s = 0; s <= steps; s++) {
-        const t = s / steps
-        const x = ax + (bx - ax) * t
-        const z = az + (bz - az) * t
-        const { d, halfWidth } = riverInfo(x, z)
-        if (d < halfWidth + 1.5) {
-          const dirX = (bx - ax) / segLen
-          const dirZ = (bz - az) / segLen
-          // walk along the road direction until out of the water
-          let u = 0
-          while (u < 60 && riverInfo(x + dirX * u, z + dirZ * u).d < halfWidth + 2) u += 1.2
-          const hi = u
-          u = 0
-          while (u > -60 && riverInfo(x + dirX * u, z + dirZ * u).d < halfWidth + 2) u -= 1.2
-          const lo = u
-          const midU = (lo + hi) / 2
-          const cx = x + dirX * midU
-          const cz = z + dirZ * midU
-          bridges.push({
-            x: cx,
-            z: cz,
-            y: WATER_Y + 1.5,
-            rotY: Math.atan2(dirX, dirZ),
-            length: hi - lo + 6,
-            width: 7.5,
-          })
-          break // one bridge per road segment
-        }
-      }
-    }
-  }
-  // de-duplicate bridges that ended up within 6 units of each other
-  const out: BridgeDef[] = []
-  for (const b of bridges) {
-    if (!out.some((o) => Math.hypot(o.x - b.x, o.z - b.z) < 6)) out.push(b)
-  }
-  return out
-}
-
-export const BRIDGES: BridgeDef[] = findCrossings()
+/**
+ * The real bridges of Lokoja (computed from the OSM network by the geo
+ * pipeline): every mapped stream crossing — the dual-carriageway A2
+ * bridges over the northern river, the town bridges along the Okene and
+ * IBB roads, Felele-road crossings. The Niger itself has NO road bridge
+ * at Lokoja (locals cross by the Ganaja ferry — true to the real city).
+ */
+export const BRIDGES: BridgeDef[] = GEO_BRIDGES.map((b) => ({
+  x: b.x,
+  z: b.z,
+  y: WATER_Y + 1.5,
+  rotY: b.yaw,
+  length: b.len,
+  width: b.w,
+  cls: (b.cls === 'asphalt' ? 'asphalt' : b.cls === 'laterite' ? 'laterite' : 'dirt') as RoadStyle,
+}))
 
 /* -------------------------------- districts -------------------------------- */
 
@@ -360,7 +447,7 @@ export const DISTRICTS: District[] = ANCHORS.map((a) => ({
   x: a.x,
   z: a.z,
   y: a.y,
-  radius: a.id === 'mount-patti' || a.id === 'confluence' ? 20 : 16,
+  radius: a.id === 'mount-patti' || a.id === 'confluence' ? 34 : 30,
 }))
 
 /* ------------------------------- buildings --------------------------------- */
@@ -388,7 +475,10 @@ export const ROOF_TONES = ['#8a4a2a', '#6e4530', '#7a6a55', '#96543a', '#5a6e5c'
 
 function isClearOf(x: number, z: number, r: number): boolean {
   if (riverInfo(x, z).d < 16) return false
-  if (roadDistance(x, z) < r + 3.4) return false
+  // majors need full breathing room; the dense minor fabric only demands
+  // the building not straddle the rendered carriageway
+  if (roadDistanceMajors(x, z) < r + 2.6) return false
+  if (roadDistance(x, z) < r * 0.55 + 2.2) return false
   return true
 }
 
@@ -406,7 +496,7 @@ function buildDistrictBuildings(d: District, rng: () => number): BuildingDef[] {
     roof: BuildingDef['roof'],
     rotJitter = 0.5,
   ): void => {
-    for (let attempt = 0; attempt < 14; attempt++) {
+    for (let attempt = 0; attempt < 16; attempt++) {
       const ang = rng() * Math.PI * 2
       const rad = radiusMin + rng() * (radiusMax - radiusMin)
       const x = d.x + Math.cos(ang) * rad
@@ -431,45 +521,45 @@ function buildDistrictBuildings(d: District, rng: () => number): BuildingDef[] {
       // the player's place — proud compound beside the anchor clearing
       // (roads terminate at the anchor, so the centre stays open)
       push({ x: d.x + 6.5, z: d.z - 5, w: 6.4, d: 5.4, h: 3.4, rotY: -0.5, kind: 'house', tone: 5, roof: 'hip', roofTone: 0 })
-      for (let i = 0; i < 3; i++) tryPlace(11, 15, 4.6 + rng() * 1.6, 4 + rng(), 2.9, 'house', 'hip')
+      for (let i = 0; i < 5; i++) tryPlace(13, 28, 4.6 + rng() * 1.6, 4 + rng(), 2.9, 'house', 'hip')
       break
     }
     case 'market': {
       // permanent sheds beside the clearing; dense stall rows are placed separately
       push({ x: d.x - 10, z: d.z - 6, w: 9, d: 5.6, h: 3.8, rotY: 0.4, kind: 'shed', tone: 2, roof: 'shed', roofTone: 4 })
       push({ x: d.x + 11, z: d.z + 7, w: 8, d: 5, h: 3.4, rotY: -0.3, kind: 'shed', tone: 1, roof: 'shed', roofTone: 3 })
-      for (let i = 0; i < 3; i++) tryPlace(12, 15.5, 4.4, 4, 3, 'shop', 'flat')
+      for (let i = 0; i < 5; i++) tryPlace(14, 30, 4.4, 4, 3, 'shop', 'flat')
       break
     }
     case 'food': {
-      for (let i = 0; i < 3; i++) tryPlace(10.5, 14.5, 4.6, 4.2, 3.1, 'shop', 'flat')
-      for (let i = 0; i < 2; i++) tryPlace(11, 15, 4, 3.6, 2.7, 'house', 'hip')
+      for (let i = 0; i < 5; i++) tryPlace(13, 28, 4.6, 4.2, 3.1, 'shop', 'flat')
+      for (let i = 0; i < 3; i++) tryPlace(14, 29, 4, 3.6, 2.7, 'house', 'hip')
       break
     }
     case 'junction': {
-      for (let i = 0; i < 5; i++) tryPlace(10.5, 15.5, 5 + rng() * 2.4, 4.4, 3.6 + rng() * 1.4, 'shop', 'flat')
+      for (let i = 0; i < 8; i++) tryPlace(13, 30, 5 + rng() * 2.4, 4.4, 3.6 + rng() * 1.4, 'shop', 'flat')
       break
     }
     case 'park': {
       push({ x: d.x, z: d.z, w: 12, d: 6.4, h: 4, rotY: 0.2, kind: 'shed', tone: 3, roof: 'shed', roofTone: 1 })
-      for (let i = 0; i < 2; i++) tryPlace(12, 15, 4.8, 4, 3, 'shop', 'flat')
+      for (let i = 0; i < 4; i++) tryPlace(14, 29, 4.8, 4, 3, 'shop', 'flat')
       break
     }
     case 'historic': {
       // colonial relics — pale walls, dark hip roofs
       push({ x: d.x - 6, z: d.z + 2, w: 8.4, d: 6, h: 4.6, rotY: 0.9, kind: 'colonial', tone: 0, roof: 'hip', roofTone: 2 })
       push({ x: d.x + 7, z: d.z - 4, w: 6.6, d: 5.4, h: 4.1, rotY: -0.6, kind: 'colonial', tone: 5, roof: 'hip', roofTone: 2 })
-      tryPlace(11, 14.5, 5.4, 4.8, 3.6, 'colonial', 'hip', 0.3)
+      for (let i = 0; i < 2; i++) tryPlace(14, 28, 5.4, 4.8, 3.6, 'colonial', 'hip', 0.3)
       break
     }
     case 'gov': {
       push({ x: d.x, z: d.z, w: 12.5, d: 7.5, h: 6.2, rotY: 0, kind: 'block', tone: 6, roof: 'flat', roofTone: 4 })
-      tryPlace(12, 15, 6, 5, 4.4, 'block', 'flat', 0.2)
+      for (let i = 0; i < 2; i++) tryPlace(15, 29, 6, 5, 4.4, 'block', 'flat', 0.2)
       break
     }
     case 'university': {
       push({ x: d.x - 5, z: d.z + 3, w: 10.5, d: 6, h: 5.4, rotY: 0.3, kind: 'hostel', tone: 4, roof: 'flat', roofTone: 5 })
-      for (let i = 0; i < 3; i++) tryPlace(10.5, 15, 4.4, 4, 3.1, 'shop', 'flat')
+      for (let i = 0; i < 5; i++) tryPlace(13, 29, 4.4, 4, 3.1, 'shop', 'flat')
       break
     }
     case 'landmark-river':
@@ -531,15 +621,15 @@ export const DOORS: DoorDef[] = (() => {
     ) ?? null
   // Mama's buka — the first shop placed in the food district
   const foodShop = BUILDINGS.find(
-    (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['food-area'].x, b.z - ANCHOR_BY_ID['food-area'].z) < 16,
+    (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['food-area'].x, b.z - ANCHOR_BY_ID['food-area'].z) < 34,
   ) ?? null
   // the provision store — the first shed in the market district
   const marketShed = BUILDINGS.find(
-    (b) => b.kind === 'shed' && Math.hypot(b.x - ANCHOR_BY_ID['kpata-market'].x, b.z - ANCHOR_BY_ID['kpata-market'].z) < 16,
+    (b) => b.kind === 'shed' && Math.hypot(b.x - ANCHOR_BY_ID['kpata-market'].x, b.z - ANCHOR_BY_ID['kpata-market'].z) < 34,
   ) ?? null
   // Stage 5-b — the campus gym: a shop building in the university district
   const uniGym = BUILDINGS.find(
-    (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['university-area'].x, b.z - ANCHOR_BY_ID['university-area'].z) < 16,
+    (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['university-area'].x, b.z - ANCHOR_BY_ID['university-area'].z) < 34,
   ) ?? null
   // Stage 5-b — the microfinance bank: the civic block standing at the gov anchor
   const govA = ANCHOR_BY_ID['government-area']
@@ -550,7 +640,7 @@ export const DOORS: DoorDef[] = (() => {
   // Stage 5-b — the lounge: the SECOND shop in the food strip (the first is Mama's)
   const foodShop2 =
     BUILDINGS.filter(
-      (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['food-area'].x, b.z - ANCHOR_BY_ID['food-area'].z) < 16,
+      (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['food-area'].x, b.z - ANCHOR_BY_ID['food-area'].z) < 34,
     )[1] ?? null
   return [
     doorFor('home-interior', 'home', homeHouse, { dx: 5, dz: 2 }),
@@ -582,12 +672,12 @@ function scatterTrees(): TreeDef[] {
   const rng = makeRng(51197)
   const out: TreeDef[] = []
   let guard = 0
-  while (out.length < 280 && guard < 9000) {
+  while (out.length < 700 && guard < 26000) {
     guard++
     const x = (rng() * 2 - 1) * (WALK_BOUND - 4)
     const z = (rng() * 2 - 1) * (WALK_BOUND - 4)
     const y = heightAt(x, z)
-    if (y > 24) continue // sparse above the Patti slopes' treeline
+    if (y > 26) continue // sparse above the Patti slopes' treeline
     const nearRiver = riverInfo(x, z)
     if (nearRiver.d < 13) continue
     if (roadDistance(x, z) < 6.5) continue
@@ -596,7 +686,7 @@ function scatterTrees(): TreeDef[] {
     if (ANCHORS.some((a) => Math.hypot(a.x - x, a.z - z) < 13)) continue
     if (BUILDINGS.some((b) => Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) * 0.75 + 2)) continue
     // denser around Patti + riversides, thinner downtown
-    const pattiBoost = Math.max(0, 1 - Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z) / 90)
+    const pattiBoost = Math.max(0, 1 - Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z) / 110)
     if (rng() > 0.34 + pattiBoost * 0.5) continue
     // riverside riverine vegetation — palms line the watersides
     const riverside = nearRiver.d < nearRiver.halfWidth + 26
@@ -634,13 +724,13 @@ export const GRASS: GrassDef[] = (() => {
   const rng = makeRng(90210)
   const out: GrassDef[] = []
   let guard = 0
-  while (out.length < 3200 && guard < 30000) {
+  while (out.length < 7500 && guard < 72000) {
     guard++
     const x = (rng() * 2 - 1) * (WALK_BOUND - 2)
     const z = (rng() * 2 - 1) * (WALK_BOUND - 2)
     const y = heightAt(x, z)
     if (y < WATER_Y + 0.4) continue
-    if (y > 26) continue // rocky Patti crown stays bare
+    if (y > 28) continue // rocky Patti crown stays bare
     // steep ground sheds the terrain mesh's faceting — tufts would float
     const slope = (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
     if (slope > 0.45) continue
@@ -669,25 +759,11 @@ export interface LampDef {
   y: number
 }
 
-export const LAMPS: LampDef[] = (() => {
-  const out: LampDef[] = []
-  for (const road of ROADS) {
-    for (let i = 0; i < road.length - 1; i++) {
-      const [ax, az] = road[i]
-      const [bx, bz] = road[i + 1]
-      const len = Math.hypot(bx - ax, bz - az)
-      const steps = Math.floor(len / 17)
-      for (let s = 0; s < steps; s++) {
-        const t = (s + 0.5) / steps
-        const x = ax + (bx - ax) * t + 4.2
-        const z = az + (bz - az) * t + 2.2
-        if (riverInfo(x, z).d < 12) continue
-        out.push({ x, z, y: heightAt(x, z) })
-      }
-    }
-  }
-  return out
-})()
+/**
+ * Street lights along the REAL major roads (emitted by the geo pipeline
+ * from the OSM trunk/major/secondary network — the lit arteries of Lokoja).
+ */
+export const LAMPS: LampDef[] = GEO_LAMPS.map(([x, z]) => ({ x, z, y: heightAt(x, z) }))
 
 /* ---------------------------------- stalls ---------------------------------- */
 
@@ -706,9 +782,9 @@ export const STALLS: StallDef[] = (() => {
   const rng = makeRng(4402)
   const out: StallDef[] = []
   const rows: { cx: number; cz: number; n: number; spread: number; rot: number }[] = [
-    { cx: ANCHOR_BY_ID['kpata-market'].x, cz: ANCHOR_BY_ID['kpata-market'].z, n: 12, spread: 12.5, rot: 0.35 },
-    { cx: ANCHOR_BY_ID['food-area'].x, cz: ANCHOR_BY_ID['food-area'].z, n: 9, spread: 10.5, rot: -0.5 },
-    { cx: ANCHOR_BY_ID['ganaja-junction'].x, cz: ANCHOR_BY_ID['ganaja-junction'].z, n: 6, spread: 9, rot: 1.1 },
+    { cx: ANCHOR_BY_ID['kpata-market'].x, cz: ANCHOR_BY_ID['kpata-market'].z, n: 14, spread: 17, rot: 0.35 },
+    { cx: ANCHOR_BY_ID['food-area'].x, cz: ANCHOR_BY_ID['food-area'].z, n: 10, spread: 14, rot: -0.5 },
+    { cx: ANCHOR_BY_ID['ganaja-junction'].x, cz: ANCHOR_BY_ID['ganaja-junction'].z, n: 8, spread: 12, rot: 1.1 },
   ]
   for (const row of rows) {
     for (let i = 0; i < row.n; i++) {
@@ -716,7 +792,7 @@ export const STALLS: StallDef[] = (() => {
       const gz = Math.floor(i / 4) - 1
       const x = row.cx + Math.cos(row.rot) * (gx * 4.6) - Math.sin(row.rot) * (gz * 5.4)
       const z = row.cz + Math.sin(row.rot) * (gx * 4.6) + Math.cos(row.rot) * (gz * 5.4)
-      if (roadDistance(x, z) < 4.5) continue
+      if (roadDistance(x, z) < 2.6) continue
       out.push({
         x, z, y: heightAt(x, z),
         rotY: row.rot + (rng() - 0.5) * 0.3,
@@ -743,7 +819,7 @@ export const NPC_ZONES: NpcZone[] = [
   'kpata-market', 'food-area', 'ganaja-junction', 'home', 'transport-area', 'university-area', 'historic-lokoja',
 ].map((id) => {
   const a = ANCHOR_BY_ID[id]
-  return { locationId: id, x: a.x, z: a.z, y: a.y, radius: 11 }
+  return { locationId: id, x: a.x, z: a.z, y: a.y, radius: 15 }
 })
 
 /* ---------------------------- points of interest ----------------------------- */
@@ -789,32 +865,8 @@ export const POINTS_OF_INTEREST: PoiDef[] = (
 
 /* ------------------------------- traffic loops ------------------------------- */
 
-/** concatenate road point lists into closed loops for keke/okada traffic */
-export const TRAFFIC_LOOPS: [number, number][][] = [
-  // loop A: food strip ↔ kpata ↔ ganaja junction ↔ food strip (IBB ring)
-  [
-    ...ROADS[0],
-    ...ROADS[0].slice().reverse().slice(1),
-  ],
-  // loop B: kpata ↔ home ↔ motor park ↔ bypass ↔ back (southern ring)
-  [
-    ...ROADS[1],
-    ...ROADS[6],
-    ...ROADS[6].slice().reverse().slice(1),
-    ...ROADS[1].slice().reverse().slice(1),
-  ],
-  // loop C: kpata ↔ historic ↔ GRA ↔ food strip ↔ kpata (western ring)
-  [
-    ...ROADS[7],
-    ...ROADS[9],
-    ...ROADS[10],
-    ...ROADS[0].slice(0, 3),
-  ],
-  // loop D: ganaja junction ↔ university ↔ confluence viewpoint (out + back)
-  [
-    ...ROADS[3],
-    ...ROADS[4],
-    ...ROADS[4].slice().reverse().slice(1),
-    ...ROADS[3].slice().reverse().slice(1),
-  ],
-]
+/**
+ * Closed traffic loops chained along the REAL major-road graph by the geo
+ * pipeline (IBB Way circuit, Taiwo/west ring, Otukpo road circuit).
+ */
+export const TRAFFIC_LOOPS: [number, number][][] = GEO_LOOPS

@@ -726,12 +726,13 @@ interface VehiclePlan {
 // speeds are presentation feel, scaled off the shared config base
 const BASE = WORLD3D.trafficBaseSpeed
 
-/** the town's fleet mix — 13 rigs across the four loops (perf ceiling ~14) */
+/** the town's fleet mix — 13 rigs across the real road loops (perf ceiling ~14) */
 const TRAFFIC_MIX: { kind: VehicleKind; loop: number; lane: number; base: number; variant?: SedanVariant }[] = [
   { kind: 'keke', loop: 0, lane: 1.55, base: 1.0 },
   { kind: 'taxi', loop: 0, lane: -1.7, base: 1.14 },
   { kind: 'danfo', loop: 0, lane: 1.9, base: 0.8 },
   { kind: 'okada', loop: 0, lane: -1.4, base: 1.32 },
+  { kind: 'danfo', loop: 0, lane: 2.1, base: 0.72 },
   { kind: 'danfo', loop: 1, lane: 1.9, base: 0.78 },
   { kind: 'keke', loop: 1, lane: -1.55, base: 0.96 },
   { kind: 'sedan', loop: 1, lane: 1.75, base: 1.06, variant: 'white' },
@@ -739,8 +740,7 @@ const TRAFFIC_MIX: { kind: VehicleKind; loop: number; lane: number; base: number
   { kind: 'keke', loop: 2, lane: 1.5, base: 1.0 },
   { kind: 'sedan', loop: 2, lane: -1.8, base: 1.08, variant: 'silver' },
   { kind: 'okada', loop: 2, lane: 1.4, base: 1.3 },
-  { kind: 'taxi', loop: 3, lane: 1.65, base: 1.12 },
-  { kind: 'sedan', loop: 3, lane: -1.75, base: 1.02, variant: 'darkblue' },
+  { kind: 'taxi', loop: 1, lane: 1.65, base: 1.12 },
 ]
 
 const VEHICLES: VehiclePlan[] = TRAFFIC_MIX.map((m, i) => {

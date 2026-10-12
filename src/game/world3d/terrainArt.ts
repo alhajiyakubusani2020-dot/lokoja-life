@@ -99,7 +99,7 @@ export function makeGroundGrainTexture(size = 256): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(cv)
   tex.wrapS = THREE.RepeatWrapping
   tex.wrapT = THREE.RepeatWrapping
-  tex.anisotropy = 4
+  tex.anisotropy = 8
   return tex
 }
 

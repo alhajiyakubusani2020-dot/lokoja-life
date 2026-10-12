@@ -264,7 +264,7 @@ export const HUSTLE = {
  */
 export const TRAVEL = {
   /** Map units (0–100 grid) → kilometres. Lokoja core ≈ 11 km across. */
-  kmPerMapUnit: 0.11,
+  kmPerMapUnit: 0.16,
   /** Every completed trip advances this many time slots on the EXISTING clock. */
   slotsPerTrip: 1,
   /** Minutes multiplier per transport in each weather (kept gentle by design). */

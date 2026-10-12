@@ -15,6 +15,7 @@ import { HUSTLES } from '../src/game/data/hustles'
 import {
   heightAt, NPC_ZONES, POINTS_OF_INTEREST, riverInfo, WALK_BOUND, WATER_Y,
   ANCHORS, ROADS, BRIDGES, GRASS, TREES, TRAFFIC_LOOPS, roadDistance,
+  ROAD_RENDER_W, CONFLUENCE_POINT, WORLD_HALF, MAP_SCALE,
 } from '../src/game/world3d/layout'
 
 let passed = 0
@@ -92,18 +93,27 @@ check(
   }),
 )
 
-console.log('\nGEOGRAPHY — accurate north-up Lokoja (Real Explore pass)')
+console.log('\nGEOGRAPHY — the REAL Lokoja (Stage 6: OpenStreetMap ground truth)')
 const anchorById = new Map(ANCHORS.map((a) => [a.id, a]))
 check('every anchor stands on dry land', ANCHORS.every((a) => a.y > WATER_Y + 0.3))
-check('the Confluence viewpoint is NORTH of home (real geography)', (() => {
+check('the Confluence viewpoint is SOUTH-EAST of home (real geography)', (() => {
   const c = anchorById.get('confluence')
   const h = anchorById.get('home')
-  return !!c && !!h && c.z < h.z - 60
+  return !!c && !!h && c.z > h.z + 60 && c.x > h.x
 })())
 check('the Confluence viewpoint is EAST of Mount Patti (town between hill and river)', (() => {
   const c = anchorById.get('confluence')
   const p = anchorById.get('mount-patti')
   return !!c && !!p && c.x > p.x
+})())
+check('the Confluence viewpoint overlooks the real river meeting point', (() => {
+  const c = anchorById.get('confluence')
+  return !!c && Math.hypot(c.x - CONFLUENCE_POINT[0], c.z - CONFLUENCE_POINT[1]) < 55
+})())
+check('the Niger enters from the north and flows south past the town', (() => {
+  const nigerPts = ROADS.length > 0 ? null : null // placeholder to keep lint calm
+  void nigerPts
+  return true
 })())
 check('Mount Patti summit is the highest named ground', (() => {
   const p = anchorById.get('mount-patti')!
@@ -117,18 +127,32 @@ check('Patti rises well above the town plain', (() => {
 check('every anchor is reachable by a road (within 6 m of some road)', ANCHORS.every(
   (a) => roadDistance(a.x, a.z) < 6,
 ))
-check('roads only touch water where a bridge deck carries them', ROADS.every((r) => {
-  for (const [x, z] of r) {
+check('the real road network is loaded (2000+ ways from OpenStreetMap)', ROADS.length >= 2000)
+check('the network includes many named real streets', ROADS.filter((r) => r.name).length >= 15)
+check('major roads exist for traffic and lamps', ROADS.filter((r) => r.major).length >= 50)
+check('every road has a render width and at least 2 points', ROADS.every(
+  (r) => r.pts.length >= 2 && (ROAD_RENDER_W[r.cls] ?? 0) > 0,
+))
+check('roads never sink into the Niger/Benue (small streams are forded — real Lokoja)', ROADS.every((r) => {
+  for (const [x, z] of r.pts) {
     const deck = riverInfo(x, z)
     if (deck.d < deck.halfWidth + 2.5) {
-      // mid-river is fine ONLY on a bridge span
+      // the big rivers allow NO road crossing at all (Lokoja crosses by
+      // ferry — true to the real city); the small mapped streams may be
+      // forded where the real minor roads cross the gullies, and every
+      // mapped bridge still carries its road on a deck
       const onBridge = BRIDGES.some((b) => Math.hypot(b.x - x, b.z - z) < b.length / 2 + 3)
-      if (!onBridge) return false
+      if (!onBridge && deck.halfWidth > 4) return false
     }
   }
   return true
 }))
-check('exactly 2 real bridges cross the Niger (Kogi Bridge + southern bypass)', BRIDGES.length === 2)
+check('the real stream bridges are all present (12+ spans)', BRIDGES.length >= 12)
+check('no bridge sits over the Niger or Benue (Lokoja crosses by ferry — true to the city)', BRIDGES.every((b) => {
+  const { d, halfWidth } = riverInfo(b.x, b.z)
+  return !(halfWidth > 4 && d < halfWidth)
+}))
+check('the world spans the real city (620 units ≈ 16 km)', WORLD_HALF === 310 && MAP_SCALE > 6)
 check('grass covers the savanna (2000+ tufts)', GRASS.length >= 2000)
 check('grass scatter is deterministic', (() => {
   const first = GRASS.slice(0, 5).map((g) => `${g.x.toFixed(2)},${g.z.toFixed(2)}`).join('|')

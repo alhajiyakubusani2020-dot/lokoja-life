@@ -13,13 +13,13 @@
  * display values computed by systems/travel.calculateTravel.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
 import { LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
 import { NPCS } from '@/game/data/npcs'
 import { HUSTLES } from '@/game/data/hustles'
 import { WORLD3D, FOOD, INTERIOR } from '@/game/data/config'
-import { ANCHORS, ANCHOR_BY_ID, POINTS_OF_INTEREST } from '@/game/world3d/layout'
+import { ANCHORS, ANCHOR_BY_ID, POINTS_OF_INTEREST, RIVERS, WORLD_HALF } from '@/game/world3d/layout'
 import { INTERIOR_BY_ID, type HotspotKind, type InteriorDef } from '@/game/world3d/interiors'
 import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import type { TransportId, VehicleModel } from '@/game/types'
@@ -140,12 +140,26 @@ function MiniMap({ discovered }: { discovered: Set<string> }) {
   }, [])
   void tick
 
-  // world (±160) → minimap viewbox (0..44)
-  const toMap = (v: number) => 22 + (v / 160) * 21
-  const px = toMap(Math.max(-160, Math.min(160, playerPos.x)))
-  const pz = toMap(Math.max(-160, Math.min(160, playerPos.z)))
+  // world (±WORLD_HALF) → minimap viewbox (0..44)
+  const B = WORLD_HALF
+  const toMap = (v: number) => 22 + (v / B) * 21
+  const px = toMap(Math.max(-B, Math.min(B, playerPos.x)))
+  const pz = toMap(Math.max(-B, Math.min(B, playerPos.z)))
   // heading: world yaw 0 faces +z (south) — minimap up is north (-z)
   const headingDeg = (Math.atan2(Math.sin(playerPos.heading), -Math.cos(playerPos.heading)) * 180) / Math.PI
+
+  // the REAL rivers, traced from the same data as the 3D world
+  const riverPaths = useMemo(
+    () =>
+      RIVERS.map((r) => {
+        const step = Math.max(1, Math.floor(r.points.length / 14))
+        const pts = r.points.filter((_, i) => i % step === 0 || i === r.points.length - 1)
+        const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toMap(p[0]).toFixed(1)} ${toMap(p[1]).toFixed(1)}`).join(' ')
+        return { id: r.id, d, w: Math.max(1.3, (r.width / B) * 21 * 0.55) }
+      }),
+    [],
+  )
+  const patti = ANCHOR_BY_ID['mount-patti']
 
   return (
     <div className="pointer-events-none rounded-full border border-white/25 bg-black/40 shadow-[var(--lko-shadow-md)] backdrop-blur-md">
@@ -157,12 +171,12 @@ function MiniMap({ discovered }: { discovered: Set<string> }) {
           </radialGradient>
         </defs>
         <circle cx="22" cy="22" r="21" fill="url(#lkoMiniLand)" />
-        {/* rivers — faint north-up traces */}
-        <path d="M 1 6 C 8 6.8 14 8 22 7.8 C 28 7.7 31 7.6 34.3 7.5" stroke="#3d9481" strokeWidth="1.6" fill="none" opacity="0.85" />
-        <path d="M 43 6.9 C 38 7 35 7.4 34.3 7.5" stroke="#3d9481" strokeWidth="1.4" fill="none" opacity="0.85" />
-        <path d="M 34.3 7.5 C 35.2 10.5 35.9 14 36.2 18 C 36.6 24 36 30 35.5 35 C 35.2 39 35.1 41.5 35 43.5" stroke="#2f8fa0" strokeWidth="1.9" fill="none" opacity="0.85" />
-        {/* Mount Patti mass */}
-        <ellipse cx="9.9" cy="14.9" rx="6.4" ry="5.6" fill="#4C7A2E" opacity="0.8" />
+        {/* rivers — the real courses, north-up */}
+        {riverPaths.map((r) => (
+          <path key={r.id} d={r.d} stroke={r.id === 'niger' ? '#2f8fa0' : '#3d9481'} strokeWidth={r.w} fill="none" opacity="0.85" strokeLinecap="round" />
+        ))}
+        {/* Mount Patti mass — at its real summit position */}
+        <ellipse cx={toMap(patti.x)} cy={toMap(patti.z)} rx="7.5" ry="6.2" fill="#4C7A2E" opacity="0.8" />
         {/* anchors */}
         {ANCHORS.map((a) => (
           <circle

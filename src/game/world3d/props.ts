@@ -27,6 +27,7 @@ import {
   makeRng,
   riverInfo,
   roadDistance,
+  WALK_BOUND,
 } from '@/game/world3d/layout'
 
 /* ------------------------------ shared helpers ------------------------------ */
@@ -61,7 +62,7 @@ function clearOfWater(x: number, z: number, margin: number): boolean {
   return d > halfWidth + margin
 }
 
-/** closest point on the road graph, plus that segment's unit direction */
+/** closest point on the MAJOR road graph, plus that segment's unit direction */
 function nearestRoadPoint(x: number, z: number): { px: number; pz: number; d: number; dirX: number; dirZ: number } {
   let bx = x
   let bz = z
@@ -69,11 +70,12 @@ function nearestRoadPoint(x: number, z: number): { px: number; pz: number; d: nu
   let bdx = 0
   let bdz = 1
   for (const road of ROADS) {
-    for (let i = 0; i < road.length - 1; i++) {
-      const ax = road[i][0]
-      const az = road[i][1]
-      const bx2 = road[i + 1][0]
-      const bz2 = road[i + 1][1]
+    if (!road.major) continue
+    for (let i = 0; i < road.pts.length - 1; i++) {
+      const ax = road.pts[i][0]
+      const az = road.pts[i][1]
+      const bx2 = road.pts[i + 1][0]
+      const bz2 = road.pts[i + 1][1]
       const dx = bx2 - ax
       const dz = bz2 - az
       const len2 = dx * dx + dz * dz
@@ -282,25 +284,26 @@ export const ANTENNAS: AntennaDef[] = []
  * DERIVATION (runs once at import — deterministic, seeded, in-order)
  * ========================================================================== */
 
-/* ---- 1. utility poles + wire spans along the main roads ---- */
+/* ---- 1. utility poles + wire spans along the real major roads ---- */
 {
   const rng = makeRng(41001)
-  const POLE_ROADS = [0, 1, 2, 3, 5, 6, 7, 11] // the named town roads, not the Patti trail
-  for (const ri of POLE_ROADS) {
-    const road = ROADS[ri]
-    const side = ri % 2 === 0 ? 1 : -1
+  let roadIdx = 0
+  for (const road of ROADS) {
+    if (!road.major) continue
+    roadIdx++
+    const side = roadIdx % 2 === 0 ? 1 : -1
     const chain: PoleDef[] = []
-    for (let i = 0; i < road.length - 1; i++) {
-      const ax = road[i][0]
-      const az = road[i][1]
-      const bx = road[i + 1][0]
-      const bz = road[i + 1][1]
+    for (let i = 0; i < road.pts.length - 1; i++) {
+      const ax = road.pts[i][0]
+      const az = road.pts[i][1]
+      const bx = road.pts[i + 1][0]
+      const bz = road.pts[i + 1][1]
       const segLen = Math.hypot(bx - ax, bz - az)
       const dirX = (bx - ax) / segLen
       const dirZ = (bz - az) / segLen
-      const steps = Math.max(1, Math.floor(segLen / 12))
+      const steps = Math.max(1, Math.floor(segLen / 13))
       for (let s = 0; s < steps; s++) {
-        if (UTILITY_POLES.length >= 30) break
+        if (UTILITY_POLES.length >= 110) break
         const t = (s + 0.5) / steps
         const cx = ax + (bx - ax) * t
         const cz = az + (bz - az) * t
@@ -310,7 +313,7 @@ export const ANTENNAS: AntennaDef[] = []
         if (!clearOfWater(x, z, 5)) continue
         if (roadDistance(x, z) < 2.4) continue
         if (!clearOfBuildings(x, z, 0.8)) continue
-        if (Math.hypot(x, z) > 150) continue
+        if (Math.hypot(x, z) > WALK_BOUND - 24) continue
         const y = heightAt(x, z)
         if (y < 0) continue
         // avoid stacking poles at junctions where roads meet

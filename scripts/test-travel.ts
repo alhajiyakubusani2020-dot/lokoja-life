@@ -27,17 +27,17 @@ console.log('\n— Determinism —')
   check('same inputs → identical plan', JSON.stringify(a) === JSON.stringify(b))
 }
 
-console.log('\n— Spec example trip: Home → Kpata Market (≈1.8 km, accurate geography) —')
+console.log('\n— Spec example trip: Home → Kpata Market (≈0.55 km in the REAL town — near neighbours) —')
 {
   const home = LOCATION_BY_ID['home']
   const kpata = LOCATION_BY_ID['kpata-market']
   const walk = calculateTravel(home, kpata, 'walk', 'sunny', 'morning')
   const keke = calculateTravel(home, kpata, 'keke', 'sunny', 'morning')
   const taxi = calculateTravel(home, kpata, 'taxi', 'sunny', 'morning')
-  check('walk free, slow, highest energy', walk.cost === 0 && walk.minutes >= 8 && walk.energyCost >= 5, JSON.stringify(walk))
-  check('keke ≈ ₦210 / ~5 min / -1⚡', keke.cost >= 190 && keke.cost <= 230 && keke.minutes <= 8 && keke.energyCost <= 3, JSON.stringify(keke))
-  check('taxi ≈ ₦690 / ~2 min / -1⚡', taxi.cost >= 640 && taxi.cost <= 740 && taxi.minutes <= 6 && taxi.energyCost <= 2, JSON.stringify(taxi))
-  check('arrival slot advances morning → afternoon', keke.arrival.timeOfDay === 'afternoon' && keke.arrival.dayDelta === 0)
+  check('walk free, ~3 min, cheapest energy', walk.cost === 0 && walk.minutes >= 2 && walk.minutes <= 8 && walk.energyCost >= 1, JSON.stringify(walk))
+  check('keke ≈ ₦130 / ~1 min', keke.cost >= 100 && keke.cost <= 170 && keke.minutes <= 4 && keke.energyCost <= 3, JSON.stringify(keke))
+  check('taxi ≈ ₦420 / ~1 min', taxi.cost >= 380 && taxi.cost <= 480 && taxi.minutes <= 4 && taxi.energyCost <= 2, JSON.stringify(taxi))
+  check('a short real hop stays the same day (one slot advances)', keke.arrival.dayDelta === 0)
   check('walk is the slowest, taxi the fastest', walk.minutes > keke.minutes && keke.minutes >= taxi.minutes)
 }
 
