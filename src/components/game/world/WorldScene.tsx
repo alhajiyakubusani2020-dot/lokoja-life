@@ -14,6 +14,7 @@ import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Canvas, useFrame } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
+import { makeRng } from '@/game/world3d/layout'
 import { atmoLive, getAtmosphere, sunVec } from './atmosphere'
 import { WorldTerrain } from './WorldTerrain'
 import { CityMesh } from './CityMesh'
@@ -31,9 +32,9 @@ function detectQuality(): 'high' | 'low' {
 /* ------------------------------- shared easing state --------------------------- */
 
 const skyTargets = {
-  top: new THREE.Color('#5ea8d6'),
-  horizon: new THREE.Color('#c8e4da'),
-  sun: new THREE.Color('#fff1d4'),
+  top: new THREE.Color('#4f9fd8'),
+  horizon: new THREE.Color('#cfe4d4'),
+  sun: new THREE.Color('#fff2d0'),
   glow: 1,
 }
 const starsState = { opacity: 0 }
@@ -43,10 +44,10 @@ const starsState = { opacity: 0 }
 function SkyDome({ sunRef }: { sunRef: React.MutableRefObject<THREE.Vector3> }) {
   const uniforms = useMemo(
     () => ({
-      uTop: { value: new THREE.Color('#5ea8d6') },
-      uHorizon: { value: new THREE.Color('#c8e4da') },
+      uTop: { value: new THREE.Color('#4f9fd8') },
+      uHorizon: { value: new THREE.Color('#cfe4d4') },
       uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.2) },
-      uSunColor: { value: new THREE.Color('#fff1d4') },
+      uSunColor: { value: new THREE.Color('#fff2d0') },
       uSunGlow: { value: 1 },
     }),
     [],
@@ -109,11 +110,13 @@ function SkyDome({ sunRef }: { sunRef: React.MutableRefObject<THREE.Vector3> }) 
 function Stars() {
   const mat = useRef<THREE.PointsMaterial>(null)
   const geo = useMemo(() => {
+    // seeded so the night sky is identical for every player, every load
+    const rng = makeRng(4242)
     const g = new THREE.BufferGeometry()
     const pos = new Float32Array(320 * 3)
     for (let i = 0; i < 320; i++) {
-      const theta = Math.random() * Math.PI * 2
-      const phi = Math.acos(Math.random() * 0.85)
+      const theta = rng() * Math.PI * 2
+      const phi = Math.acos(rng() * 0.85)
       const r = 560
       pos[i * 3] = Math.sin(phi) * Math.cos(theta) * r
       pos[i * 3 + 1] = Math.cos(phi) * r * 0.9 + 40
@@ -263,7 +266,8 @@ export function WorldScene({
       camera={{ fov: 55, near: 0.5, far: 900, position: [8, 8, 8] }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 1.05
+        // gentle lift: warm Nigerian light without blowing the plaster out
+        gl.toneMappingExposure = 1.12
         onReady?.()
       }}
       style={{ position: 'absolute', inset: 0, touchAction: 'none' }}

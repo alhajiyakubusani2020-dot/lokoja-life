@@ -1,56 +1,132 @@
 'use client'
 
 /**
- * LOKOJA LIFE — 3D Terrain (Stage 3D)
- * ------------------------------------
- * The land itself: heightfield from layout.heightAt (shared with the
- * player controller, so feet always meet ground), the Niger and Benue,
- * their confluence foam, laterite roads, and the confluence bridge.
+ * LOKOJA LIFE — 3D Terrain (Stage 4C — "the ground half of the world")
+ * --------------------------------------------------------------------
+ * The land itself, painted like a place instead of a prototype:
+ *  • heightfield from layout.heightAt (shared with the player controller —
+ *    feet always meet ground) with layered savanna vertex colours:
+ *    gold-olive base, river lowlands, laterite road halos, market dust
+ *    bowls, parched high ground, Patti rock — plus a baked grain texture.
+ *  • rivers with proper banks: a sand/mud shelf that dips under a wider
+ *    two-tone water surface (shallow rim → deep channel), wet dark line at
+ *    the waterline, confluence foam accent.
+ *  • roads that read as roads: width hierarchy (trunk asphalt 6.5 → minor
+ *    laterite 4.5 → trail 3.6), baked wheel-track wear + centre dashes,
+ *    dirt shoulders, junction patches at shared endpoints.
+ *  • grass as crossed-blade tufts (two instanced variants) with per-instance
+ *    hue jitter, plus a few dry-season flower dots near the rivers.
+ *  • bridges with railings, pylons and abutments carrying their road's
+ *    surface style.
+ * Everything is baked/memoised once; no per-frame allocations; no shadows
+ * added; ~21 draw calls total. Zero Math.random — seeded helpers only.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  BRIDGES, GRASS, GRASS_TONES, heightAt, riverInfo, ROADS, RIVERS, WATER_Y, WORLD_HALF,
+  BRIDGES, DISTRICTS, GRASS, GRASS_TONES, heightAt, riverInfo, ROADS, RIVERS,
+  WATER_Y, WORLD_HALF, roadDistance,
 } from '@/game/world3d/layout'
+import { hash1, mergeGeoms, makeGroundGrainTexture, roadTextures } from '@/game/world3d/terrainArt'
+
+function smoothstep(a: number, b: number, t: number): number {
+  const x = Math.max(0, Math.min(1, (t - a) / (b - a)))
+  return x * x * (3 - 2 * x)
+}
 
 /* -------------------------------- terrain ---------------------------------- */
 
 const SEG = 128
 
+/** districts that kick up real dust: market, motor park, junction, food strip */
+const DUSTY_DISTRICTS = DISTRICTS.filter((d) =>
+  d.kind === 'market' || d.kind === 'junction' || d.kind === 'park' || d.kind === 'food',
+)
+
 function TerrainMesh() {
+  const grain = useMemo(() => {
+    const t = makeGroundGrainTexture(256)
+    t.repeat.set(26, 26)
+    return t
+  }, [])
+
   const geometry = useMemo(() => {
     const geo = new THREE.PlaneGeometry(WORLD_HALF * 2, WORLD_HALF * 2, SEG, SEG)
     geo.rotateX(-Math.PI / 2)
     const pos = geo.attributes.position as THREE.BufferAttribute
     const colors = new Float32Array(pos.count * 3)
 
-    const cGrass = new THREE.Color('#7d9c50')
-    const cDry = new THREE.Color('#a39a5c')
-    const cSand = new THREE.Color('#cdb680')
-    const cHigh = new THREE.Color('#8a9a5e')
-    const cRock = new THREE.Color('#94856a')
+    // dry-season Guinea-savanna palette — warm and earthy, no greens that glow
+    const c = new THREE.Color()
+    const base = new THREE.Color('#7f8f4c') // gold-olive savanna
+    const mottD = new THREE.Color('#6d7f40') // richer olive mottling
+    const mottL = new THREE.Color('#9d9a5c') // dry gold mottling
+    const lush = new THREE.Color('#59763a') // river lowland green
+    const dust = new THREE.Color('#b58a58') // laterite dust halo
+    const dustD = new THREE.Color('#a1764a') // packed earth right by roads
+    const dryHi = new THREE.Color('#a39a5e') // parched high ground
+    const rock = new THREE.Color('#8f7f63') // Patti stone on slopes
+    const sand = new THREE.Color('#c2aa72') // bank sand
+    const mud = new THREE.Color('#66543a') // wet waterline mud
+    const bed = new THREE.Color('#4c5a40') // riverbed, hints through the water
 
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i)
       const z = pos.getZ(i)
       const y = heightAt(x, z)
       pos.setY(i, y)
+      c.copy(base)
 
-      // colour by altitude + slope + riverbanks
-      const n = Math.sin(x * 0.11 + z * 0.07) * 0.5 + Math.sin(x * 0.031 - z * 0.043) * 0.5
-      const c = cGrass.clone().lerp(cDry, Math.max(0, n) * 0.45)
-      if (y > 7) c.lerp(cHigh, Math.min(1, (y - 7) / 10))
+      // low-frequency mottling — two octave bands, never the same twice
+      const n1 = Math.sin(x * 0.052 + z * 0.031) * 0.5 + Math.sin(x * 0.021 - z * 0.047 + 1.3) * 0.5
+      const n2 = Math.sin(x * 0.14 + z * 0.11 + 2.1) * 0.5 + Math.sin(x * 0.09 - z * 0.16 + 0.6) * 0.5
+      c.lerp(n1 > 0 ? mottL : mottD, Math.abs(n1) * 0.34)
+      c.lerp(n2 > 0 ? mottL : mottD, Math.abs(n2) * 0.13)
+
+      // parched patches on high ground, broken up by the second noise band
+      const dryT = Math.max(0, (y - 4.5) / 9) * (0.55 + 0.45 * n2)
+      if (dryT > 0) c.lerp(dryHi, Math.min(1, dryT) * 0.65)
+
+      // richer green lowlands near the rivers (moisture gradient)
+      const { d, halfWidth } = riverInfo(x, z)
+      const moist = 1 - smoothstep(2, 26, d - halfWidth)
+      if (moist > 0) c.lerp(lush, moist * 0.6)
+
+      // dusty laterite halos along the roads (wide soft, packed near centre)
+      const rd = roadDistance(x, z)
+      const halo = 1 - smoothstep(2.2, 10.5, rd)
+      if (halo > 0) c.lerp(dust, halo * 0.72)
+      const packed = 1 - smoothstep(1.2, 3.4, rd)
+      if (packed > 0) c.lerp(dustD, packed * 0.8)
+
+      // dust bowls around the market / motor park / junction / food strip
+      for (const dd of DUSTY_DISTRICTS) {
+        const ddx = x - dd.x
+        const ddz = z - dd.z
+        const dd2 = ddx * ddx + ddz * ddz
+        const rOut = dd.radius * 1.9
+        if (dd2 < rOut * rOut) {
+          const t = 1 - smoothstep(dd.radius * 0.62, rOut, Math.sqrt(dd2))
+          if (t > 0) c.lerp(dust, t * 0.5)
+        }
+      }
+
       // rocky slopes — steeper ground reveals the Patti laterite stone
       const slope =
         (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
-      if (slope > 0.32) c.lerp(cRock, Math.min(1, (slope - 0.32) * 2.2))
-      if (y > 16) c.lerp(cRock, Math.min(1, (y - 16) / 14))
-      // sandy river banks
-      const { d, halfWidth } = riverInfo(x, z)
-      const bankT = 1 - Math.min(1, Math.abs(d - (halfWidth + 1)) / 5)
-      if (bankT > 0) c.lerp(cSand, bankT * 0.45)
+      if (slope > 0.32) c.lerp(rock, Math.min(1, (slope - 0.32) * 2.2))
+      if (y > 16) c.lerp(rock, Math.min(1, (y - 16) / 14))
+
+      // river banks — sand shelf, wet dark line, darker bed under the water
+      if (d < halfWidth + 9) {
+        const sandT = 1 - smoothstep(halfWidth + 1.5, halfWidth + 9, d)
+        if (sandT > 0) c.lerp(sand, sandT * 0.75)
+      }
+      if (d < halfWidth + 1.2) c.lerp(mud, 1 - smoothstep(halfWidth - 1, halfWidth + 1.2, d))
+      if (d < halfWidth - 0.6) c.lerp(bed, 1 - smoothstep(halfWidth - 4, halfWidth - 0.6, d))
+
       colors[i * 3] = c.r
       colors[i * 3 + 1] = c.g
       colors[i * 3 + 2] = c.b
@@ -62,42 +138,238 @@ function TerrainMesh() {
 
   return (
     <mesh geometry={geometry} receiveShadow>
-      <meshStandardMaterial vertexColors flatShading roughness={0.95} metalness={0} />
+      <meshStandardMaterial vertexColors flatShading map={grain} roughness={0.95} metalness={0} />
     </mesh>
   )
 }
 
 /* --------------------------------- rivers ---------------------------------- */
 
-function riverGeometry(points: [number, number][], width: number, y: number): THREE.BufferGeometry {
-  // ribbon along the centreline with soft edge verts (for slight shore colour)
-  const verts: number[] = []
-  const uvs: number[] = []
-  const idx: number[] = []
-  const dirs: THREE.Vector2[] = []
+/** dense resample of a polyline every `step` units */
+function resample(points: [number, number][], step: number): [number, number][] {
+  const out: [number, number][] = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const [ax, az] = points[i]
+    const [bx, bz] = points[i + 1]
+    const len = Math.hypot(bx - ax, bz - az)
+    const n = Math.max(1, Math.round(len / step))
+    for (let s = 0; s < n; s++) {
+      const t = s / n
+      out.push([ax + (bx - ax) * t, az + (bz - az) * t])
+    }
+  }
+  out.push(points[points.length - 1])
+  return out
+}
 
-  for (let i = 0; i < points.length; i++) {
-    const [x, z] = points[i]
-    const prev = points[Math.max(0, i - 1)]
-    const next = points[Math.min(points.length - 1, i + 1)]
+/**
+ * Water surface: wider than the carved channel so the rim tucks under the
+ * bank (the real waterline sits ≈ halfWidth+3.4 out). Four columns across
+ * give a two-tone depth read — bright shallow rim, dark mid channel.
+ */
+function waterGeometry(points: [number, number][], width: number): THREE.BufferGeometry {
+  const dense = resample(points, 4)
+  const edge = width / 2 + 3.6
+  const offs = [-edge, -edge * 0.42, edge * 0.42, edge]
+  const shade = [1.22, 0.78, 0.78, 1.22]
+  const verts: number[] = []
+  const cols: number[] = []
+  const idx: number[] = []
+  for (let i = 0; i < dense.length; i++) {
+    const [x, z] = dense[i]
+    const prev = dense[Math.max(0, i - 1)]
+    const next = dense[Math.min(dense.length - 1, i + 1)]
     const dx = next[0] - prev[0]
     const dz = next[1] - prev[1]
     const len = Math.hypot(dx, dz) || 1
-    dirs.push(new THREE.Vector2(dx / len, dz / len))
+    const nx = -dz / len
+    const nz = dx / len
+    for (let k = 0; k < 4; k++) {
+      verts.push(x + nx * offs[k], WATER_Y, z + nz * offs[k])
+      cols.push(shade[k], shade[k], shade[k])
+    }
+    if (i < dense.length - 1) {
+      const b = i * 4
+      for (let k = 0; k < 3; k++) {
+        idx.push(b + k, b + 4 + k, b + k + 1, b + k + 1, b + 4 + k, b + 5 + k)
+      }
+    }
   }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3))
+  geo.setIndex(idx)
+  geo.computeVertexNormals()
+  return geo
+}
 
+/**
+ * The bank between land and water: a draped sand/mud shelf — dark wet band
+ * right at the waterline, sand above it, fading out into the terrain's own
+ * sand tint so no hard seam shows.
+ */
+function shelfGeometry(points: [number, number][], width: number): THREE.BufferGeometry {
+  const dense = resample(points, 2.5)
+  const hw = width / 2
+  const offs = [hw + 0.8, hw + 2.9, hw + 4.8, hw + 6.8]
+  const tones = [
+    new THREE.Color('#4e4234'), // submerged mud (hints through the water)
+    new THREE.Color('#64513a'), // wet band at the waterline
+    new THREE.Color('#c2a870'), // dry sand shelf
+    new THREE.Color('#93875e'), // fading into the savanna
+  ]
+  const verts: number[] = []
+  const cols: number[] = []
+  const idx: number[] = []
+  const both = [1, -1] // both banks
+  for (const side of both) {
+    const base = verts.length / 3
+    for (let i = 0; i < dense.length; i++) {
+      const [x, z] = dense[i]
+      const prev = dense[Math.max(0, i - 1)]
+      const next = dense[Math.min(dense.length - 1, i + 1)]
+      const dx = next[0] - prev[0]
+      const dz = next[1] - prev[1]
+      const len = Math.hypot(dx, dz) || 1
+      const nx = (-dz / len) * side
+      const nz = (dx / len) * side
+      for (let k = 0; k < 4; k++) {
+        const px = x + nx * offs[k]
+        const pz = z + nz * offs[k]
+        verts.push(px, heightAt(px, pz) + 0.02, pz)
+        cols.push(tones[k].r, tones[k].g, tones[k].b)
+      }
+      if (i < dense.length - 1) {
+        const b = base + i * 4
+        for (let k = 0; k < 3; k++) {
+          idx.push(b + k, b + 4 + k, b + k + 1, b + k + 1, b + 4 + k, b + 5 + k)
+        }
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3))
+  geo.setIndex(idx)
+  geo.computeVertexNormals()
+  return geo
+}
+
+function Rivers() {
+  const nigerRef = useRef<THREE.Mesh>(null)
+  const foamRef = useRef<THREE.Mesh>(null)
+  const foam2Ref = useRef<THREE.Mesh>(null)
+
+  const { waters, shelf } = useMemo(
+    () => ({
+      waters: RIVERS.map((r) => waterGeometry(r.points, r.width)),
+      shelf: mergeGeoms(RIVERS.map((r) => shelfGeometry(r.points, r.width))),
+    }),
+    [],
+  )
+
+  useFrame((state) => {
+    // gentle water shimmer — one material trick, cheap
+    const t = state.clock.elapsedTime
+    if (nigerRef.current) {
+      const m = nigerRef.current.material as THREE.MeshStandardMaterial
+      m.roughness = 0.15 + Math.sin(t * 0.7) * 0.05
+    }
+    if (foamRef.current) {
+      foamRef.current.scale.setScalar(1 + Math.sin(t * 1.6) * 0.06)
+      ;(foamRef.current.material as THREE.MeshBasicMaterial).opacity = 0.26 + Math.sin(t * 2.1) * 0.08
+    }
+    if (foam2Ref.current) {
+      foam2Ref.current.scale.setScalar(1 + Math.sin(t * 0.9 + 2.1) * 0.05)
+      ;(foam2Ref.current.material as THREE.MeshBasicMaterial).opacity = 0.11 + Math.sin(t * 1.3 + 1.0) * 0.05
+    }
+  })
+
+  const confluence = RIVERS[0].points[RIVERS[0].points.length - 1]
+
+  return (
+    <group>
+      {/* banks first, water over them */}
+      <mesh geometry={shelf}>
+        <meshStandardMaterial vertexColors flatShading side={THREE.DoubleSide} roughness={1} metalness={0} />
+      </mesh>
+      {waters.map((g, i) => (
+        <mesh key={RIVERS[i].id} ref={i === 0 ? nigerRef : undefined} geometry={g}>
+          <meshStandardMaterial
+            vertexColors
+            color={i === 2 ? '#2e8a80' : '#2f8fa0'}
+            roughness={0.18}
+            metalness={0.08}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+      ))}
+      {/* confluence foam — where the Niger kisses the Benue (the landmark) */}
+      <mesh ref={foamRef} rotation={[-Math.PI / 2, 0, 0]} position={[confluence[0], WATER_Y + 0.06, confluence[1]]}>
+        <circleGeometry args={[9.5, 24]} />
+        <meshBasicMaterial color="#eaf5ee" transparent opacity={0.28} depthWrite={false} />
+      </mesh>
+      <mesh ref={foam2Ref} rotation={[-Math.PI / 2, 0, 0]} position={[confluence[0], WATER_Y + 0.05, confluence[1]]}>
+        <circleGeometry args={[15, 28]} />
+        <meshBasicMaterial color="#dceee8" transparent opacity={0.12} depthWrite={false} />
+      </mesh>
+    </group>
+  )
+}
+
+/* ---------------------------------- roads ----------------------------------- */
+
+type RoadClass = 'asphalt' | 'laterite' | 'trail'
+
+/** width + surface hierarchy: trunk asphalt → secondary/minor laterite → trail */
+const ROAD_STYLE: { w: number; cls: RoadClass }[] = [
+  { w: 6.5, cls: 'asphalt' }, // 0 IBB Way — the E-W spine (trunk)
+  { w: 6.5, cls: 'asphalt' }, // 1 Murtala Mohammed Way — town spine (trunk)
+  { w: 5.5, cls: 'laterite' }, // 2 Ganaja Road
+  { w: 5.5, cls: 'laterite' }, // 3 Nataco/university road
+  { w: 4.5, cls: 'laterite' }, // 4 Confluence viewpoint road
+  { w: 5.5, cls: 'laterite' }, // 5 Kogi Bridge road
+  { w: 6.5, cls: 'asphalt' }, // 6 Southern bypass (trunk)
+  { w: 4.5, cls: 'laterite' }, // 7 Patti foot road
+  { w: 3.6, cls: 'trail' }, // 8 Patti switchback trail
+  { w: 4.5, cls: 'laterite' }, // 9 GRA road
+  { w: 4.5, cls: 'laterite' }, // 10 GRA ↔ IBB link
+  { w: 5.5, cls: 'laterite' }, // 11 Felele road
+]
+
+/**
+ * Road ribbon draping the terrain via heightAt. Resampled every 3 u so it
+ * hugs slopes; tiny per-road lift offsets keep overlapping ribbons at
+ * junctions from z-fighting. u across the road, v along it (tiled).
+ */
+function roadGeometry(
+  points: [number, number][],
+  width: number,
+  yOff: number,
+  vScale: number,
+): THREE.BufferGeometry {
+  const dense = resample(points, 3)
+  const verts: number[] = []
+  const uvs: number[] = []
+  const idx: number[] = []
   let cursor = 0
-  for (let i = 0; i < points.length; i++) {
-    const [x, z] = points[i]
-    const d = dirs[i]
-    const nx = -d.y
-    const nz = d.x
-    const hw = width / 2
-    verts.push(x + nx * hw, y, z + nz * hw)
-    verts.push(x - nx * hw, y, z - nz * hw)
-    uvs.push(cursor, 0, cursor, 1)
+  for (let i = 0; i < dense.length; i++) {
+    const [x, z] = dense[i]
+    const prev = dense[Math.max(0, i - 1)]
+    const next = dense[Math.min(dense.length - 1, i + 1)]
+    const dx = next[0] - prev[0]
+    const dz = next[1] - prev[1]
+    const len = Math.hypot(dx, dz) || 1
+    const nx = (-dz / len) * (width / 2)
+    const nz = (dx / len) * (width / 2)
+    const yL = heightAt(x + nx, z + nz) + yOff
+    const yR = heightAt(x - nx, z - nz) + yOff
+    verts.push(x + nx, yL, z + nz)
+    verts.push(x - nx, yR, z - nz)
+    uvs.push(0, cursor * vScale, 1, cursor * vScale)
     cursor += 1
-    if (i < points.length - 1) {
+    if (i < dense.length - 1) {
       const a = i * 2
       idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
     }
@@ -110,107 +382,88 @@ function riverGeometry(points: [number, number][], width: number, y: number): TH
   return geo
 }
 
-function Rivers() {
-  const nigerRef = useRef<THREE.Mesh>(null)
-  const foamRef = useRef<THREE.Mesh>(null)
-
-  const geos = useMemo(
-    () => RIVERS.map((r) => riverGeometry(r.points, r.width, WATER_Y)),
-    [],
-  )
-
-  useFrame((state) => {
-    // gentle water shimmer — one material trick, cheap
-    const t = state.clock.elapsedTime
-    for (const g of geos) void g
-    if (nigerRef.current) {
-      const m = nigerRef.current.material as THREE.MeshStandardMaterial
-      m.roughness = 0.14 + Math.sin(t * 0.7) * 0.05
-    }
-    if (foamRef.current) {
-      foamRef.current.scale.setScalar(1 + Math.sin(t * 1.6) * 0.06)
-      ;(foamRef.current.material as THREE.MeshBasicMaterial).opacity = 0.26 + Math.sin(t * 2.1) * 0.08
-    }
-  })
-
-  const confluence = RIVERS[0].points[RIVERS[0].points.length - 1]
-
-  return (
-    <group>
-      {geos.map((g, i) => (
-        <mesh key={RIVERS[i].id} ref={i === 0 ? nigerRef : undefined} geometry={g} position={[0, 0, 0]}>
-          <meshStandardMaterial
-            color={i === 2 ? '#2e8a80' : '#2f8fa0'}
-            roughness={0.3}
-            metalness={0.05}
-            transparent
-            opacity={0.93}
-          />
-        </mesh>
-      ))}
-      {/* confluence foam — where the Niger kisses the Benue */}
-      <mesh ref={foamRef} rotation={[-Math.PI / 2, 0, 0]} position={[confluence[0], WATER_Y + 0.06, confluence[1]]}>
-        <circleGeometry args={[9, 24]} />
-        <meshBasicMaterial color="#eaf5ee" transparent opacity={0.28} depthWrite={false} />
-      </mesh>
-    </group>
-  )
-}
-
-/* ---------------------------------- roads ----------------------------------- */
-
-function roadGeometry(points: [number, number][], width: number): THREE.BufferGeometry {
-  // resample the polyline into short steps so the ribbon drapes the terrain
-  // smoothly instead of stretching into wall-like slabs across slopes
-  const dense: [number, number][] = []
-  for (let i = 0; i < points.length - 1; i++) {
-    const [ax, az] = points[i]
-    const [bx, bz] = points[i + 1]
-    const len = Math.hypot(bx - ax, bz - az)
-    const steps = Math.max(1, Math.round(len / 3.2))
-    for (let s = 0; s < steps; s++) {
-      const t = s / steps
-      dense.push([ax + (bx - ax) * t, az + (bz - az) * t])
-    }
+/** darker worn-earth discs where road endpoints meet, so seams don't show */
+function junctionDiscs(): THREE.BufferGeometry | null {
+  const pts: [number, number][] = []
+  for (const r of ROADS) {
+    pts.push(r[0])
+    pts.push(r[r.length - 1])
   }
-  dense.push(points[points.length - 1])
-
-  const verts: number[] = []
-  const idx: number[] = []
-  for (let i = 0; i < dense.length; i++) {
-    const [x, z] = dense[i]
-    const prev = dense[Math.max(0, i - 1)]
-    const next = dense[Math.min(dense.length - 1, i + 1)]
-    const dx = next[0] - prev[0]
-    const dz = next[1] - prev[1]
-    const len = Math.hypot(dx, dz) || 1
-    const nx = (-dz / len) * (width / 2)
-    const nz = (dx / len) * (width / 2)
-    const yL = heightAt(x + nx, z + nz) + 0.07
-    const yR = heightAt(x - nx, z - nz) + 0.07
-    verts.push(x + nx, yL, z + nz)
-    verts.push(x - nx, yR, z - nz)
-    if (i < dense.length - 1) {
-      const a = i * 2
-      idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
+  const used = pts.map(() => false)
+  const geos: THREE.BufferGeometry[] = []
+  for (let i = 0; i < pts.length; i++) {
+    if (used[i]) continue
+    used[i] = true
+    let cx = pts[i][0]
+    let cz = pts[i][1]
+    let n = 1
+    for (let j = i + 1; j < pts.length; j++) {
+      if (!used[j] && Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]) < 5) {
+        used[j] = true
+        cx += pts[j][0]
+        cz += pts[j][1]
+        n++
+      }
     }
+    if (n < 2) continue
+    cx /= n
+    cz /= n
+    const disc = new THREE.CircleGeometry(5.6, 20)
+    disc.rotateX(-Math.PI / 2)
+    disc.translate(cx, heightAt(cx, cz) + 0.16, cz)
+    geos.push(disc)
   }
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
-  geo.setIndex(idx)
-  geo.computeVertexNormals()
-  return geo
+  return geos.length ? mergeGeoms(geos) : null
 }
 
 function Roads() {
-  const geos = useMemo(() => ROADS.map((r) => roadGeometry(r, 5.6)), [])
+  const { shoulder, asphalt, laterite, trail, junctions } = useMemo(() => {
+    const shoulders: THREE.BufferGeometry[] = []
+    const byClass: Record<RoadClass, THREE.BufferGeometry[]> = {
+      asphalt: [], laterite: [], trail: [],
+    }
+    ROADS.forEach((pts, i) => {
+      const st = ROAD_STYLE[i] ?? { w: 4.5, cls: 'laterite' as const }
+      shoulders.push(roadGeometry(pts, st.w + 2.4, 0.05 + (i % 4) * 0.003, 0.25))
+      byClass[st.cls].push(roadGeometry(pts, st.w, 0.09 + (i % 5) * 0.004, 1 / 7.2))
+    })
+    return {
+      shoulder: mergeGeoms(shoulders),
+      asphalt: byClass.asphalt.length ? mergeGeoms(byClass.asphalt) : null,
+      laterite: byClass.laterite.length ? mergeGeoms(byClass.laterite) : null,
+      trail: byClass.trail.length ? mergeGeoms(byClass.trail) : null,
+      junctions: junctionDiscs(),
+    }
+  }, [])
+  const tex = useMemo(() => roadTextures(), [])
+
   return (
     <group>
-      {geos.map((g, i) => (
-        <mesh key={i} geometry={g} receiveShadow>
-          <meshStandardMaterial color="#b0713c" roughness={1} metalness={0} />
+      {/* dirt casing/shoulder under every road, blending into the dust halo */}
+      <mesh geometry={shoulder} receiveShadow>
+        <meshStandardMaterial color="#a9885c" roughness={1} metalness={0} />
+      </mesh>
+      {asphalt && (
+        <mesh geometry={asphalt} receiveShadow>
+          <meshStandardMaterial map={tex.asphalt} roughness={0.94} metalness={0} />
         </mesh>
-      ))}
+      )}
+      {laterite && (
+        <mesh geometry={laterite} receiveShadow>
+          <meshStandardMaterial map={tex.laterite} roughness={1} metalness={0} />
+        </mesh>
+      )}
+      {trail && (
+        <mesh geometry={trail} receiveShadow>
+          <meshStandardMaterial map={tex.laterite} color="#b08c68" roughness={1} metalness={0} />
+        </mesh>
+      )}
+      {/* junction patches — one worn-earth disc per shared endpoint */}
+      {junctions && (
+        <mesh geometry={junctions} receiveShadow>
+          <meshStandardMaterial color="#8f7248" roughness={1} metalness={0} />
+        </mesh>
+      )}
     </group>
   )
 }
@@ -218,33 +471,120 @@ function Roads() {
 /* --------------------------------- bridges ---------------------------------- */
 
 function Bridges() {
+  const tex = useMemo(() => roadTextures(), [])
+  const built = useMemo(() => {
+    const decks: THREE.BufferGeometry[] = []
+    const rails: THREE.BufferGeometry[] = []
+    const piers: THREE.BufferGeometry[] = []
+    const surfA: THREE.BufferGeometry[] = []
+    const surfL: THREE.BufferGeometry[] = []
+    const m = new THREE.Matrix4()
+    const p = new THREE.Vector3()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const s = new THREE.Vector3(1, 1, 1)
+    for (const b of BRIDGES) {
+      // +3 so the visible deck ends where the walkable deck zone ends
+      // (collision uses length/2 + 1.5) — ends land on the bank, not mid-water
+      const L = b.length + 3
+      const W = b.width
+      // which road does this bridge carry? nearest road polyline to its centre
+      let best = 0
+      let bestD = Infinity
+      ROADS.forEach((pts, i) => {
+        for (const [px, pz] of pts) {
+          const d = Math.hypot(px - b.x, pz - b.z)
+          if (d < bestD) {
+            bestD = d
+            best = i
+          }
+        }
+      })
+      const cls = ROAD_STYLE[best]?.cls ?? 'laterite'
+      e.set(0, b.rotY, 0)
+      q.setFromEuler(e)
+      p.set(b.x, b.y, b.z)
+      m.compose(p, q, s)
+      // deck slab
+      const deck = new THREE.BoxGeometry(W, 0.55, L)
+      deck.applyMatrix4(m)
+      decks.push(deck)
+      // road surface riding the deck, in the carrying road's own style
+      const surf = new THREE.PlaneGeometry(W, L)
+      surf.rotateX(-Math.PI / 2)
+      const uvA = surf.attributes.uv as THREE.BufferAttribute
+      for (let k = 0; k < uvA.count; k++) uvA.setY(k, uvA.getY(k) * (L / 7.2))
+      surf.translate(0, 0.29, 0)
+      surf.applyMatrix4(m)
+      ;(cls === 'asphalt' ? surfA : surfL).push(surf)
+      // post-and-rail railings, both sides
+      for (const side of [-1, 1]) {
+        const rx = side * (W / 2 - 0.28)
+        const top = new THREE.BoxGeometry(0.12, 0.1, L)
+        top.translate(rx, 0.98, 0)
+        top.applyMatrix4(m)
+        rails.push(top)
+        const mid = new THREE.BoxGeometry(0.09, 0.08, L)
+        mid.translate(rx, 0.66, 0)
+        mid.applyMatrix4(m)
+        rails.push(mid)
+        for (let z = -L / 2 + 1; z <= L / 2 - 1; z += 2.6) {
+          const post = new THREE.BoxGeometry(0.14, 0.62, 0.14)
+          post.translate(rx, 0.58, z)
+          post.applyMatrix4(m)
+          rails.push(post)
+        }
+      }
+      // two pylons down through the waterline
+      for (const z of [-L * 0.28, L * 0.28]) {
+        const py = new THREE.BoxGeometry(1.35, 3.6, 0.95)
+        py.translate(0, -1.7, z)
+        py.applyMatrix4(m)
+        piers.push(py)
+      }
+      // stone abutments masking the deck ends down to the terrain
+      const dirX = Math.sin(b.rotY)
+      const dirZ = Math.cos(b.rotY)
+      for (const sd of [-1, 1]) {
+        const ex = b.x + dirX * (L / 2 - 1)
+        const ez = b.z + dirZ * (L / 2 - 1)
+        const gh = heightAt(ex, ez)
+        const h = Math.max(1, b.y - 0.27 - gh + 0.5)
+        const ab = new THREE.BoxGeometry(W - 0.6, h, 2.4)
+        ab.translate(ex, gh - 0.5 + h / 2, ez)
+        piers.push(ab)
+      }
+    }
+    return {
+      deck: mergeGeoms(decks),
+      rail: mergeGeoms(rails),
+      pier: mergeGeoms(piers),
+      surfA: surfA.length ? mergeGeoms(surfA) : null,
+      surfL: surfL.length ? mergeGeoms(surfL) : null,
+    }
+  }, [])
+
   return (
     <group>
-      {BRIDGES.map((b, i) => (
-        <group key={i} position={[b.x, b.y, b.z]} rotation={[0, b.rotY, 0]}>
-          {/* deck */}
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[b.width, 0.6, b.length]} />
-            <meshStandardMaterial color="#9a8570" roughness={0.9} />
-          </mesh>
-          {/* railings */}
-          <mesh position={[b.width / 2 - 0.15, 0.65, 0]}>
-            <boxGeometry args={[0.24, 0.7, b.length]} />
-            <meshStandardMaterial color="#7a6650" roughness={0.9} />
-          </mesh>
-          <mesh position={[-b.width / 2 + 0.15, 0.65, 0]}>
-            <boxGeometry args={[0.24, 0.7, b.length]} />
-            <meshStandardMaterial color="#7a6650" roughness={0.9} />
-          </mesh>
-          {/* pillars */}
-          {[-b.length / 2 + 2, 0, b.length / 2 - 2].map((z, j) => (
-            <mesh key={j} position={[0, -1.4, z]}>
-              <boxGeometry args={[1.1, 2.4, 1.1]} />
-              <meshStandardMaterial color="#8a7660" roughness={1} />
-            </mesh>
-          ))}
-        </group>
-      ))}
+      <mesh geometry={built.deck} castShadow receiveShadow>
+        <meshStandardMaterial color="#989083" roughness={0.95} metalness={0} />
+      </mesh>
+      {built.surfA && (
+        <mesh geometry={built.surfA} receiveShadow>
+          <meshStandardMaterial map={tex.asphalt} roughness={0.94} metalness={0} />
+        </mesh>
+      )}
+      {built.surfL && (
+        <mesh geometry={built.surfL} receiveShadow>
+          <meshStandardMaterial map={tex.laterite} roughness={1} metalness={0} />
+        </mesh>
+      )}
+      <mesh geometry={built.rail} castShadow>
+        <meshStandardMaterial color="#6d675c" roughness={0.8} metalness={0.25} />
+      </mesh>
+      <mesh geometry={built.pier}>
+        <meshStandardMaterial color="#8d8474" roughness={1} metalness={0} />
+      </mesh>
     </group>
   )
 }
@@ -252,56 +592,155 @@ function Bridges() {
 /* ---------------------------------- grass ----------------------------------- */
 
 /**
- * Savanna ground cover — one InstancedMesh of low tufts, per-instance
- * colour from the layout's moisture gradient. No shadows, no per-frame
- * work: 3.2k tufts for a single draw call.
+ * A tuft of `blades` crossed, tapered blades with a slight bend — reads as
+ * grass from any angle instead of flat paper shards.
+ */
+function tuftGeometry(blades: number, w: number, h: number, bend: number): THREE.BufferGeometry {
+  const pos: number[] = []
+  const idx: number[] = []
+  for (let bI = 0; bI < blades; bI++) {
+    const a = (bI / blades) * Math.PI
+    const cos = Math.cos(a)
+    const sin = Math.sin(a)
+    const base = pos.length / 3
+    const v: [number, number, number][] = [
+      [-w, 0, 0],
+      [w, 0, 0],
+      [-w * 0.45 + bend * 0.35, h * 0.55, bend * 0.28],
+      [w * 0.45 + bend * 0.35, h * 0.55, bend * 0.28],
+      [bend, h, bend * 0.55],
+    ]
+    for (const [vx, vy, vz] of v) pos.push(vx * cos - vz * sin, vy, vx * sin + vz * cos)
+    idx.push(base, base + 1, base + 3, base, base + 3, base + 2, base + 2, base + 3, base + 4)
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setIndex(idx)
+  g.computeVertexNormals()
+  return g
+}
+
+/**
+ * Savanna ground cover — two InstancedMeshes (two tuft variants) with
+ * per-instance colour from the layout's moisture gradient + deterministic
+ * hue jitter. No shadows, no per-frame work: 3.2k tufts, 2 draw calls.
  */
 function Grass() {
-  const ref = useRef<THREE.InstancedMesh>(null)
+  const refA = useRef<THREE.InstancedMesh>(null)
+  const refB = useRef<THREE.InstancedMesh>(null)
 
-  const { geometry, material } = useMemo(
-    () => ({
-      geometry: new THREE.ConeGeometry(0.55, 1.35, 4, 1, true),
-      material: new THREE.MeshStandardMaterial({
-        roughness: 1,
-        metalness: 0,
-        flatShading: true,
-      }),
-    }),
-    [],
-  )
+  const { geoA, geoB, mat, countA, countB } = useMemo(() => {
+    const mat = new THREE.MeshStandardMaterial({
+      side: THREE.DoubleSide,
+      roughness: 1,
+      metalness: 0,
+    })
+    return {
+      geoA: tuftGeometry(2, 0.22, 1.3, 0.34), // tall crossed pair
+      geoB: tuftGeometry(3, 0.17, 0.95, 0.5), // shorter three-blade star
+      mat,
+      countA: Math.ceil(GRASS.length / 2),
+      countB: Math.floor(GRASS.length / 2),
+    }
+  }, [])
 
   useEffect(() => {
-    // fill instance matrices once after mount
+    const meshA = refA.current
+    const meshB = refB.current
+    if (!meshA || !meshB) return
+    const meshes = [meshA, meshB]
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const sc = new THREE.Vector3()
+    const p = new THREE.Vector3()
+    const color = new THREE.Color()
+    const hide = new THREE.Matrix4().makeScale(0, 0, 0)
+    GRASS.forEach((g, i) => {
+      const mesh = meshes[i % 2]
+      const k = Math.floor(i / 2)
+      // no tufts ON the tarmac (road shoulders keep their dry grass)
+      if (roadDistance(g.x, g.z) < 3.4) {
+        mesh.setMatrixAt(k, hide)
+        return
+      }
+      // deterministic per-tuft jitter — yaw, lean, stretch, hue
+      e.set(
+        (hash1(i * 3.7 + 1.3) - 0.5) * 0.3,
+        hash1(i * 12.9898) * Math.PI * 2,
+        (hash1(i * 7.9 + 4.1) - 0.5) * 0.3,
+      )
+      q.setFromEuler(e)
+      // modest cap — savanna tufts, not thorn bushes (keeps night silhouettes soft)
+      const s = Math.min(g.scale, 1.15) * 0.74
+      const sy = s * (0.85 + hash1(i * 5.1) * 0.4)
+      sc.set(s, sy, s)
+      p.set(g.x, g.y + 0.02, g.z)
+      m.compose(p, q, sc)
+      mesh.setMatrixAt(k, m)
+      color.set(GRASS_TONES[g.tone])
+      color.offsetHSL(
+        (hash1(i * 2.3) - 0.5) * 0.035,
+        (hash1(i * 8.7) - 0.5) * 0.16,
+        (hash1(i * 4.9) - 0.5) * 0.07,
+      )
+      mesh.setColorAt(k, color)
+    })
+    for (const mesh of meshes) {
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    }
+  }, [])
+
+  return (
+    <group>
+      <instancedMesh ref={refA} args={[geoA, mat, countA]} frustumCulled={false} />
+      <instancedMesh ref={refB} args={[geoB, mat, countB]} frustumCulled={false} />
+    </group>
+  )
+}
+
+/** tiny dry-season flower dots near the rivers — a few dozen, one draw call */
+const FLOWER_TONES = ['#e8cf6f', '#d9814f', '#efe9dc']
+
+function Flowers() {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const { geo, mat, list } = useMemo(() => {
+    const list: { x: number; z: number; y: number; s: number; c: number }[] = []
+    for (let i = 0; i < GRASS.length && list.length < 72; i += 11) {
+      const g = GRASS[i]
+      const rv = riverInfo(g.x, g.z)
+      if (rv.d > rv.halfWidth + 11) continue
+      list.push({ x: g.x, z: g.z, y: g.y, s: 0.75 + hash1(i * 6.6) * 0.6, c: Math.floor(hash1(i * 3.3) * 3) })
+    }
+    return {
+      geo: new THREE.SphereGeometry(0.085, 6, 5),
+      mat: new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 }),
+      list,
+    }
+  }, [])
+
+  useEffect(() => {
     const mesh = ref.current
     if (!mesh) return
     const m = new THREE.Matrix4()
     const q = new THREE.Quaternion()
-    const e = new THREE.Euler()
-    const s = new THREE.Vector3()
-    const p = new THREE.Vector3()
     const color = new THREE.Color()
-    GRASS.forEach((g, i) => {
-      e.set((g.scale - 0.7) * 0.4, (g.x + g.z) % Math.PI, (g.z - g.x) * 0.13)
-      q.setFromEuler(e)
-      s.setScalar(g.scale)
-      p.set(g.x, g.y + 0.3 * g.scale, g.z)
-      m.compose(p, q, s)
+    list.forEach((f, i) => {
+      m.compose(
+        new THREE.Vector3(f.x, f.y + 0.55 * f.s, f.z),
+        q,
+        new THREE.Vector3(f.s, f.s, f.s),
+      )
       mesh.setMatrixAt(i, m)
-      color.set(GRASS_TONES[g.tone])
+      color.set(FLOWER_TONES[f.c])
       mesh.setColorAt(i, color)
     })
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [])
+  }, [list])
 
-  return (
-    <instancedMesh
-      ref={ref}
-      args={[geometry, material, GRASS.length]}
-      frustumCulled={false}
-    />
-  )
+  return <instancedMesh ref={ref} args={[geo, mat, list.length]} frustumCulled={false} />
 }
 
 /* ---------------------------------- export ---------------------------------- */
@@ -311,6 +750,7 @@ export function WorldTerrain() {
     <group>
       <TerrainMesh />
       <Grass />
+      <Flowers />
       <Rivers />
       <Roads />
       <Bridges />

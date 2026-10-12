@@ -21,9 +21,13 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
 import {
-  ANCHOR_BY_ID, DISTRICTS, DOORS, heightAt, NPC_ZONES, POINTS_OF_INTEREST, TRAFFIC_LOOPS,
+  ANCHOR_BY_ID, DISTRICTS, DOORS, heightAt, makeRng, NPC_ZONES, POINTS_OF_INTEREST, TRAFFIC_LOOPS,
 } from '@/game/world3d/layout'
 import { bridgeDeckY, cameraObstructionT, resolvePosition } from '@/game/world3d/collision'
+import {
+  applyVehicleNight, buildDanfo, buildKeke, buildOkada, buildSedan, headlightConeMaterial,
+  PARKED_VEHICLES, type SedanVariant, type VehicleRig,
+} from '@/game/world3d/vehicles'
 import { NPCS } from '@/game/data/npcs'
 import { INTERIOR, WORLD3D } from '@/game/data/config'
 import {
@@ -416,246 +420,280 @@ export function Npcs({
 
 /* ---------------------------------- traffic ----------------------------------- */
 
-function KekeMesh({ night }: { night: boolean }) {
-  const wheel = useRef<THREE.Group>(null)
-  useFrame((_, dt) => {
-    if (wheel.current) wheel.current.children.forEach((w) => (w.rotation.x += dt * 6))
-  })
-  return (
-    <group>
-      {/* body */}
-      <mesh position={[0, 0.72, -0.1]} castShadow>
-        <boxGeometry args={[1.3, 0.9, 2.1]} />
-        <meshStandardMaterial color="#e8c832" roughness={0.6} metalness={0.15} />
-      </mesh>
-      {/* canopy */}
-      <mesh position={[0, 1.5, -0.25]} castShadow>
-        <boxGeometry args={[1.34, 0.75, 1.7]} />
-        <meshStandardMaterial color="#22261f" roughness={0.8} />
-      </mesh>
-      {/* nose */}
-      <mesh position={[0, 0.68, 1.05]} castShadow>
-        <sphereGeometry args={[0.5, 10, 10]} />
-        <meshStandardMaterial color="#e8c832" roughness={0.6} metalness={0.15} />
-      </mesh>
-      {/* headlight */}
-      <mesh position={[0, 0.8, 1.52]}>
-        <sphereGeometry args={[0.11, 8, 8]} />
-        <meshStandardMaterial color="#fff6d8" emissive="#ffe9a8" emissiveIntensity={night ? 2.4 : 0.4} />
-      </mesh>
-      {/* wheels */}
-      <group ref={wheel}>
-        <mesh position={[-0.62, 0.34, 1.0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.34, 0.34, 0.18, 10]} />
-          <meshStandardMaterial color="#1c1c1c" roughness={1} />
-        </mesh>
-        <mesh position={[0.62, 0.34, 1.0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.34, 0.34, 0.18, 10]} />
-          <meshStandardMaterial color="#1c1c1c" roughness={1} />
-        </mesh>
-        <mesh position={[0, 0.38, -1.15]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.38, 0.38, 0.2, 10]} />
-          <meshStandardMaterial color="#1c1c1c" roughness={1} />
-        </mesh>
-      </group>
-      {/* driver */}
-      <mesh position={[0.45, 1.15, 0.6]}>
-        <capsuleGeometry args={[0.14, 0.34, 3, 6]} />
-        <meshStandardMaterial color="#4A2C17" roughness={1} />
-      </mesh>
-    </group>
-  )
-}
+/**
+ * STAGE 4 — the fleet. Every vehicle is a shared-rig build from
+ * `world3d/vehicles.ts` (keke napep, okada, danfo, taxi, private
+ * sedans) with cached geometries/materials. The Traffic loop below:
+ *   - drives each rig along its seeded loop with per-vehicle speed
+ *     noise, corner braking, right-hand lane keeping and okada weave
+ *   - banks rigs into corners (okadas lean IN, bodies lean OUT)
+ *   - spins wheels by true distance travelled and steers the front fork
+ *   - at night, rides ONE pool of four fake headlight cones on the
+ *     vehicles nearest the player (no real lights, no allocations)
+ * Parked cars render statically from the seeded placement data.
+ */
 
-function OkadaMesh({ night }: { night: boolean }) {
-  const wheel = useRef<THREE.Group>(null)
-  useFrame((_, dt) => {
-    if (wheel.current) wheel.current.children.forEach((w) => (w.rotation.x += dt * 7))
-  })
-  return (
-    <group>
-      <mesh position={[0, 0.62, 0]} castShadow>
-        <boxGeometry args={[0.34, 0.34, 1.7]} />
-        <meshStandardMaterial color="#8a3a28" roughness={0.7} metalness={0.3} />
-      </mesh>
-      <mesh position={[0, 0.92, -0.42]} castShadow>
-        <boxGeometry args={[0.4, 0.24, 0.6]} />
-        <meshStandardMaterial color="#22261f" roughness={1} />
-      </mesh>
-      <mesh position={[0, 1.05, 0.4]}>
-        <capsuleGeometry args={[0.15, 0.36, 3, 6]} />
-        <meshStandardMaterial color="#5C3A21" roughness={1} />
-      </mesh>
-      <mesh position={[0, 0.86, 0.78]}>
-        <sphereGeometry args={[0.17, 8, 8]} />
-        <meshStandardMaterial color="#4A2C17" roughness={1} />
-      </mesh>
-      <mesh position={[0, 0.62, 0.86]}>
-        <sphereGeometry args={[0.1, 8, 8]} />
-        <meshStandardMaterial color="#fff6d8" emissive="#ffe9a8" emissiveIntensity={night ? 2.2 : 0.3} />
-      </mesh>
-      <group ref={wheel}>
-        <mesh position={[0, 0.34, 0.78]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.34, 0.34, 0.14, 10]} />
-          <meshStandardMaterial color="#1c1c1c" roughness={1} />
-        </mesh>
-        <mesh position={[0, 0.34, -0.72]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.34, 0.34, 0.14, 10]} />
-          <meshStandardMaterial color="#1c1c1c" roughness={1} />
-        </mesh>
-      </group>
-    </group>
-  )
-}
+type VehicleKind = 'keke' | 'okada' | 'danfo' | 'taxi' | 'sedan'
 
-function TaxiMesh({ night }: { night: boolean }) {
-  return (
-    <group>
-      <mesh position={[0, 0.62, 0]} castShadow>
-        <boxGeometry args={[1.7, 0.72, 3.4]} />
-        <meshStandardMaterial color="#9fb83a" roughness={0.55} metalness={0.2} />
-      </mesh>
-      <mesh position={[0, 1.22, -0.2]} castShadow>
-        <boxGeometry args={[1.5, 0.6, 1.9]} />
-        <meshStandardMaterial color="#c8d44a" roughness={0.55} metalness={0.2} />
-      </mesh>
-      <mesh position={[0, 1.56, -0.2]}>
-        <boxGeometry args={[0.7, 0.22, 0.4]} />
-        <meshStandardMaterial color="#e8c832" emissive="#e8c832" emissiveIntensity={night ? 1.2 : 0.15} />
-      </mesh>
-      {[[-0.78, 1.05], [0.78, 1.05], [-0.78, -1.15], [0.78, -1.15]].map(([x, z], i) => (
-        <mesh key={i} position={[x, 0.34, z]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.34, 0.34, 0.2, 10]} />
-          <meshStandardMaterial color="#1c1c1c" roughness={1} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function DanfoMesh({ night }: { night: boolean }) {
-  const wheel = useRef<THREE.Group>(null)
-  useFrame((_, dt) => {
-    if (wheel.current) wheel.current.children.forEach((w) => (w.rotation.x += dt * 5.5))
-  })
-  return (
-    <group>
-      {/* body — the classic yellow Lagos danfo silhouette (Lagos Run homage) */}
-      <mesh position={[0, 0.95, 0]} castShadow>
-        <boxGeometry args={[1.9, 1.3, 4.2]} />
-        <meshStandardMaterial color="#e8b820" roughness={0.55} metalness={0.1} />
-      </mesh>
-      {/* roof */}
-      <mesh position={[0, 1.66, 0]} castShadow>
-        <boxGeometry args={[1.7, 0.14, 3.4]} />
-        <meshStandardMaterial color="#f2ead8" roughness={0.8} />
-      </mesh>
-      {/* green side stripes */}
-      {[1, -1].map((sx) => (
-        <mesh key={sx} position={[sx * 0.96, 0.72, 0]}>
-          <boxGeometry args={[0.03, 0.26, 3.9]} />
-          <meshStandardMaterial color="#1c5c3a" roughness={0.7} />
-        </mesh>
-      ))}
-      {/* windshield band */}
-      <mesh position={[0, 1.35, 2.11]}>
-        <boxGeometry args={[1.7, 0.5, 0.05]} />
-        <meshStandardMaterial color="#28323a" roughness={0.25} metalness={0.4} />
-      </mesh>
-      {/* side windows */}
-      {[1, -1].map((sx) =>
-        [0.95, -0.45].map((z, i) => (
-          <mesh key={`${sx}-${i}`} position={[sx * 0.96, 1.4, z]}>
-            <boxGeometry args={[0.03, 0.42, 1.05]} />
-            <meshStandardMaterial color="#28323a" roughness={0.3} metalness={0.35} />
-          </mesh>
-        )),
-      )}
-      {/* headlights */}
-      {[0.6, -0.6].map((x) => (
-        <mesh key={x} position={[x, 0.75, 2.12]}>
-          <sphereGeometry args={[0.12, 8, 8]} />
-          <meshStandardMaterial color="#fff6d8" emissive="#ffe9a8" emissiveIntensity={night ? 2.2 : 0.35} />
-        </mesh>
-      ))}
-      {/* wheels */}
-      <group ref={wheel}>
-        {[[-0.92, 1.4], [0.92, 1.4], [-0.92, -1.35], [0.92, -1.35]].map(([x, z], i) => (
-          <mesh key={i} position={[x, 0.38, z]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.38, 0.38, 0.22, 10]} />
-            <meshStandardMaterial color="#1c1c1c" roughness={1} />
-          </mesh>
-        ))}
-      </group>
-    </group>
-  )
-}
-
-interface Vehicle {
+interface VehiclePlan {
+  kind: VehicleKind
+  variant: SedanVariant
+  toneIdx: number
   loop: number
   s: number
-  speed: number
-  kind: 'keke' | 'okada' | 'taxi' | 'danfo'
-  offset: number
+  base: number
+  lane: number
+  phase: number
+  wobbleFreq: number
+  weave: number
+  yaw: number
+  rate: number
 }
 
 // speeds are presentation feel, scaled off the shared config base
 const BASE = WORLD3D.trafficBaseSpeed
 
-const VEHICLES: Vehicle[] = [
-  { loop: 0, s: 0.05, speed: 1.07 * BASE, kind: 'keke', offset: 1.6 },
-  { loop: 0, s: 0.55, speed: 0.91 * BASE, kind: 'keke', offset: -1.6 },
-  { loop: 1, s: 0.2, speed: 1.17 * BASE, kind: 'okada', offset: 1.4 },
-  { loop: 1, s: 0.75, speed: 1.0 * BASE, kind: 'keke', offset: -1.4 },
-  { loop: 2, s: 0.3, speed: 1.29 * BASE, kind: 'taxi', offset: 1.8 },
-  { loop: 2, s: 0.8, speed: 0.89 * BASE, kind: 'okada', offset: -1.8 },
-  { loop: 0, s: 0.33, speed: 0.86 * BASE, kind: 'danfo', offset: 1.9 },
-  { loop: 1, s: 0.62, speed: 0.8 * BASE, kind: 'danfo', offset: -1.9 },
+/** the town's fleet mix — 13 rigs across the four loops (perf ceiling ~14) */
+const TRAFFIC_MIX: { kind: VehicleKind; loop: number; lane: number; base: number; variant?: SedanVariant }[] = [
+  { kind: 'keke', loop: 0, lane: 1.55, base: 1.0 },
+  { kind: 'taxi', loop: 0, lane: -1.7, base: 1.14 },
+  { kind: 'danfo', loop: 0, lane: 1.9, base: 0.8 },
+  { kind: 'okada', loop: 0, lane: -1.4, base: 1.32 },
+  { kind: 'danfo', loop: 1, lane: 1.9, base: 0.78 },
+  { kind: 'keke', loop: 1, lane: -1.55, base: 0.96 },
+  { kind: 'sedan', loop: 1, lane: 1.75, base: 1.06, variant: 'white' },
+  { kind: 'okada', loop: 1, lane: -1.35, base: 1.36 },
+  { kind: 'keke', loop: 2, lane: 1.5, base: 1.0 },
+  { kind: 'sedan', loop: 2, lane: -1.8, base: 1.08, variant: 'silver' },
+  { kind: 'okada', loop: 2, lane: 1.4, base: 1.3 },
+  { kind: 'taxi', loop: 3, lane: 1.65, base: 1.12 },
+  { kind: 'sedan', loop: 3, lane: -1.75, base: 1.02, variant: 'darkblue' },
 ]
 
-/** position along a loop polyline at arc-length s */
-function loopPosition(loop: [number, number][], s: number): { x: number; z: number; yaw: number } {
-  const segs: { ax: number; az: number; bx: number; bz: number; len: number }[] = []
-  let total = 0
-  for (let i = 0; i < loop.length; i++) {
-    const a = loop[i]
-    const b = loop[(i + 1) % loop.length]
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1])
-    segs.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], len })
-    total += len
+const VEHICLES: VehiclePlan[] = TRAFFIC_MIX.map((m, i) => {
+  // per-vehicle seeded rng: order-independent, identical every load
+  const r = makeRng(8021 + i * 97)
+  return {
+    ...m,
+    variant: m.variant ?? 'silver',
+    toneIdx: Math.floor(r() * 4),
+    s: r() * 400,
+    base: m.base * (0.9 + r() * 0.2) * BASE,
+    phase: r() * Math.PI * 2,
+    wobbleFreq: 0.25 + r() * 0.3,
+    weave: m.kind === 'okada' ? 0.4 + r() * 0.25 : 0,
+    yaw: 0,
+    rate: 0,
   }
-  let rem = ((s % total) + total) % total
-  for (const seg of segs) {
-    if (rem <= seg.len) {
-      const t = seg.len === 0 ? 0 : rem / seg.len
-      const x = seg.ax + (seg.bx - seg.ax) * t
-      const z = seg.az + (seg.bz - seg.az) * t
-      return { x, z, yaw: Math.atan2(seg.bx - seg.ax, seg.bz - seg.az) }
-    }
-    rem -= seg.len
-  }
-  return { x: loop[0][0], z: loop[0][1], yaw: 0 }
+})
+
+interface LoopTable {
+  ax: Float64Array
+  az: Float64Array
+  dx: Float64Array
+  dz: Float64Array
+  start: Float64Array
+  len: Float64Array
+  yaw: Float64Array
+  total: number
 }
+
+// arc-length tables precomputed once — the frame loop never allocates
+const LOOP_TABLES: LoopTable[] = TRAFFIC_LOOPS.map((loop) => {
+  const n = loop.length
+  const t: LoopTable = {
+    ax: new Float64Array(n),
+    az: new Float64Array(n),
+    dx: new Float64Array(n),
+    dz: new Float64Array(n),
+    start: new Float64Array(n),
+    len: new Float64Array(n),
+    yaw: new Float64Array(n),
+    total: 0,
+  }
+  let acc = 0
+  for (let i = 0; i < n; i++) {
+    const a = loop[i]
+    const b = loop[(i + 1) % n]
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1])
+    t.ax[i] = a[0]
+    t.az[i] = a[1]
+    t.dx[i] = b[0] - a[0]
+    t.dz[i] = b[1] - a[1]
+    t.start[i] = acc
+    t.len[i] = l
+    t.yaw[i] = Math.atan2(t.dx[i], t.dz[i])
+    acc += l
+  }
+  t.total = acc
+  return t
+})
+
+interface LoopPoint {
+  x: number
+  z: number
+  yaw: number
+}
+const SCRATCH_A: LoopPoint = { x: 0, z: 0, yaw: 0 }
+const SCRATCH_B: LoopPoint = { x: 0, z: 0, yaw: 0 }
+
+/** position along a loop at arc-length s — writes into `out`, no allocation */
+function loopPoint(loopIdx: number, s: number, out: LoopPoint): void {
+  const t = LOOP_TABLES[loopIdx]
+  const rem = ((s % t.total) + t.total) % t.total
+  let k = 0
+  while (k < t.len.length - 1 && rem > t.start[k + 1]) k++
+  const f = t.len[k] === 0 ? 0 : (rem - t.start[k]) / t.len[k]
+  out.x = t.ax[k] + t.dx[k] * f
+  out.z = t.az[k] + t.dz[k] * f
+  out.yaw = t.yaw[k]
+}
+
+// feel constants per family: body roll gain/cap + wheel radius (spin rate)
+const ROLL_GAIN: Record<VehicleKind, number> = { keke: 0.55, okada: 3.4, taxi: 0.24, sedan: 0.24, danfo: 0.15 }
+const MAX_ROLL: Record<VehicleKind, number> = { keke: 0.09, okada: 0.4, taxi: 0.05, sedan: 0.05, danfo: 0.04 }
+const WHEEL_R: Record<VehicleKind, number> = { keke: 0.34, okada: 0.33, taxi: 0.34, sedan: 0.34, danfo: 0.38 }
+
+function buildTrafficRig(v: VehiclePlan): VehicleRig {
+  if (v.kind === 'keke') return buildKeke()
+  if (v.kind === 'okada') return buildOkada(v.toneIdx)
+  if (v.kind === 'danfo') return buildDanfo()
+  if (v.kind === 'taxi') return buildSedan('taxi')
+  return buildSedan(v.variant)
+}
+
+// module-level rig caches — built lazily on the first client render (SSR
+// import stays safe); geometries/materials themselves live in vehicles.ts
+let RIG_CACHE: VehicleRig[] | null = null
+let PARKED_RIG_CACHE: VehicleRig[] | null = null
+
+function getRigs(): VehicleRig[] {
+  if (!RIG_CACHE) RIG_CACHE = VEHICLES.map(buildTrafficRig)
+  return RIG_CACHE
+}
+
+function getParkedRigs(): VehicleRig[] {
+  if (!PARKED_RIG_CACHE) {
+    PARKED_RIG_CACHE = PARKED_VEHICLES.map((p) =>
+      p.build === 'keke' ? buildKeke(true) : buildSedan(p.variant, true),
+    )
+  }
+  return PARKED_RIG_CACHE
+}
+
+// reused scratch for the nightly "4 nearest vehicles" scan (no allocs)
+const BEST_D = [Infinity, Infinity, Infinity, Infinity]
+const BEST_I = [-1, -1, -1, -1]
 
 export function Traffic({ timeOfDay }: { timeOfDay: TimeOfDay }) {
   const refs = useRef<(THREE.Group | null)[]>([])
+  const coneRefs = useRef<(THREE.Group | null)[]>([])
   const night = timeOfDay === 'night'
 
-  useFrame((_, dt) => {
+  const coneGeo = useMemo(() => {
+    const g = new THREE.PlaneGeometry(2.5, 5.6)
+    g.translate(0, 2.8, 0) // pivot at the near edge so the pool runs forward
+    return g
+  }, [])
+
+  // one call flips every headlight/taillight in town (moving + parked)
+  useEffect(() => {
+    applyVehicleNight(night)
+  }, [night])
+
+  useFrame((state, rawDt) => {
+    const dt = Math.min(rawDt, 0.05)
+    const t = state.clock.elapsedTime
+
     for (let i = 0; i < VEHICLES.length; i++) {
       const v = VEHICLES[i]
       const g = refs.current[i]
-      if (!g) continue
-      v.s += v.speed * dt
-      const p = loopPosition(TRAFFIC_LOOPS[v.loop], v.s)
-      // lateral offset so opposing traffic doesn't share a lane
-      const ox = Math.sin(p.yaw) * v.offset
-      const oz = Math.cos(p.yaw) * v.offset
-      const x = p.x + ox
-      const z = p.z + oz
+      const rig = getRigs()[i]
+      if (!g || !rig) continue
+
+      // cruise: deterministic per-vehicle noise + gentle slow-down into corners
+      loopPoint(v.loop, v.s, SCRATCH_A)
+      loopPoint(v.loop, v.s + 3.4, SCRATCH_B)
+      let lookYaw = SCRATCH_B.yaw - SCRATCH_A.yaw
+      while (lookYaw > Math.PI) lookYaw -= Math.PI * 2
+      while (lookYaw < -Math.PI) lookYaw += Math.PI * 2
+      const noise = 1 + Math.sin(t * v.wobbleFreq + v.phase) * 0.09
+      const corner = 1 - Math.min(0.45, Math.abs(lookYaw) * 1.15)
+      const spd = v.base * noise * corner
+      v.s += spd * dt
+
+      // lane keeping (right-hand traffic); okadas weave, everyone drifts a hair
+      const lateral =
+        v.lane + (v.weave > 0 ? Math.sin(v.s * 0.55 + v.phase) * v.weave : Math.sin(v.s * 0.21 + v.phase) * 0.07)
+      const x = SCRATCH_A.x + -Math.cos(SCRATCH_A.yaw) * lateral
+      const z = SCRATCH_A.z + Math.sin(SCRATCH_A.yaw) * lateral
+
+      // smoothed turn rate → steer + bank (okadas lean IN, bodies lean OUT)
+      let dy = SCRATCH_A.yaw - v.yaw
+      while (dy > Math.PI) dy -= Math.PI * 2
+      while (dy < -Math.PI) dy += Math.PI * 2
+      v.rate += (dy / Math.max(dt, 1e-3) - v.rate) * Math.min(1, dt * 4.5)
+      v.yaw = SCRATCH_A.yaw
+
       // ride bridge decks where the loop crosses water (bypass / Kogi bridge)
-      g.position.set(x, (bridgeDeckY(x, z) ?? heightAt(x, z) + 0.05), z)
-      g.rotation.y = p.yaw
+      g.position.set(x, bridgeDeckY(x, z) ?? heightAt(x, z) + 0.05, z)
+      g.rotation.set(0, SCRATCH_A.yaw, 0)
+
+      const leanSign = v.kind === 'okada' ? -1 : 1
+      const rollTarget = THREE.MathUtils.clamp(
+        leanSign * v.rate * ROLL_GAIN[v.kind],
+        -MAX_ROLL[v.kind],
+        MAX_ROLL[v.kind],
+      )
+      rig.bank.rotation.z += (rollTarget - rig.bank.rotation.z) * Math.min(1, dt * 6)
+      if (rig.steer) rig.steer.rotation.y = THREE.MathUtils.clamp(v.rate * 0.35, -0.3, 0.3)
+
+      // wheels spin by true distance travelled
+      const dist = spd * dt
+      const wr = WHEEL_R[v.kind]
+      for (const w of rig.wheels) w.rotation.x += dist / wr
+    }
+
+    // night: the four shared light pools ride the vehicles nearest the player
+    const cones = coneRefs.current
+    if (night) {
+      for (let k = 0; k < 4; k++) {
+        BEST_D[k] = Infinity
+        BEST_I[k] = -1
+      }
+      const px = playerPos.x
+      const pz = playerPos.z
+      for (let i = 0; i < VEHICLES.length; i++) {
+        const g = refs.current[i]
+        if (!g) continue
+        const d2 = (g.position.x - px) * (g.position.x - px) + (g.position.z - pz) * (g.position.z - pz)
+        for (let k = 0; k < 4; k++) {
+          if (d2 < BEST_D[k]) {
+            for (let m = 3; m > k; m--) {
+              BEST_D[m] = BEST_D[m - 1]
+              BEST_I[m] = BEST_I[m - 1]
+            }
+            BEST_D[k] = d2
+            BEST_I[k] = i
+            break
+          }
+        }
+      }
+      for (let c = 0; c < cones.length; c++) {
+        const cone = cones[c]
+        if (!cone) continue
+        const gi = c < 4 ? BEST_I[c] : -1
+        const src = gi >= 0 ? refs.current[gi] : null
+        if (src && BEST_D[c] < 3600) {
+          cone.visible = true
+          cone.position.set(src.position.x, src.position.y + 0.05, src.position.z)
+          cone.rotation.y = VEHICLES[gi].yaw
+        } else {
+          cone.visible = false
+        }
+      }
+    } else {
+      for (const cone of cones) if (cone) cone.visible = false
     }
   })
 
@@ -663,11 +701,26 @@ export function Traffic({ timeOfDay }: { timeOfDay: TimeOfDay }) {
     <group>
       {VEHICLES.map((v, i) => (
         <group key={i} ref={(el) => { refs.current[i] = el }}>
-          {v.kind === 'keke' && <KekeMesh night={night} />}
-          {v.kind === 'okada' && <OkadaMesh night={night} />}
-          {v.kind === 'taxi' && <TaxiMesh night={night} />}
-          {v.kind === 'danfo' && <DanfoMesh night={night} />}
-          <BlobShadow scale={1.6} />
+          <primitive object={getRigs()[i].group} />
+          <BlobShadow scale={v.kind === 'danfo' ? 2 : 1.6} />
+        </group>
+      ))}
+      {/* parked fleet — static visual-only rigs, no frame updates */}
+      {PARKED_VEHICLES.map((p, i) => (
+        <group key={`parked-${i}`} position={[p.x, p.y, p.z]} rotation={[0, p.rotY, 0]}>
+          <primitive object={getParkedRigs()[i].group} />
+          <BlobShadow scale={p.build === 'sedan' ? 1.7 : 1.3} />
+        </group>
+      ))}
+      {/* fake headlight pools — one shared material, four riders (night only) */}
+      {[0, 1, 2, 3].map((i) => (
+        <group key={`cone-${i}`} ref={(el) => { coneRefs.current[i] = el }} visible={false}>
+          <mesh
+            geometry={coneGeo}
+            material={headlightConeMaterial()}
+            rotation={[Math.PI / 2, 0, 0]}
+            position={[0, 0.06, 1.6]}
+          />
         </group>
       ))}
     </group>

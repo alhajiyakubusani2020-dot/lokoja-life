@@ -273,8 +273,33 @@ export function MapScreen({
         </p>
       )}
 
+      {/* map canvas + markers — hero of the screen: status header above,
+          atlas + legend below; square art so the pin overlay never drifts */}
+      <div className="-mx-2 sm:mx-auto w-auto sm:w-full sm:max-w-[620px] lg:max-w-[640px]">
+        <div className="lko-card relative aspect-square w-full overflow-hidden p-0">
+          <MapCanvas />
+          {LOCATIONS.map((l) => (
+            <Marker
+              key={l.id}
+              location={l}
+              isCurrent={l.id === origin.id && !isTravelling}
+              isLocked={player.level < l.unlockLevel}
+              onSelect={() => openLocation(l.id)}
+            />
+          ))}
+          {isTravelling && (
+            <div className="lko-scrim absolute inset-0 z-20 flex items-center justify-center bg-[var(--lko-cream)]/40 backdrop-blur-[1px]">
+              <span className="lko-display flex items-center gap-2 rounded-full border border-[var(--lko-gold)]/40 bg-white/95 px-4 py-2 text-sm shadow-md">
+                <KekeIcon size={17} className="animate-pulse text-[var(--lko-gold-deep)]" />
+                Travelling…
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* exploration progress — walk the 3D city or travel to fill the atlas */}
-      <div className="lko-card mb-3 px-4 py-3">
+      <div className="lko-card mt-3 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
             Lokoja atlas
@@ -298,30 +323,6 @@ export function MapScreen({
             You don find every corner of Lokoja. The whole city sabi your face. 🏙️
           </p>
         )}
-      </div>
-
-      {/* map canvas + markers — square art, width-capped and centred on desktop */}
-      <div className="mx-auto w-full max-w-[560px] lg:max-w-[600px]">
-        <div className="lko-card relative aspect-square w-full overflow-hidden p-0">
-          <MapCanvas />
-          {LOCATIONS.map((l) => (
-            <Marker
-              key={l.id}
-              location={l}
-              isCurrent={l.id === origin.id && !isTravelling}
-              isLocked={player.level < l.unlockLevel}
-              onSelect={() => openLocation(l.id)}
-            />
-          ))}
-          {isTravelling && (
-            <div className="lko-scrim absolute inset-0 z-20 flex items-center justify-center bg-[var(--lko-cream)]/40 backdrop-blur-[1px]">
-              <span className="lko-display flex items-center gap-2 rounded-full border border-[var(--lko-gold)]/40 bg-white/95 px-4 py-2 text-sm shadow-md">
-                <KekeIcon size={17} className="animate-pulse text-[var(--lko-gold-deep)]" />
-                Travelling…
-              </span>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* transport legend (informational, fares shown per-trip) */}

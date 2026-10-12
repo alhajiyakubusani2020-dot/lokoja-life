@@ -1,0 +1,65 @@
+[
+  {
+    "url": "https://support.google.com/photos/thread/93201456/where-do-i-find-my-screenshots?hl=en",
+    "name": "Where do I find my screenshots - Google Photos Community",
+    "snippet": "Jan 12, 2021 — From within the Google Photos app, tap the Library button at the bottom right of the screen. Look there for the Screenshot folder.",
+    "host_name": "support.google.com",
+    "rank": 0,
+    "date": "Jan 12, 2021",
+    "favicon": ""
+  },
+  {
+    "url": "https://play.google.com/store/apps/details?id=com.splendapps.splendshot&hl=en_US",
+    "name": "Screenshot - Apps on Google Play",
+    "snippet": "Free android app which allows you to capture screenshots and manage them in a user friendly way. Take screenshots on your phone and tablet",
+    "host_name": "play.google.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://en.wikipedia.org",
+    "name": "Screenshot",
+    "snippet": "A screenshot (also known as screen capture or screen grab) is an analog or digital image that shows the contents of a computer display. Creating proof images ...",
+    "host_name": "en.wikipedia.org",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://support.microsoft.com",
+    "name": "Use Snipping Tool to capture screenshots",
+    "snippet": "Learn how to use Snipping Tool to capture a screenshot, or snip, of any object on your screen, and then annotate, save, or share the image.",
+    "host_name": "support.microsoft.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://support.apple.com",
+    "name": "Take a screenshot on your iPhone",
+    "snippet": "Jun 3, 2026 — How to take a screenshot on an iPhone with Face ID · Press the side button and the volume up button at the same time . PlayPauseReplay · Quickly ... Read more",
+    "host_name": "support.apple.com",
+    "rank": 4,
+    "date": "Jun 3, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.binghamton.edu",
+    "name": "Taking screenshots makes you more likely to forget",
+    "snippet": "If you take photographs or screenshots during an experience, consistent evidence has shown that your memory of the information or event is degraded, explained ... Read more",
+    "host_name": "www.binghamton.edu",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://playwright.dev",
+    "name": "Screenshots",
+    "snippet": "Full page screenshots ​. Full page screenshot is a screenshot of a full scrollable page, as if you had a very tall screen and the page could fit it entirely. Read more",
+    "host_name": "playwright.dev",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  }
+]

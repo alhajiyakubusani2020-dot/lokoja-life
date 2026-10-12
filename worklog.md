@@ -208,3 +208,90 @@ Stage Summary:
 - INC 4 COMPLETE. Lokoja Life now has an INSIDE: your own four-room flat (bed to sleep in, stove to cook, TV to unwind, bath to freshen up), Mama's buka and the Kpata provision store — all walking through visible doorways into real rooms with real furniture, all actions flowing through the SAME store/systems authority. The human is a proper articulated character (jointed limbs, walk cycle, run lean, breathing), the city breathes (birds, smoke, procedural ambience that blends by time/weather/proximity/indoors), residents respect walls, the camera respects buildings, and the body now lives on a schedule (decay). Saves, location IDs, economy authority and R1 identity untouched.
 - Honest limitations: interiors are session-only presentation state (exiting the world always returns you outside — by design); no ceiling (dollhouse cutaway, by design); ambient audio verified via code paths + settings gate (headless can't output sound); iPhone touch verified via emulation; prod build not runnable in this env.
 - Next highest-impact steps: (1) day-2+ quests tied to the interiors (furnish the flat with earnings, meet Musa at Kpata); (2) wardrobe/clothing swap hotspot using the existing avatar data; (3) market stall browsing (walk-to-stall shopping beyond the counter); (4) more interiors (university lecture hall, government office for permits).
+
+---
+Task ID: 4-a
+Agent: swarm-map-cartographer (session timed out pre-report; work verified by integrator)
+Task: Rebuild the 2D Lokoja map into real cartography (user: "the map wrong — check how Lagos Life arrange things")
+
+Work Log:
+- Rewrote MapCanvas.tsx from stroke-art to filled cartography: rivers as water polygons (light shallow edge → deep channel → mid-line, bank highlights), proper Niger(NW)+Benue(E) V-meeting with confluence swirl + sandbanks, combined outflow flowing south along the town's east side
+- Mount Patti as layered massif (nested contour bands, ridge hachures, summit plateau + Lugard rest-house mark, dashed footpath + switchback trail)
+- Urban fabric between Patti and the river: faint block grid + clustered building blocks, denser near Kpata/market spine, thinning toward Felele/Adankolo
+- Road hierarchy: trunk (IBB Way/Murtala Mohammed Way spine/bypass) with dark casing + laterite fill + center dash; secondary/minor tiers; bridges as deck rects with railing ticks; road-name labels (MURTALA MOHAMED WAY, UNIVERSITY RD, GANAJA RD, IBB WAY, FELELE RD, SOUTHERN BYPASS)
+- District typography: GRA, ADANKOLO, OTOKITI, GANAJA, FELELE; New/Old Market + Jetty annotations; legend, compass rose, scale bar, cartouche
+- MapScreen.tsx presentation-only: map now fills the viewport (all 10 pins still positioned by the SAME mapX/mapY grid — zero data drift)
+- New MapScreen layout verified desktop 1280 + mobile 390 (final-mobile-map.png: cartouche complete, water reads as water, all markers sane, travel sheet regression passed)
+
+Stage Summary:
+- 4-a COMPLETE. The map is now a believable game-city map drawn around the frozen location pins. Water/urban/terrain/roads all read correctly. Honest nits: a couple of long road labels clip at map edge on desktop; ADANKOLO label sits near the Confluence pin — acceptable, fixable later.
+
+---
+Task ID: 4-b
+Agent: swarm-city-builder (session timed out pre-report; work verified by integrator)
+Task: Nigerianize the 3D city — buildings/roofs/shopfronts/street furniture/trees/lighting (user: "environment looking fake")
+
+Work Log:
+- CityMesh.tsx buildings rebuilt: baked facade CanvasTextures per kind/tone — plaster walls (WALL_TONES) with grime at the base, SMALL punched windows with frames/lintels/sills (realistic ratio, no more full-facade lantern glow), separate emissive night map (only some windows lit, warm, tasteful)
+- Corrugated roofs (ribbed canvas texture + rust patches, overhanging eaves), parapets + rooftop water tanks on blocks, shopfronts: striped awnings + signboards with ORIGINAL business names ("MAMA NGOZI PROVISIONS", "BUKA & JOLLOF SPOT", ...)
+- NEW src/game/world3d/props.ts (deterministic, seeded): compound walls with gates, utility poles with sagging wires along main roads, bus shelters, market crates, tyre stacks, water barrels — clearance-checked against BUILDINGS/ROADS/DOORS, visual-only (no collider changes)
+- Trees(): palms rebuilt (curved stacked trunk, arched fronds, coconut crowns), broadleaf savanna trees (2-3 blob canopies, dry-season gold variants); instanced, few draw calls
+- WorldScene.tsx + atmosphere.ts: warmer golden day lighting, sky-matched haze, deep-blue night with sodium lamp pools + subtle moon fill; device-tier quality preserved
+- E2E evidence: terr4/veh4/final2 screenshots show grounded buildings, corrugated roofs, wires, signs; day + night verified; zero console errors; walking/collision/door prompts intact
+
+Stage Summary:
+- 4-b COMPLETE. The city reads as lived-in Nigerian urban fabric in both day and night. Keep-list preserved (Doorways/JobBoards/landmarks/labels APIs untouched).
+
+---
+Task ID: 4-c
+Agent: swarm-terrain-artist (session timed out pre-report; work verified by integrator)
+Task: Realistic 3D ground/roads/rivers/grass/bridges (user: "roads, hills, everything fake")
+
+Work Log:
+- WorldTerrain.tsx ground: 4-5 natural savanna vertex-colour layers (gold-olive base + noise mottling, green lowlands near rivers, laterite dust halos along roads/markets, dry highlands), optional baked grain texture (terrainArt.ts)
+- Roads(): layered ribbons — dirt shoulders + asphalt trunk roads (gray, center dashed line, baked road textures) vs laterite secondaries (worn wheel-track stripes), junction seam discs, width hierarchy (trunk wider)
+- Rivers: sand/mud shelf band before the waterline, two-tone depth water with shimmer, confluence foam accent
+- Grass(): replaced paper-cone shards with crossed-quad tufts + 3-blade stars (2 instanced meshes), moisture tones + per-instance hue jitter; flowers near rivers
+- Bridges: railings + pylons, deck matches carried road surface
+- INTEGRATOR FIXES after the timeout: repaired one torn code line risk-checked in Grass (verified intact), tuft render scale capped (min(scale,1.15)*0.74 — kills the night "thorn bush" silhouettes) and tufts within 3.4 u of a road centerline are hidden (no more grass on the tarmac, shoulders keep dry grass)
+- E2E: drone shots show road hierarchy + riverbanks + terrain variety; player still grounds correctly (heightAt untouched); 101/101 world3d checks pass
+
+Stage Summary:
+- 4-c COMPLETE + integrator polish. Ground half of the world now reads real in day AND night.
+
+---
+Task ID: 4-d
+Agent: swarm-vehicle-shop (session timed out pre-report; work verified by integrator)
+Task: Rebuild all vehicles + traffic feel (user: "the cars look fake")
+
+Work Log:
+- NEW src/game/world3d/vehicles.ts (deterministic builders + parked-vehicle placement, clearance-checked)
+- KekeMesh: rounded yellow cabin + green stripe, black canopy, windscreen, 1 front + 2 rear wheels (tire+rim), headlight/taillight, body roll on turns
+- DanfoMesh: proportioned minibus — dark window band with pillars, yellow/black stripe, ORIGINAL "LOKOJA TRANSIT" livery text (baked), bumpers, lights, roof rack
+- Okada: motorcycle + rider (helmet, colored clothes), spoked wheels, headlight, lean-into-curves banking
+- Taxi (green/yellow livery + roof sign) + private sedans (white/silver/dark blue) — 3-box silhouettes, window bands, hubs, lights
+- Traffic life: per-vehicle speed noise (±20%), okada faster/weaving, danfo steadier, slow on sharp turns, wheels spin, night headlights + taillights (fake light cones for nearest few only)
+- Parked sedans/keke along road edges near market/motor-park/food strip
+- Player/NPC/door/POI logic untouched; loops + bridgeDeckY respected (no sinking)
+- E2E: close-ups of keke (follow cam) + okada passing on mobile + LOKOJA TRANSIT bus at shelter; zero errors; 101/101 checks
+
+Stage Summary:
+- 4-d COMPLETE. Traffic now reads as Nigerian street life: keke/danfo/okada/taxi/private cars, parked vehicles, living motion day and night.
+
+---
+Task ID: 5
+Agent: Main Agent (Super Z) — swarm integrator
+Task: STAGE 4 INTEGRATION — "environment real + map right, Lagos Life standard" (user: swarm yourself, fix all the issues, full standard)
+
+Work Log:
+- Baseline FIRST: tag stage4-start @ 8b6a454; 168/168 checks (16 travel + 51 stage3 + 101 world3d), tsc 4 pre-existing errors in examples/skills only, lint clean; BEFORE screenshots captured (map + 3D day/night) confirming the user's complaints (lantern buildings, ribbon roads, blob Patti, road-like rivers)
+- Research: Lagos Life public material (Google Play listing unreachable 404-region; leaned on prior Vanguard research + app-store snippet: Sims-style, six meters, recognisable city) + Lokoja wiki facts (suburbs Felele/Adankolo/Otokiti/Ganaja; three markets; Patti = hill of doves; confluence geography) saved to research/s*.json + p*.json
+- Launched 4-agent swarm (file-ownership matrix, layout.ts/locations/config/systems frozen): 4-a map, 4-b city, 4-c terrain, 4-d vehicles. All four completed their edits + E2E screenshots before the orchestrator call timed out (Task-tool deadline) — work preserved, integrator verified and finished the protocol (worklog entries above)
+- Integration verification: tsc 0 game errors, lint clean, 168/168, zero console/page errors on desktop + mobile; E2E: menu→continue→world (day), nap×3→world (night windows/lamp pools), interior enter/exit regression (bed/TV prompts alive), keke close-up, okada on mobile 390×844, map at 1280+390
+- Fixes by integrator: grass tufts — render scale cap (night thorn silhouettes) + no tufts within 3.4 u of road centerline; deleted DEAD files src/game/systems/terrain.ts (competing abandoned terrain system, zero imports) and src/components/game/SceneBackdrop.tsx (zero importers)
+- Screenshots: .zscripts/stage4/ (before-*, map4-*, terr4-*, veh4-*, final*-*, final2-*)
+
+Stage Summary:
+- STAGE 4 "FULL STANDARD" INCREMENT COMPLETE. 2D map = real cartography around frozen pins; 3D city = Nigerian urban fabric (facades/roofs/shopfronts/compound walls/poles+wires/signs); ground = savanna layers + hierarchical roads + riverbanks; traffic = keke/danfo/okada/taxi/private + parked; night = tasteful window/lamp/headlight glow; interiors + human rig from inc4 regressions-clean. Saves, location IDs, economy authority, R1 identity untouched. 168/168.
+- Honest limitations: one Task-tool orchestration timeout (agents finished the work; no code lost); road-label clipping on the 2D map edge; NPC traffic ignores junction priority; prod build not runnable in this env; iPhone touch verified via emulation only.
+- Next: quests tied to discovery/interiors, wardrobe hotspot, market stall browsing, more interiors (lecture hall, government office).

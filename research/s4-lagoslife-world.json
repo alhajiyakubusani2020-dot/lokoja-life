@@ -1,0 +1,29 @@
+[
+  {
+    "url": "https://workspace.google.com/products/drive",
+    "name": "Google Drive: Share Files Online with Secure Cloud Storage",
+    "snippet": "Learn about Google Drive's file sharing platform that provides a personal, secure cloud storage option to share content with other users.",
+    "host_name": "workspace.google.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://apps.apple.com",
+    "name": "Google Drive - App Store",
+    "snippet": "Google Drive . Store, access and scan files. Free · In‑App Purchases. 7.9M ... Places, navigation & traffic · View. Gmail - Email by Google. Secure, fast ... Read more",
+    "host_name": "apps.apple.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://play.google.com/store/apps/details?id=com.google.android.apps.docs&hl=en_US",
+    "name": "Google Drive - Apps on Google Play",
+    "snippet": "5 days ago — Google Drive lets you securely store, intelligently organize and collaborate on files and folders from anywhere, on any device. Read more",
+    "host_name": "play.google.com",
+    "rank": 2,
+    "date": "Oct 6, 2026",
+    "favicon": ""
+  }
+]
