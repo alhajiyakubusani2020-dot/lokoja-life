@@ -421,3 +421,20 @@ Stage Summary:
 - New gameplay: school canteens serve meals (menu hotspot + eatMeal), 8 new study venues (labs/halls/workshops/chapel/mosque/library) all flowing through the existing study system
 - E2E hook made live-closure safe (e2eApi ref) — future test drivers won't fight stale closures
 - ALL TESTS GREEN: schools 232, world3d 55, stage3, stage5 36, travel; tsc + lint clean; E2E screenshots in download/stage8-shots/
+
+---
+Task ID: 9
+Agent: Main Agent (Super Z)
+Task: "server is dead" — diagnose why the dev server / preview (port 3000) is down and restore it
+
+Work Log:
+- Verified no process was listening on 3000; preview proxy (Caddy on :81) returning 502 (backend down).
+- Reconstructed platform architecture from /start.sh: at container boot, start.sh -> .zscripts/dev.sh (bun install, db:push, bun run dev, health check) launches the dev server parented to the init/caddy tree — that ancestry is immune to session cleanup. Boot timeline (/tmp/boot-timeline.log) confirms this succeeded at 08:20 today (19s, healthy).
+- The boot server was stopped externally (~12:54, platform dev.pid written) — consistent with the session handoff when the previous conversation ran out of context.
+- Empirical killer isolation: any process holding a TCP LISTEN socket spawned from an agent Bash session (setsid'd next dev on 3000; python http.server on 3000, 3999, and 127.0.0.1:3444) is killed between tool invocations; a non-listening setsid sleep survives. Conclusion: agent-spawned servers CANNOT persist — only boot-ancestry servers can. Not OOM (cgroup failcnt 0, 4GB limit), not a universal reaper.
+- Ruled out self-service revivals: no sudo for z, no cron/atd/systemd/tmux, MCP control service (12600) exposes only the standard tool set (no exec/restart tool), Caddy admin API not exposed.
+- Verified restart safety: git working tree clean at f93d144 (Stage 8 complete), db/custom.db present, `bun run db:push` exits 0, bun 1.3.14 + .zscripts/dev.sh intact — the boot flow is guaranteed to relaunch the server on container restart.
+
+Stage Summary:
+- Root cause: platform stopped the boot-time dev server during the previous session's handoff; agent-spawned listeners are policy-killed between tool calls, so the preview cannot be revived from inside the session.
+- Fix: user restarts the sandbox (restart button) -> start.sh reruns .zscripts/dev.sh -> dev server returns on 3000 sanctioned and stable. All code/data verified safe for restart (clean tree, committed Stage 8).
