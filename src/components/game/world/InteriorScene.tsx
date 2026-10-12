@@ -73,7 +73,7 @@ function plateTexture(lines: string[], bg: string, fg: string, accent: string): 
   return tex
 }
 
-function Furniture({ f, night }: { f: FurnDef; night: boolean }) {
+function Furniture({ f, night, accent }: { f: FurnDef; night: boolean; accent: string }) {
   const fp = FURN_FOOTPRINT[f.kind]
   const s = f.s ?? 1
   const tone = f.tone ?? 0
@@ -878,6 +878,375 @@ function Furniture({ f, night }: { f: FurnDef; night: boolean }) {
           </mesh>
         </group>
       )
+    case 'bunk':
+      // student hostel bunk — steel frame, two mattresses, folded blanket
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* posts */}
+          {[[-0.94, -0.42], [0.94, -0.42], [-0.94, 0.42], [0.94, 0.42]].map(([x, z]) => (
+            <mesh key={`${x}${z}`} position={[x, 0.88, z]} castShadow>
+              <boxGeometry args={[0.07, 1.76, 0.07]} />
+              <meshStandardMaterial color="#5f6a72" metalness={0.6} roughness={0.45} />
+            </mesh>
+          ))}
+          {/* lower mattress + base */}
+          <mesh position={[0, 0.34, 0]} castShadow>
+            <boxGeometry args={[1.92, 0.09, 0.92]} />
+            <meshStandardMaterial color="#5f6a72" metalness={0.5} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 0.46, 0]} castShadow>
+            <boxGeometry args={[1.88, 0.14, 0.88]} />
+            <meshStandardMaterial color={FABRIC[tone % FABRIC.length]} roughness={0.95} />
+          </mesh>
+          {/* upper mattress + base */}
+          <mesh position={[0, 1.28, 0]} castShadow>
+            <boxGeometry args={[1.92, 0.09, 0.92]} />
+            <meshStandardMaterial color="#5f6a72" metalness={0.5} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 1.4, 0]} castShadow>
+            <boxGeometry args={[1.88, 0.14, 0.88]} />
+            <meshStandardMaterial color={FABRIC[(tone + 2) % FABRIC.length]} roughness={0.95} />
+          </mesh>
+          {/* folded blanket + pillow up top */}
+          <mesh position={[-0.55, 1.51, 0.12]} castShadow>
+            <boxGeometry args={[0.7, 0.09, 0.6]} />
+            <meshStandardMaterial color="#e7ddc8" roughness={1} />
+          </mesh>
+          <mesh position={[0.72, 1.52, 0.05]} castShadow>
+            <boxGeometry args={[0.34, 0.1, 0.5]} />
+            <meshStandardMaterial color="#f2ead8" roughness={1} />
+          </mesh>
+          {/* ladder rungs */}
+          {[0.55, 0.95, 1.35].map((y) => (
+            <mesh key={y} position={[0.98, y, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.025, 0.025, 0.2, 6]} />
+              <meshStandardMaterial color="#8a939b" metalness={0.55} roughness={0.4} />
+            </mesh>
+          ))}
+        </group>
+      )
+    case 'locker':
+      // steel student locker — vents, handle, house-colour door
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, fp.h / 2, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, fp.h, fp.d * s]} />
+            <meshStandardMaterial color="#6e7a84" metalness={0.55} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, fp.h / 2 + 0.01, fp.d * s / 2 + 0.011]}>
+            <boxGeometry args={[fp.w * s - 0.07, fp.h - 0.1, 0.02]} />
+            <meshStandardMaterial color={accent} roughness={0.6} metalness={0.25} />
+          </mesh>
+          {/* vent slits */}
+          {[0.35, 0.5, 1.25, 1.4].map((y) => (
+            <mesh key={y} position={[0, y, fp.d * s / 2 + 0.024]}>
+              <boxGeometry args={[fp.w * s * 0.6, 0.035, 0.012]} />
+              <meshStandardMaterial color="#2c343a" roughness={0.8} />
+            </mesh>
+          ))}
+          <mesh position={[fp.w * s * 0.28, 0.92, fp.d * s / 2 + 0.026]}>
+            <boxGeometry args={[0.05, 0.16, 0.02]} />
+            <meshStandardMaterial color="#d9d4c5" metalness={0.7} roughness={0.3} />
+          </mesh>
+        </group>
+      )
+    case 'lab-bench':
+      // science lab bench — hardwood top, reagent rack, gas taps, cupboards
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, fp.h - 0.045, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.07, fp.d * s]} />
+            <meshStandardMaterial color="#26221e" roughness={0.55} />
+          </mesh>
+          <mesh position={[0, fp.h / 2 - 0.06, 0]} castShadow>
+            <boxGeometry args={[fp.w * s - 0.08, fp.h - 0.16, fp.d * s - 0.1]} />
+            <meshStandardMaterial color={WOOD[(tone + 2) % WOOD.length]} roughness={0.85} />
+          </mesh>
+          {/* reagent rack along the back edge */}
+          <mesh position={[0, fp.h + 0.19, -fp.d * s / 2 + 0.1]} castShadow>
+            <boxGeometry args={[fp.w * s * 0.8, 0.05, 0.09]} />
+            <meshStandardMaterial color={WOOD[tone % WOOD.length]} roughness={0.9} />
+          </mesh>
+          {[-0.7, -0.35, 0, 0.35, 0.7].map((x, i) => (
+            <mesh key={x} position={[x * fp.w * s * 0.5, fp.h + 0.11, -fp.d * s / 2 + 0.1]} castShadow>
+              <cylinderGeometry args={[0.055, 0.05, i % 2 ? 0.15 : 0.22, 8]} />
+              <meshStandardMaterial color={i === 2 ? '#7da35c' : i === 4 ? '#b0673a' : '#9fb6c2'} roughness={0.25} transparent opacity={0.85} />
+            </mesh>
+          ))}
+          {/* gas taps */}
+          {[-0.4, 0.4].map((x) => (
+            <group key={x} position={[x * fp.w * s * 0.5, fp.h, 0.12]}>
+              <mesh position={[0, 0.07, 0]}>
+                <cylinderGeometry args={[0.026, 0.032, 0.14, 8]} />
+                <meshStandardMaterial color="#b8b2a4" metalness={0.75} roughness={0.3} />
+              </mesh>
+              <mesh position={[0, 0.16, 0.05]} rotation={[Math.PI / 2.6, 0, 0]}>
+                <cylinderGeometry args={[0.016, 0.016, 0.13, 6]} />
+                <meshStandardMaterial color="#b8b2a4" metalness={0.75} roughness={0.3} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+      )
+    case 'fume-hood':
+      // fume cupboard — steel base, glass sash, dark working chamber
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, 0.44, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.88, fp.d * s]} />
+            <meshStandardMaterial color="#8d949c" metalness={0.4} roughness={0.55} />
+          </mesh>
+          <mesh position={[0, 1.5, -0.06]} castShadow>
+            <boxGeometry args={[fp.w * s, 1.22, fp.d * s - 0.12]} />
+            <meshStandardMaterial color="#3a3e44" roughness={0.7} />
+          </mesh>
+          {/* glass sash */}
+          <mesh position={[0, 1.52, fp.d * s / 2 - 0.05]}>
+            <boxGeometry args={[fp.w * s - 0.14, 0.95, 0.03]} />
+            <meshStandardMaterial color="#b9d8e0" transparent opacity={0.35} roughness={0.12} metalness={0.1} />
+          </mesh>
+          {/* duct */}
+          <mesh position={[0, 2.32, -0.1]}>
+            <cylinderGeometry args={[0.11, 0.11, 0.5, 10]} />
+            <meshStandardMaterial color="#9aa1a8" metalness={0.5} roughness={0.45} />
+          </mesh>
+        </group>
+      )
+    case 'basin':
+      // wall wash basin — safety first in every lab
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, 0.82, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.16, fp.d * s]} />
+            <meshStandardMaterial color="#eef0ea" roughness={0.35} />
+          </mesh>
+          <mesh position={[0, 0.9, -0.03]}>
+            <boxGeometry args={[fp.w * s - 0.1, 0.05, fp.d * s - 0.12]} />
+            <meshStandardMaterial color="#dfe2da" roughness={0.4} />
+          </mesh>
+          <mesh position={[0, 1.02, -fp.d * s / 2 + 0.08]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.22, 6]} />
+            <meshStandardMaterial color="#b8b2a4" metalness={0.8} roughness={0.25} />
+          </mesh>
+          <mesh position={[0, 1.12, -fp.d * s / 2 + 0.14]} rotation={[Math.PI / 2.4, 0, 0]}>
+            <cylinderGeometry args={[0.014, 0.014, 0.1, 6]} />
+            <meshStandardMaterial color="#b8b2a4" metalness={0.8} roughness={0.25} />
+          </mesh>
+          {/* pedestal */}
+          <mesh position={[0, 0.4, 0]}>
+            <cylinderGeometry args={[0.09, 0.12, 0.8, 8]} />
+            <meshStandardMaterial color="#eef0ea" roughness={0.4} />
+          </mesh>
+        </group>
+      )
+    case 'specimen-cabinet':
+      // glass specimen cabinet — jars and preserved samples on shelves
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, fp.h / 2, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, fp.h, fp.d * s]} />
+            <meshStandardMaterial color={WOOD[tone % WOOD.length]} roughness={0.85} />
+          </mesh>
+          <mesh position={[0, fp.h / 2 + 0.02, fp.d * s / 2 + 0.015]}>
+            <boxGeometry args={[fp.w * s - 0.1, fp.h - 0.14, 0.02]} />
+            <meshStandardMaterial color="#bcd8e2" transparent opacity={0.38} roughness={0.1} metalness={0.1} />
+          </mesh>
+          {/* shelves with specimen jars */}
+          {[0.62, 1.05, 1.48].map((y, si) => (
+            <group key={y}>
+              <mesh position={[0, y, 0.02]}>
+                <boxGeometry args={[fp.w * s - 0.14, 0.03, fp.d * s - 0.1]} />
+                <meshStandardMaterial color={WOOD[(tone + 1) % WOOD.length]} roughness={0.9} />
+              </mesh>
+              {[-0.3, 0, 0.3].map((x, i) => (
+                <mesh key={`${x}${si}`} position={[x * fp.w * s * 0.42, y + 0.1, 0.02]} castShadow>
+                  <cylinderGeometry args={[0.055, 0.05, 0.13 + (i % 2) * 0.05, 8]} />
+                  <meshStandardMaterial color={['#8fae7c', '#a88f5c', '#7c9fae'][(i + si) % 3]} roughness={0.3} transparent opacity={0.8} />
+                </mesh>
+              ))}
+            </group>
+          ))}
+        </group>
+      )
+    case 'microscope':
+      // compound microscope — bench-top, ocular tube + stage
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, 0.025, 0]} castShadow>
+            <boxGeometry args={[0.2, 0.05, 0.26]} />
+            <meshStandardMaterial color="#3a3e44" metalness={0.45} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 0.16, -0.03]} rotation={[0.16, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.032, 0.042, 0.26, 10]} />
+            <meshStandardMaterial color="#565e66" metalness={0.55} roughness={0.4} />
+          </mesh>
+          <mesh position={[0, 0.29, -0.05]} rotation={[0.16, 0, 0]}>
+            <cylinderGeometry args={[0.02, 0.026, 0.07, 8]} />
+            <meshStandardMaterial color="#2c3036" metalness={0.5} roughness={0.4} />
+          </mesh>
+          <mesh position={[0, 0.1, 0.07]}>
+            <boxGeometry args={[0.14, 0.02, 0.09]} />
+            <meshStandardMaterial color="#6e7a84" metalness={0.4} roughness={0.5} />
+          </mesh>
+          {/* the slide */}
+          <mesh position={[0, 0.115, 0.07]}>
+            <boxGeometry args={[0.07, 0.005, 0.05]} />
+            <meshStandardMaterial color="#d8ecf2" roughness={0.2} />
+          </mesh>
+        </group>
+      )
+    case 'skeleton':
+      // articulated skeleton model on a rolling stand — anatomy's boss prop
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* stand */}
+          <mesh position={[0, 0.05, 0]} castShadow>
+            <cylinderGeometry args={[0.22, 0.26, 0.1, 10]} />
+            <meshStandardMaterial color="#3a3e44" metalness={0.5} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 0.5, 0]}>
+            <cylinderGeometry args={[0.025, 0.025, 0.9, 8]} />
+            <meshStandardMaterial color="#8a939b" metalness={0.6} roughness={0.35} />
+          </mesh>
+          {/* spine + pelvis */}
+          <mesh position={[0, 1.12, 0]} castShadow>
+            <cylinderGeometry args={[0.035, 0.05, 0.5, 8]} />
+            <meshStandardMaterial color="#ece6d4" roughness={0.85} />
+          </mesh>
+          <mesh position={[0, 0.86, 0]} castShadow>
+            <boxGeometry args={[0.24, 0.12, 0.14]} />
+            <meshStandardMaterial color="#ece6d4" roughness={0.85} />
+          </mesh>
+          {/* ribcage */}
+          {[1.02, 1.08, 1.14, 1.2, 1.26].map((y, i) => (
+            <mesh key={y} position={[0, y, 0]} rotation={[0, i * 0.2, 0]}>
+              <torusGeometry args={[0.13 - i * 0.008, 0.014, 6, 14, Math.PI * 1.5]} />
+              <meshStandardMaterial color="#ece6d4" roughness={0.85} />
+            </mesh>
+          ))}
+          {/* skull */}
+          <mesh position={[0, 1.48, 0]} castShadow>
+            <sphereGeometry args={[0.11, 12, 10]} />
+            <meshStandardMaterial color="#f2ecda" roughness={0.85} />
+          </mesh>
+          <mesh position={[0, 1.4, 0.05]}>
+            <boxGeometry args={[0.12, 0.08, 0.1]} />
+            <meshStandardMaterial color="#f2ecda" roughness={0.85} />
+          </mesh>
+          {/* arms + legs */}
+          {[[-0.15], [0.15]].map(([x]) => (
+            <mesh key={x} position={[x, 1.12, 0]} rotation={[0, 0, x > 0 ? -0.12 : 0.12]}>
+              <cylinderGeometry args={[0.02, 0.018, 0.52, 6]} />
+              <meshStandardMaterial color="#ece6d4" roughness={0.85} />
+            </mesh>
+          ))}
+          {[[-0.09], [0.09]].map(([x]) => (
+            <mesh key={x} position={[x, 0.45, 0]}>
+              <cylinderGeometry args={[0.024, 0.02, 0.72, 6]} />
+              <meshStandardMaterial color="#ece6d4" roughness={0.85} />
+            </mesh>
+          ))}
+        </group>
+      )
+    case 'dissection-table':
+      // steel dissection table — slight drain slope, hose at the corner
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, fp.h - 0.03, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.06, fp.d * s]} />
+            <meshStandardMaterial color="#c9cdd2" metalness={0.65} roughness={0.3} />
+          </mesh>
+          <mesh position={[0, fp.h - 0.075, 0]}>
+            <boxGeometry args={[fp.w * s - 0.06, 0.03, fp.d * s - 0.06]} />
+            <meshStandardMaterial color="#aeb4ba" metalness={0.6} roughness={0.35} />
+          </mesh>
+          {/* legs */}
+          {[[-0.82, -0.3], [0.82, -0.3], [-0.82, 0.3], [0.82, 0.3]].map(([x, z]) => (
+            <mesh key={`${x}${z}`} position={[x * fp.w * s * 0.55, 0.42, z * fp.d * s * 0.6]}>
+              <cylinderGeometry args={[0.035, 0.035, 0.84, 8]} />
+              <meshStandardMaterial color="#8d949c" metalness={0.6} roughness={0.4} />
+            </mesh>
+          ))}
+          {/* drain + hose */}
+          <mesh position={[0, fp.h + 0.005, 0.24]}>
+            <cylinderGeometry args={[0.045, 0.045, 0.012, 10]} />
+            <meshStandardMaterial color="#565e66" metalness={0.5} roughness={0.5} />
+          </mesh>
+          <mesh position={[fp.w * s * 0.38, fp.h - 0.2, fp.d * s * 0.3]} rotation={[0.5, 0, 1.2]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.42, 8]} />
+            <meshStandardMaterial color="#7c8571" roughness={0.8} />
+          </mesh>
+        </group>
+      )
+    case 'podium':
+      // lecture podium — angled top, mic stem, school crest panel
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, 0.58, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 1.06, fp.d * s]} />
+            <meshStandardMaterial color={WOOD[tone % WOOD.length]} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 1.14, 0.02]} rotation={[-0.22, 0, 0]} castShadow>
+            <boxGeometry args={[fp.w * s + 0.06, 0.05, fp.d * s + 0.12]} />
+            <meshStandardMaterial color={WOOD[(tone + 1) % WOOD.length]} roughness={0.7} />
+          </mesh>
+          {/* mic */}
+          <mesh position={[0.14, 1.3, 0.05]} rotation={[0.35, 0, -0.15]}>
+            <cylinderGeometry args={[0.012, 0.012, 0.28, 6]} />
+            <meshStandardMaterial color="#2c3036" metalness={0.5} roughness={0.4} />
+          </mesh>
+          <mesh position={[0.19, 1.42, 0.1]}>
+            <sphereGeometry args={[0.035, 8, 8]} />
+            <meshStandardMaterial color="#2c3036" roughness={0.6} />
+          </mesh>
+          {/* crest panel */}
+          <mesh position={[0, 0.62, fp.d * s / 2 + 0.012]}>
+            <boxGeometry args={[fp.w * s * 0.55, 0.4, 0.015]} />
+            <meshStandardMaterial color={accent} roughness={0.6} />
+          </mesh>
+        </group>
+      )
+    case 'riser':
+      // tiered lecture platform — stepped concrete, benches sit on top
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, fp.h / 2, 0]} receiveShadow>
+            <boxGeometry args={[fp.w * s, fp.h, fp.d * s]} />
+            <meshStandardMaterial color="#c8c2b4" roughness={0.95} />
+          </mesh>
+          <mesh position={[0, fp.h + 0.09, -fp.d * s / 2 + 0.16]} receiveShadow>
+            <boxGeometry args={[fp.w * s, fp.h, 0.32]} />
+            <meshStandardMaterial color="#b6b0a2" roughness={0.95} />
+          </mesh>
+        </group>
+      )
+    case 'machine':
+      // workshop machine — lathe/mill on a plinth with a chuck + gears
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, 0.14, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.28, fp.d * s]} />
+            <meshStandardMaterial color="#6e7a84" metalness={0.45} roughness={0.55} />
+          </mesh>
+          <mesh position={[-0.4, 0.62, 0]} castShadow>
+            <boxGeometry args={[0.42, 0.68, 0.6]} />
+            <meshStandardMaterial color="#3a6ea3" roughness={0.5} metalness={0.3} />
+          </mesh>
+          <mesh position={[0.35, 0.5, 0]} castShadow>
+            <boxGeometry args={[1.1, 0.16, 0.3]} />
+            <meshStandardMaterial color="#b8b2a4" metalness={0.6} roughness={0.35} />
+          </mesh>
+          <mesh position={[0.85, 0.5, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.16, 0.16, 0.1, 12]} />
+            <meshStandardMaterial color="#565e66" metalness={0.65} roughness={0.3} />
+          </mesh>
+          {/* chuck jaws */}
+          <mesh position={[0.85, 0.5, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.05, 0.05, 0.14, 8]} />
+            <meshStandardMaterial color="#2c3036" metalness={0.6} roughness={0.4} />
+          </mesh>
+        </group>
+      )
     default:
       return null
   }
@@ -1036,7 +1405,7 @@ function Room({ def, night }: { def: InteriorDef; night: boolean }) {
       ))}
       {/* furniture */}
       {def.furniture.map((f, i) => (
-        <Furniture key={i} f={f} night={night} />
+        <Furniture key={i} f={f} night={night} accent={def.palette.accent} />
       ))}
       {/* exit door — frame + ajar slab + warm outside light */}
       <group position={[def.door.x, 0, def.door.z]} rotation={[0, doorYaw(def), 0]}>

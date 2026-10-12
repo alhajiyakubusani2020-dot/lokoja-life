@@ -202,8 +202,8 @@ import type { Needs } from '../src/game/types'
 
 console.log('\nINC 4 — INTERIOR DATA VALIDITY')
 check(
-  `six city interiors + ${31} school interiors`,
-  INTERIORS.length === 6 + 31,
+  `six city interiors + ${88} school interiors (the great schools)`,
+  INTERIORS.length === 6 + 88,
 )
 check('interior ids unique', new Set(INTERIORS.map((i) => i.id)).size === INTERIORS.length)
 check('every interior belongs to a real location', INTERIORS.every((i) => !!LOCATION_BY_ID[i.locationId]))

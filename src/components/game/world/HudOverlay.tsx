@@ -1411,7 +1411,7 @@ const INTERIOR_COPY: Record<HotspotKind, { title: string; sub: string }> = {
   stove: { title: 'Cook at the stove', sub: 'The pot at home is the cheapest belly filler.' },
   tv: { title: 'Watch some TV', sub: 'One slot — mood up, small energy back.' },
   bath: { title: 'Freshen up', sub: 'A quick bath — energy and mood, one slot.' },
-  menu: { title: 'Mama’s menu', sub: 'Hot plates straight from the pot.' },
+  menu: { title: 'Food is ready', sub: 'Hot plates straight from the pot.' },
   shop: { title: 'Provisions counter', sub: 'Foodstuff and small chops for the pot.' },
   exit: { title: 'Step outside', sub: '' },
 }

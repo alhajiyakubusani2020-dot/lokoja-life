@@ -12,7 +12,7 @@
  */
 
 import {
-  SCHOOLS, SCHOOL_BY_ID, projectLatLon, LEGACY_ANCHOR_XY,
+  SCHOOLS, SCHOOL_BY_ID, projectLatLon, LEGACY_ANCHOR_XY, SCHOOL_PLANS,
 } from '../src/game/data/schools'
 import { LOCATION_BY_ID, LOCATIONS } from '../src/game/data/locations'
 import {
@@ -203,16 +203,40 @@ for (const c of SCHOOL_COMPOUNDS) {
 
 console.log('\nSTAGE 7 — SCHOOL INTERIORS (inside and out)')
 const schoolInteriors = INTERIORS.filter((i) => !!SCHOOL_BY_ID[i.locationId])
+const roomCount = (suffix: string): number =>
+  schoolInteriors.filter((i) => i.id === `${i.locationId}-${suffix}`).length
 check(
-  'every school has a classroom; kinds add up (31 total: 12 class + 7 office + 7 library + 4 lab + 1 theatre)',
-  schoolInteriors.length === 31 &&
-    SCHOOLS.every((s) => schoolInteriors.some((i) => i.locationId === s.id && i.id === `${s.id}-class`)),
+  'every school has a classroom; the great-schools inventory adds up',
+  schoolInteriors.length === 88 &&
+    SCHOOLS.every((s) => schoolInteriors.some((i) => i.locationId === s.id && i.id === `${s.id}-class`)) &&
+    roomCount('office') === 11 &&
+    roomCount('library') === 8 &&
+    roomCount('lab') === 5 &&
+    roomCount('canteen') === 11 &&
+    roomCount('clinic') === 12 &&
+    roomCount('sci-lab') === 7 &&
+    roomCount('hall') === 7 &&
+    roomCount('hostel') === 4,
 )
 check(
-  'FUL gets its lecture theatre; secondary schools get principals\u2019 offices',
-  schoolInteriors.some((i) => i.id === 'ful-felele-theatre') &&
+  'the Stage 8 great buildings exist — FUL senate + faculties + twin theatres + hostels',
+  schoolInteriors.some((i) => i.id === 'ful-felele-senate') &&
+    schoolInteriors.some((i) => i.id === 'ful-felele-fac-arts') &&
+    schoolInteriors.some((i) => i.id === 'ful-felele-fac-sci') &&
+    schoolInteriors.some((i) => i.id === 'ful-felele-lt-b') &&
+    schoolInteriors.some((i) => i.id === 'ful-felele-hostel') &&
+    schoolInteriors.some((i) => i.id === 'ful-adankolo-anatomy') &&
+    schoolInteriors.some((i) => i.id === 'ful-adankolo-preclinic') &&
+    schoolInteriors.some((i) => i.id === 'ksp-felele-workshop') &&
+    schoolInteriors.some((i) => i.id === 'salem-university-chapel') &&
+    schoolInteriors.some((i) => i.id === 'al-azhar-college-mosque') &&
+    schoolInteriors.some((i) => i.id === 'college-nursing-demo') &&
     ['crowther-memorial', 'gyb-model-adankolo', 'faithview-academy', 'baptist-high', 'al-azhar-college', 'julitola-intl', 'christfield-school']
       .every((id) => schoolInteriors.some((i) => i.id === `${id}-office`)),
+)
+check(
+  'every plan building placed — no school drops a planned structure',
+  SCHOOL_COMPOUNDS.every((c) => c.plans.length === (SCHOOL_PLANS[c.site.id]?.length ?? 0)),
 )
 check('school interior ids unique across the whole registry', new Set(INTERIORS.map((i) => i.id)).size === INTERIORS.length)
 check('INTERIOR_BY_ID is a full index over the school set', schoolInteriors.every((i) => INTERIOR_BY_ID[i.id] === i))

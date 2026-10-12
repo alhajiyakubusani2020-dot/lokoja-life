@@ -145,6 +145,8 @@ export function SchoolMesh() {
     const by: Record<SchoolBoxKind, SchoolBox[]> = {
       wall: [], pillar: [], gatehouse: [], block: [], admin: [], library: [],
       lab: [], office: [], toilet: [], theatre: [], flag: [], water: [], veranda: [],
+      senate: [], faculty: [], hostel: [], watchtower: [], healthsci: [],
+      workshop: [], chapel: [], mosque: [], hall: [], canteen: [], clinic: [], demo: [],
     }
     for (const c of compounds) {
       for (const b of c.boxes) by[b.kind].push(b)
@@ -187,8 +189,21 @@ export function SchoolMesh() {
   const wallPaint = schoolPaint(['#e8e0cc'])
   const roofPaint = () => ROOF_TONES[0]
 
-  const bigKinds: SchoolBoxKind[] = ['office', 'admin', 'library', 'lab', 'theatre']
+  const bigKinds: SchoolBoxKind[] = [
+    'office', 'admin', 'library', 'lab', 'theatre',
+    'faculty', 'hostel', 'healthsci', 'workshop', 'chapel', 'mosque',
+    'hall', 'canteen', 'clinic', 'demo',
+  ]
   const bigList = useMemo(() => bigKinds.flatMap((k) => groups[k]), [groups])
+
+  /** roof tone per kind — the painted corrugated variety real campuses carry */
+  const roofTone = (kind: SchoolBoxKind): number =>
+    kind === 'admin' ? 3
+    : kind === 'library' ? 1
+    : kind === 'chapel' || kind === 'mosque' ? 0
+    : kind === 'hostel' || kind === 'hall' ? 2
+    : kind === 'senate' ? 3
+    : 2
 
   return (
     <group>
@@ -282,15 +297,120 @@ export function SchoolMesh() {
         <meshStandardMaterial roughness={0.62} metalness={0.22} flatShading />
       </InstancedGroup>
 
-      {/* big buildings: office / admin / library / lab / theatre + roofs */}
+      {/* big buildings: office / admin / library / lab / theatre + the Stage 8 kinds, with roofs */}
       <InstancedGroup count={bigList.length} castShadow receiveShadow setup={(i, m, color) => bodySetup(bigList, wallPaint, i, m, color)}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.94} />
       </InstancedGroup>
-      <InstancedGroup count={bigList.length} castShadow setup={(i, m, color) => roofSetup(bigList, (b) => ROOF_TONES[b.kind === 'admin' ? 3 : b.kind === 'library' ? 1 : 2], i, m, color)}>
+      <InstancedGroup count={bigList.length} castShadow setup={(i, m, color) => roofSetup(bigList, () => ROOF_TONES[roofTone(bigList[i].kind)], i, m, color)}>
         <coneGeometry args={[0.71, 1, 4]} />
         <meshStandardMaterial roughness={0.62} metalness={0.22} flatShading />
       </InstancedGroup>
+
+      {/* the Senate Building — clock face + entrance steps on the front face */}
+      {compounds.flatMap((c) =>
+        c.boxes
+          .filter((b) => b.kind === 'senate')
+          .map((b, i) => (
+            <group key={`senate-${c.site.id}-${i}`}>
+              {/* entrance steps */}
+              {[0, 1, 2].map((s) => (
+                <mesh
+                  key={s}
+                  position={[
+                    b.x + Math.sin(b.rotY) * (b.d / 2 + 0.28 + s * 0.42),
+                    b.y + 0.07 + (2 - s) * 0.07,
+                    b.z + Math.cos(b.rotY) * (b.d / 2 + 0.28 + s * 0.42),
+                  ]}
+                  rotation={[0, b.rotY, 0]}
+                  castShadow
+                  receiveShadow
+                >
+                  <boxGeometry args={[b.w * 0.5, 0.14 + s * 0.07, 0.5]} />
+                  <meshStandardMaterial color="#c8c2b4" roughness={0.9} />
+                </mesh>
+              ))}
+              {/* the clock — white disc, dark hands, above the entrance */}
+              <group
+                position={[
+                  b.x + Math.sin(b.rotY) * (b.d / 2 + 0.1),
+                  b.y + b.h * 0.74,
+                  b.z + Math.cos(b.rotY) * (b.d / 2 + 0.1),
+                ]}
+                rotation={[0, b.rotY, 0]}
+              >
+                <mesh castShadow>
+                  <cylinderGeometry args={[0.55, 0.55, 0.12, 20]} />
+                  <meshStandardMaterial color="#f4efe2" roughness={0.5} />
+                </mesh>
+                <mesh position={[0, 0, 0.075]} rotation={[Math.PI / 2, 0, 0]}>
+                  <boxGeometry args={[0.05, 0.34, 0.02]} />
+                  <meshStandardMaterial color="#26221e" roughness={0.6} />
+                </mesh>
+                <mesh position={[0.12, 0.02, 0.075]} rotation={[Math.PI / 2, 0, -Math.PI / 3]}>
+                  <boxGeometry args={[0.04, 0.24, 0.02]} />
+                  <meshStandardMaterial color="#26221e" roughness={0.6} />
+                </mesh>
+              </group>
+            </group>
+          )),
+      )}
+
+      {/* the security watchtower — tall post, cabin on top, pyramid cap */}
+      {compounds.flatMap((c) =>
+        c.boxes
+          .filter((b) => b.kind === 'watchtower')
+          .map((b, i) => (
+            <group key={`tower-${c.site.id}-${i}`}>
+              <mesh position={[b.x, b.y + b.h * 0.42, b.z]} castShadow>
+                <boxGeometry args={[b.w * 0.55, b.h * 0.84, b.d * 0.55]} />
+                <meshStandardMaterial color="#b8b2a4" roughness={0.92} />
+              </mesh>
+              {/* the cabin — glazed, all-round view */}
+              <mesh position={[b.x, b.y + b.h * 0.94, b.z]} castShadow>
+                <boxGeometry args={[b.w * 1.5, b.h * 0.2, b.d * 1.5]} />
+                <meshStandardMaterial color="#9fc4cc" roughness={0.25} metalness={0.15} />
+              </mesh>
+              <mesh position={[b.x, b.y + b.h + 0.22, b.z]} castShadow>
+                <coneGeometry args={[b.w * 1.15, 0.5, 4]} />
+                <meshStandardMaterial color={ROOF_TONES[0]} roughness={0.62} metalness={0.2} flatShading />
+              </mesh>
+            </group>
+          )),
+      )}
+
+      {/* the chapel cross + the mosque dome */}
+      {compounds.flatMap((c) =>
+        c.boxes
+          .filter((b) => b.kind === 'chapel' || b.kind === 'mosque')
+          .map((b, i) =>
+            b.kind === 'chapel' ? (
+              <group key={`chapel-${c.site.id}-${i}`} position={[b.x, b.y, b.z]} rotation={[0, b.rotY, 0]}>
+                {/* cross on the front gable */}
+                <mesh position={[0, b.h + 1.05, b.d / 2 - 0.1]} castShadow>
+                  <boxGeometry args={[0.09, 0.72, 0.09]} />
+                  <meshStandardMaterial color="#f2ecda" roughness={0.7} />
+                </mesh>
+                <mesh position={[0, b.h + 1.18, b.d / 2 - 0.1]} castShadow>
+                  <boxGeometry args={[0.34, 0.09, 0.09]} />
+                  <meshStandardMaterial color="#f2ecda" roughness={0.7} />
+                </mesh>
+              </group>
+            ) : (
+              <group key={`mosque-${c.site.id}-${i}`} position={[b.x, b.y, b.z]}>
+                {/* the dome */}
+                <mesh position={[0, b.h + 0.42, 0]} castShadow>
+                  <sphereGeometry args={[1.15, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                  <meshStandardMaterial color="#2e7d5b" roughness={0.5} metalness={0.25} />
+                </mesh>
+                <mesh position={[0, b.h + 1.62, 0]} castShadow>
+                  <cylinderGeometry args={[0.03, 0.03, 0.42, 6]} />
+                  <meshStandardMaterial color="#d9c26a" metalness={0.7} roughness={0.3} />
+                </mesh>
+              </group>
+            ),
+          ),
+      )}
 
       {/* toilet block (squat, unpainted cement) */}
       <InstancedGroup count={groups.toilet.length} castShadow setup={(i, m, color) => bodySetup(groups.toilet, () => '#c8c2b2', i, m, color)}>
@@ -347,7 +467,10 @@ export function SchoolMesh() {
       {/* louvre window bands facing the yard on every building */}
       {compounds.flatMap((c) =>
         c.boxes
-          .filter((b) => ['block', 'library', 'lab', 'office', 'admin', 'theatre'].includes(b.kind))
+          .filter((b) =>
+            ['block', 'library', 'lab', 'office', 'admin', 'theatre', 'faculty', 'hostel',
+              'hall', 'healthsci', 'workshop', 'demo', 'canteen', 'clinic', 'chapel', 'mosque', 'senate'].includes(b.kind),
+          )
           .map((b, i) => (
             <mesh
               key={`louvre-${c.site.id}-${b.kind}-${i}`}

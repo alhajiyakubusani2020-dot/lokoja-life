@@ -152,6 +152,18 @@ export function WorldTab({
   // automated browser a honest steering wheel (travel / position / stick /
   // door list) because driving a follow-cam world blind with synthetic
   // keystrokes is impractical. Normal play never touches this.
+  // The api lives in a ref that refreshes EVERY render, so a hook captured
+  // earlier always reaches the live closure even across scene swaps.
+  const e2eApi = useRef({
+    enter: (_id: string) => {},
+    scene: () => 'world' as string,
+    interior: () => null as string | null,
+  })
+  useEffect(() => {
+    e2eApi.current.enter = (id: string) => enterInterior(id)
+    e2eApi.current.scene = () => (interiorId ? 'interior' : 'world')
+    e2eApi.current.interior = () => interiorId
+  })
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!window.location.search.includes('e2e=1')) return
@@ -161,8 +173,9 @@ export function WorldTab({
       stick: (x: number, y: number) => setJoystick(x, y),
       frozen: () => isInputFrozen(),
       doors: () => ALL_DOORS.map((d) => ({ id: d.interiorId, x: d.x, z: d.z })),
-      enter: (id: string) => enterInterior(id),
-      scene: () => (interiorId ? 'interior' : 'world'),
+      enter: (id: string) => e2eApi.current.enter(id),
+      scene: () => e2eApi.current.scene(),
+      interior: () => e2eApi.current.interior(),
     }
     return () => {
       delete (window as unknown as { __lkl?: unknown }).__lkl

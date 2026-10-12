@@ -25,6 +25,10 @@ export type FurnKind =
   | 'booth' | 'bottle-shelf' | 'dj-deck' | 'speaker' | 'drink-table'
   // Stage 7 — school fittings (the classroom experience)
   | 'school-desk' | 'blackboard' | 'wallmap' | 'computer'
+  // Stage 8 — the great schools: universities + laboratories + hostels
+  | 'bunk' | 'locker' | 'lab-bench' | 'fume-hood' | 'basin'
+  | 'specimen-cabinet' | 'microscope' | 'skeleton' | 'dissection-table'
+  | 'podium' | 'riser' | 'machine'
 
 export interface FurnFootprint {
   /** local width (x) at scale 1 */
@@ -77,6 +81,19 @@ export const FURN_FOOTPRINT: Record<FurnKind, FurnFootprint> = {
   blackboard: { w: 2.6, d: 0.14, solid: false, h: 1.25 },
   wallmap: { w: 1.5, d: 0.1, solid: false, h: 1.0 },
   computer: { w: 0.85, d: 0.62, solid: false, h: 0.95 },
+  // Stage 8 — the great schools
+  bunk: { w: 2.05, d: 1.05, solid: true, h: 1.75 },
+  locker: { w: 0.55, d: 0.6, solid: true, h: 1.8 },
+  'lab-bench': { w: 2.3, d: 0.9, solid: true, h: 0.95 },
+  'fume-hood': { w: 1.35, d: 0.85, solid: true, h: 2.25 },
+  basin: { w: 0.6, d: 0.5, solid: true, h: 1.05 },
+  'specimen-cabinet': { w: 1.1, d: 0.5, solid: true, h: 1.9 },
+  microscope: { w: 0.3, d: 0.38, solid: false, h: 0.42 },
+  skeleton: { w: 0.5, d: 0.5, solid: true, h: 1.72 },
+  'dissection-table': { w: 2.0, d: 0.85, solid: true, h: 0.92 },
+  podium: { w: 0.62, d: 0.5, solid: true, h: 1.18 },
+  riser: { w: 3.6, d: 1.4, solid: false, h: 0.32 },
+  machine: { w: 1.7, d: 0.85, solid: true, h: 1.3 },
 }
 
 export interface FurnDef {
