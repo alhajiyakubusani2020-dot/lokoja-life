@@ -1,6 +1,6 @@
 /**
- * LOKOJA LIFE — World Input Controls (Stage 3D)
- * -----------------------------------------------
+ * LOKOJA LIFE — World Input Controls (Stage 3D + Stage 5)
+ * --------------------------------------------------------
  * A tiny framework-agnostic input layer shared by the DOM HUD
  * (joystick, buttons) and the R3F player controller (keyboard).
  *
@@ -8,7 +8,13 @@
  *   WASD/arrow keys (desktop) — joystick wins when engaged.
  * - Look drag: pointer drag anywhere on the look surface.
  * - Interact: E / Enter (keyboard) or the HUD button (touch).
+ * - Stage 5 drive mode: while driving, the same joystick/key axes are
+ *   re-interpreted by DriveSystem (Y = throttle/brake, X = steer) and
+ *   the walking controller is held frozen. The DOM HUD and the R3F
+ *   drive loop meet here — neither imports the other.
  */
+
+import type { VehicleModel } from '@/game/types'
 
 export interface Vec2 {
   x: number
@@ -223,8 +229,9 @@ export function freezeInput(frozen: boolean) {
   }
 }
 
+/** panels OR the driver's seat both hold the walking controller still */
 export function isInputFrozen(): boolean {
-  return inputFrozen
+  return inputFrozen || driveActive
 }
 
 export function isAttached(): boolean {
@@ -312,4 +319,127 @@ export function getTutProgress(): { moved: boolean; looked: boolean } {
 export function resetTutProgress() {
   tut.moved = false
   tut.looked = false
+}
+
+/* ============================ Stage 5 — drive mode ============================ */
+
+/**
+ * Drive-mode handshake between the DOM HUD and the R3F DriveSystem.
+ * Nothing here touches money or time — the store's settleDrive stays the
+ * only authority; this layer only MEASURES (metres driven, speed feel).
+ *
+ * Seat protocol: while driving, DriveSystem writes the vehicle's ground
+ * position here every frame. The player rig should be hidden (or seated)
+ * at that spot — DriveSystem applies it best-effort via the scene graph;
+ * if PlayerController is ever given the one-line hook (INTEGRATOR note in
+ * the worklog), reading getDriveSeat() after its own position update is
+ * the guaranteed version of the same contract.
+ */
+
+let driveActive = false
+let driveModel: VehicleModel | null = null
+let driveMeters = 0
+let driveSpeed = 0
+let driveStartedAt = 0
+let nearVehicle: VehicleModel | null = null
+let enterRequest: VehicleModel | null = null
+let parkRequest = false
+
+export interface DriveSeat {
+  x: number
+  y: number
+  z: number
+  yaw: number
+  /** true while the driver is "inside" — rig should be hidden/occupied */
+  hide: boolean
+}
+
+let driveSeat: DriveSeat | null = null
+
+export function setDriveSeat(seat: DriveSeat | null) {
+  driveSeat = seat
+}
+
+export function getDriveSeat(): DriveSeat | null {
+  return driveSeat
+}
+
+/** enter drive mode (or leave it) — also dumps held input so the walking
+ *  controller never inherits a stuck joystick from behind the wheel */
+export function setDriveActive(on: boolean, model: VehicleModel | null = null) {
+  driveActive = on
+  driveModel = on ? model : null
+  if (on) {
+    driveStartedAt = performance.now()
+    joy = { x: 0, y: 0 }
+    joyActive = false
+    keys.clear()
+    nearVehicle = null
+  } else {
+    driveSeat = null
+    driveSpeed = 0
+  }
+}
+
+export function isDriveActive(): boolean {
+  return driveActive
+}
+
+export function getDriveModel(): VehicleModel | null {
+  return driveModel
+}
+
+export function addDriveMeters(meters: number) {
+  if (Number.isFinite(meters) && meters > 0) driveMeters += meters
+}
+
+export function getDriveMeters(): number {
+  return driveMeters
+}
+
+export function resetDriveMeters() {
+  driveMeters = 0
+}
+
+export function reportDriveSpeed(speed: number) {
+  driveSpeed = speed
+}
+
+export function getDriveSpeed(): number {
+  return driveSpeed
+}
+
+export function getDriveStartedAt(): number {
+  return driveStartedAt
+}
+
+/** DriveSystem reports which owned vehicle is in walk-up range (null = none) */
+export function reportNearVehicle(model: VehicleModel | null) {
+  nearVehicle = model
+}
+
+export function getNearVehicle(): VehicleModel | null {
+  return nearVehicle
+}
+
+/** HUD: "Enter {label}" chip or the garage Drive button */
+export function requestEnterVehicle(model: VehicleModel) {
+  enterRequest = model
+}
+
+export function consumeEnterRequest(): VehicleModel | null {
+  const m = enterRequest
+  enterRequest = null
+  return m
+}
+
+/** HUD: "Park & Step Out" button (or stop + E) */
+export function requestParkVehicle() {
+  parkRequest = true
+}
+
+export function consumeParkRequest(): boolean {
+  const hit = parkRequest
+  parkRequest = false
+  return hit
 }

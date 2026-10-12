@@ -11,7 +11,7 @@
 import type { GameSave, PlayerState } from '../types'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 2
+const SAVE_VERSION = 3
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -49,6 +49,12 @@ function deserialize(raw: string): GameSave | null {
         save.version = 2
         break
       case 2:
+        // v2 → v3 (Stage 5): vehicles, bank balance, NPC relationships.
+        // Defaults applied below — a v2 player wakes up with an empty
+        // garage, an empty bank account, and strangers for friends.
+        save.version = 3
+        break
+      case 3:
         // current version
         break
       default:
@@ -77,6 +83,11 @@ function deserialize(raw: string): GameSave | null {
     if (!p.stats) {
       p.stats = { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }
     }
+
+    // --- Stage 5 player fields (missing on v2-and-older saves) ---
+    if (!p.vehicles) p.vehicles = []
+    if (typeof p.bankBalance !== 'number') p.bankBalance = 0
+    if (!p.relationships) p.relationships = {}
 
     save.version = SAVE_VERSION
     return save

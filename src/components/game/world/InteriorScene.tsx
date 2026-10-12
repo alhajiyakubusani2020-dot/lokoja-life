@@ -13,21 +13,65 @@
  * unwind) flow through the SAME store actions as everywhere else.
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay } from '@/game/types'
 import { INTERIOR } from '@/game/data/config'
-import { FURN_FOOTPRINT, resolveInteriorPosition, type FurnDef, type InteriorDef } from '@/game/world3d/interiors'
 import {
-  consumeLook, consumeZoom, isInputFrozen, playerPos, readMoveInput, reportPlayerPos,
+  FURN_FOOTPRINT, resolveInteriorPosition,
+  type ActionDef, type FurnDef, type InteriorDef,
+} from '@/game/world3d/interiors'
+import {
+  consumeLook, consumeZoom, freezeInput, isInputFrozen, playerPos, readMoveInput, reportPlayerPos,
 } from './controls'
 import { HumanRig } from './HumanRig'
+import { useWardrobeBus } from './wardrobe-store'
+import { useGameStore } from '@/game/store/useGameStore'
+import { audio } from '@/game/systems/audio'
+import { BankPanel } from './panels/BankPanel'
+import { LoungeConfirm } from './panels/LoungeConfirm'
 
 /* --------------------------------- furniture --------------------------------- */
 
 const WOOD = ['#7a5a38', '#8a6a42', '#6a4c30']
 const FABRIC = ['#c94f2e', '#2e7d5b', '#3a6ea3', '#d99a2b']
+const METAL = '#9aa0a6'
+
+/**
+ * Stage 5-b — baked text plate (painted sign). One small canvas per
+ * distinct (text, palette) pair, cached module-level so the gym motto
+ * and the lounge neon cost one texture each, once per session.
+ */
+const plateTexCache = new Map<string, THREE.CanvasTexture>()
+
+function plateTexture(lines: string[], bg: string, fg: string, accent: string): THREE.CanvasTexture {
+  const key = `${lines.join('|')}·${bg}·${fg}·${accent}`
+  let tex = plateTexCache.get(key)
+  if (tex) return tex
+  const c = document.createElement('canvas')
+  c.width = 512
+  c.height = 256
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, 512, 256)
+  // border trim
+  ctx.strokeStyle = accent
+  ctx.lineWidth = 10
+  ctx.strokeRect(12, 12, 488, 232)
+  ctx.fillStyle = fg
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const size = lines.length > 1 ? 64 : 80
+  ctx.font = `900 ${size}px Arial, sans-serif`
+  lines.forEach((ln, i) => {
+    ctx.fillText(ln, 256, 128 + (i - (lines.length - 1) / 2) * (size + 8))
+  })
+  tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  plateTexCache.set(key, tex)
+  return tex
+}
 
 function Furniture({ f, night }: { f: FurnDef; night: boolean }) {
   const fp = FURN_FOOTPRINT[f.kind]
@@ -341,6 +385,392 @@ function Furniture({ f, night }: { f: FurnDef; night: boolean }) {
           ))}
         </group>
       )
+    /* -------- Stage 5-b — gym / bank / lounge fittings -------- */
+    case 'dumbbell-rack':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* two inclined rails */}
+          {[-0.55, 0.55].map((x) => (
+            <mesh key={x} position={[x, 0.34, 0]} rotation={[0, 0, 0.5]} castShadow>
+              <boxGeometry args={[0.06, 1.0, fp.d * s - 0.1]} />
+              <meshStandardMaterial color="#2c2c30" roughness={0.6} metalness={0.3} />
+            </mesh>
+          ))}
+          {/* base + crossbar */}
+          <mesh position={[0, 0.05, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.1, fp.d * s]} />
+            <meshStandardMaterial color="#1c1c20" roughness={0.7} metalness={0.2} />
+          </mesh>
+          <mesh position={[0, 0.92, 0]} castShadow>
+            <boxGeometry args={[fp.w * s - 0.2, 0.07, 0.06]} />
+            <meshStandardMaterial color="#c94f2e" roughness={0.6} />
+          </mesh>
+          {/* the dumbbells, paired heads on slanted handles */}
+          {Array.from({ length: 4 }, (_, i) => {
+            const x = -0.6 + i * 0.4
+            const y = 0.42 + i * 0.13
+            return (
+              <group key={i} position={[x, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                <mesh castShadow>
+                  <cylinderGeometry args={[0.028, 0.028, 0.3, 8]} />
+                  <meshStandardMaterial color={METAL} metalness={0.6} roughness={0.35} />
+                </mesh>
+                {[-0.13, 0.13].map((o) => (
+                  <mesh key={o} position={[0, o, 0]} castShadow>
+                    <cylinderGeometry args={[0.085, 0.085, 0.07, 10]} />
+                    <meshStandardMaterial color="#1a1a1e" roughness={0.5} />
+                  </mesh>
+                ))}
+              </group>
+            )
+          })}
+        </group>
+      )
+    case 'bench-press':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* bench pad */}
+          <mesh position={[0, 0.46, 0.1]} castShadow>
+            <boxGeometry args={[0.42, 0.1, fp.d * s - 0.2]} />
+            <meshStandardMaterial color="#20242a" roughness={0.85} />
+          </mesh>
+          {[-0.3, 0.3].map((x) => (
+            <mesh key={x} position={[x, 0.2, 0.1]} castShadow>
+              <boxGeometry args={[0.07, 0.42, 0.07]} />
+              <meshStandardMaterial color="#2c2c30" metalness={0.4} roughness={0.5} />
+            </mesh>
+          ))}
+          {/* uprights holding the bar */}
+          {[-0.52, 0.52].map((x) => (
+            <mesh key={x} position={[x, 0.72, -0.44]} castShadow>
+              <boxGeometry args={[0.08, 1.44, 0.08]} />
+              <meshStandardMaterial color="#2c2c30" metalness={0.4} roughness={0.5} />
+            </mesh>
+          ))}
+          {/* the loaded barbell */}
+          <group position={[0, 1.18, -0.44]} rotation={[0, 0, Math.PI / 2]}>
+            <mesh castShadow>
+              <cylinderGeometry args={[0.035, 0.035, 2.1, 10]} />
+              <meshStandardMaterial color={METAL} metalness={0.65} roughness={0.3} />
+            </mesh>
+            {[-0.82, -0.7, 0.7, 0.82].map((o, i) => (
+              <mesh key={o} position={[0, o, 0]} castShadow>
+                <cylinderGeometry args={[i % 2 === 0 ? 0.22 : 0.17, i % 2 === 0 ? 0.22 : 0.17, 0.06, 14]} />
+                <meshStandardMaterial color="#1a1a1e" roughness={0.45} />
+              </mesh>
+            ))}
+          </group>
+        </group>
+      )
+    case 'treadmill':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* deck — raised at the back, belt on top */}
+          <mesh position={[0, 0.16, 0.15]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.24, fp.d * s * 0.82]} />
+            <meshStandardMaterial color="#23262b" roughness={0.6} metalness={0.2} />
+          </mesh>
+          <mesh position={[0, 0.29, 0.15]} castShadow>
+            <boxGeometry args={[fp.w * s - 0.16, 0.03, fp.d * s * 0.78]} />
+            <meshStandardMaterial color="#111318" roughness={0.9} />
+          </mesh>
+          {/* side handrails */}
+          {[-1, 1].map((sd) => (
+            <mesh key={sd} position={[sd * (fp.w * s / 2 - 0.06), 0.52, 0.05]} rotation={[0.5, 0, 0]} castShadow>
+              <boxGeometry args={[0.05, 0.9, 0.05]} />
+              <meshStandardMaterial color={METAL} metalness={0.6} roughness={0.35} />
+            </mesh>
+          ))}
+          {/* console mast + screen */}
+          <mesh position={[0, 0.62, -fp.d * s * 0.44]} castShadow>
+            <boxGeometry args={[fp.w * s * 0.7, 1.05, 0.09]} />
+            <meshStandardMaterial color="#2c2c30" metalness={0.4} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 1.06, -fp.d * s * 0.4]} rotation={[-0.5, 0, 0]}>
+            <boxGeometry args={[fp.w * s * 0.55, 0.26, 0.04]} />
+            <meshStandardMaterial color="#0d1117" emissive="#39d98a" emissiveIntensity={0.7} roughness={0.3} />
+          </mesh>
+        </group>
+      )
+    case 'mirror-strip':
+      return (
+        <group position={[f.x, 1.05, f.z]} rotation={rot}>
+          <mesh castShadow>
+            <boxGeometry args={[fp.w * s, fp.h, 0.06]} />
+            <meshStandardMaterial color="#4a4a52" metalness={0.4} roughness={0.4} />
+          </mesh>
+          {/* the glass — slightly emissive so the room reads in it */}
+          <mesh position={[0, 0, 0.045]}>
+            <boxGeometry args={[fp.w * s - 0.1, fp.h - 0.12, 0.02]} />
+            <meshStandardMaterial color="#b8ccd4" roughness={0.08} metalness={0.85} emissive="#6a7a84" emissiveIntensity={0.18} />
+          </mesh>
+        </group>
+      )
+    case 'sign': {
+      const gym = tone !== 1
+      const tex = plateTexture(
+        gym ? ['NO FOOD', 'BEFORE REP 10'] : ['GOLDEN', 'NIGHTS'],
+        gym ? '#8e2318' : '#1a1410',
+        gym ? '#f4ede0' : '#e8a317',
+        gym ? '#d9a12b' : '#c98d14',
+      )
+      return (
+        <group position={[f.x, 1.92, f.z]} rotation={[0, f.rotY, 0]}>
+          <mesh castShadow>
+            <boxGeometry args={[fp.w * s, 0.8, 0.05]} />
+            <meshStandardMaterial color={gym ? '#8e2318' : '#1a1410'} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 0, 0.031]}>
+            <planeGeometry args={[fp.w * s - 0.08, 0.72]} />
+            <meshStandardMaterial
+              map={tex}
+              emissive="#ffffff"
+              emissiveMap={tex}
+              emissiveIntensity={gym ? 0.22 : night ? 0.85 : 0.25}
+              roughness={0.7}
+            />
+          </mesh>
+        </group>
+      )
+    }
+    case 'ceilingfan':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={[0, f.rotY, 0]}>
+          {/* drop rod (the dollhouse hangs lamps the same way) */}
+          <mesh position={[0, 2.48, 0]}>
+            <cylinderGeometry args={[0.022, 0.022, 0.5, 8]} />
+            <meshStandardMaterial color="#5a4030" roughness={0.6} metalness={0.3} />
+          </mesh>
+          <mesh position={[0, 2.22, 0]} castShadow>
+            <cylinderGeometry args={[0.13, 0.16, 0.12, 12]} />
+            <meshStandardMaterial color="#3a3230" roughness={0.5} metalness={0.35} />
+          </mesh>
+          {/* three pitched blades — arranged by rotation, no spin loop needed */}
+          {[0, 1, 2].map((i) => (
+            <mesh key={i} position={[0, 2.17, 0]} rotation={[0, (i * Math.PI * 2) / 3, 0.12]} castShadow>
+              <boxGeometry args={[1.15, 0.02, 0.19]} />
+              <meshStandardMaterial color={tone === 1 ? '#6a4c30' : '#8a6a4a'} roughness={0.85} />
+            </mesh>
+          ))}
+        </group>
+      )
+    case 'vault':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* frame slab */}
+          <mesh position={[0, fp.h / 2, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, fp.h, fp.d * s]} />
+            <meshStandardMaterial color="#3c4048" roughness={0.5} metalness={0.35} />
+          </mesh>
+          {/* the round vault door */}
+          <mesh position={[0, 1.12, fp.d * s / 2 + 0.03]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.62, 0.62, 0.14, 24]} />
+            <meshStandardMaterial color="#23262c" metalness={0.75} roughness={0.3} />
+          </mesh>
+          {/* locking spokes + hub */}
+          {[0, 1, 2].map((i) => (
+            <mesh key={i} position={[0, 1.12, fp.d * s / 2 + 0.11]} rotation={[Math.PI / 2, (i * Math.PI) / 3, 0]}>
+              <boxGeometry args={[0.9, 0.07, 0.04]} />
+              <meshStandardMaterial color={METAL} metalness={0.7} roughness={0.3} />
+            </mesh>
+          ))}
+          <mesh position={[0, 1.12, fp.d * s / 2 + 0.13]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.12, 0.12, 0.06, 12]} />
+            <meshStandardMaterial color="#c8b06a" metalness={0.8} roughness={0.25} />
+          </mesh>
+        </group>
+      )
+    case 'partition':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* the glass screen */}
+          <mesh position={[0, 1.05, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 1.85, 0.05]} />
+            <meshStandardMaterial
+              color="#cfe0e8" roughness={0.08} metalness={0.35} transparent opacity={0.42}
+            />
+          </mesh>
+          {/* top rail + feet */}
+          <mesh position={[0, 1.99, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.07, 0.12]} />
+            <meshStandardMaterial color={WOOD[0]} roughness={0.9} />
+          </mesh>
+          {[-fp.w * s / 2 + 0.1, fp.w * s / 2 - 0.1].map((x) => (
+            <mesh key={x} position={[x, 0.5, 0]} castShadow>
+              <boxGeometry args={[0.09, 1.0, 0.12]} />
+              <meshStandardMaterial color={WOOD[0]} roughness={0.9} />
+            </mesh>
+          ))}
+          {/* the speech slot at the counter height */}
+          <mesh position={[0, 0.86, 0]}>
+            <boxGeometry args={[0.6, 0.16, 0.06]} />
+            <meshStandardMaterial color="#1d5c8a" roughness={0.5} emissive="#1d5c8a" emissiveIntensity={0.12} />
+          </mesh>
+        </group>
+      )
+    case 'queueboard':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* pole + hood */}
+          <mesh position={[0, 0.7, 0]} castShadow>
+            <boxGeometry args={[0.09, 1.4, 0.09]} />
+            <meshStandardMaterial color="#2c2c30" metalness={0.4} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, 1.62, 0.02]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.72, 0.08]} />
+            <meshStandardMaterial color="#14181d" roughness={0.4} />
+          </mesh>
+          {/* the now-serving digits (green, of course) */}
+          {[0, 1, 2].map((i) => (
+            <mesh key={i} position={[-0.24 + i * 0.24, 1.62, 0.07]}>
+              <boxGeometry args={[0.16, 0.3, 0.02]} />
+              <meshStandardMaterial color="#0d1117" emissive="#39d98a" emissiveIntensity={1.1} roughness={0.3} />
+            </mesh>
+          ))}
+          <mesh position={[0, 1.24, 0.07]}>
+            <boxGeometry args={[0.6, 0.08, 0.02]} />
+            <meshStandardMaterial color="#e8dcc3" emissive="#e8dcc3" emissiveIntensity={0.35} roughness={0.6} />
+          </mesh>
+          <mesh position={[0, 0.04, 0]} castShadow>
+            <cylinderGeometry args={[0.24, 0.28, 0.08, 12]} />
+            <meshStandardMaterial color="#2c2c30" roughness={0.6} />
+          </mesh>
+        </group>
+      )
+    case 'booth':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* seat + high back — the classic lounge booth */}
+          <mesh position={[0, 0.24, -0.1]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.34, fp.d * s - 0.12]} />
+            <meshStandardMaterial color={FABRIC[tone % FABRIC.length]} roughness={1} />
+          </mesh>
+          <mesh position={[0, 0.68, -fp.d * s / 2 + 0.16]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.94, 0.2]} />
+            <meshStandardMaterial color={FABRIC[tone % FABRIC.length]} roughness={1} />
+          </mesh>
+          {/* side wings */}
+          {[-1, 1].map((sd) => (
+            <mesh key={sd} position={[sd * (fp.w * s / 2 - 0.08), 0.52, 0]} castShadow>
+              <boxGeometry args={[0.14, 1.04, fp.d * s]} />
+              <meshStandardMaterial color={WOOD[2]} roughness={0.95} />
+            </mesh>
+          ))}
+        </group>
+      )
+    case 'bottle-shelf':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* cabinet + warm back panel (the backlight) */}
+          <mesh position={[0, fp.h / 2, -0.04]} castShadow>
+            <boxGeometry args={[fp.w * s, fp.h, fp.d * s - 0.06]} />
+            <meshStandardMaterial color={WOOD[2]} roughness={0.95} />
+          </mesh>
+          <mesh position={[0, fp.h / 2, fp.d * s / 2 - 0.14]}>
+            <planeGeometry args={[fp.w * s - 0.2, fp.h - 0.3]} />
+            <meshStandardMaterial
+              color="#7a4a1e" emissive="#ffb85c" emissiveIntensity={night ? 1.5 : 0.5} roughness={0.8}
+            />
+          </mesh>
+          {/* bottles on two glass ledges */}
+          {[0.72, 1.36].map((y, r) => (
+            <group key={y}>
+              <mesh position={[0, y - 0.16, 0.05]} castShadow>
+                <boxGeometry args={[fp.w * s - 0.14, 0.04, fp.d * s - 0.16]} />
+                <meshStandardMaterial color="#cfe0e8" roughness={0.15} metalness={0.4} transparent opacity={0.55} />
+              </mesh>
+              {Array.from({ length: 7 }, (_, i) => (
+                <mesh key={i} position={[-fp.w * s / 2 + 0.32 + i * ((fp.w * s - 0.62) / 6), y, 0.06]} castShadow>
+                  <cylinderGeometry args={[0.05, 0.06, r === 0 ? 0.3 : 0.24, 8]} />
+                  <meshStandardMaterial
+                    color={['#b03a2e', '#3a6ea3', '#2e7d5b', '#d99a2b', '#8a4a6a', '#c96f3b', '#e8dcc3'][i]}
+                    roughness={0.3} metalness={0.15} emissive="#ffb85c" emissiveIntensity={night ? 0.22 : 0.05}
+                  />
+                </mesh>
+              ))}
+            </group>
+          ))}
+        </group>
+      )
+    case 'dj-deck':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          {/* the table */}
+          <mesh position={[0, 0.44, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, 0.88, fp.d * s]} />
+            <meshStandardMaterial color="#26221e" roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 0.9, 0]} castShadow>
+            <boxGeometry args={[fp.w * s + 0.08, 0.06, fp.d * s + 0.06]} />
+            <meshStandardMaterial color="#14161a" roughness={0.5} metalness={0.3} />
+          </mesh>
+          {/* two platters + a mixer strip */}
+          {[-0.42, 0.42].map((x) => (
+            <group key={x} position={[x, 0.95, 0]}>
+              <mesh castShadow>
+                <cylinderGeometry args={[0.16, 0.16, 0.03, 16]} />
+                <meshStandardMaterial color="#2c2c30" roughness={0.4} metalness={0.3} />
+              </mesh>
+              <mesh position={[0, 0.02, 0]}>
+                <cylinderGeometry args={[0.05, 0.05, 0.02, 10]} />
+                <meshStandardMaterial color="#e8a317" metalness={0.6} roughness={0.3} emissive="#e8a317" emissiveIntensity={0.3} />
+              </mesh>
+            </group>
+          ))}
+          <mesh position={[0, 0.95, 0]}>
+            <boxGeometry args={[0.34, 0.04, 0.24]} />
+            <meshStandardMaterial color="#3a3f46" roughness={0.4} metalness={0.4} emissive="#39d98a" emissiveIntensity={0.35} />
+          </mesh>
+        </group>
+      )
+    case 'speaker':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, fp.h / 2, 0]} castShadow>
+            <boxGeometry args={[fp.w * s, fp.h, fp.d * s]} />
+            <meshStandardMaterial color="#191c20" roughness={0.85} />
+          </mesh>
+          <mesh position={[0, 0.44, fp.d * s / 2 + 0.01]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.17, 0.17, 0.04, 14]} />
+            <meshStandardMaterial color="#101216" roughness={0.7} />
+          </mesh>
+          <mesh position={[0, 1.12, fp.d * s / 2 + 0.01]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.1, 0.1, 0.04, 12]} />
+            <meshStandardMaterial color="#101216" roughness={0.7} />
+          </mesh>
+          <mesh position={[0, fp.h - 0.08, fp.d * s / 2 + 0.012]}>
+            <circleGeometry args={[0.035, 10]} />
+            <meshStandardMaterial color="#e8a317" emissive="#e8a317" emissiveIntensity={night ? 1.2 : 0.4} />
+          </mesh>
+        </group>
+      )
+    case 'drink-table':
+      return (
+        <group position={[f.x, 0, f.z]} rotation={rot}>
+          <mesh position={[0, fp.h - 0.03, 0]} castShadow>
+            <cylinderGeometry args={[fp.w * s / 2, fp.w * s / 2, 0.05, 16]} />
+            <meshStandardMaterial color={WOOD[tone % WOOD.length]} roughness={0.7} />
+          </mesh>
+          <mesh position={[0, fp.h / 2 - 0.04, 0]} castShadow>
+            <cylinderGeometry args={[0.045, 0.045, fp.h - 0.1, 8]} />
+            <meshStandardMaterial color="#26221e" roughness={0.6} metalness={0.3} />
+          </mesh>
+          <mesh position={[0, 0.03, 0]} castShadow>
+            <cylinderGeometry args={[fp.w * s / 2 - 0.08, fp.w * s / 2 - 0.04, 0.06, 16]} />
+            <meshStandardMaterial color="#26221e" roughness={0.6} metalness={0.3} />
+          </mesh>
+          {/* two glasses catching the neon */}
+          {[-0.14, 0.16].map((x, i) => (
+            <mesh key={x} position={[x, fp.h + 0.07, i === 0 ? 0.08 : -0.05]} castShadow>
+              <cylinderGeometry args={[0.045, 0.035, 0.14, 10]} />
+              <meshStandardMaterial
+                color="#d8ecf2" roughness={0.1} metalness={0.2} transparent opacity={0.7}
+                emissive={i === 0 ? '#e8a317' : '#39d98a'} emissiveIntensity={0.25}
+              />
+            </mesh>
+          ))}
+        </group>
+      )
     default:
       return null
   }
@@ -388,17 +818,32 @@ function segHitsBox(
 
 function Room({ def, night }: { def: InteriorDef; night: boolean }) {
   const floorTex = useMemo(() => {
-    // subtle plank stripes painted on a canvas texture
     const c = document.createElement('canvas')
     c.width = 256
     c.height = 256
     const ctx = c.getContext('2d')!
     ctx.fillStyle = def.palette.floor
     ctx.fillRect(0, 0, 256, 256)
-    ctx.fillStyle = def.palette.floorAlt
-    for (let y = 0; y < 256; y += 32) {
-      ctx.fillRect(0, y, 256, 2)
-      for (let x = ((y / 32) % 2) * 64; x < 256; x += 128) ctx.fillRect(x, y, 2, 32)
+    if (def.floorTiles) {
+      // Stage 5-b — ceramic tiles (the bank): alternating tone + grout lines
+      ctx.fillStyle = def.palette.floorAlt
+      for (let y = 0; y < 256; y += 64) {
+        for (let x = 0; x < 256; x += 64) {
+          if (((x / 64) + (y / 64)) % 2 === 0) ctx.fillRect(x, y, 64, 64)
+        }
+      }
+      ctx.fillStyle = 'rgba(40,32,22,0.35)'
+      for (let v = 0; v <= 256; v += 64) {
+        ctx.fillRect(0, v - 1, 256, 2)
+        ctx.fillRect(v - 1, 0, 2, 256)
+      }
+    } else {
+      // subtle plank stripes painted on a canvas texture
+      ctx.fillStyle = def.palette.floorAlt
+      for (let y = 0; y < 256; y += 32) {
+        ctx.fillRect(0, y, 256, 2)
+        for (let x = ((y / 32) % 2) * 64; x < 256; x += 128) ctx.fillRect(x, y, 2, 32)
+      }
     }
     const tex = new THREE.CanvasTexture(c)
     tex.wrapS = THREE.RepeatWrapping
@@ -522,13 +967,18 @@ function doorYaw(def: InteriorDef): number {
 
 function HotspotMarkers({ def, nearestRef }: { def: InteriorDef; nearestRef: React.MutableRefObject<string | null> }) {
   const refs = useRef<(THREE.Mesh | null)[]>([])
+  // HUD hotspots + Stage 5-b action hotspots share the same golden-pin language
+  const points: { id: string; x: number; z: number }[] = [
+    ...def.hotspots.map((h) => ({ id: h.id, x: h.x, z: h.z })),
+    ...(def.actions ?? []).map((a) => ({ id: a.id, x: a.x, z: a.z })),
+  ]
   useFrame((state) => {
     const t = state.clock.elapsedTime
-    for (let i = 0; i < def.hotspots.length; i++) {
+    for (let i = 0; i < points.length; i++) {
       const m = refs.current[i]
       if (!m) continue
-      const h = def.hotspots[i]
-      const active = nearestRef.current === h.id
+      const p = points[i]
+      const active = nearestRef.current === p.id
       m.scale.setScalar((active ? 1.35 : 1) * (1 + Math.sin(t * 3 + i) * 0.08))
       const mat = m.material as THREE.MeshBasicMaterial
       mat.color.set(active ? '#ffd88a' : '#e8a317')
@@ -537,11 +987,11 @@ function HotspotMarkers({ def, nearestRef }: { def: InteriorDef; nearestRef: Rea
   })
   return (
     <group>
-      {def.hotspots.map((h, i) => (
+      {points.map((p, idx) => (
         <mesh
-          key={h.id}
-          ref={(el) => { refs.current[i] = el }}
-          position={[h.x, 1.62, h.z]}
+          key={p.id}
+          ref={(el) => { refs.current[idx] = el }}
+          position={[p.x, 1.62, p.z]}
           rotation={[Math.PI / 2, 0, 0]}
         >
           <octahedronGeometry args={[0.11, 0]} />
@@ -559,11 +1009,17 @@ function InteriorPlayer({
   avatar,
   spawn,
   onHotspot,
+  onNearest,
+  onNearAction,
 }: {
   def: InteriorDef
   avatar: AvatarConfig
   spawn: { x: number; z: number; facing: number }
   onHotspot?: (id: string | null) => void
+  /** every nearest-point change (HUD hotspots AND actions) — marker highlight */
+  onNearest?: (id: string | null) => void
+  /** Stage 5-b — the nearest in-scene action hotspot (or null) */
+  onNearAction?: (a: ActionDef | null) => void
 }) {
   const group = useRef<THREE.Group>(null)
   const speed = useRef(0)
@@ -579,6 +1035,7 @@ function InteriorPlayer({
     camDist: INTERIOR.camera.distance as number,
     speed: 0,
     near: null as string | null,
+    nearAction: null as string | null,
     camSnap: true,
   })
 
@@ -645,19 +1102,37 @@ function InteriorPlayer({
     g.rotation.y = s.yaw
     reportPlayerPos(s.x, s.z, s.yaw)
 
-    // nearest hotspot
-    let best: string | null = null
+    // nearest interactive point — HUD hotspots and the Stage 5-b action
+    // hotspots compete on the SAME radius; the single closest one wins, so
+    // only one prompt (HUD chip or in-scene chip) can ever show at a time.
+    let bestId: string | null = null
+    let bestAction: ActionDef | null = null
     let bestD: number = INTERIOR.hotspotRadius
     for (const h of def.hotspots) {
       const d = Math.hypot(h.x - s.x, h.z - s.z)
       if (d < bestD) {
         bestD = d
-        best = h.id
+        bestId = h.id
+        bestAction = null
       }
     }
-    if (best !== s.near) {
-      s.near = best
-      onHotspot?.(best)
+    for (const a of def.actions ?? []) {
+      const d = Math.hypot(a.x - s.x, a.z - s.z)
+      if (d < bestD) {
+        bestD = d
+        bestId = a.id
+        bestAction = a
+      }
+    }
+    if (bestId !== s.near) {
+      s.near = bestId
+      onNearest?.(bestId)
+      // action hotspots are owned by THIS layer — the HUD never sees them
+      onHotspot?.(bestAction ? null : bestId)
+    }
+    if ((bestAction?.id ?? null) !== s.nearAction) {
+      s.nearAction = bestAction?.id ?? null
+      onNearAction?.(bestAction)
     }
 
     // camera — closer follow
@@ -709,6 +1184,14 @@ function InteriorPlayer({
 
 /* ---------------------------------- the scene --------------------------------- */
 
+/** the in-scene chip icon per action kind (matches the HUD chip anatomy) */
+const ACTION_ICON: Record<ActionDef['kind'], string> = {
+  workout: '💪',
+  'bank-teller': '🏦',
+  'night-out': '🍾',
+  wardrobe: '👕',
+}
+
 export function InteriorScene({
   def,
   avatar,
@@ -725,11 +1208,89 @@ export function InteriorScene({
   const night = timeOfDay === 'night'
   const nearestRef = useRef<string | null>(null)
 
+  // Stage 5-b — in-scene action state (prompt chip + self-owned panels).
+  // Sheet state carries its owning interior id so a (defensive) interior
+  // swap can never show a stale panel; walking-input freeze mirrors it.
+  const [nearAction, setNearAction] = useState<ActionDef | null>(null)
+  const [sheet, setSheet] = useState<{ owner: string; kind: 'bank' | 'lounge' } | null>(null)
+  const nearActionRef = useRef<ActionDef | null>(null)
+  const sheetRef = useRef<{ owner: string; kind: 'bank' | 'lounge' } | null>(null)
+  useEffect(() => {
+    nearActionRef.current = nearAction
+  }, [nearAction])
+  useEffect(() => {
+    sheetRef.current = sheet
+  }, [sheet])
+  // leaving the world must never leave the joystick frozen
+  useEffect(() => () => freezeInput(false), [])
+
+  // live = still valid for THIS interior (guards against any def swap)
+  const shownAction = nearAction && (def.actions ?? []).some((a) => a.id === nearAction.id) ? nearAction : null
+  const shownSheet = sheet?.owner === def.id ? sheet.kind : null
+
+  const closeSheet = () => {
+    setSheet(null)
+    sheetRef.current = null
+    freezeInput(false)
+  }
+
+  /** activate the nearest action — money/time flows through the store only */
+  const activateAction = (a: ActionDef) => {
+    audio.play('click')
+    switch (a.kind) {
+      case 'workout':
+        // the store applies the slot + needs and shows its own toast
+        useGameStore.getState().workout()
+        break
+      case 'bank-teller':
+        setSheet({ owner: def.id, kind: 'bank' })
+        sheetRef.current = { owner: def.id, kind: 'bank' }
+        freezeInput(true)
+        break
+      case 'night-out':
+        setSheet({ owner: def.id, kind: 'lounge' })
+        sheetRef.current = { owner: def.id, kind: 'lounge' }
+        freezeInput(true)
+        break
+      case 'wardrobe':
+        // the wardrobe UI lives in another layer — ring the bus
+        useWardrobeBus.getState().show()
+        break
+    }
+  }
+
+  // keyboard: E / Enter activates the nearest action, Escape closes my sheet
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (e.code === 'Escape') {
+        if (sheetRef.current) {
+          setSheet(null)
+          sheetRef.current = null
+          freezeInput(false)
+        }
+        return
+      }
+      if (e.code !== 'KeyE' && e.code !== 'Enter') return
+      // a focused button fires click itself — don't double-fire on Enter
+      if (e.code === 'Enter' && tag === 'BUTTON') return
+      if (isInputFrozen() || sheetRef.current) return
+      const a = nearActionRef.current
+      if (a) activateAction(a)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   useEffect(() => {
     // E2E hook: let tests peek at the interior without DOM digging
     if (process.env.NODE_ENV !== 'production') {
       const w = window as unknown as Record<string, unknown>
-      w.__lkoInterior = { id: def.id, hotspots: def.hotspots.map((h) => h.id) }
+      w.__lkoInterior = {
+        id: def.id,
+        hotspots: def.hotspots.map((h) => h.id),
+        actions: (def.actions ?? []).map((a) => ({ id: a.id, kind: a.kind, label: a.label })),
+      }
     }
     return () => {
       delete (window as unknown as Record<string, unknown>).__lkoInterior
@@ -737,47 +1298,76 @@ export function InteriorScene({
   }, [def])
 
   return (
-    <Canvas
-      shadows
-      dpr={[1, 1.8]}
-      gl={{ antialias: true, powerPreference: 'high-performance' }}
-      camera={{ fov: 58, near: 0.1, far: 60, position: [def.spawn.x - 3, 3.4, def.spawn.z + 3] }}
-      onCreated={({ gl }) => {
-        gl.toneMapping = THREE.ACESFilmicToneMapping
-        gl.toneMappingExposure = 1.08
-        onReady?.()
-      }}
-      style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
-    >
-      {/* warm interior light */}
-      <hemisphereLight args={[night ? '#3a3f52' : '#fff4e0', '#8a6a4a', night ? 0.72 : 1.05]} />
-      <directionalLight
-        castShadow
-        position={[def.size.w * 0.3, 7, -def.size.d * 0.4]}
-        intensity={night ? 0.35 : 2.2}
-        color={night ? '#8fa3c8' : '#fff0d2'}
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-near={1}
-        shadow-camera-far={30}
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
-        shadow-camera-top={10}
-        shadow-camera-bottom={-10}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.03}
-      />
-      {night && <ambientLight intensity={0.45} color="#7a84a0" />}
-      <Room def={def} night={night} />
-      <HotspotMarkers def={def} nearestRef={nearestRef} />
-      <InteriorPlayer
-        def={def}
-        avatar={avatar}
-        spawn={def.spawn}
-        onHotspot={(id) => {
-          nearestRef.current = id
-          onHotspot?.(id)
+    <>
+      <Canvas
+        shadows
+        dpr={[1, 1.8]}
+        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        camera={{ fov: 58, near: 0.1, far: 60, position: [def.spawn.x - 3, 3.4, def.spawn.z + 3] }}
+        onCreated={({ gl }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping
+          gl.toneMappingExposure = 1.08
+          onReady?.()
         }}
-      />
-    </Canvas>
+        style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
+      >
+        {/* warm interior light */}
+        <hemisphereLight args={[night ? '#3a3f52' : '#fff4e0', '#8a6a4a', night ? 0.72 : 1.05]} />
+        <directionalLight
+          castShadow
+          position={[def.size.w * 0.3, 7, -def.size.d * 0.4]}
+          intensity={night ? 0.35 : 2.2}
+          color={night ? '#8fa3c8' : '#fff0d2'}
+          shadow-mapSize={[1024, 1024]}
+          shadow-camera-near={1}
+          shadow-camera-far={30}
+          shadow-camera-left={-10}
+          shadow-camera-right={10}
+          shadow-camera-top={10}
+          shadow-camera-bottom={-10}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.03}
+        />
+        {night && <ambientLight intensity={0.45} color="#7a84a0" />}
+        <Room def={def} night={night} />
+        <HotspotMarkers def={def} nearestRef={nearestRef} />
+        <InteriorPlayer
+          key={def.id}
+          def={def}
+          avatar={avatar}
+          spawn={def.spawn}
+          onNearest={(id) => {
+            nearestRef.current = id
+          }}
+          onHotspot={onHotspot}
+          onNearAction={setNearAction}
+        />
+      </Canvas>
+
+      {/* ---- Stage 5-b — in-scene action prompt chip ----
+        Shown only while an ACTION hotspot is nearest; HUD hotspots keep the
+        HUD's own chip (the two can never show together — one nearest wins). */}
+      {shownAction && !shownSheet && (
+        <div
+          data-lko-chip={shownAction.kind}
+          className="pointer-events-none absolute inset-x-0 bottom-32 z-[45] flex justify-center px-6 sm:bottom-10"
+        >
+          <button
+            onClick={() => activateAction(shownAction)}
+            className="lko-press lko-pop pointer-events-auto flex max-w-full items-center gap-2.5 rounded-full border border-[#ffd88a]/45 bg-black/60 px-5 py-3 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#ffd88a] text-[11px] font-black text-[#3d2a00]">
+              {ACTION_ICON[shownAction.kind]}
+            </span>
+            <span className="truncate text-[14px] font-extrabold">{shownAction.label}</span>
+            <kbd className="rounded-md border border-white/30 bg-white/10 px-1.5 py-0.5 text-[10px] font-extrabold">E</kbd>
+          </button>
+        </div>
+      )}
+
+      {/* ---- Stage 5-b — self-owned bottom sheets ---- */}
+      {shownSheet === 'bank' && <BankPanel onClose={closeSheet} />}
+      {shownSheet === 'lounge' && <LoungeConfirm onClose={closeSheet} />}
+    </>
   )
 }

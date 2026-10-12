@@ -1,11 +1,12 @@
 'use client'
 
 /**
- * LOKOJA LIFE — Dashboard (R1 visual overhaul)
+ * LOKOJA LIFE — Dashboard (R1 visual overhaul + Stage 5 tabs)
  * The in-game shell: a compact HUD header, the living-world hero on the
  * Home tab (driven by the real world clock + weather), needs/skills/rest,
- * and the 5-tab bottom navigation. Tabs that arrive in later stages show
- * honest "coming soon" panels with real data teasers where available.
+ * and the 7-tab bottom navigation (Stage 5 adds the Phone).
+ * Tabs that arrive in later stages show honest "coming soon" panels with
+ * real data teasers where available.
  *
  * R1 is presentation-only: every store action, guard and data source below
  * is untouched — only the visual layer was redesigned.
@@ -18,6 +19,7 @@ import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
 import { LivingScene } from '../LivingScene'
 import { MapScreen } from './MapScreen'
 import { WorkScreen } from './WorkScreen'
+import { PhoneScreen } from './PhoneScreen'
 import { WorldTab } from '../world/WorldTab'
 import {
   PlaceIcon,
@@ -290,6 +292,13 @@ function MapTab({
 /** Stage 3: the economy is live — see WorkScreen. */
 function WorkTab({ onGoToMap }: { onGoToMap: (locationId: string) => void }) {
   return <WorkScreen onGoToMap={onGoToMap} />
+}
+
+/* -------------------------------- phone tab -------------------------------- */
+
+/** Stage 5: the handset — chats, bank, hustle shortcut, settings (see PhoneScreen). */
+function PhoneTab({ onOpenWork }: { onOpenWork: () => void }) {
+  return <PhoneScreen onOpenWork={onOpenWork} />
 }
 
 /* ---------------------------------- bag tab --------------------------------- */
@@ -604,6 +613,7 @@ export function Dashboard() {
                   }}
                 />
               )}
+              {tab === 'phone' && <PhoneTab onOpenWork={() => switchTab('work')} />}
               {tab === 'bag' && <BagTab />}
               {tab === 'profile' && <ProfileTab />}
             </div>

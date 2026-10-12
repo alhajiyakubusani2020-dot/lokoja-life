@@ -76,6 +76,16 @@ export const INTERIOR = {
     tv: { mood: 8, energy: 3, hunger: -3 },
     bath: { mood: 5, energy: 5, hunger: -3 },
   },
+  /** Stage 5 — gym session (one clock slot, leaves you properly tired) */
+  gym: { energy: -14, mood: 8, health: 6, hunger: -8 },
+  /** Stage 5 — night out at the lounge: mood bomb, wallet hit (cash in NIGHT_OUT.cost) */
+  lounge: { energy: -6, mood: 14, hunger: -4 },
+  /** Stage 5 — night-out economy */
+  NIGHT_OUT: {
+    cost: 2500,
+    /** evening/night only — daytime visits cost the same but give half mood */
+    nightMoodBonus: 4,
+  },
   /** interior camera rig tuning (presentation-only) */
   camera: {
     distance: 4.6,
@@ -310,6 +320,8 @@ export const WORLD3D = {
   onboardingKey: 'lko-world-tut-v1',
   /** localStorage key for district discovery progress (NOT part of the save) */
   discoveryKey: 'lko-world-disc-v1',
+  /** Stage 5 — driving your own vehicle: energy per km (much cheaper than walking) */
+  driveEnergyPerKm: 0.35,
 } as const
 
 /* ------------------------------- food & eating -------------------------------- */

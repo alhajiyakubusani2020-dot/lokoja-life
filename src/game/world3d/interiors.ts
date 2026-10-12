@@ -19,6 +19,10 @@ export type FurnKind =
   | 'bed' | 'wardrobe' | 'stove' | 'fridge' | 'sofa' | 'tv'
   | 'table' | 'chair' | 'shelf' | 'counter' | 'bench' | 'shower'
   | 'mirror' | 'rug' | 'mat' | 'crate' | 'pot' | 'fan' | 'menu'
+  // Stage 5-b — gym / bank / lounge fittings
+  | 'dumbbell-rack' | 'bench-press' | 'treadmill' | 'mirror-strip'
+  | 'sign' | 'ceilingfan' | 'vault' | 'partition' | 'queueboard'
+  | 'booth' | 'bottle-shelf' | 'dj-deck' | 'speaker' | 'drink-table'
 
 export interface FurnFootprint {
   /** local width (x) at scale 1 */
@@ -51,6 +55,21 @@ export const FURN_FOOTPRINT: Record<FurnKind, FurnFootprint> = {
   pot: { w: 0.4, d: 0.4, solid: false, h: 0.35 },
   fan: { w: 0.4, d: 0.4, solid: false, h: 1.3 },
   menu: { w: 1.1, d: 0.12, solid: false, h: 0.8 },
+  // Stage 5-b — gym / bank / lounge fittings
+  'dumbbell-rack': { w: 1.7, d: 0.55, solid: true, h: 1.0 },
+  'bench-press': { w: 1.5, d: 0.7, solid: true, h: 1.35 },
+  treadmill: { w: 0.85, d: 1.95, solid: true, h: 1.25 },
+  'mirror-strip': { w: 2.4, d: 0.1, solid: false, h: 1.9 },
+  sign: { w: 1.7, d: 0.08, solid: false, h: 0.7 },
+  ceilingfan: { w: 1.3, d: 1.3, solid: false, h: 0.5 },
+  vault: { w: 1.7, d: 0.35, solid: true, h: 2.25 },
+  partition: { w: 2.9, d: 0.12, solid: true, h: 1.95 },
+  queueboard: { w: 0.95, d: 0.35, solid: true, h: 1.7 },
+  booth: { w: 1.75, d: 0.95, solid: true, h: 1.05 },
+  'bottle-shelf': { w: 3.2, d: 0.42, solid: true, h: 2.1 },
+  'dj-deck': { w: 1.7, d: 0.85, solid: true, h: 1.05 },
+  speaker: { w: 0.55, d: 0.55, solid: true, h: 1.45 },
+  'drink-table': { w: 0.85, d: 0.85, solid: true, h: 0.78 },
 }
 
 export interface FurnDef {
@@ -99,6 +118,24 @@ export interface HotspotDef {
   label: string
 }
 
+/**
+ * Stage 5-b — self-service action hotspots (gym workout, bank teller,
+ * lounge night-out, home wardrobe). Kept as a SEPARATE array + union so
+ * the HUD's existing HotspotKind-driven sheet contract stays untouched:
+ * the InteriorScene layer owns the whole interaction for these (its own
+ * prompt chip + panels) and reports `null` to the HUD while one is near.
+ */
+export type ActionKind = 'workout' | 'bank-teller' | 'night-out' | 'wardrobe'
+
+export interface ActionDef {
+  id: string
+  kind: ActionKind
+  x: number
+  z: number
+  /** prompt text on the in-scene chip */
+  label: string
+}
+
 /* --------------------------------- interiors -------------------------------- */
 
 export interface RoomZone {
@@ -121,6 +158,10 @@ export interface InteriorDef {
   walls: WallSeg[]
   furniture: FurnDef[]
   hotspots: HotspotDef[]
+  /** Stage 5-b — self-service action hotspots owned by the interior scene */
+  actions?: ActionDef[]
+  /** draw the floor as tiles (bank) instead of planks */
+  floorTiles?: boolean
   /** where the player spawns inside (just through the door) */
   spawn: { x: number; z: number; facing: number }
   /** interior side of the exit door */
@@ -193,6 +234,10 @@ const HOME: InteriorDef = (() => {
       { id: 'home-tv', kind: 'tv', x: -2.4, z: 3.15, label: 'Watch some TV' },
       { id: 'home-bath', kind: 'bath', x: 4.6, z: -3.3, label: 'Freshen up' },
       { id: 'home-exit', kind: 'exit', x: -5.35, z: 0, label: 'Step outside' },
+    ],
+    // Stage 5-b — the bedroom wardrobe now opens your look
+    actions: [
+      { id: 'home-wardrobe', kind: 'wardrobe', x: 2.7, z: 3.1, label: 'Change your look' },
     ],
     spawn: { x: -3.4, z: 1.7, facing: Math.PI / 2 },
     door: { x: -5.6, z: 0 },
@@ -298,7 +343,169 @@ const KPATA_SHOP: InteriorDef = (() => {
   }
 })()
 
-export const INTERIORS: InteriorDef[] = [HOME, MAMAS, KPATA_SHOP]
+/* ------------------------------- peak fitness gym ------------------------------- */
+
+const GYM: InteriorDef = (() => {
+  const walls: WallSeg[] = [
+    // 11 × 8 m, door gap on the SOUTH wall (x −0.9..0.9)
+    wall(-5.5, -4, 5.5, -4),
+    wall(-5.5, -4, -5.5, 4),
+    wall(5.5, -4, 5.5, 4),
+    wall(-5.5, 4, -0.9, 4),
+    wall(0.9, 4, 5.5, 4),
+  ]
+  return {
+    id: 'peak-gym',
+    name: 'Peak Fitness Gym',
+    locationId: 'university-area',
+    size: { w: 11, d: 8 },
+    rooms: [
+      { name: 'Weights corner', x: -3, z: -1, w: 5, d: 6 },
+      { name: 'Cardio row', x: 3.2, z: -1.6, w: 4.2, d: 4.4 },
+    ],
+    walls,
+    furniture: [
+      // wall mirror strip + the house motto (both hang on the north wall)
+      { kind: 'mirror-strip', x: 1.4, z: -3.83, rotY: 0, s: 1.4, tone: 0 },
+      { kind: 'sign', x: -2.9, z: -3.82, rotY: 0, tone: 0 },
+      // weights corner
+      { kind: 'dumbbell-rack', x: -5.02, z: 0.1, rotY: -Math.PI / 2, tone: 0 },
+      { kind: 'crate', x: -5.0, z: 1.9, rotY: 0.2, tone: 0 },
+      { kind: 'bench-press', x: -3.3, z: -2.4, rotY: 0, tone: 0 },
+      // cardio row
+      { kind: 'treadmill', x: 4.5, z: -2.4, rotY: 0, tone: 0 },
+      { kind: 'shelf', x: 4.0, z: -3.68, rotY: 0, s: 0.9, tone: 2 },
+      { kind: 'bench', x: 4.95, z: 0.6, rotY: -Math.PI / 2, tone: 1 },
+      // open floor: mats for stretching under the ceiling fan
+      { kind: 'ceilingfan', x: 0, z: 0.4, rotY: 0, tone: 0 },
+      { kind: 'mat', x: -1.2, z: 1.5, rotY: 0.1, tone: 0 },
+      { kind: 'mat', x: 0.2, z: 1.7, rotY: -0.12, tone: 1 },
+      { kind: 'fan', x: -4.9, z: 3.3, rotY: -Math.PI / 4, tone: 0 },
+    ],
+    hotspots: [
+      { id: 'gym-exit', kind: 'exit', x: 0, z: 3.2, label: 'Step back to the campus' },
+    ],
+    actions: [
+      { id: 'gym-workout', kind: 'workout', x: -1.5, z: -0.9, label: 'Hit a workout' },
+    ],
+    spawn: { x: 0, z: 2.6, facing: Math.PI },
+    door: { x: 0, z: 3.55 },
+    palette: { floor: '#3a3e44', floorAlt: '#2f3237', wall: '#e6ddc8', accent: '#c94f2e' },
+    mealSpot: false,
+    shopSpot: false,
+  }
+})()
+
+/* ---------------------------- lokoja microfinance bank ---------------------------- */
+
+const BANK: InteriorDef = (() => {
+  const walls: WallSeg[] = [
+    // 12 × 9 m, door gap on the SOUTH wall (x −0.9..0.9)
+    wall(-6, -4.5, 6, -4.5),
+    wall(-6, -4.5, -6, 4.5),
+    wall(6, -4.5, 6, 4.5),
+    wall(-6, 4.5, -0.9, 4.5),
+    wall(0.9, 4.5, 6, 4.5),
+  ]
+  return {
+    id: 'lokoja-microfinance',
+    name: 'Lokoja Microfinance Bank',
+    locationId: 'government-area',
+    size: { w: 12, d: 9 },
+    rooms: [
+      { name: 'Banking hall', x: 0, z: 0.4, w: 12, d: 7.4 },
+      { name: 'Teller row', x: 2.2, z: -2.4, w: 6.4, d: 3.4 },
+    ],
+    walls,
+    furniture: [
+      // the teller counter + glass partition, queue board beside it
+      { kind: 'counter', x: 2.2, z: -2.6, rotY: 0, tone: 1 },
+      { kind: 'partition', x: 2.2, z: -1.82, rotY: 0, tone: 0 },
+      { kind: 'queueboard', x: 4.9, z: -2.6, rotY: -Math.PI / 2, tone: 0 },
+      // the vault — back wall, very serious
+      { kind: 'vault', x: -3.8, z: -4.15, rotY: 0, tone: 0 },
+      // queue benches
+      { kind: 'bench', x: -1.9, z: 0.9, rotY: 0, tone: 1 },
+      { kind: 'bench', x: -1.9, z: 2.1, rotY: 0, tone: 1 },
+      { kind: 'shelf', x: 5.6, z: 1.4, rotY: -Math.PI / 2, tone: 1 },
+      { kind: 'fridge', x: 5.4, z: -4.0, rotY: -Math.PI / 2, tone: 1 },
+      { kind: 'crate', x: -5.3, z: 3.7, rotY: 0.25, tone: 0 },
+      { kind: 'ceilingfan', x: -2.2, z: -1.6, rotY: 0, tone: 0 },
+      { kind: 'ceilingfan', x: 2.6, z: 1.6, rotY: 0, tone: 0 },
+    ],
+    hotspots: [
+      { id: 'bank-exit', kind: 'exit', x: 0, z: 3.2, label: 'Step back to the secretariat' },
+    ],
+    actions: [
+      { id: 'bank-teller', kind: 'bank-teller', x: 2.2, z: -1.05, label: 'Join the queue' },
+    ],
+    spawn: { x: 0, z: 2.6, facing: Math.PI },
+    door: { x: 0, z: 4.05 },
+    palette: { floor: '#cfc8b8', floorAlt: '#bfb6a2', wall: '#eee6d2', accent: '#1d5c8a' },
+    floorTiles: true,
+    mealSpot: false,
+    shopSpot: false,
+  }
+})()
+
+/* ----------------------------- golden nights lounge ------------------------------ */
+
+const LOUNGE: InteriorDef = (() => {
+  const walls: WallSeg[] = [
+    // 10 × 8 m, door gap on the EAST wall (z −0.9..0.9)
+    wall(-5, -4, 5, -4),
+    wall(-5, 4, 5, 4),
+    wall(-5, -4, -5, 4),
+    wall(5, -4, 5, -0.9),
+    wall(5, 0.9, 5, 4),
+  ]
+  return {
+    id: 'golden-nights',
+    name: 'Golden Nights Lounge',
+    locationId: 'food-area',
+    size: { w: 10, d: 8 },
+    rooms: [
+      { name: 'Dance floor', x: 0.4, z: -0.8, w: 7.6, d: 5.6 },
+      { name: 'Bar counter', x: -1, z: 2.6, w: 6.4, d: 2.8 },
+    ],
+    walls,
+    furniture: [
+      // the dark wood bar + backlit bottle shelf
+      { kind: 'counter', x: -1.0, z: 2.8, rotY: 0, s: 1.5, tone: 0 },
+      { kind: 'bottle-shelf', x: -1.0, z: 3.6, rotY: 0, tone: 0 },
+      { kind: 'crate', x: -4.5, z: 3.4, rotY: 0.25, tone: 0 },
+      // booth seats with drink tables on the west side
+      { kind: 'booth', x: -4.4, z: -0.8, rotY: Math.PI / 2, tone: 1 },
+      { kind: 'booth', x: -4.4, z: -2.8, rotY: Math.PI / 2, tone: 2 },
+      { kind: 'drink-table', x: -3.3, z: -0.8, rotY: 0, tone: 0 },
+      { kind: 'drink-table', x: -3.3, z: -2.8, rotY: 0, tone: 0 },
+      // DJ corner + speaker stacks
+      { kind: 'dj-deck', x: 3.6, z: -3.3, rotY: Math.PI, tone: 0 },
+      { kind: 'speaker', x: 4.55, z: -3.35, rotY: 0, tone: 0 },
+      { kind: 'speaker', x: 2.4, z: -3.4, rotY: 0, tone: 1 },
+      // scattered tables with glasses on the dance floor
+      { kind: 'drink-table', x: 2.6, z: -1.5, rotY: 0, tone: 1 },
+      { kind: 'drink-table', x: 0.6, z: 0.8, rotY: 0, tone: 0 },
+      { kind: 'rug', x: 0.6, z: -0.6, rotY: 0, s: 1.3, tone: 2 },
+      // accents
+      { kind: 'sign', x: -2.0, z: -3.8, rotY: 0, s: 1.2, tone: 1 },
+      { kind: 'fan', x: 4.4, z: 2.9, rotY: Math.PI, tone: 0 },
+    ],
+    hotspots: [
+      { id: 'lounge-exit', kind: 'exit', x: 4.1, z: 0, label: 'Step back to the food strip' },
+    ],
+    actions: [
+      { id: 'lounge-night-out', kind: 'night-out', x: -1.0, z: 0.9, label: 'Pull up a booth' },
+    ],
+    spawn: { x: 3.5, z: 0, facing: -Math.PI / 2 },
+    door: { x: 4.5, z: 0 },
+    palette: { floor: '#4a3524', floorAlt: '#3e2c1e', wall: '#2e2620', accent: '#e8a317' },
+    mealSpot: false,
+    shopSpot: false,
+  }
+})()
+
+export const INTERIORS: InteriorDef[] = [HOME, MAMAS, KPATA_SHOP, GYM, BANK, LOUNGE]
 
 export const INTERIOR_BY_ID: Record<string, InteriorDef> = Object.fromEntries(
   INTERIORS.map((i) => [i.id, i]),

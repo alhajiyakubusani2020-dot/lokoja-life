@@ -19,6 +19,7 @@ import { atmoLive, getAtmosphere, sunVec } from './atmosphere'
 import { WorldTerrain } from './WorldTerrain'
 import { CityMesh } from './CityMesh'
 import { Birds, Npcs, PlayerController, Rain, SmokeWisps, Traffic } from './Actors'
+import { DriveSystem } from './DriveSystem'
 
 /* --------------------------------- device tier -------------------------------- */
 
@@ -292,6 +293,8 @@ export function WorldScene({
       {/* INC 4 — the city breathes: birds by day, cooking smoke at the food strip */}
       <Birds timeOfDay={timeOfDay} />
       <SmokeWisps />
+      {/* STAGE 5 — your own rides: spawn/enter/drive/park (owns the camera while driving) */}
+      <DriveSystem timeOfDay={timeOfDay} followRef={camTarget} />
     </Canvas>
   )
 }

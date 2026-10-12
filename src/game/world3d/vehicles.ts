@@ -21,8 +21,10 @@
 
 import * as THREE from 'three'
 import {
-  ANCHORS, BRIDGES, BUILDINGS, LAMPS, ROADS, STALLS, WALK_BOUND, heightAt, makeRng, riverInfo,
+  ANCHORS, BRIDGES, BUILDINGS, DOORS, LAMPS, POINTS_OF_INTEREST, ROADS, STALLS, WALK_BOUND,
+  heightAt, makeRng, riverInfo,
 } from './layout'
+import type { VehicleModel } from '../types'
 
 /* ------------------------------ vehicle types ------------------------------- */
 
@@ -623,6 +625,91 @@ export function buildSedan(variant: SedanVariant, parked = false): VehicleRig {
     }
   }
   return rig
+}
+
+/* --------------------------- player vehicle spawning --------------------------- */
+
+/** a place the player's own ride can sit: ground position + facing */
+export interface SpawnSpot {
+  x: number
+  z: number
+  rotY: number
+}
+
+/** what the player's chosen model builds as — traffic-grade shared rigs */
+export function buildPlayerRig(model: VehicleModel): VehicleRig {
+  if (model === 'okada') return buildOkada(2) // the green tone — the hero ride
+  if (model === 'keke') return buildKeke()
+  if (model === 'danfo') return buildDanfo()
+  return buildSedan('taxi')
+}
+
+function playerSpotIsClear(x: number, z: number): boolean {
+  if (Math.hypot(x, z) > WALK_BOUND - 6) return false
+  const river = riverInfo(x, z)
+  if (river.d < river.halfWidth + 2.5) return false // never in the water
+  for (const b of BUILDINGS) if (Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) * 0.5 + 1.6) return false
+  for (const s of STALLS) if (Math.hypot(s.x - x, s.z - z) < 2.2) return false
+  for (const l of LAMPS) if (Math.hypot(l.x - x, l.z - z) < 1.4) return false
+  for (const p of POINTS_OF_INTEREST) if (Math.hypot(p.x - x, p.z - z) < 2.4) return false
+  for (const dr of DOORS) if (Math.hypot(dr.x - x, dr.z - z) < 2.6) return false // never block a doorway
+  for (const a of ANCHORS) if (Math.hypot(a.x - x, a.z - z) < 3.2) return false // keep plazas' centre open
+  for (const p of PARKED_VEHICLES) if (Math.hypot(p.x - x, p.z - z) < 4.2) return false
+  return true
+}
+
+/**
+ * Stage 5 — a road-adjacent parking spot for the player's own ride.
+ * Projects the player onto the nearest road centreline (the same graph
+ * the traffic lanes keep), pushes out to a shoulder, then falls back to
+ * "just beside the player" when no road is close. Clearance-checked so
+ * the keke never materialises inside a wall, stall or doorway.
+ */
+export function findPlayerVehicleSpot(px: number, pz: number, fallbackYaw: number): SpawnSpot {
+  let bx = 0
+  let bz = 0
+  let byaw = 0
+  let bd = Infinity
+  for (const road of ROADS) {
+    for (let i = 0; i < road.length - 1; i++) {
+      const [ax, az] = road[i]
+      const [cx, cz] = road[i + 1]
+      const dx = cx - ax
+      const dz = cz - az
+      const len2 = dx * dx + dz * dz || 1e-6
+      let t = ((px - ax) * dx + (pz - az) * dz) / len2
+      t = Math.max(0, Math.min(1, t))
+      const qx = ax + dx * t
+      const qz = az + dz * t
+      const d = Math.hypot(px - qx, pz - qz)
+      if (d < bd) {
+        bd = d
+        bx = qx
+        bz = qz
+        byaw = Math.atan2(dx, dz)
+      }
+    }
+  }
+  const candidates: SpawnSpot[] = []
+  if (bd < 14) {
+    // both shoulders of the nearest road, facing along the traffic flow
+    for (const side of [1, -1] as const) {
+      const lat = 2.15 * side
+      candidates.push({
+        x: bx + -Math.cos(byaw) * lat,
+        z: bz + Math.sin(byaw) * lat,
+        rotY: byaw + (side < 0 ? Math.PI : 0),
+      })
+    }
+  }
+  // fallback: kerbside right next to whoever called it
+  candidates.push({
+    x: px + Math.sin(fallbackYaw) * 2.4,
+    z: pz + Math.cos(fallbackYaw) * 2.4,
+    rotY: fallbackYaw,
+  })
+  for (const c of candidates) if (playerSpotIsClear(c.x, c.z)) return c
+  return candidates[candidates.length - 1]
 }
 
 /* ------------------------------ parked vehicles -------------------------------- */

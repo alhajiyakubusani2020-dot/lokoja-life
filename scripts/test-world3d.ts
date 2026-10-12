@@ -173,7 +173,7 @@ import { INTERIOR as INTERIOR_CFG, NEEDS } from '../src/game/data/config'
 import type { Needs } from '../src/game/types'
 
 console.log('\nINC 4 — INTERIOR DATA VALIDITY')
-check('exactly the three launch interiors', INTERIORS.length === 3)
+check('six interiors — home, buka, shop + gym, bank, lounge', INTERIORS.length === 6)
 check('interior ids unique', new Set(INTERIORS.map((i) => i.id)).size === INTERIORS.length)
 check('every interior belongs to a real location', INTERIORS.every((i) => !!LOCATION_BY_ID[i.locationId]))
 check('INTERIOR_BY_ID is a full index', INTERIORS.every((i) => INTERIOR_BY_ID[i.id] === i))
@@ -182,13 +182,18 @@ check(
   INTERIORS.every((i) => i.furniture.every((f) => !!FURN_FOOTPRINT[f.kind])),
 )
 check(
-  'every hotspot sits inside the room bounds',
+  'every hotspot + action sits inside the room bounds',
   INTERIORS.every((i) =>
     i.hotspots.every(
       (h) =>
         Math.abs(h.x) < i.size.w / 2 - 0.2 &&
         Math.abs(h.z) < i.size.d / 2 - 0.2,
-    ),
+    ) &&
+      (i.actions ?? []).every(
+        (a) =>
+          Math.abs(a.x) < i.size.w / 2 - 0.2 &&
+          Math.abs(a.z) < i.size.d / 2 - 0.2,
+      ),
   ),
 )
 check(
@@ -215,6 +220,32 @@ check(
     const kinds = INTERIOR_BY_ID['home-interior'].hotspots.map((h) => h.kind)
     return ['bed', 'stove', 'tv', 'bath'].every((k) => kinds.includes(k as never))
   })(),
+)
+
+console.log('\nSTAGE 5-b — ACTION HOTSPOTS (gym / bank / lounge / wardrobe)')
+check(
+  'one exit per interior + unique action ids',
+  INTERIORS.every((i) => {
+    const ids = (i.actions ?? []).map((a) => a.id)
+    return i.hotspots.filter((h) => h.kind === 'exit').length === 1 && new Set(ids).size === ids.length
+  }),
+)
+check(
+  'action kinds land where they belong',
+  INTERIOR_BY_ID['peak-gym']?.actions?.some((a) => a.kind === 'workout') === true &&
+    INTERIOR_BY_ID['lokoja-microfinance']?.actions?.some((a) => a.kind === 'bank-teller') === true &&
+    INTERIOR_BY_ID['golden-nights']?.actions?.some((a) => a.kind === 'night-out') === true &&
+    INTERIOR_BY_ID['home-interior']?.actions?.some((a) => a.kind === 'wardrobe') === true,
+)
+check(
+  'the three new interiors belong to their districts',
+  INTERIOR_BY_ID['peak-gym']?.locationId === 'university-area' &&
+    INTERIOR_BY_ID['lokoja-microfinance']?.locationId === 'government-area' &&
+    INTERIOR_BY_ID['golden-nights']?.locationId === 'food-area',
+)
+check(
+  'every action label is player-facing text',
+  INTERIORS.every((i) => (i.actions ?? []).every((a) => a.label.length >= 4)),
 )
 
 console.log('\nINC 4 — INTERIOR COLLISION RESPECTS THE PLAYER')
@@ -301,7 +332,12 @@ for (const def of INTERIORS) {
   const { reach, key } = pathableCells(def.id)
   const toIdx = (x: number) => Math.floor((x + def.size.w / 2) / 0.15)
   const toIdz = (z: number) => Math.floor((z + def.size.d / 2) / 0.15)
-  for (const h of def.hotspots) {
+  // HUD hotspots AND Stage 5-b action hotspots must be walkable-to
+  const targets: { id: string; x: number; z: number }[] = [
+    ...def.hotspots.map((h) => ({ id: h.id, x: h.x, z: h.z })),
+    ...(def.actions ?? []).map((a) => ({ id: a.id, x: a.x, z: a.z })),
+  ]
+  for (const h of targets) {
     // a hotspot counts as reachable when any cell within 0.45 m of it is reachable
     let ok = false
     for (let ox = -3; ox <= 3 && !ok; ox++) {

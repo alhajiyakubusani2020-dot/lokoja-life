@@ -75,6 +75,8 @@ export type TransactionCategory =
   | 'shop'
   | 'tip'
   | 'other'
+  | 'bank'
+  | 'fun'
 
 /** One money event in the player's life — the ledger the phone/Bank reads later. */
 export interface Transaction {
@@ -175,6 +177,49 @@ export interface PlayerState {
   missions: Record<string, MissionProgress>
   achievements: string[]
   discoveries: string[]
+
+  /* Stage 5 — vehicles, bank, relationships */
+  /** 🛵 owned vehicles (garage). One per model — Lokoja parking is real. */
+  vehicles: OwnedVehicle[]
+  /** 🏦 money kept safe at the bank — separate from pocket cash */
+  bankBalance: number
+  /** 👥 familiarity per NPC id (social life) */
+  relationships: Record<string, RelationshipState>
+}
+
+/* --------------------------- Stage 5 — ownership --------------------------- */
+
+export type VehicleModel = 'okada' | 'keke' | 'taxi' | 'danfo'
+
+/** A vehicle the player owns, persisted in the save. */
+export interface OwnedVehicle {
+  /** unique garage id (stable once bought) */
+  id: string
+  model: VehicleModel
+  /** display plate, e.g. "LKO-419-AB" */
+  plate: string
+  /** in-game day it was bought */
+  boughtDay: number
+}
+
+/** Familiarity track with one NPC (pure data — social logic lives in systems/social). */
+export interface RelationshipState {
+  /** 0–100 */
+  familiarity: number
+  /** absolute day of the last chat (cooldown gate) */
+  lastChatDay: number
+}
+
+/** Result of one chat exchange (Stage 5) — everything the phone/talk UI needs. */
+export interface ChatOutcome {
+  npcId: string
+  tier: import('./data/npcChat').FamiliarityTier
+  /** familiarity AFTER this chat */
+  familiarity: number
+  /** the NPC's reply line */
+  reply: string
+  /** true when this was the first-ever chat with this NPC */
+  firstMeeting: boolean
 }
 
 /* ---------------------------------- World ---------------------------------- */

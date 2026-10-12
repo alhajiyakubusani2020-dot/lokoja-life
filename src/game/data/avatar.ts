@@ -65,6 +65,8 @@ export const AVATAR_CLOTHING_STYLES: ClothingStyleOption[] = [
   { key: 'kaftan', label: 'Kaftan', description: 'Clean traditional look' },
   { key: 'ankara', label: 'Ankara Print', description: 'Full pattern flex' },
   { key: 'senator', label: 'Senator Wear', description: 'Sharp for business' },
+  { key: 'hoodie', label: 'Hoodie', description: 'Street hoodie — blessed and chilly' },
+  { key: 'lace', label: 'Lace', description: 'Lace grandeur — occasion wear' },
 ]
 
 /** Clothing colours — warm Nigerian-fashion palette. */

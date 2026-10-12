@@ -21,20 +21,23 @@ import { HUSTLES } from '@/game/data/hustles'
 import { WORLD3D, FOOD, INTERIOR } from '@/game/data/config'
 import { ANCHORS, ANCHOR_BY_ID, POINTS_OF_INTEREST } from '@/game/world3d/layout'
 import { INTERIOR_BY_ID, type HotspotKind, type InteriorDef } from '@/game/world3d/interiors'
+import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
+import type { TransportId, VehicleModel } from '@/game/types'
 import { calculateTravel } from '@/game/systems/travel'
 import { formatNaira } from '@/game/systems/progression'
 import { ambience } from '@/game/systems/ambience'
-import type { TransportId } from '@/game/types'
 import { audio } from '@/game/systems/audio'
+import { GaragePanel } from './GaragePanel'
 import {
   ArrowLeftIcon, CheckIcon, ClockIcon, CoinsIcon, EnergyIcon, KekeIcon,
   LockIcon, MapIcon, MoonIcon, PinIcon, PlaceIcon, TaxiIcon, WalkIcon,
   WeatherIcon, WorkIcon, TimeIcon,
 } from '../icons'
 import {
-  attachControls, consumeInteract, cycleCamMode, freezeInput, getCamMode, getTutProgress,
-  getWalkedMeters, isPhotoMode, playerPos, queueInteract, resetTutProgress, resetWalkedMeters,
-  setJoystick, setPhotoMode, setSprint, togglePhotoMode, CAM_MODES,
+  attachControls, consumeInteract, cycleCamMode, freezeInput, getCamMode, getDriveModel,
+  getDriveSpeed, getDriveStartedAt, getNearVehicle, getTutProgress, getWalkedMeters, isDriveActive,
+  isPhotoMode, playerPos, queueInteract, requestEnterVehicle, requestParkVehicle, resetTutProgress,
+  resetWalkedMeters, setJoystick, setPhotoMode, setSprint, togglePhotoMode, CAM_MODES,
 } from './controls'
 
 const TRANSPORT_ICON: Record<TransportId, (p: { size?: number }) => React.ReactNode> = {
@@ -211,6 +214,22 @@ type PanelState =
   | { kind: 'activities'; loc: LokojaLocation }
   | { kind: 'travel'; loc: LokojaLocation }
   | { kind: 'interior'; hotspot: HotspotKind }
+  | { kind: 'garage' }
+
+/** polled from the input layer each frame — re-rendered only on real changes */
+interface DriveUi {
+  driving: boolean
+  model: VehicleModel | null
+  /** an owned parked vehicle in walk-up range ("Enter …" chip) */
+  near: VehicleModel | null
+  /** first-5-seconds drive hints */
+  hints: boolean
+}
+
+const DRIVE_UI_IDLE: DriveUi = { driving: false, model: null, near: null, hints: false }
+
+/** the motor park — the Vehicle Shop button lives within this radius */
+const SHOP_RADIUS = 28
 
 export function HudOverlay({
   nearestAnchor,
@@ -252,6 +271,16 @@ export function HudOverlay({
   const surfaceRef = useRef<HTMLDivElement>(null)
   const nearestRef = useRef<string | null>(null)
   const [panel, setPanel] = useState<PanelState>({ kind: 'none' })
+  const panelRef = useRef<PanelState>(panel)
+  useEffect(() => {
+    panelRef.current = panel
+  }, [panel])
+
+  /* Stage 5 — drive chrome state (polled, cheap) */
+  const [driveUi, setDriveUi] = useState<DriveUi>(DRIVE_UI_IDLE)
+  const driveUiRef = useRef<DriveUi>(DRIVE_UI_IDLE)
+  const [nearShop, setNearShop] = useState(false)
+  const nearShopRef = useRef(false)
 
   // INC 4 — interior mode: refs so the rAF poll can read them without re-subscribing
   const interiorRef = useRef<InteriorDef | null>(interior)
@@ -403,7 +432,19 @@ export function HudOverlay({
             if (h.kind === 'exit') exitInteriorRef.current()
             else setPanel({ kind: 'interior', hotspot: h.kind })
           }
-        } else if (nearestRef.current) {
+        } else if (
+          driveUiRef.current.near &&
+          panelRef.current.kind === 'none' &&
+          !driveUiRef.current.driving
+        ) {
+          // STAGE 5 — walk-up entry to your own parked ride
+          audio.play('click')
+          requestEnterVehicle(driveUiRef.current.near)
+        } else if (driveUiRef.current.driving && getDriveSpeed() < 2.6) {
+          // STAGE 5 — stopped + interact = park & step out
+          audio.play('click')
+          requestParkVehicle()
+        } else if (nearestRef.current && !driveUiRef.current.driving) {
           const anchorId = nearestRef.current
           if (anchorId.startsWith('door:')) {
             audio.play('click')
@@ -465,6 +506,33 @@ export function HudOverlay({
       // camera mode can change from the input layer (C key) — keep the chip honest
       const cm = getCamMode()
       setCamModeState((prev) => (prev === cm ? prev : cm))
+
+      // STAGE 5 — drive chrome: poll the input layer, re-render on real changes only
+      const driving = isDriveActive()
+      const dui: DriveUi = {
+        driving,
+        model: getDriveModel(),
+        near: driving ? null : getNearVehicle(),
+        hints:
+          driving && getDriveStartedAt() > 0 && performance.now() - getDriveStartedAt() < 5200,
+      }
+      const prevDui = driveUiRef.current
+      if (
+        prevDui.driving !== dui.driving ||
+        prevDui.model !== dui.model ||
+        prevDui.near !== dui.near ||
+        prevDui.hints !== dui.hints
+      ) {
+        driveUiRef.current = dui
+        setDriveUi(dui)
+      }
+      const shopA = ANCHOR_BY_ID['transport-area']
+      const shopNow =
+        !driving && !!shopA && Math.hypot(shopA.x - playerPos.x, shopA.z - playerPos.z) < SHOP_RADIUS
+      if (shopNow !== nearShopRef.current) {
+        nearShopRef.current = shopNow
+        setNearShop(shopNow)
+      }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -512,6 +580,10 @@ export function HudOverlay({
   const promptLoc = !interior && !doorDef && nearestAnchor ? resolveAnchorLoc(nearestAnchor) : null
   const promptAnchor = nearestAnchor
   const isPoiPrompt = !!promptAnchor?.startsWith('poi:')
+  // STAGE 5 — your parked ride is close enough to enter; it wins the prompt slot
+  const nearVehicleDef = driveUi.near ? VEHICLE_BY_MODEL[driveUi.near] : null
+  const vehicleChip =
+    nearVehicleDef && panel.kind === 'none' && !driveUi.driving && !interior && !isTravelling && !photo
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none" style={{ zIndex: 30 }}>
@@ -697,6 +769,37 @@ export function HudOverlay({
         </div>
       )}
 
+      {/* ---------- STAGE 5 — drive hints (first 5 seconds) ---------- */}
+      {driveUi.driving && driveUi.hints && !photo && (
+        <div className="pointer-events-none absolute inset-x-0 top-[4.9rem] flex justify-center px-4">
+          <p className="lko-pop max-w-full rounded-full bg-black/55 px-4 py-2 text-center text-[12px] font-extrabold text-white backdrop-blur-md">
+            {touchMode
+              ? 'Stick up = gas · down = brake · sides = steer'
+              : 'W / ↑ gas · S / ↓ brake · A D steer'}
+            {' '}— slow down, then PARK
+          </p>
+        </div>
+      )}
+
+      {/* ---------- STAGE 5 — Vehicle Shop pill (near the motor park) ---------- */}
+      {nearShop && !driveUi.driving && panel.kind === 'none' && !isTravelling && !photo && !interior && (
+        <div
+          className="pointer-events-auto absolute left-4 z-10"
+          style={{ bottom: touchMode ? '10.9rem' : '5.75rem' }}
+        >
+          <button
+            onClick={() => {
+              audio.play('click')
+              setPanel({ kind: 'garage' })
+            }}
+            className="lko-press lko-pop flex items-center gap-2 rounded-full border border-[#ffd88a]/50 bg-black/60 px-4 py-2.5 text-[13px] font-extrabold text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+          >
+            <span className="text-[15px]" aria-hidden>🏍️</span>
+            Vehicle Shop
+          </button>
+        </div>
+      )}
+
       {/* ---------- interact prompt ---------- */}
       {interior && hotDef && panel.kind === 'none' && !photo && (
         <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
@@ -714,7 +817,27 @@ export function HudOverlay({
           </button>
         </div>
       )}
-      {!interior && doorDef && panel.kind === 'none' && !isTravelling && !photo && (
+      {/* ---------- STAGE 5 — enter-your-ride prompt ---------- */}
+      {vehicleChip && nearVehicleDef && (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
+          <button
+            onClick={() => {
+              audio.play('click')
+              requestEnterVehicle(nearVehicleDef.model)
+            }}
+            className="lko-press lko-pop flex max-w-full items-center gap-2.5 rounded-full border border-[#ffd88a]/45 bg-black/60 px-5 py-3 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#e8a317] text-[12px]">
+              {nearVehicleDef.emoji}
+            </span>
+            <span className="truncate text-[14px] font-extrabold">Enter {nearVehicleDef.label}</span>
+            {!touchMode && (
+              <kbd className="rounded-md border border-white/30 bg-white/10 px-1.5 py-0.5 text-[10px] font-extrabold">E</kbd>
+            )}
+          </button>
+        </div>
+      )}
+      {!interior && doorDef && panel.kind === 'none' && !isTravelling && !photo && !vehicleChip && !driveUi.driving && (
         <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
           <button
             onClick={() => openPanelFor(promptAnchor)}
@@ -730,7 +853,7 @@ export function HudOverlay({
           </button>
         </div>
       )}
-      {promptLoc && panel.kind === 'none' && !isTravelling && !photo && !interior && !doorDef && (
+      {promptLoc && panel.kind === 'none' && !isTravelling && !photo && !interior && !doorDef && !vehicleChip && !driveUi.driving && (
         <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
           <button
             onClick={() => openPanelFor(promptAnchor)}
@@ -796,33 +919,65 @@ export function HudOverlay({
         <>
           <Joystick />
           <div className="pointer-events-auto absolute bottom-6 right-4 flex flex-col items-center gap-3">
-            <button
-              aria-label="Interact"
-              onPointerDown={() => queueInteract()}
-              className={`lko-press flex h-14 w-14 items-center justify-center rounded-full border text-white backdrop-blur-md ${
-                promptAnchor ? 'border-[#ffd88a]/70 bg-[#e8a317]/85 shadow-[0_0_18px_rgba(232,163,23,0.55)]' : 'border-white/25 bg-black/35'
-              }`}
-            >
-              <PinIcon size={22} />
-            </button>
-            <button
-              aria-label="Sprint (hold)"
-              onPointerDown={(e) => {
-                try {
-                  e.currentTarget.setPointerCapture(e.pointerId)
-                } catch {
-                  /* synthetic pointers */
-                }
-                setSprint(true)
-              }}
-              onPointerUp={() => setSprint(false)}
-              onPointerCancel={() => setSprint(false)}
-              className="lko-press flex h-14 w-14 items-center justify-center rounded-full border border-white/25 bg-black/35 text-[11px] font-extrabold text-white backdrop-blur-md"
-            >
-              RUN
-            </button>
+            {driveUi.driving ? (
+              /* behind the wheel: PARK replaces the walk buttons (stop + E also parks) */
+              <button
+                aria-label="Park and step out"
+                onClick={() => {
+                  audio.play('click')
+                  requestParkVehicle()
+                }}
+                className="lko-press flex h-14 w-14 items-center justify-center rounded-full border border-[#ffd88a]/70 bg-[#e8a317]/90 text-[10.5px] font-extrabold text-[#3d2a00] shadow-[0_0_18px_rgba(232,163,23,0.5)] backdrop-blur-md"
+              >
+                PARK
+              </button>
+            ) : (
+              <>
+                <button
+                  aria-label="Interact"
+                  onPointerDown={() => queueInteract()}
+                  className={`lko-press flex h-14 w-14 items-center justify-center rounded-full border text-white backdrop-blur-md ${
+                    promptAnchor || vehicleChip ? 'border-[#ffd88a]/70 bg-[#e8a317]/85 shadow-[0_0_18px_rgba(232,163,23,0.55)]' : 'border-white/25 bg-black/35'
+                  }`}
+                >
+                  <PinIcon size={22} />
+                </button>
+                <button
+                  aria-label="Sprint (hold)"
+                  onPointerDown={(e) => {
+                    try {
+                      e.currentTarget.setPointerCapture(e.pointerId)
+                    } catch {
+                      /* synthetic pointers */
+                    }
+                    setSprint(true)
+                  }}
+                  onPointerUp={() => setSprint(false)}
+                  onPointerCancel={() => setSprint(false)}
+                  className="lko-press flex h-14 w-14 items-center justify-center rounded-full border border-white/25 bg-black/35 text-[11px] font-extrabold text-white backdrop-blur-md"
+                >
+                  RUN
+                </button>
+              </>
+            )}
           </div>
         </>
+      )}
+
+      {/* ---------- STAGE 5 — desktop park button (always visible while driving) ---------- */}
+      {driveUi.driving && !touchMode && panel.kind === 'none' && !photo && (
+        <div className="pointer-events-auto absolute bottom-6 right-4">
+          <button
+            onClick={() => {
+              audio.play('click')
+              requestParkVehicle()
+            }}
+            title="Park & step out (or stop + E)"
+            className="lko-press flex min-h-[44px] items-center gap-2 rounded-full border border-[#ffd88a]/70 bg-[#e8a317]/90 px-4 text-[12.5px] font-extrabold text-[#3d2a00] shadow-[0_0_18px_rgba(232,163,23,0.5)] backdrop-blur-md"
+          >
+            🅿 Park & Step Out
+          </button>
+        </div>
       )}
 
       {/* ---------- bottom sheets ---------- */}
@@ -841,7 +996,9 @@ export function HudOverlay({
                 ? `Travel to ${panel.loc.name}`
                 : panel.kind === 'interior'
                   ? `${interior?.name ?? 'Indoors'} — inside`
-                  : `${panel.loc.name} activities`
+                  : panel.kind === 'garage'
+                    ? 'Motor Park garage — buy and drive your own ride'
+                    : `${panel.loc.name} activities`
             }
           >
             <div className="mx-auto mt-2.5 h-1.5 w-10 rounded-full bg-black/10" aria-hidden />
@@ -860,6 +1017,18 @@ export function HudOverlay({
                     <h2 className="lko-display truncate text-lg leading-tight">{interior?.name ?? 'Indoors'}</h2>
                     <p className="truncate text-[11.5px] font-semibold italic text-[var(--lko-ink-soft)]">
                       Inside your own four walls
+                    </p>
+                  </div>
+                </>
+              ) : panel.kind === 'garage' ? (
+                <>
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--lko-gold)] text-[20px]">
+                    🏍️
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="lko-display truncate text-lg leading-tight">Motor Park Garage</h2>
+                    <p className="truncate text-[11.5px] font-semibold italic text-[var(--lko-ink-soft)]">
+                      Buy your own — drive Lokoja your way
                     </p>
                   </div>
                 </>
@@ -913,6 +1082,8 @@ export function HudOverlay({
                   relaxAction(k)
                 }}
               />
+            ) : panel.kind === 'garage' ? (
+              <GaragePanel onClose={() => setPanel({ kind: 'none' })} />
             ) : (
               <ActivitiesSheet
                 loc={panel.loc}

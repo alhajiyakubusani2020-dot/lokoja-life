@@ -27,6 +27,7 @@ import { getWalkedMeters, resetWalkedMeters } from './controls'
 import { WorldScene } from './WorldScene'
 import { InteriorScene } from './InteriorScene'
 import { HudOverlay } from './HudOverlay'
+import WardrobePanel from './WardrobePanel'
 
 /* ------------------------------ capability check ------------------------------ */
 
@@ -260,6 +261,9 @@ export function WorldTab({
               onExitInterior={exitInterior}
             />
           )}
+
+          {/* STAGE 5 — wardrobe (interior hotspot rings the bus; panel lives here) */}
+          <WardrobePanel />
         </>
       )}
     </div>

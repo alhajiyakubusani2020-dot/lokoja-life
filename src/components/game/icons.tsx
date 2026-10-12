@@ -94,6 +94,17 @@ export function ProfileIcon(p: IconProps) {
   )
 }
 
+/** Phone — the in-game handset (Stage 5). Works anywhere, not location-bound. */
+export function PhoneIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <rect x="7" y="2.8" width="10" height="18.4" rx="2.6" />
+      <path d="M10.4 5.2h3.2" />
+      <path d="M11 18.6h2" />
+    </Svg>
+  )
+}
+
 /* -------------------------------- needs --------------------------------- */
 
 export function HealthIcon(p: IconProps) {
@@ -641,13 +652,14 @@ export function FireIcon(p: IconProps) {
 
 /* ------------------------------- mapped sets ----------------------------- */
 
-export type NavIconKey = 'home' | 'world' | 'map' | 'work' | 'bag' | 'profile'
+export type NavIconKey = 'home' | 'world' | 'map' | 'work' | 'phone' | 'bag' | 'profile'
 
 const NAV_ICONS: Record<NavIconKey, (p: IconProps) => ReactNode> = {
   home: HomeIcon,
   world: WorldIcon,
   map: MapIcon,
   work: WorkIcon,
+  phone: PhoneIcon,
   bag: BagIcon,
   profile: ProfileIcon,
 }

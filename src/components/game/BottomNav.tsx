@@ -1,10 +1,11 @@
 'use client'
 
 /**
- * LOKOJA LIFE — BottomNav + ComingSoon (R1)
- * Mobile-first bottom navigation (5 tabs) with the coherent SVG icon set,
+ * LOKOJA LIFE — BottomNav + ComingSoon (R1 + Stage 5)
+ * Mobile-first bottom navigation (7 tabs) with the coherent SVG icon set,
  * an animated active pill, and the honest "arrives in a later stage" panel.
  * Principle: never fake finished functionality.
+ * Stage 5: the Phone tab joins — chats, bank, hustle shortcut, settings.
  */
 
 import { audio } from '@/game/systems/audio'
@@ -22,6 +23,7 @@ const TABS: TabDef[] = [
   { key: 'world', label: 'World' },
   { key: 'map', label: 'Map' },
   { key: 'work', label: 'Work' },
+  { key: 'phone', label: 'Phone' },
   { key: 'bag', label: 'Bag' },
   { key: 'profile', label: 'You' },
 ]
@@ -46,7 +48,7 @@ export function BottomNav({ active, onChange, badge }: BottomNavProps) {
         style={{ background: 'linear-gradient(90deg, transparent, rgba(232,163,23,0.35), transparent)' }}
         aria-hidden
       />
-      <div className="mx-auto grid max-w-xl grid-cols-6 px-1.5">
+      <div className="mx-auto grid max-w-xl grid-cols-7 px-1">
         {TABS.map((tab) => {
           const isActive = active === tab.key
           return (

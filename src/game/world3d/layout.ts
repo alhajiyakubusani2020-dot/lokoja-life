@@ -537,10 +537,28 @@ export const DOORS: DoorDef[] = (() => {
   const marketShed = BUILDINGS.find(
     (b) => b.kind === 'shed' && Math.hypot(b.x - ANCHOR_BY_ID['kpata-market'].x, b.z - ANCHOR_BY_ID['kpata-market'].z) < 16,
   ) ?? null
+  // Stage 5-b — the campus gym: a shop building in the university district
+  const uniGym = BUILDINGS.find(
+    (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['university-area'].x, b.z - ANCHOR_BY_ID['university-area'].z) < 16,
+  ) ?? null
+  // Stage 5-b — the microfinance bank: the civic block standing at the gov anchor
+  const govA = ANCHOR_BY_ID['government-area']
+  const govBlock =
+    BUILDINGS.find(
+      (b) => b.kind === 'block' && Math.hypot(b.x - govA.x, b.z - govA.z) < 2,
+    ) ?? null
+  // Stage 5-b — the lounge: the SECOND shop in the food strip (the first is Mama's)
+  const foodShop2 =
+    BUILDINGS.filter(
+      (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['food-area'].x, b.z - ANCHOR_BY_ID['food-area'].z) < 16,
+    )[1] ?? null
   return [
     doorFor('home-interior', 'home', homeHouse, { dx: 5, dz: 2 }),
     doorFor('mamas-kitchen', 'food-area', foodShop, { dx: -4, dz: -4.5 }),
     doorFor('kpata-shop', 'kpata-market', marketShed, { dx: -10, dz: -6 }),
+    doorFor('peak-gym', 'university-area', uniGym, { dx: 6.5, dz: -4.5 }),
+    doorFor('lokoja-microfinance', 'government-area', govBlock, { dx: -6.5, dz: -5.5 }),
+    doorFor('golden-nights', 'food-area', foodShop2, { dx: 4.5, dz: 4.5 }),
   ]
 })()
 

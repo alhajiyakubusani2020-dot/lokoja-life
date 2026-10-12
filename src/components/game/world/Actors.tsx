@@ -30,6 +30,8 @@ import {
 } from '@/game/world3d/vehicles'
 import { NPCS } from '@/game/data/npcs'
 import { INTERIOR, WORLD3D } from '@/game/data/config'
+import { audio } from '@/game/systems/audio'
+import { useGameStore } from '@/game/store/useGameStore'
 import {
   addWalkDistance, consumeLook, consumeZoom, getCamMode, isInputFrozen, MOVE, playerPos,
   readMoveInput, reportPlayerPos, CAM_RIG,
@@ -40,7 +42,7 @@ import { HumanRig, MidRig, type RigColors } from './HumanRig'
 
 const VOLUME_HAIR = new Set(['afro', 'puffs', 'dreads', 'braids'])
 const CAP_HAIR = new Set(['low-cut', 'waves', 'cornrows'])
-const DRESS_STYLES = new Set(['kaftan'])
+const DRESS_STYLES = new Set(['kaftan', 'lace'])
 
 export function playerRigColors(avatar: AvatarConfig): RigColors {
   return {
@@ -50,6 +52,9 @@ export function playerRigColors(avatar: AvatarConfig): RigColors {
     hair: avatar.hairColor,
     hairStyle: VOLUME_HAIR.has(avatar.hairstyle) ? 'volume' : CAP_HAIR.has(avatar.hairstyle) ? 'cap' : 'none',
     dress: DRESS_STYLES.has(avatar.clothingStyle),
+    // Stage 5 — raw keys so the rig can render the exact style + hair hints
+    hairstyle: avatar.hairstyle,
+    style: avatar.clothingStyle,
   }
 }
 
@@ -65,7 +70,22 @@ function BlobShadow({ scale = 1 }: { scale?: number }) {
 
 /* ------------------------------- player character ----------------------------- */
 
-export function PlayerAvatar({ avatar, speedRef }: { avatar: AvatarConfig; speedRef: { current: number } }) {
+/**
+ * The player's articulated body.
+ * Stage 5 contract: `driving: true` = the player is inside a vehicle, so the
+ * on-foot body renders NOTHING (agent 5-a's vehicle scene passes this; the
+ * default false keeps every existing call site unchanged).
+ */
+export function PlayerAvatar({
+  avatar,
+  speedRef,
+  driving = false,
+}: {
+  avatar: AvatarConfig
+  speedRef: { current: number }
+  driving?: boolean
+}) {
+  if (driving) return null
   return <HumanRig colors={playerRigColors(avatar)} speedRef={speedRef} castShadow />
 }
 
@@ -77,12 +97,15 @@ export function PlayerController({
   onPosition,
   onNearestAnchor,
   onDistrict,
+  driving = false,
 }: {
   avatar: AvatarConfig
   spawnLocationId: string
   onPosition?: (x: number, z: number, heading: number) => void
   onNearestAnchor?: (anchorId: string | null) => void
   onDistrict?: (districtId: string | null) => void
+  /** Stage 5 — accepted + passed to the body; movement authority stays upstream (see report). */
+  driving?: boolean
 }) {
   const group = useRef<THREE.Group>(null)
   const playerSpeed = useRef(0)
@@ -311,16 +334,228 @@ export function PlayerController({
 
   return (
     <group ref={group}>
-      <PlayerAvatar avatar={avatar} speedRef={playerSpeed} />
-      <BlobShadow scale={1.2} />
+      <PlayerAvatar avatar={avatar} speedRef={playerSpeed} driving={driving} />
+      {!driving && <BlobShadow scale={1.2} />}
     </group>
   )
 }
 
 /* ----------------------------------- NPCs ------------------------------------- */
 
+const NPC_COUNT = 12
 const NPC_SKINS = ['#4A2C17', '#5C3A21', '#6E4326', '#8A5A32', '#A9714B']
 const NPC_CLOTHES = ['#c94f2e', '#2e7d5b', '#d99a2b', '#3a6ea3', '#8a5aa3', '#b03a5b', '#e8dcc3']
+const NPC_HAIRS = ['#1A1714', '#2E1D12', '#5C2330', '#8A6A3B', '#B79545']
+// wardrobe keys — tshirt double-weighted so the street still reads everyday
+const NPC_STYLES = ['tshirt', 'tshirt', 'kaftan', 'ankara', 'senator', 'hoodie', 'lace']
+const NPC_HAIRSTYLES = ['bald', 'low-cut', 'waves', 'afro', 'cornrows', 'dreads', 'braids', 'puffs']
+
+/** FNV-1a string hash — seeds the per-NPC look rng (deterministic crowds) */
+function hashSeed(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/* ------------------------ talk chips + speech bubbles ----------------------- */
+
+const TALK_RADIUS = 4 // u — close enough to say hello
+const BUBBLE_MS = 4500
+const CHIP_Y = 1.98 // floats just above the head
+const BUBBLE_Y = 2.44
+
+interface TalkTarget {
+  /** false = nobody in talking range (other fields stale) */
+  live: boolean
+  i: number
+  id: string
+  name: string
+}
+
+/**
+ * Shared scratch written by the Npcs frame loop and read by NpcTalkLayer —
+ * a stable object + one fixed array, so the frame path allocates nothing.
+ */
+const npcTalk = {
+  /** world position per NPC (x, groundY, z); y = -999 while hidden */
+  pos: new Float32Array(NPC_COUNT * 3),
+  target: { live: false, i: -1, id: '', name: '' } as TalkTarget,
+}
+
+/** one fixed overlay host for all talk DOM (created lazily, client-only) */
+let TALK_HOST: HTMLDivElement | null = null
+function talkHost(): HTMLDivElement {
+  if (!TALK_HOST) {
+    TALK_HOST = document.createElement('div')
+    TALK_HOST.setAttribute('data-lko-npc-talk', '')
+    TALK_HOST.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:40;overflow:hidden;'
+    document.body.appendChild(TALK_HOST)
+  }
+  return TALK_HOST
+}
+
+// projection scratch — module scope, no per-frame allocation
+const TALK_V = new THREE.Vector3()
+const TALK_DIR = new THREE.Vector3()
+
+/** place a DOM anchor over a world point; hides it when behind/off screen */
+function placeAnchor(el: HTMLElement | null, x: number, y: number, z: number, cam: THREE.Camera): void {
+  if (!el) return
+  TALK_V.set(x, y, z)
+  cam.getWorldDirection(TALK_DIR)
+  const dx = TALK_V.x - cam.position.x
+  const dy = TALK_V.y - cam.position.y
+  const dz = TALK_V.z - cam.position.z
+  if (dx * TALK_DIR.x + dy * TALK_DIR.y + dz * TALK_DIR.z < 0.4) {
+    el.style.display = 'none'
+    return
+  }
+  TALK_V.project(cam)
+  if (TALK_V.x < -1.15 || TALK_V.x > 1.15 || TALK_V.y < -1.15 || TALK_V.y > 1.1) {
+    el.style.display = 'none'
+    return
+  }
+  el.style.display = 'block'
+  el.style.left = `${(TALK_V.x * 0.5 + 0.5) * 100}%`
+  el.style.top = `${(-TALK_V.y * 0.5 + 0.5) * 100}%`
+}
+
+/**
+ * The talk chip + speech bubble.
+ *
+ * WHY IMPERATIVE DOM: the codebase runs without @react-three/drei, and a
+ * react-dom portal rendered inside the R3F v9 tree corrupts the reconciler
+ * here ("Unexpected Fiber popped" → Canvas crash), so this is the in-house
+ * equivalent of <Html>: the component returns null into the three tree and
+ * owns two plain DOM anchors inside a fixed overlay host. Everything is
+ * written directly per frame (projection + styles, zero allocation, zero
+ * React re-renders). Tapping the chip goes through
+ * useGameStore.chatNpc — no economy logic lives here.
+ */
+const CHIP_CLASS =
+  'lko-press pointer-events-auto flex min-h-[44px] items-center gap-2 rounded-full border border-white/25 bg-[var(--lko-green)] px-4 py-2 text-[13px] font-extrabold text-white shadow-[var(--lko-shadow-lg)]'
+const BUBBLE_CARD_CLASS =
+  'w-[min(72vw,260px)] rounded-2xl border border-white/25 bg-black/60 p-3 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md'
+const BUBBLE_NAME_CLASS = 'text-[11px] font-extrabold uppercase tracking-wider text-[var(--lko-gold)]'
+const BUBBLE_TEXT_CLASS = 'mt-1 text-[13px] font-semibold leading-snug'
+
+function NpcTalkLayer() {
+  const camera = useThree((s) => s.camera)
+  const els = useRef<{
+    chip: HTMLDivElement
+    chipBtn: HTMLButtonElement
+    chipLabel: HTMLSpanElement
+    bubble: HTMLDivElement
+    bubbleName: HTMLParagraphElement
+    bubbleText: HTMLParagraphElement
+  } | null>(null)
+  const chipId = useRef('')
+  const bubbleI = useRef(-1)
+  const bubbleUntil = useRef(0)
+
+  // build the two DOM anchors once; drop them when the world unmounts
+  // (the tap handler lives here too — it only reads refs + the store, so
+  //  it never goes stale and the component never re-renders)
+  useEffect(() => {
+    const host = talkHost()
+
+    const chip = document.createElement('div')
+    chip.setAttribute('data-lko-talk-chip', '')
+    chip.style.cssText = 'position:absolute;display:none;transform:translate(-50%,-100%);'
+    const chipBtn = document.createElement('button')
+    chipBtn.type = 'button'
+    chipBtn.className = CHIP_CLASS
+    const icon = document.createElement('span')
+    icon.setAttribute('aria-hidden', 'true')
+    icon.textContent = '💬'
+    const chipLabel = document.createElement('span')
+    chipLabel.textContent = 'Talk'
+    chipBtn.append(icon, chipLabel)
+    chip.appendChild(chipBtn)
+    host.appendChild(chip)
+
+    const bubble = document.createElement('div')
+    bubble.setAttribute('data-lko-talk-bubble', '')
+    bubble.style.cssText = 'position:absolute;display:none;transform:translate(-50%,-100%);'
+    const card = document.createElement('div')
+    card.className = `lko-pop ${BUBBLE_CARD_CLASS}`
+    const bubbleName = document.createElement('p')
+    bubbleName.className = BUBBLE_NAME_CLASS
+    const bubbleText = document.createElement('p')
+    bubbleText.className = BUBBLE_TEXT_CLASS
+    card.append(bubbleName, bubbleText)
+    bubble.appendChild(card)
+    host.appendChild(bubble)
+
+    els.current = { chip, chipBtn, chipLabel, bubble, bubbleName, bubbleText }
+
+    // chip tap → the store's chat action (outcome drives the bubble)
+    const onTap = () => {
+      const tgt = npcTalk.target
+      if (!tgt.live) return
+      audio.play('click')
+      const out = useGameStore.getState().chatNpc(tgt.id)
+      if (out) {
+        bubbleName.textContent = out.firstMeeting ? `${tgt.name} · first meeting` : tgt.name
+        bubbleText.textContent = out.reply
+        bubbleI.current = tgt.i
+        bubbleUntil.current = performance.now() + BUBBLE_MS
+        // replay the pop-in
+        card.style.animation = 'none'
+        void card.offsetWidth
+        card.style.animation = ''
+      }
+      // null = same-day cooldown — the store already toasted; stay quiet
+    }
+    chipBtn.addEventListener('click', onTap)
+
+    return () => {
+      chipBtn.removeEventListener('click', onTap)
+      chip.remove()
+      bubble.remove()
+      els.current = null
+    }
+  }, [])
+
+  useFrame(() => {
+    const e = els.current
+    if (!e) return
+    // sheets/photo/travel freeze world input — the chip steps aside
+    const frozen = isInputFrozen()
+    const tgt = npcTalk.target
+    const p = npcTalk.pos
+
+    // chip identity + visibility (follows the CURRENT nearest talkable NPC)
+    const wantChip = !frozen && tgt.live
+    if (wantChip) {
+      if (tgt.id !== chipId.current) {
+        chipId.current = tgt.id
+        e.chipLabel.textContent = `Talk to ${tgt.name}`
+        e.chipBtn.setAttribute('aria-label', `Talk to ${tgt.name}`)
+      }
+      placeAnchor(e.chip, p[tgt.i * 3], p[tgt.i * 3 + 1] + CHIP_Y, p[tgt.i * 3 + 2], camera)
+    } else {
+      if (chipId.current !== '') chipId.current = ''
+      if (e.chip.style.display !== 'none') e.chip.style.display = 'none'
+    }
+
+    // the bubble keeps riding its own NPC for its whole lifetime
+    if (bubbleI.current >= 0) {
+      const gone = performance.now() > bubbleUntil.current || p[bubbleI.current * 3 + 1] < -500
+      if (gone) {
+        bubbleI.current = -1
+        e.bubble.style.display = 'none'
+      } else {
+        placeAnchor(e.bubble, p[bubbleI.current * 3], p[bubbleI.current * 3 + 1] + BUBBLE_Y, p[bubbleI.current * 3 + 2], camera)
+      }
+    }
+  })
+
+  return null
+}
 
 export function Npcs({
   timeOfDay,
@@ -330,21 +565,27 @@ export function Npcs({
   /** reports the nearest named NPC's id (real NPCS registry) — null when none near */
   onGist?: (npcId: string | null) => void
 }) {
-  const COUNT = 12
   const refs = useRef<(THREE.Group | null)[]>([])
   const gistRef = useRef<string | null>(null)
   const data = useMemo(
     () =>
-      Array.from({ length: COUNT }, (_, i) => {
+      Array.from({ length: NPC_COUNT }, (_, i) => {
         const zone = NPC_ZONES[i % NPC_ZONES.length]
-        const rng = Math.random
         // real identities — the same registry that powers hustle offers
         const pool = NPCS.filter((n) => n.homeLocationId === zone.locationId)
+        const identity = pool.length ? pool[i % pool.length] : null
+        // Stage 5 — deterministic per-person look: hash the identity (or
+        // seat) so every reload dresses the same crowd AND the crowd never
+        // looks cloned (skin, cloth, hair, hairstyle, wardrobe style)
+        const rng = makeRng(hashSeed(`${identity?.id ?? 'villager'}#${i}`))
         const skin = NPC_SKINS[Math.floor(rng() * NPC_SKINS.length)]
         const cloth = NPC_CLOTHES[Math.floor(rng() * NPC_CLOTHES.length)]
+        const clothAlt = NPC_CLOTHES[Math.floor(rng() * NPC_CLOTHES.length)]
+        const hairstyle = NPC_HAIRSTYLES[Math.floor(rng() * NPC_HAIRSTYLES.length)]
+        const style = NPC_STYLES[Math.floor(rng() * NPC_STYLES.length)]
         return {
           zone,
-          identity: pool.length ? pool[i % pool.length] : null,
+          identity,
           ang0: rng() * Math.PI * 2,
           radius: 5 + rng() * (zone.radius - 7),
           speed: 0.25 + rng() * 0.4,
@@ -352,10 +593,12 @@ export function Npcs({
           rig: {
             skin,
             cloth,
-            clothAlt: NPC_CLOTHES[Math.floor(rng() * NPC_CLOTHES.length)],
-            hair: '#1A1714',
-            hairStyle: (['none', 'cap', 'volume'] as const)[Math.floor(rng() * 3)],
-            dress: rng() > 0.6,
+            clothAlt,
+            hair: NPC_HAIRS[Math.floor(rng() * NPC_HAIRS.length)],
+            hairStyle: VOLUME_HAIR.has(hairstyle) ? 'volume' : CAP_HAIR.has(hairstyle) ? 'cap' : 'none',
+            dress: DRESS_STYLES.has(style),
+            hairstyle,
+            style,
           } as RigColors,
           walk: { current: 1.2 + rng() * 0.6 },
         }
@@ -364,11 +607,11 @@ export function Npcs({
   )
 
   // at night most residents head home — the real clock makes the city breathe
-  const activeCount = timeOfDay === 'night' ? 4 : COUNT
+  const activeCount = timeOfDay === 'night' ? 4 : NPC_COUNT
 
   useFrame((s) => {
     const t = s.clock.elapsedTime
-    for (let i = 0; i < COUNT; i++) {
+    for (let i = 0; i < NPC_COUNT; i++) {
       const g = refs.current[i]
       if (!g) continue
       const d = data[i]
@@ -378,31 +621,59 @@ export function Npcs({
       // INC 4 — residents now respect walls & rivers (was: stroll through buildings)
       ;[x, z] = resolvePosition(x, z)
       g.visible = i < activeCount
-      if (!g.visible) continue
-      g.position.set(x, heightAt(x, z), z)
+      if (!g.visible) {
+        npcTalk.pos[i * 3 + 1] = -999 // hidden — any chip/bubble on this NPC drops
+        continue
+      }
+      const gy = heightAt(x, z)
+      g.position.set(x, gy, z)
       g.rotation.y = -ang + (d.dir > 0 ? Math.PI / 2 : -Math.PI / 2)
+      npcTalk.pos[i * 3] = x
+      npcTalk.pos[i * 3 + 1] = gy
+      npcTalk.pos[i * 3 + 2] = z
     }
 
-    // gist discovery — the nearest NAMED resident to the player
-    if (onGist) {
-      let best: string | null = null
-      let bestD: number = WORLD3D.npcGistRadius
-      for (let i = 0; i < COUNT; i++) {
-        if (i >= activeCount) break
-        const d = data[i]
-        if (!d.identity) continue
-        const g = refs.current[i]
-        if (!g) continue
-        const dist = Math.hypot(g.position.x - playerPos.x, g.position.z - playerPos.z)
-        if (dist < bestD) {
-          bestD = dist
-          best = d.identity.id
-        }
+    // discovery — ONE pass feeds BOTH the HUD gist chip (WORLD3D radius)
+    // and the Stage 5 talk chip (close range): the nearest NAMED resident
+    const px = playerPos.x
+    const pz = playerPos.z
+    let bestGist: string | null = null
+    let bestGistD: number = WORLD3D.npcGistRadius
+    let talkI = -1
+    let talkId = ''
+    let talkName = ''
+    let bestTalkD: number = TALK_RADIUS
+    for (let i = 0; i < NPC_COUNT; i++) {
+      if (i >= activeCount) break
+      const d = data[i]
+      if (!d.identity) continue
+      const g = refs.current[i]
+      if (!g) continue
+      const dist = Math.hypot(g.position.x - px, g.position.z - pz)
+      if (dist < bestGistD) {
+        bestGistD = dist
+        bestGist = d.identity.id
       }
-      if (best !== gistRef.current) {
-        gistRef.current = best
-        onGist(best)
+      if (dist < bestTalkD) {
+        bestTalkD = dist
+        talkI = i
+        talkId = d.identity.id
+        talkName = d.identity.name
       }
+    }
+    if (onGist && bestGist !== gistRef.current) {
+      gistRef.current = bestGist
+      onGist(bestGist)
+    }
+    // talk target — mutate the shared scratch in place (no allocation)
+    const tgt = npcTalk.target
+    if (talkI < 0) {
+      tgt.live = false
+    } else if (!tgt.live || tgt.id !== talkId) {
+      tgt.live = true
+      tgt.i = talkI
+      tgt.id = talkId
+      tgt.name = talkName
     }
   })
 
@@ -414,6 +685,8 @@ export function Npcs({
           <BlobShadow scale={0.9} />
         </group>
       ))}
+      {/* Stage 5 — "Talk to {name}" chip + speech bubble (DOM overlay) */}
+      <NpcTalkLayer />
     </group>
   )
 }

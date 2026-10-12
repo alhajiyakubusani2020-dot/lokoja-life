@@ -63,6 +63,9 @@ function makePlayer(over: Partial<PlayerState> = {}): PlayerState {
     missions: {},
     achievements: [],
     discoveries: [],
+    vehicles: [],
+    bankBalance: 0,
+    relationships: {},
     ...over,
   }
 }

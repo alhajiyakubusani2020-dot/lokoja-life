@@ -13,10 +13,12 @@ import { create } from 'zustand'
 import type {
   ActiveOpportunity,
   AvatarConfig,
+  ChatOutcome,
   GameNotification,
   GameSave,
   GameSettings,
   Gender,
+  OwnedVehicle,
   PlayerState,
   Reward,
   Screen,
@@ -24,11 +26,15 @@ import type {
   Transaction,
   TransactionCategory,
   TransportId,
+  VehicleModel,
   WorldState,
 } from '../types'
 import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY } from '../data/config'
 import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
 import { DEFAULT_AVATAR } from '../data/avatar'
+import { VEHICLE_BY_MODEL, generatePlate } from '../data/vehicles'
+import { NPC_CHAT } from '../data/npcChat'
+import { NPC_BY_ID } from '../data/npcs'
 import { LOCATION_BY_ID } from '../data/locations'
 import { JOB_BY_ID } from '../data/jobs'
 import { applyNeedsDelta, applySlotDecay } from '../systems/needs'
@@ -36,6 +42,7 @@ import { addXp as processXp, formatNaira } from '../systems/progression'
 import { recordTransaction, pushTransaction, canAfford, rewardCash, describeReward } from '../systems/economy'
 import { addSkillXp as applySkillXp, SKILL_META } from '../systems/skills'
 import { checkRequirements, cooldownRemaining, resolveJob } from '../systems/work'
+import { canChat, relationshipFor, tierFor, pickLine, afterChat } from '../systems/social'
 import {
   generateHustleOffers,
   hustleDefFor,
@@ -87,6 +94,24 @@ interface GameStore {
   eatMeal: (mealKey: string, atLocationId?: string) => boolean
   /** Stage 3D — settle the energy cost of one 3D-world visit's walking (0 → no-op) */
   settleWorldWalk: (meters: number) => void
+
+  /* Stage 5 — ownership, banking, social life */
+  /** Buy a vehicle at the motor park (one per model). False = couldn't afford / owned. */
+  buyVehicle: (model: VehicleModel) => boolean
+  /** Wardrobe — change appearance (merges over DEFAULT_AVATAR). */
+  setAvatar: (avatar: AvatarConfig) => void
+  /** Gym workout — needs shift + one honest clock slot. */
+  workout: () => void
+  /** Night out at the lounge — cash cost, big mood, one clock slot. */
+  nightOut: () => void
+  /** Bank: pocket cash → bankBalance. */
+  bankDeposit: (amount: number) => boolean
+  /** Bank: bankBalance → pocket cash. */
+  bankWithdraw: (amount: number) => boolean
+  /** Talk with an NPC — familiarity + one warm line. Null = cooldown / guard. */
+  chatNpc: (npcId: string) => ChatOutcome | null
+  /** Stage 3D — settle the (small) energy cost of driving your own vehicle. */
+  settleDrive: (meters: number) => void
 
   /* travel (Stage 2) */
   isTravelling: boolean
@@ -206,6 +231,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       missions: {},
       achievements: [],
       discoveries: [],
+      vehicles: [],
+      bankBalance: 0,
+      relationships: {},
     }
     const world: WorldState = {
       day: 1,
@@ -315,6 +343,196 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (label) {
       get().notify({ icon: '🚶', text: `${label} — ${cost} energy spent.`, tone: 'neutral' })
     }
+    scheduleAutosave(get)
+  },
+
+  /* ------------------ Stage 5 — ownership, bank, social ------------------ */
+
+  buyVehicle: (model) => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const def = VEHICLE_BY_MODEL[model]
+    if (!def) return false
+    if (player.vehicles.some((v) => v.model === model)) {
+      get().notify({
+        icon: def.emoji,
+        text: `You already own a ${def.label}. One per model — garage space na premium.`,
+        tone: 'neutral',
+      })
+      return false
+    }
+    if (!canAfford(player.cash, def.price)) {
+      get().notify({
+        icon: '💰',
+        text: `${def.label} costs ${formatNaira(def.price)}. Keep pushing — e go reach.`,
+        tone: 'bad',
+      })
+      return false
+    }
+    const vehicle: OwnedVehicle = {
+      id: `${model}-${world.day}-${player.vehicles.length + 1}`,
+      model,
+      plate: generatePlate(model, world.day, player.vehicles.length),
+      boughtDay: world.day,
+    }
+    const ok = get().removeMoney(def.price, {
+      label: `${def.label} (${vehicle.plate})`,
+      category: 'shop',
+    })
+    if (!ok) return false
+    const paid = get().player
+    if (!paid) return false
+    set({ player: { ...paid, vehicles: [...paid.vehicles, vehicle] } })
+    get().notify({
+      icon: def.emoji,
+      text: `Congratulations! ${def.label} na yours — plate ${vehicle.plate}.`,
+      tone: 'good',
+    })
+    audio.play('levelup')
+    scheduleAutosave(get)
+    return true
+  },
+
+  setAvatar: (avatar) => {
+    const { player } = get()
+    if (!player) return
+    set({ player: { ...player, avatar: { ...DEFAULT_AVATAR, ...avatar } } })
+    get().notify({ icon: '👕', text: 'Fresh look don land. Who be this?', tone: 'good' })
+    audio.play('notify')
+    scheduleAutosave(get)
+  },
+
+  workout: () => {
+    const { player, world } = get()
+    if (!player || !world) return
+    const needs = applySlotDecay(applyNeedsDelta(player.needs, INTERIOR.gym), 1)
+    const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
+    set({ player: { ...player, needs }, world: { ...world, ...clock } })
+    get().notify({ icon: '💪', text: 'Gym session done. Body dey thank you.', tone: 'good' })
+    audio.play('notify')
+    scheduleAutosave(get)
+  },
+
+  nightOut: () => {
+    const { player, world } = get()
+    if (!player || !world) return
+    const isNight = world.timeOfDay === 'evening' || world.timeOfDay === 'night'
+    if (!canAfford(player.cash, INTERIOR.NIGHT_OUT.cost)) {
+      get().notify({
+        icon: '🍾',
+        text: `Night out costs ${formatNaira(INTERIOR.NIGHT_OUT.cost)} — pocket no reach today.`,
+        tone: 'bad',
+      })
+      return
+    }
+    const ok = get().removeMoney(INTERIOR.NIGHT_OUT.cost, {
+      label: 'Night out at the lounge',
+      category: 'fun',
+    })
+    if (!ok) return
+    const paid = get().player
+    if (!paid) return
+    const shift = {
+      ...INTERIOR.lounge,
+      mood: INTERIOR.lounge.mood + (isNight ? INTERIOR.NIGHT_OUT.nightMoodBonus : 0),
+    }
+    const needs = applySlotDecay(applyNeedsDelta(paid.needs, shift), 1)
+    const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
+    set({ player: { ...paid, needs }, world: { ...world, ...clock } })
+    get().notify({
+      icon: '🍾',
+      text: isNight
+        ? 'Night life done you well. Lokoja no go sleep tonight!'
+        : 'Small chill for the lounge. Evening own go pass this one.',
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+  },
+
+  bankDeposit: (amount) => {
+    const { player, world } = get()
+    if (!player || !world || amount <= 0) return false
+    if (!canAfford(player.cash, amount)) {
+      get().notify({ icon: '🏦', text: 'Cash wey dey your pocket no reach that amount.', tone: 'bad' })
+      return false
+    }
+    const slot = absoluteSlot(world.day, world.timeOfDay)
+    const tx = recordTransaction('Bank deposit', 'bank', -amount, world.day, slot)
+    set({
+      player: {
+        ...player,
+        cash: player.cash - amount,
+        bankBalance: player.bankBalance + amount,
+        transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
+      },
+    })
+    get().notify({ icon: '🏦', text: `${formatNaira(amount)} don enter bank. Money wey dey bank dey safe.`, tone: 'good' })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  bankWithdraw: (amount) => {
+    const { player, world } = get()
+    if (!player || !world || amount <= 0) return false
+    if (player.bankBalance < amount) {
+      get().notify({ icon: '🏦', text: 'Your bank balance no reach that amount.', tone: 'bad' })
+      return false
+    }
+    const slot = absoluteSlot(world.day, world.timeOfDay)
+    const tx = recordTransaction('Bank withdrawal', 'bank', amount, world.day, slot)
+    set({
+      player: {
+        ...player,
+        cash: player.cash + amount,
+        bankBalance: player.bankBalance - amount,
+        transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
+      },
+    })
+    get().notify({ icon: '🏦', text: `${formatNaira(amount)} don comot from bank.`, tone: 'good' })
+    audio.play('notify')
+    scheduleAutosave(get)
+    return true
+  },
+
+  chatNpc: (npcId) => {
+    const { player, world } = get()
+    if (!player || !world) return null
+    const npc = NPC_BY_ID[npcId]
+    if (!npc) return null
+    const today = world.day
+    const rel = relationshipFor(player.relationships, npcId)
+    if (!canChat(rel, today)) {
+      get().notify({
+        icon: '💬',
+        text: `You don talk with ${npc.name} today. Tomorrow another level.`,
+        tone: 'neutral',
+      })
+      return null
+    }
+    const next = afterChat(rel, today)
+    const tier = tierFor(next.familiarity)
+    const pool = NPC_CHAT[npcId]
+    const firstMeeting = rel.familiarity === 0
+    const reply = pool
+      ? firstMeeting
+        ? pool.stranger[0]
+        : pickLine(pool[tier], rel.familiarity, today)
+      : npc.bio
+    set({ player: { ...player, relationships: { ...player.relationships, [npcId]: next } } })
+    get().addSkillXp('social', 2)
+    scheduleAutosave(get)
+    return { npcId, tier, familiarity: next.familiarity, reply, firstMeeting }
+  },
+
+  settleDrive: (meters) => {
+    const { player } = get()
+    if (!player || meters <= 0) return
+    const cost = Math.min(4, (meters / 1000) * WORLD3D.driveEnergyPerKm)
+    if (cost < 0.5) return
+    const needs = applyNeedsDelta(player.needs, { energy: -Math.round(cost * 10) / 10 })
+    set({ player: { ...player, needs } })
     scheduleAutosave(get)
   },
 
