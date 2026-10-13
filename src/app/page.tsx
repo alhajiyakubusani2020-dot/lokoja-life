@@ -5,13 +5,32 @@
  * A single-page game shell: the only route is `/`, screens are
  * switched in-app (menu → creation → game) exactly like a game client.
  * Handles boot (save detection) and auto-save on exit.
+ *
+ * PERF (M3): the game screens (Dashboard → 3D world → three.js) are
+ * dynamically imported, so the first paint is the lightweight menu shell
+ * alone. The chunk is preloaded in the background the moment the menu is
+ * interactive, so tapping "start" lands on an already-cached bundle.
  */
 
+import dynamic from 'next/dynamic'
 import { useEffect } from 'react'
 import { MainMenu } from '@/components/game/screens/MainMenu'
-import { CharacterCreation } from '@/components/game/screens/CharacterCreation'
-import { Dashboard } from '@/components/game/screens/Dashboard'
 import { useGameStore } from '@/game/store/useGameStore'
+import { preloadDashboard } from '@/components/game/screens/dashboard-chunk'
+
+const CharacterCreation = dynamic(
+  () => import('@/components/game/screens/CharacterCreation').then((m) => m.CharacterCreation),
+  { ssr: false },
+)
+const Dashboard = dynamic(() => import('@/components/game/screens/Dashboard').then((m) => m.Dashboard), {
+  ssr: false,
+  loading: () => (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-[#f5edd8]">
+      <p className="lko-display text-xl text-[var(--lko-green-deep)]">Opening Lokoja…</p>
+      <p className="text-xs font-semibold text-[var(--lko-ink-soft)]">warming the Confluence</p>
+    </div>
+  ),
+})
 
 export default function Home() {
   const screen = useGameStore((s) => s.screen)
@@ -22,6 +41,22 @@ export default function Home() {
   // boot once on mount: detect existing save, sync audio settings
   useEffect(() => {
     boot()
+    // PERF: warm the game bundle while the menu is on screen (idle — never
+    // competes with the first paint or the menu's own hydration)
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+      cancelIdleCallback?: (h: number) => void
+    }
+    let idleHandle = 0
+    const timeout = window.setTimeout(preloadDashboard, 1200)
+    if (typeof w.requestIdleCallback === 'function') {
+      window.clearTimeout(timeout)
+      idleHandle = w.requestIdleCallback(() => preloadDashboard(), { timeout: 2500 })
+    }
+    return () => {
+      window.clearTimeout(timeout)
+      if (idleHandle) w.cancelIdleCallback?.(idleHandle)
+    }
   }, [boot])
 
   // flush the autosave when the tab/app is hidden or closed

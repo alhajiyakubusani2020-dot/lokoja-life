@@ -1,0 +1,17 @@
+{
+ "ts": "2026-10-13T20:53:12.199Z",
+ "viewport": "390x844 headless SwiftShader (deviceMemory 4 → low tier)",
+ "caveat": "software WebGL — absolute FPS lower than real devices; judge the ratio walk/idle",
+ "idle": {
+  "frames": 7,
+  "fps": 0.6985330805308984,
+  "long50": 3
+ },
+ "walk": {
+  "frames": 6,
+  "fps": 0.614433031919802,
+  "long50": 3
+ },
+ "heapMB": 73,
+ "consoleErrors": 0
+}

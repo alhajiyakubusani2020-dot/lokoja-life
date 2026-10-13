@@ -28,3 +28,5 @@ console.log('nepa owed in store:', useGameStore.getState().civic?.nepa.owed)
 await new Promise((r) => setTimeout(r, 1600))
 const save2 = JSON.parse(mem.get('lokoja-life:save') ?? '{}')
 console.log('save day final:', save2.world?.day, '| save owed:', save2.civic?.nepa?.owed)
+
+export {}

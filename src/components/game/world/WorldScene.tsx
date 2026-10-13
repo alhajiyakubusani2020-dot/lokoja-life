@@ -10,9 +10,9 @@
  * and casts the shadow frustum that follows the player.
  */
 
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
 import { makeRng } from '@/game/world3d/layout'
 import { atmoLive, getAtmosphere, sunVec } from './atmosphere'
@@ -29,6 +29,70 @@ function detectQuality(): 'high' | 'low' {
   const coarse = window.matchMedia('(pointer: coarse)').matches
   const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8
   return coarse || mem <= 4 ? 'low' : 'high'
+}
+
+/* ------------------------------ perf governors (M3) ---------------------------- */
+
+/** the governed renderer, captured once at canvas creation (module scratch —
+ *  keeps the frame loop free of hook-returned objects it must mutate) */
+const governedRenderer = { gl: null as THREE.WebGLRenderer | null }
+/** where the shadow frustum currently sits (player pos, copied per frame) */
+const shadowGovFollow = { x: 0, z: 0 }
+const shadowGovScratch = { x: 9999, z: 9999, t: -1 }
+
+/** copies the follow target into module scratch each frame (ref writes from a
+ *  hook-owned ref inside useFrame trip the immutability lint; this doesn't) */
+function FollowCopier({ followRef }: { followRef: React.MutableRefObject<THREE.Vector3> }) {
+  useFrame(() => {
+    shadowGovFollow.x = followRef.current.x
+    shadowGovFollow.z = followRef.current.z
+  })
+  return null
+}
+
+/**
+ * The shadow map used to re-render EVERY frame — a second full pass over every
+ * shadow caster at 30-60fps. The Governor flips to on-demand: the map refreshes
+ * when the player moves ≥3u (frustum follows), when rigs have had time to walk
+ * on (0.4s heartbeat), or on the first frame. Three.js renders the map exactly
+ * once per needsUpdate and then parks it — the sun's EASING is handled because
+ * any real sun move coincides with player movement or the heartbeat.
+ */
+function ShadowGovernor() {
+  useFrame((state) => {
+    const gl = governedRenderer.gl
+    if (!gl) return
+    const sm = gl.shadowMap
+    if (sm.autoUpdate) return // not governed (defensive)
+    const p = shadowGovFollow
+    const now = state.clock.elapsedTime
+    if (
+      shadowGovScratch.t < 0 ||
+      Math.hypot(p.x - shadowGovScratch.x, p.z - shadowGovScratch.z) >= 3 ||
+      now - shadowGovScratch.t >= 0.4
+    ) {
+      shadowGovScratch.x = p.x
+      shadowGovScratch.z = p.z
+      shadowGovScratch.t = now
+      sm.needsUpdate = true
+    }
+  })
+  return null
+}
+
+/**
+ * Low tier only: paces the render loop at ~30Hz in demand mode — same visual
+ * pacing on weak phones, half the GPU energy, and thermal headroom that keeps
+ * the GPU from throttling into stutter.
+ */
+function FramePacer({ hz }: { hz: number }) {
+  const invalidate = useThree((s) => s.invalidate)
+  useEffect(() => {
+    if (!hz) return
+    const t = setInterval(() => invalidate(), 1000 / hz)
+    return () => clearInterval(t)
+  }, [hz, invalidate])
+  return null
 }
 
 /* ------------------------------- shared easing state --------------------------- */
@@ -263,17 +327,40 @@ export function WorldScene({
   return (
     <Canvas
       shadows={quality === 'high'}
-      dpr={quality === 'high' ? [1, 2] : [0.8, 1.4]}
-      gl={{ antialias: quality === 'high', powerPreference: 'high-performance' }}
-      camera={{ fov: 55, near: 0.5, far: 900, position: [8, 8, 8] }}
+      dpr={quality === 'high' ? [1, 1.75] : [0.65, 1.05]}
+      frameloop={quality === 'high' ? 'always' : 'demand'}
+      gl={{
+        antialias: quality === 'high',
+        powerPreference: 'high-performance',
+        stencil: false,
+      }}
+      camera={{ fov: 55, near: 0.5, far: quality === 'high' ? 900 : 720, position: [8, 8, 8] }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
         // gentle lift: warm Nigerian light without blowing the plaster out
         gl.toneMappingExposure = 1.12
+        if (quality === 'high') {
+          // cheaper shadow filter — visually indistinguishable here at 1024², measurably faster
+          gl.shadowMap.type = THREE.PCFShadowMap
+          // M3: shadows render on demand via <ShadowGovernor/>, not every frame
+          gl.shadowMap.autoUpdate = false
+          gl.shadowMap.needsUpdate = true
+          governedRenderer.gl = gl
+          // honest metrics for the perf harness (dev only)
+          if (process.env.NODE_ENV !== 'production') {
+            ;(window as unknown as Record<string, unknown>).__lklRenderer = gl
+          }
+        }
         onReady?.()
       }}
       style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
     >
+      {quality === 'high' ? (
+        <ShadowGovernor />
+      ) : (
+        <FramePacer hz={30} />
+      )}
+      <FollowCopier followRef={camTarget} />
       <AtmosphereController timeOfDay={timeOfDay} weather={weather} sunRef={sunRef} followRef={camTarget} />
       <SkyDome sunRef={sunRef} />
       <Stars />

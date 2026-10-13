@@ -14,7 +14,7 @@
 import { execSync } from 'child_process'
 import { writeFileSync } from 'fs'
 
-const BASE = 'http://localhost:3000'
+const BASE = process.env.PERF_BASE ?? 'http://localhost:3000'
 const OUT = '/home/z/my-project/research/frag-payload-curl.json'
 
 function curlWire(url: string): { wire: number; contentType: string; http: number } {

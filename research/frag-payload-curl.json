@@ -1,361 +1,228 @@
 {
-  "ts": "2026-10-13T17:27:58.524Z",
-  "base": "http://localhost:3000",
+  "ts": "2026-10-13T20:48:20.064Z",
+  "base": "http://localhost:3001",
   "caveat": "dev bundles are UNMINIFIED (next dev, no build); wire bytes are gzip/br transfer sizes via curl --compressed; snapshot covers only resources declared in the served HTML (lazy chunks measured separately via CDP)",
-  "htmlWireBytes": 8789,
-  "resourceCount": 49,
+  "htmlWireBytes": 3235,
+  "resourceCount": 30,
   "resources": [
     {
-      "url": "/_next/static/chunks/node_modules_three_build_three_core_996ef05a.js",
+      "url": "/_next/static/chunks/abc386bdde209760.js",
       "kind": "script",
-      "wire": 292641,
+      "wire": 70888,
       "contentType": "application/javascript;",
       "http": 0
     },
     {
-      "url": "/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_1dd7fb59.js",
+      "url": "/_next/static/chunks/d845d9d9b0c68126.js",
       "kind": "script",
-      "wire": 223816,
+      "wire": 40085,
       "contentType": "application/javascript;",
       "http": 0
     },
     {
-      "url": "/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js",
+      "url": "/_next/static/chunks/664adc71bc2617c2.js",
       "kind": "script",
-      "wire": 181770,
+      "wire": 39961,
       "contentType": "application/javascript;",
       "http": 0
     },
     {
-      "url": "/_next/static/chunks/node_modules_%40react-three_fiber_dist_72435030._.js",
+      "url": "/_next/static/chunks/77a0bf1f5cd8cf6c.js",
       "kind": "script",
-      "wire": 169013,
+      "wire": 38845,
       "contentType": "application/javascript;",
       "http": 0
     },
     {
-      "url": "/_next/static/chunks/node_modules_three_build_three_module_0c59ee63.js",
-      "kind": "script",
-      "wire": 133497,
-      "contentType": "application/javascript;",
-      "http": 0
+      "url": "/_next/static/media/1b99372b3eaef0c8-s.p.758e15a8.woff2",
+      "kind": "font",
+      "wire": 32228,
+      "contentType": "font/woff2",
+      "http": 200
     },
     {
-      "url": "/_next/static/chunks/node_modules_next_dist_client_17643121._.js",
-      "kind": "script",
-      "wire": 122343,
-      "contentType": "application/javascript;",
-      "http": 0
+      "url": "/_next/static/media/caa3a2e1cccd8315-s.p.3b6cae6d.woff2",
+      "kind": "font",
+      "wire": 29288,
+      "contentType": "font/woff2",
+      "http": 200
     },
     {
-      "url": "/_next/static/chunks/src_game_world3d_geo_ts_8ee5adf1._.js",
-      "kind": "script",
-      "wire": 85470,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_components_game_world_690147aa._.js",
-      "kind": "script",
-      "wire": 75477,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_components_game_51d5da2c._.js",
-      "kind": "script",
-      "wire": 63394,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_game_world3d_436d697c._.js",
-      "kind": "script",
-      "wire": 55888,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_components_game_screens_37b91040._.js",
-      "kind": "script",
-      "wire": 52676,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_394613a2._.js",
-      "kind": "script",
-      "wire": 44097,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_next_dist_build_polyfills_polyfill-nomodule.js",
-      "kind": "script",
-      "wire": 39627,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_next_dist_f3530cac._.js",
-      "kind": "script",
-      "wire": 38917,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_1dcd17cd._.js",
-      "kind": "script",
-      "wire": 34207,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/%5Broot-of-the-server%5D__46e8e60c._.css",
+      "url": "/_next/static/chunks/1b0297c8ca5f9673.css",
       "kind": "style",
-      "wire": 30860,
+      "wire": 27655,
       "contentType": "text/css;",
       "http": 0
     },
     {
-      "url": "/_next/static/chunks/src_game_data_53ca5427._.js",
-      "kind": "script",
-      "wire": 30800,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_9212ccad._.js",
-      "kind": "script",
-      "wire": 30748,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_components_game_world_CityMesh_tsx_d92141a8._.js",
-      "kind": "script",
-      "wire": 29232,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_next_dist_compiled_a0e4c7b4._.js",
-      "kind": "script",
-      "wire": 28368,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_game_3b7674b2._.js",
-      "kind": "script",
-      "wire": 28229,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_next_71e330a9._.js",
-      "kind": "script",
-      "wire": 27689,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_components_game_world_InteriorScene_tsx_d1cfd2b8._.js",
-      "kind": "script",
-      "wire": 27649,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_next_dist_be32b49c._.js",
-      "kind": "script",
-      "wire": 22204,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_components_game_world_HudOverlay_tsx_bc5036d2._.js",
-      "kind": "script",
-      "wire": 21084,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/turbopack-_23a915ee._.js",
-      "kind": "script",
-      "wire": 18537,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/media/797e433ab948586e-s.p.29207c2f.woff2",
+      "url": "/_next/static/media/797e433ab948586e-s.p.29207c2f.woff2",
       "kind": "font",
-      "wire": 7617,
+      "wire": 23108,
+      "contentType": "font/woff2",
+      "http": 200
+    },
+    {
+      "url": "/_next/static/chunks/3f01b91ee66dedfa.js",
+      "kind": "script",
+      "wire": 18421,
+      "contentType": "application/javascript;",
+      "http": 0
+    },
+    {
+      "url": "/_next/static/chunks/6247c313c923fbaa.js",
+      "kind": "script",
+      "wire": 12640,
+      "contentType": "application/javascript;",
+      "http": 0
+    },
+    {
+      "url": "/_next/static/chunks/6de29df824ed6dd8.js",
+      "kind": "script",
+      "wire": 7671,
+      "contentType": "application/javascript;",
+      "http": 0
+    },
+    {
+      "url": "/_next/static/chunks/d2be314c3ece3fbe.js",
+      "kind": "script",
+      "wire": 7463,
+      "contentType": "application/javascript;",
+      "http": 0
+    },
+    {
+      "url": "/_next/static/chunks/eb0be5af744ff457.js",
+      "kind": "script",
+      "wire": 6324,
+      "contentType": "application/javascript;",
+      "http": 0
+    },
+    {
+      "url": "/_next/static/chunks/turbopack-a685dbf4b43e5fc1.js",
+      "kind": "script",
+      "wire": 4013,
+      "contentType": "application/javascript;",
+      "http": 0
+    },
+    {
+      "url": "/media/fef07dbb0973bf53-s.518e079e.woff2",
+      "kind": "font",
+      "wire": 2809,
       "contentType": "text/html;",
       "http": 0
     },
     {
       "url": "/media/8a480f0b521d4e75-s.ea323500.woff2",
       "kind": "font",
-      "wire": 7613,
-      "contentType": "text/html;",
-      "http": 0
-    },
-    {
-      "url": "/media/7d817b4c03b0c5f1-s.a40b9a8b.woff2",
-      "kind": "font",
-      "wire": 7613,
-      "contentType": "text/html;",
-      "http": 0
-    },
-    {
-      "url": "/media/caa3a2e1cccd8315-s.p.3b6cae6d.woff2",
-      "kind": "font",
-      "wire": 7612,
-      "contentType": "text/html;",
-      "http": 0
-    },
-    {
-      "url": "/media/4fa387ec64143e14-s.3b336396.woff2",
-      "kind": "font",
-      "wire": 7612,
-      "contentType": "text/html;",
-      "http": 0
-    },
-    {
-      "url": "/media/1b99372b3eaef0c8-s.p.758e15a8.woff2",
-      "kind": "font",
-      "wire": 7611,
-      "contentType": "text/html;",
-      "http": 0
-    },
-    {
-      "url": "/media/7178b3e590c64307-s.55554cd0.woff2",
-      "kind": "font",
-      "wire": 7609,
-      "contentType": "text/html;",
-      "http": 0
-    },
-    {
-      "url": "/media/b2ea385cb5ae8625-s.866357a4.woff2",
-      "kind": "font",
-      "wire": 7609,
-      "contentType": "text/html;",
-      "http": 0
-    },
-    {
-      "url": "/media/fef07dbb0973bf53-s.518e079e.woff2",
-      "kind": "font",
-      "wire": 7608,
-      "contentType": "text/html;",
-      "http": 0
-    },
-    {
-      "url": "/media/bbc41e54d2fcbd21-s.fe42ddf4.woff2",
-      "kind": "font",
-      "wire": 7608,
+      "wire": 2809,
       "contentType": "text/html;",
       "http": 0
     },
     {
       "url": "/media/53b9e256198e5412-s.853d50a3.woff2",
       "kind": "font",
-      "wire": 7607,
+      "wire": 2809,
       "contentType": "text/html;",
       "http": 0
     },
     {
-      "url": "/media/6306c77e7c8268e4-s.e3369375.woff2",
+      "url": "/media/7178b3e590c64307-s.55554cd0.woff2",
       "kind": "font",
-      "wire": 7606,
+      "wire": 2809,
+      "contentType": "text/html;",
+      "http": 0
+    },
+    {
+      "url": "/media/caa3a2e1cccd8315-s.p.3b6cae6d.woff2",
+      "kind": "font",
+      "wire": 2809,
       "contentType": "text/html;",
       "http": 0
     },
     {
       "url": "/media/5ce348bf30bf5439-s.56c1f21e.woff2",
       "kind": "font",
-      "wire": 7603,
+      "wire": 2809,
       "contentType": "text/html;",
       "http": 0
     },
     {
-      "url": "/_next/static/chunks/node_modules_three_build_three_module_f7d46d9b.js",
+      "url": "/media/4fa387ec64143e14-s.3b336396.woff2",
+      "kind": "font",
+      "wire": 2809,
+      "contentType": "text/html;",
+      "http": 0
+    },
+    {
+      "url": "/media/6306c77e7c8268e4-s.e3369375.woff2",
+      "kind": "font",
+      "wire": 2809,
+      "contentType": "text/html;",
+      "http": 0
+    },
+    {
+      "url": "/media/7d817b4c03b0c5f1-s.a40b9a8b.woff2",
+      "kind": "font",
+      "wire": 2809,
+      "contentType": "text/html;",
+      "http": 0
+    },
+    {
+      "url": "/media/bbc41e54d2fcbd21-s.fe42ddf4.woff2",
+      "kind": "font",
+      "wire": 2809,
+      "contentType": "text/html;",
+      "http": 0
+    },
+    {
+      "url": "/media/797e433ab948586e-s.p.29207c2f.woff2",
+      "kind": "font",
+      "wire": 2809,
+      "contentType": "text/html;",
+      "http": 0
+    },
+    {
+      "url": "/media/b2ea385cb5ae8625-s.866357a4.woff2",
+      "kind": "font",
+      "wire": 2809,
+      "contentType": "text/html;",
+      "http": 0
+    },
+    {
+      "url": "/media/1b99372b3eaef0c8-s.p.758e15a8.woff2",
+      "kind": "font",
+      "wire": 2809,
+      "contentType": "text/html;",
+      "http": 0
+    },
+    {
+      "url": "/_next/static/chunks/0de2f3dbd32b531f.css",
+      "kind": "style",
+      "wire": 1081,
+      "contentType": "text/css;",
+      "http": 0
+    },
+    {
+      "url": "/_next/static/chunks/9837b630b6c5e9d6.js",
       "kind": "script",
-      "wire": 4559,
+      "wire": 992,
       "contentType": "application/javascript;",
       "http": 0
     },
     {
-      "url": "/_next/static/chunks/src_2bc135c0._.js",
+      "url": "/_next/static/chunks/ff1a16fafef87110.js",
       "kind": "script",
-      "wire": 3888,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_components_ui_767cba4e._.js",
-      "kind": "script",
-      "wire": 2377,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_app_page_tsx_b4090435._.js",
-      "kind": "script",
-      "wire": 2200,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/_a0ff3932._.js",
-      "kind": "script",
-      "wire": 783,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_%40swc_helpers_cjs_d80fb378._.js",
-      "kind": "script",
-      "wire": 741,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_956a0d3a._.js",
-      "kind": "script",
-      "wire": 671,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_app_page_tsx_5d1b00fa._.js",
-      "kind": "script",
-      "wire": 468,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/src_app_layout_tsx_1cf6b850._.js",
-      "kind": "script",
-      "wire": 345,
-      "contentType": "application/javascript;",
-      "http": 0
-    },
-    {
-      "url": "/_next/static/chunks/node_modules_next_dist_client_components_builtin_global-error_1cf6b850.js",
-      "kind": "script",
-      "wire": 262,
+      "wire": 282,
       "contentType": "application/javascript;",
       "http": 0
     }
   ],
   "totals": {
-    "html": 8789,
-    "js": 1893667,
-    "css": 30860,
-    "font": 98928,
+    "html": 3235,
+    "js": 247585,
+    "css": 28736,
+    "font": 121141,
     "img": 0,
     "linkOther": 0,
-    "grandTotal": 2032244
+    "grandTotal": 400697
   }
 }
