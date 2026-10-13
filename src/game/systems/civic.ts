@@ -64,11 +64,16 @@ export function freshCivicState(): CivicState {
 /**
  * The metered bill for a billing day. `bizCount` = owned businesses — every
  * fridge/freezer/POS on your meter loads it (M3: BIZ.nepaLoadPerBiz each).
+ * M5 — `solarCount` = shops running solar: those fridges draw from the sun,
+ * so their meter load drops to BIZ.nepaLoadWithSolar each.
  */
-export function nepaBillFor(day: number, bizCount = 0): number {
+export function nepaBillFor(day: number, bizCount = 0, solarCount = 0): number {
   const { baseBill, billVariance } = CIVIC.nepa
   const flat = baseBill + unit('nepa', day) * billVariance
-  const loaded = flat * (1 + Math.max(0, bizCount) * BIZ.nepaLoadPerBiz)
+  const grid = Math.max(0, bizCount - solarCount)
+  const sunny = Math.min(Math.max(0, solarCount), Math.max(0, bizCount))
+  const load = grid * BIZ.nepaLoadPerBiz + sunny * BIZ.nepaLoadWithSolar
+  const loaded = flat * (1 + load)
   return Math.round(loaded / 10) * 10
 }
 
@@ -85,13 +90,14 @@ export function nepaDayRoll(
   civic: CivicState,
   day: number,
   bizCount = 0,
+  solarCount = 0,
 ): { next: CivicState; posted: number; shed: boolean } {
   let nepa = { ...civic.nepa }
   let posted = 0
   let shed = false
 
   if (nepaBillDueToday(civic, day)) {
-    posted = nepaBillFor(day, bizCount)
+    posted = nepaBillFor(day, bizCount, solarCount)
     nepa.owed += posted
     nepa.cycleStart = day
     nepa.paidThrough = day + CIVIC.nepa.cycleDays - 1
@@ -337,8 +343,8 @@ export interface CivicDayResult {
  * advances (sleep). Idempotent per (state, day): every sub-roll is
  * guarded by its own "already done" marker.
  */
-export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0): CivicDayResult {
-  const nepa = nepaDayRoll(civic, day, bizCount)
+export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0, solarCount = 0): CivicDayResult {
+  const nepa = nepaDayRoll(civic, day, bizCount, solarCount)
   const kgirs = kgirsDayRoll(nepa.next, totalEarned, day)
   const efcc = efccDayRoll(kgirs.next, day)
   const market = marketDayRoll(efcc.next, day)

@@ -9,9 +9,10 @@ import { Icon } from './ui/icons'
 import { audio } from '@/game/systems/audio'
 import { formatNaira } from '@/game/systems/progression'
 import { BIZ } from '@/game/data/config'
-import { bizAtLocation, bizOwned, bizUpgradeCost, bizIncomeFor } from '@/game/systems/biz'
+import { bizAtLocation, bizOwned, bizUpgradeCost, bizIncomeFor, staffCapFor, hasPowerBackup } from '@/game/systems/biz'
 import { marketForDay } from '@/game/systems/civic'
 import { useGameStore } from '@/game/store/useGameStore'
+import type { ShopUpgradeId } from '@/game/types'
 
 export function BizBlock({ locationId }: { locationId: string }) {
   const player = useGameStore((s) => s.player)!
@@ -20,14 +21,25 @@ export function BizBlock({ locationId }: { locationId: string }) {
   const buyBiz = useGameStore((s) => s.buyBiz)
   const collectBiz = useGameStore((s) => s.collectBiz)
   const upgradeBiz = useGameStore((s) => s.upgradeBiz)
+  const hireStaff = useGameStore((s) => s.hireStaff)
+  const fireStaff = useGameStore((s) => s.fireStaff)
+  const installBizUpgrade = useGameStore((s) => s.installBizUpgrade)
 
   const host = bizAtLocation(locationId)
   if (!host) return null
   const { typeId, def } = host
   const shop = bizOwned(player.businesses, typeId)
 
-  // today's honest per-day income at the shop's current level
-  const todayIncome = bizIncomeFor(typeId, shop?.level ?? 1, world.day, marketForDay(civic, world.day), player.reputation)
+  // today's honest per-day income at the shop's current shape (staff + power included)
+  const todayIncome = bizIncomeFor(
+    typeId,
+    shop?.level ?? 1,
+    world.day,
+    marketForDay(civic, world.day),
+    player.reputation,
+    shop ? { staff: shop.staff, upgrades: shop.upgrades } : undefined,
+  )
+  const darkNow = !!shop && civic.nepa.shedding && !hasPowerBackup(shop.upgrades)
 
   const buy = () => {
     audio.play('click')
@@ -72,12 +84,78 @@ export function BizBlock({ locationId }: { locationId: string }) {
             <span>Level {shop.level}/{BIZ.maxLevel} · ~{formatNaira(todayIncome)}/day</span>
             {bizUpgradeCost(typeId, shop.level) === null && <span>MAX LEVEL</span>}
           </div>
+          {darkNow && (
+            <p className="mt-1.5 rounded-lg bg-[#c0392b]/10 px-2.5 py-1.5 text-[11px] font-bold text-[#8a2a20]">
+              🔌 NEPA don cut the light — the shop dey run dark today (−{Math.round((1 - BIZ.sheddingIncomeFactor) * 100)}%). Fit a generator or solar below.
+            </p>
+          )}
           <div className="mt-1.5 flex items-baseline justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--lko-ink-soft)]">Till today</span>
             <span className="lko-display text-xl tabular-nums text-[var(--lko-green-deep)]">
               {formatNaira(shop.accrued)}
             </span>
           </div>
+
+          {/* M5 — staff: income boost vs the daily wage the till pays */}
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-black/[0.035] px-2.5 py-2">
+            <span className="min-w-0 text-[11.5px] font-bold text-[var(--lko-ink-soft)]">
+              👥 Attendants {shop.staff}/{staffCapFor(shop.level)}
+              <span className="block text-[10px] font-semibold">
+                +{Math.round(BIZ.staffIncomeBoost * 100)}% each · wage {formatNaira(BIZ.staffWagePerDay)}/day from the till
+              </span>
+            </span>
+            <span className="flex shrink-0 gap-1.5">
+              <button
+                data-testid="biz-hire"
+                onClick={() => { audio.play('click'); hireStaff(typeId) }}
+                disabled={shop.staff >= staffCapFor(shop.level) || player.cash < BIZ.staffHireFee}
+                className="lko-press rounded-lg bg-[var(--lko-green)] px-2.5 py-1.5 text-[11px] font-extrabold text-white disabled:opacity-40"
+              >
+                Hire · {formatNaira(BIZ.staffHireFee)}
+              </button>
+              {shop.staff > 0 && (
+                <button
+                  data-testid="biz-fire"
+                  onClick={() => { audio.play('click'); fireStaff(typeId) }}
+                  className="lko-press rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-[var(--lko-ink-soft)]"
+                >
+                  Let go
+                </button>
+              )}
+            </span>
+          </div>
+
+          {/* M5 — power: the shedding ladder (generator → solar) */}
+          <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-black/[0.035] px-2.5 py-2">
+            <span className="min-w-0 text-[11.5px] font-bold text-[var(--lko-ink-soft)]">
+              ⚡ Power
+              <span className="block text-[10px] font-semibold">
+                {hasPowerBackup(shop.upgrades) ? 'Your light no dey go.' : 'Shedding go dim this shop — fit backup power.'}
+              </span>
+            </span>
+            <span className="flex shrink-0 gap-1.5">
+              {(Object.entries(BIZ.upgrades) as [ShopUpgradeId, { label: string; emoji: string; cost: number; blurb: string }][]).map(([id, up]) => {
+                const installed = shop.upgrades.includes(id)
+                return installed ? (
+                  <span key={id} className="flex items-center gap-1 rounded-full bg-[var(--lko-green)]/15 px-2 py-1 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
+                    <Icon name="check" size={11} /> {up.emoji} {up.label}
+                  </span>
+                ) : (
+                  <button
+                    key={id}
+                    data-testid={`biz-install-${id}`}
+                    onClick={() => { audio.play('click'); installBizUpgrade(typeId, id) }}
+                    disabled={player.cash < up.cost}
+                    title={up.blurb}
+                    className="lko-press rounded-lg border border-[var(--lko-green)]/40 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-[var(--lko-green-deep)] disabled:opacity-40"
+                  >
+                    {up.emoji} {up.label} · {formatNaira(up.cost)}
+                  </button>
+                )
+              })}
+            </span>
+          </div>
+
           <div className="mt-2 flex gap-2">
             <button
               onClick={() => { audio.play('click'); collectBiz(typeId, 'shop') }}

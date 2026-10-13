@@ -459,6 +459,32 @@ export const BIZ = {
   maxLevel: 5,
   /** non-market shops wobble inside this seeded daily band instead of a market mult */
   wobbleBand: 0.08,
+  /* ---- M5 — staff & power (the shop as a small enterprise) ---- */
+  /** each attendant lifts income by this share (+22% each) */
+  staffIncomeBoost: 0.22,
+  /** every attendant draws this daily wage straight from the till */
+  staffWagePerDay: 400,
+  /** one-time hiring fee per attendant */
+  staffHireFee: 2000,
+  /** a shop caught dark by load-shedding (no power backup) earns this share */
+  sheddingIncomeFactor: 0.75,
+  /** a solar shop's share of the normal per-shop NEPA load */
+  nepaLoadWithSolar: 0.08,
+  /** one-time installs — the power ladder + their honest trade-offs */
+  upgrades: {
+    generator: {
+      label: 'Generator',
+      emoji: '🔌',
+      cost: 28000,
+      blurb: 'When NEPA cuts the city, your shop still glows — no dark-day penalty.',
+    },
+    solar: {
+      label: 'Solar system',
+      emoji: '☀️',
+      cost: 65000,
+      blurb: 'Silent power: shedding penalty gone, and your NEPA meter load drops to almost nothing.',
+    },
+  } as Record<string, { label: string; emoji: string; cost: number; blurb: string }>,
   types: {
     'kpata-stall': {
       name: 'Kpata Provisions Stall',
@@ -502,4 +528,25 @@ export const BIZ = {
       marketId: 'food-area' as string | null,
     },
   } as Record<string, { name: string; locationId: string; emoji: string; buyCost: number; baseIncome: number; unlockLevel: number; blurb: string; marketId: string | null }>,
+} as const
+
+/* ------------------------------- M5 — fleet -------------------------------- */
+
+/**
+ * M5 — WORK & FLEET. The Motor Park gig board: passengers pay the counter
+ * fare for the trip (your M4 fuel law guarantees the margin), rain drives
+ * the day's price up, and every run costs real energy + one clock slot.
+ * Every naira traces to ECONOMY.transport + these multipliers.
+ */
+export const FLEET = {
+  /** gig offers per owned vehicle per day */
+  gigsPerModelPerDay: 2,
+  /** hired runs pay above the counter fare (you are the driver — no park cut) */
+  payoutMult: 1.18,
+  /** rain premium per model — okada rain runs are misery, and misery pays */
+  rainPayout: { okada: 1.4, keke: 1.22, taxi: 1.12, danfo: 1.12 } as Record<string, number>,
+  /** player XP per completed run */
+  gigXp: 8,
+  /** hustle-skill XP per completed run */
+  gigHustleXp: 6,
 } as const

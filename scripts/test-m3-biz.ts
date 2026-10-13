@@ -126,7 +126,7 @@ console.log('\nCIVIC COUPLING — the mesh bites the shopkeeper too')
   check('phone collect fee comes out of the transfer', net === 550)
 }
 
-console.log('\nSAVE — v4 carries into v5, legacy biz fields default')
+console.log('\nSAVE — v4 carries into v6, legacy biz fields default')
 {
   // localStorage shim BEFORE SaveSystem use — mirrors browser surface
   const mem = new Map<string, string>()
@@ -157,9 +157,11 @@ console.log('\nSAVE — v4 carries into v5, legacy biz fields default')
   mem.set(SaveSystem.SAVE_KEY, raw)
   const loaded = SaveSystem.load()
   check('v4 save loads', !!loaded)
-  check('v4 reaches v5', loaded?.version === 5)
+  check('v4 reaches v6 (M5 ladder)', loaded?.version === 6)
   const biz = loaded?.player.businesses?.[0]
   check('legacy biz gains accrual fields', !!biz && typeof biz.accrued === 'number' && typeof biz.lastAccrualDay === 'number' && typeof biz.openedDay === 'number')
+  check('legacy biz gains M5 staff + upgrades', !!biz && biz.staff === 0 && Array.isArray(biz.upgrades))
+  check('v4 save gains the M5 fleet ledger', loaded?.fleet?.day === 9 && Array.isArray(loaded?.fleet?.done))
   check('legacy level preserved', biz?.level === 2)
   const round = JSON.stringify(loaded)
   check('round-trip keeps the shop', (JSON.parse(round).player.businesses as unknown[]).length === 1)

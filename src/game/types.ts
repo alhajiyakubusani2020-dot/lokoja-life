@@ -52,6 +52,13 @@ export interface InventoryItem {
 }
 
 /**
+ * M5 — one-time shop installations beyond the level ladder.
+ * 'generator' keeps the shop lit through load-shedding; 'solar' does that
+ * AND cuts the shop's NEPA meter load to almost nothing.
+ */
+export type ShopUpgradeId = 'generator' | 'solar'
+
+/**
  * M3 — one business the player owns (data only; rules live in systems/biz).
  * `id` and `typeId` both carry the BIZ.types key (one shop per type).
  */
@@ -67,6 +74,10 @@ export interface BusinessState {
   openedDay: number
   /** last time income was collected (epoch ms) — legacy field, kept for old saves */
   lastCollectedAt: number | null
+  /** M5 — attendants hired at the shop (each boosts income, draws a daily wage) */
+  staff: number
+  /** M5 — installed one-time upgrades ('generator' | 'solar') */
+  upgrades: ShopUpgradeId[]
 }
 
 export type MissionStatus = 'active' | 'completed'
@@ -347,6 +358,20 @@ export interface CivicState {
   market: MarketState
 }
 
+/* -------------------------------- M5 — fleet -------------------------------- */
+
+/**
+ * M5 — WORK & FLEET. The Motor Park gig board is DERIVED (deterministic per
+ * day + garage), so the only thing that needs persisting is which of today's
+ * gigs you already ran — otherwise a reload would double-pay the board.
+ */
+export interface FleetState {
+  /** in-game day the done-list belongs to (stale days clear themselves) */
+  day: number
+  /** gig ids already run today */
+  done: string[]
+}
+
 /* --------------------------------- Settings -------------------------------- */
 
 export interface GameSettings {
@@ -369,6 +394,8 @@ export interface GameSave {
   settings: GameSettings
   /** M2 — the civic mesh (bills, taxes, fines, tips, market prices) */
   civic: CivicState
+  /** M5 — the fleet ledger: which of today's Motor Park gigs already ran */
+  fleet: FleetState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

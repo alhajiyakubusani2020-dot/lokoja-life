@@ -29,6 +29,8 @@ import type {
   TransportId,
   VehicleModel,
   WorldState,
+  FleetState,
+  ShopUpgradeId,
 } from '../types'
 import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY } from '../data/config'
 import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
@@ -81,8 +83,10 @@ import {
   bizUpgradeCost,
   bizCollect,
   freshBusiness,
+  staffCapFor,
 } from '../systems/biz'
-import { CIVIC } from '../data/config'
+import { gigBoard, gigLabel } from '../systems/fleet'
+import { BIZ, CIVIC, FLEET } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
 
@@ -98,6 +102,8 @@ interface GameStore {
   world: WorldState | null
   /** M2 — the civic mesh: NEPA debt, KGIRS assessment, fines, tips, market */
   civic: CivicState | null
+  /** M5 — the fleet ledger: which of today's Motor Park gigs already ran */
+  fleet: FleetState
   settings: GameSettings
 
   /* lifecycle */
@@ -138,6 +144,14 @@ interface GameStore {
   collectBiz: (typeId: string, channel: 'shop' | 'phone') => boolean
   /** Upgrade a shop one level (cost from bizUpgradeCost). */
   upgradeBiz: (typeId: string) => boolean
+  /** M5 — hire an attendant (hire fee in cash, daily wage draws from the till). */
+  hireStaff: (typeId: string) => boolean
+  /** M5 — let an attendant go (no cost; the wage stops tomorrow). */
+  fireStaff: (typeId: string) => boolean
+  /** M5 — install a one-time shop upgrade ('generator' | 'solar'). */
+  installBizUpgrade: (typeId: string, upgradeId: ShopUpgradeId) => boolean
+  /** M5 — run a Motor Park gig: passenger pays, your ride drinks the fuel. */
+  runGig: (gigId: string) => boolean
 
   /* Stage 5 — ownership, banking, social life */
   /** Buy a vehicle at the motor park (one per model). False = couldn't afford / owned. */
@@ -224,11 +238,11 @@ interface CivicAgg {
 }
 
 /** Pure: roll the civic mesh forward day by day (assessments land on exact days). */
-function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: number, newDay: number, bizCount = 0): { civic: CivicState; agg: CivicAgg } {
+function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: number, newDay: number, bizCount = 0, solarCount = 0): { civic: CivicState; agg: CivicAgg } {
   let cur = civic
   const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0 }
   for (let d = prevDay + 1; d <= newDay; d++) {
-    const r = civicDayRoll(cur, totalEarned, d, bizCount)
+    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount)
     cur = r.next
     agg.nepaPosted += r.nepaPosted
     agg.nepaShed = agg.nepaShed || r.nepaShed
@@ -251,7 +265,9 @@ function commitCivicDays(
   const { civic, player, world } = get()
   if (!civic || !player || !world || newDay <= prevDay) return
   const bizCount = player.businesses.length
-  const { civic: rolled, agg } = civicRollForDays(civic, player.stats.totalEarned, prevDay, newDay, bizCount)
+  // M5 — solar shops draw from the sun: their share of the meter load drops
+  const solarCount = player.businesses.filter((b) => b.upgrades.includes('solar')).length
+  const { civic: rolled, agg } = civicRollForDays(civic, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount)
   set({ civic: rolled })
 
   // M3 — the shops earn while the city turns: accrue into each till (market
@@ -316,6 +332,7 @@ function scheduleAutosave(get: () => GameStore) {
       player,
       world,
       civic,
+      fleet: get().fleet,
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -330,6 +347,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   player: null,
   world: null,
   civic: null,
+  fleet: { day: 1, done: [] },
   settings: { sound: true },
 
   isTravelling: false,
@@ -382,7 +400,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       weather: 'sunny',
       currentLocation: 'home',
     }
-    set({ player, world, civic: freshCivicState(), screen: 'game', offers: [] })
+    set({ player, world, civic: freshCivicState(), fleet: { day: 1, done: [] }, screen: 'game', offers: [] })
     scheduleAutosave(get)
   },
 
@@ -390,7 +408,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const save = SaveSystem.load()
     if (!save) return false
     syncAudioWithSettings(save.settings)
-    set({ player: save.player, world: save.world, civic: save.civic, settings: save.settings, screen: 'game' })
+    set({ player: save.player, world: save.world, civic: save.civic, fleet: save.fleet, settings: save.settings, screen: 'game' })
     return true
   },
 
@@ -696,6 +714,161 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().notify({ icon: def.emoji, text: `${def.name} don level up to L${shop.level + 1} — income go show am.`, tone: 'good' })
     audio.play('chime')
     scheduleAutosave(get)
+    return true
+  },
+
+  /* ------------------ M5 — staff, power & the fleet ------------------ */
+
+  hireStaff: (typeId) => {
+    const { player } = get()
+    if (!player) return false
+    const def = bizDef(typeId)
+    const shop = bizOwned(player.businesses, typeId)
+    if (!def || !shop) return false
+    const cap = staffCapFor(shop.level)
+    if (shop.staff >= cap) {
+      get().notify({
+        icon: '👥',
+        text: `The ${def.name} no fit carry more hands at L${shop.level} — upgrade am first.`,
+        tone: 'neutral',
+      })
+      return false
+    }
+    if (!get().removeMoney(BIZ.staffHireFee, { label: `Hired attendant — ${def.name}`, category: 'other' })) {
+      get().notify({ icon: '💰', text: `Hiring costs ${formatNaira(BIZ.staffHireFee)}. You no reach yet.`, tone: 'bad' })
+      return false
+    }
+    const p = get().player!
+    set({ player: { ...p, businesses: p.businesses.map((b) => (b.typeId === typeId ? { ...b, staff: b.staff + 1 } : b)) } })
+    get().notify({
+      icon: '👥',
+      text: `One more attendant join the ${def.name} — income +${Math.round(BIZ.staffIncomeBoost * 100)}%, wage ${formatNaira(BIZ.staffWagePerDay)}/day from the till.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  fireStaff: (typeId) => {
+    const { player } = get()
+    if (!player) return false
+    const shop = bizOwned(player.businesses, typeId)
+    if (!shop || shop.staff <= 0) return false
+    set({ player: { ...player, businesses: player.businesses.map((b) => (b.typeId === typeId ? { ...b, staff: b.staff - 1 } : b)) } })
+    get().notify({ icon: '👋', text: 'You let one attendant go. The wage stops tomorrow.', tone: 'neutral' })
+    scheduleAutosave(get)
+    return true
+  },
+
+  installBizUpgrade: (typeId, upgradeId) => {
+    const { player } = get()
+    if (!player) return false
+    const def = bizDef(typeId)
+    const shop = bizOwned(player.businesses, typeId)
+    const up = (BIZ.upgrades as Record<string, { label: string; emoji: string; cost: number } | undefined>)[upgradeId]
+    if (!def || !shop || !up) return false
+    if (shop.upgrades.includes(upgradeId)) {
+      get().notify({ icon: up.emoji, text: `${up.label} already dey run for the ${def.name}.`, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(up.cost, { label: `${up.label} — ${def.name}`, category: 'other' })) {
+      get().notify({ icon: '💰', text: `${up.label} costs ${formatNaira(up.cost)}. Gather am first.`, tone: 'bad' })
+      return false
+    }
+    const p = get().player!
+    set({
+      player: {
+        ...p,
+        businesses: p.businesses.map((b) => (b.typeId === typeId ? { ...b, upgrades: [...b.upgrades, upgradeId] } : b)),
+      },
+    })
+    get().notify({
+      icon: up.emoji,
+      text: `${up.label} installed at the ${def.name} — ${upgradeId === 'solar' ? 'dark days no fit touch am again, and NEPA load don drop.' : 'NEPA fit cut the whole street — your shop go still glow.'}`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  runGig: (gigId) => {
+    const { player, world, fleet, isWorking, isTravelling } = get()
+    if (!player || !world || isWorking || isTravelling) return false
+
+    const gig = gigBoard(world.day, player.vehicles, player.level, world.weather).find((g) => g.id === gigId)
+    if (!gig) return false
+    if (fleet.day === world.day && fleet.done.includes(gigId)) {
+      get().notify({ icon: '🛵', text: 'You don run this one today — tomorrow get their own runs.', tone: 'neutral' })
+      return false
+    }
+    if (world.currentLocation !== 'transport-area') {
+      get().notify({ icon: '📍', text: 'The passengers dey wait at the Motor Park — travel come first.', tone: 'bad' })
+      return false
+    }
+    if (player.needs.energy < gig.energyCost) {
+      get().notify({ icon: '🥵', text: 'You are too tired for that run. Rest small first.', tone: 'bad' })
+      return false
+    }
+
+    const label = gigLabel(gig)
+    set({ isWorking: true, workingLabel: `Driving — ${label}` })
+
+    const applyDone = () => {
+      const { player: p, world: w } = get()
+      if (!p || !w) return
+
+      // fuel first — the pump does not take promises
+      const fueled = get().removeMoney(gig.fuel, {
+        label: `Fuel — ${label.split(' run ')[0]} (gig)`,
+        category: 'transport',
+      })
+      if (!fueled) {
+        set({ isWorking: false, workingLabel: null })
+        get().notify({ icon: '💸', text: `The run needs ${formatNaira(gig.fuel)} fuel and your pocket no carry am.`, tone: 'bad' })
+        return
+      }
+      // the passenger's fare — honest hustle income the KGIRS can see
+      get().addMoney(gig.payout, { label: `Gig — ${label}`, category: 'hustle' })
+
+      const paid = get().player!
+      const needs = applySlotDecay(applyNeedsDelta(paid.needs, { energy: -gig.energyCost }), 1)
+      const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, 1)
+      const nextFleet = { day: w.day, done: [...(get().fleet.day === w.day ? get().fleet.done : []), gig.id] }
+
+      set({
+        player: {
+          ...paid,
+          needs,
+          stats: { ...paid.stats, jobsCompleted: paid.stats.jobsCompleted + 1 },
+        },
+        world: { ...w, currentLocation: gig.toId, ...clock },
+        fleet: nextFleet,
+        isWorking: false,
+        workingLabel: null,
+        offers: [], // left the park — unclaimed gist goes cold
+      })
+
+      get().addXp(FLEET.gigXp)
+      get().addSkillXp('hustle', FLEET.gigHustleXp)
+      get().notify({
+        icon: '🛵',
+        text: `${label} done — passenger paid ${formatNaira(gig.payout)}${gig.rainPremium ? ' (rain price)' : ''}, fuel chop ${formatNaira(gig.fuel)}.`,
+        tone: 'good',
+      })
+      get().notify({
+        icon: '📍',
+        text: `You drop the passenger at ${LOCATION_BY_ID[gig.toId]?.name ?? 'the drop-off'}.`,
+        tone: 'neutral',
+      })
+      // a run can cross midnight — the civic mesh follows the day
+      commitCivicDays(get, set, w.day, clock.day)
+      audio.play('chime')
+      scheduleAutosave(get)
+    }
+
+    setTimeout(applyDone, WORK.transitionMs)
     return true
   },
 
@@ -1528,7 +1701,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   saveNow: () => {
-    const { player, world, civic, settings } = get()
+    const { player, world, civic, fleet, settings } = get()
     if (!player || !world || !civic) return
     const existing = SaveSystem.load()
     SaveSystem.write({
@@ -1538,6 +1711,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       player,
       world,
       civic,
+      fleet,
       settings,
     })
     set({ hasSave: true })
@@ -1545,7 +1719,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   resetGame: () => {
     SaveSystem.clear()
-    set({ player: null, world: null, civic: null, screen: 'menu', hasSave: false })
+    set({ player: null, world: null, civic: null, fleet: { day: 1, done: [] }, screen: 'menu', hasSave: false })
   },
 
   /* ------------------------------ feedback ------------------------------ */

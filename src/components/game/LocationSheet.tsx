@@ -19,6 +19,7 @@ import { allTravelOptions } from '@/game/systems/garage'
 import { BIZ } from '@/game/data/config'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { BizBlock } from './BizBlock'
+import { FleetBlock } from './FleetBlock'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 
@@ -201,6 +202,9 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
 
       {/* M3 — the shopfront: this location's business (buy / collect / upgrade) */}
       {!isSelectedLocked && <BizBlock locationId={selected.id} />}
+
+      {/* M5 — the Motor Park gig board: your garage becomes today's work */}
+      {!isSelectedLocked && selected.id === 'transport-area' && <FleetBlock />}
 
       {/* travel confirmation */}
       {!isSelectedCurrent && !isSelectedLocked && (

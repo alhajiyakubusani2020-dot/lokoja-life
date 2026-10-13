@@ -18,7 +18,7 @@
  * taxes) so sleeping, travelling and time-skips all accrue exactly once.
  */
 
-import type { BusinessState, CivicState } from '../types'
+import type { BusinessState, CivicState, ShopUpgradeId } from '../types'
 import { BIZ } from '../data/config'
 import { civicHash, marketForDay } from './civic'
 
@@ -52,7 +52,7 @@ export function bizAtLocation(locationId: string): { typeId: string; def: BizTyp
 
 /* ------------------------------- shop creation ------------------------------ */
 
-/** A brand-new level-1 shop with an empty till. */
+/** A brand-new level-1 shop with an empty till (and nobody on the payroll). */
 export function freshBusiness(typeId: string, day: number): BusinessState {
   return {
     id: typeId,
@@ -62,7 +62,21 @@ export function freshBusiness(typeId: string, day: number): BusinessState {
     lastAccrualDay: day,
     openedDay: day,
     lastCollectedAt: null,
+    staff: 0,
+    upgrades: [],
   }
+}
+
+/* ------------------------------ M5 — staff & power ----------------------------- */
+
+/** Attendants a shop at `level` can carry: one per level (1–5). */
+export function staffCapFor(level: number): number {
+  return Math.min(Math.max(1, Math.floor(level)), BIZ.maxLevel)
+}
+
+/** Does this shop keep its own light when NEPA cuts the city? */
+export function hasPowerBackup(upgrades: ShopUpgradeId[]): boolean {
+  return upgrades.includes('generator') || upgrades.includes('solar')
 }
 
 /* --------------------------------- income law -------------------------------- */
@@ -98,13 +112,35 @@ export function bizDayMult(typeId: string, day: number, civic: CivicState): numb
   return 1 - BIZ.wobbleBand + u * 2 * BIZ.wobbleBand
 }
 
-/** One shop's income for one specific day, rounded to the naira. */
-export function bizIncomeFor(typeId: string, level: number, day: number, civic: CivicState, reputation: number): number {
+/** One shop's income for one specific day, rounded to the naira.
+ *  M5 — `opts` carries the shop's staff and power installs: each attendant
+ *  lifts income by BIZ.staffIncomeBoost, and a shop caught dark by
+ *  load-shedding (no generator/solar) earns BIZ.sheddingIncomeFactor of
+ *  the normal take. Omitted opts = the plain M3 law, untouched. */
+export function bizIncomeFor(
+  typeId: string,
+  level: number,
+  day: number,
+  civic: CivicState,
+  reputation: number,
+  opts?: { staff?: number; upgrades?: ShopUpgradeId[] },
+): number {
   const def = bizDef(typeId)
   if (!def) return 0
+  const staff = Math.max(0, Math.floor(opts?.staff ?? 0))
+  const dark = civic.nepa.shedding && !hasPowerBackup(opts?.upgrades ?? [])
+  const staffMult = 1 + staff * BIZ.staffIncomeBoost
+  const powerMult = dark ? BIZ.sheddingIncomeFactor : 1
   return Math.max(
     0,
-    Math.round(def.baseIncome * bizLevelMult(level) * bizDayMult(typeId, day, civic) * (1 + bizRepBonus(reputation))),
+    Math.round(
+      def.baseIncome *
+        bizLevelMult(level) *
+        bizDayMult(typeId, day, civic) *
+        (1 + bizRepBonus(reputation)) *
+        staffMult *
+        powerMult,
+    ),
   )
 }
 
@@ -131,6 +167,9 @@ export interface BizDayResult {
  * The accrual cap applies per shop from its OWN lastAccrualDay: after
  * `accrualCapDays` unattended days the till stops growing — the city moves
  * on, go show your face. Rolling the same day twice is a no-op (idempotent).
+ * M5 — each attendant's daily wage (BIZ.staffWagePerDay) is paid out of the
+ * day's take BEFORE it lands in the till; a day that nets ≤0 still marks
+ * the shop as accrued-through so a re-roll can never double-charge wages.
  */
 export function bizDayRoll(
   list: BusinessState[],
@@ -145,14 +184,21 @@ export function bizDayRoll(
     if (newDay <= prevDay || newDay <= biz.lastAccrualDay) return biz
     const from = Math.max(prevDay + 1, biz.lastAccrualDay + 1)
     const cappedFrom = Math.max(from, newDay - BIZ.accrualCapDays + 1)
+    const wages = Math.max(0, biz.staff) * BIZ.staffWagePerDay
     let sum = 0
     for (let day = cappedFrom; day <= newDay; day++) {
-      sum += bizIncomeFor(biz.typeId, biz.level, day, civic, reputation)
+      const gross = bizIncomeFor(biz.typeId, biz.level, day, civic, reputation, {
+        staff: biz.staff,
+        upgrades: biz.upgrades,
+      })
+      sum += Math.max(0, gross - wages)
     }
-    if (sum <= 0) return biz
+    // advance the accrual marker even on a wiped-out day (idempotence law)
+    const marked: BusinessState = { ...biz, lastAccrualDay: newDay }
+    if (sum <= 0) return marked
     earned[biz.typeId] = (earned[biz.typeId] ?? 0) + sum
     total += sum
-    return { ...biz, accrued: biz.accrued + sum, lastAccrualDay: newDay }
+    return { ...marked, accrued: biz.accrued + sum }
   })
   return { next, earned, total }
 }

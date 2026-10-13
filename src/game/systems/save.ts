@@ -8,11 +8,11 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState, CivicState } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState } from '../types'
 import { freshCivicState } from './civic'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 5
+const SAVE_VERSION = 6
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -69,6 +69,13 @@ function deserialize(raw: string): GameSave | null {
         save.version = 5
         break
       case 5:
+        // v5 → v6 (M5 — WORK & FLEET): businesses gain staff + installed
+        // upgrades, and the save carries the fleet's done-gig ledger. Both
+        // default below — a v5 player wakes up with no attendants hired,
+        // no generator/solar fitted, and a clean Motor Park board.
+        save.version = 6
+        break
+      case 6:
         // current version
         break
       default:
@@ -110,7 +117,17 @@ function deserialize(raw: string): GameSave | null {
       accrued: typeof b.accrued === 'number' ? b.accrued : 0,
       lastAccrualDay: typeof b.lastAccrualDay === 'number' ? b.lastAccrualDay : save.world?.day ?? 1,
       openedDay: typeof b.openedDay === 'number' ? b.openedDay : save.world?.day ?? 1,
+      // M5 — staff & power (missing on v5-and-older saves)
+      staff: typeof b.staff === 'number' && b.staff > 0 ? b.staff : 0,
+      upgrades: Array.isArray(b.upgrades) ? b.upgrades : [],
     }))
+
+    // --- M5 fleet ledger (missing on v5-and-older saves) ---
+    const fleet: FleetState = save.fleet && Array.isArray(save.fleet.done)
+      ? save.fleet
+      : { day: save.world?.day ?? 1, done: [] }
+    if (typeof fleet.day !== 'number') fleet.day = save.world?.day ?? 1
+    save.fleet = fleet
 
     // --- M2 civic mesh (missing on v3-and-older saves) ---
     if (!save.civic) {

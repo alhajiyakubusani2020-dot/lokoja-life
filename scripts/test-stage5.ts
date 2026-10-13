@@ -124,11 +124,12 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   mem.set(SaveSystem.SAVE_KEY, v2)
   const loaded2 = SaveSystem.load()
   check('v2 save loads', loaded2 !== null)
-  check('v2 upgraded to v5', loaded2?.version === 5)
+  check('v2 upgraded to v6', loaded2?.version === 6)
   check('v2 player gets empty garage / bank / strangers', loaded2?.player.vehicles.length === 0 && loaded2?.player.bankBalance === 0 && Object.keys(loaded2?.player.relationships ?? {}).length === 0)
   check('v2 player keeps cash + ledger', loaded2?.player.cash === 4200 && loaded2?.player.transactions.length === 0)
   check('v2 world untouched', loaded2?.world.day === 6 && loaded2?.world.currentLocation === 'kpata-market')
   check('v2 gets the M2 civic defaults', loaded2?.civic !== undefined && loaded2?.civic.nepa.owed === 0 && loaded2?.civic.kgirs.warrant === false)
+  check('v2 gets M5 fleet + shop defaults', loaded2?.fleet.day === 6 && loaded2?.fleet.done.length === 0 && (loaded2?.player.businesses ?? []).every((b) => b.staff === 0 && b.upgrades.length === 0))
 
   // v1 → v3 (two-step migration)
   const { skillXp, activeOpportunities, cooldowns, transactions, stats, ...v1Player } = basePlayer
@@ -136,9 +137,24 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   const v1 = JSON.stringify({ version: 1, createdAt: 1, updatedAt: 2, player: v1Player, world: baseWorld, settings: { sound: true } })
   mem.set(SaveSystem.SAVE_KEY, v1)
   const loaded1 = SaveSystem.load()
-  check('v1 save loads and reaches v5', loaded1?.version === 5)
+  check('v1 save loads and reaches v6', loaded1?.version === 6)
   check('v1 gets Stage 3 defaults too', loaded1?.player.skillXp.hustle === 0 && Array.isArray(loaded1?.player.activeOpportunities))
   check('v1 gets Stage 5 defaults too', loaded1?.player.vehicles.length === 0 && loaded1?.player.bankBalance === 0)
+
+  // v5 → v6 (M5): a v5 save with a biz carrying NO staff/upgrades upgrades cleanly
+  const v5 = JSON.stringify({
+    version: 5, createdAt: 1, updatedAt: 2,
+    player: { ...basePlayer, businesses: [{ id: 'kpata-stall', typeId: 'kpata-stall', level: 2, accrued: 1500, lastAccrualDay: 5, openedDay: 2, lastCollectedAt: null }] },
+    world: baseWorld,
+    civic: { nepa: { cycleStart: 1, owed: 900, paidThrough: 5, shedding: false, totalPaid: 0 }, kgirs: { lastSeenEarned: 0, assessed: 0, dueDay: 0, paid: 0, warrant: false }, police: { fines: 0, paid: 0 }, efcc: { pending: [], rewardsTotal: 0, lastTipDay: -99 }, market: { rolledDay: 6, prices: {}, event: null, marketDay: false } },
+    settings: { sound: true },
+  })
+  mem.set(SaveSystem.SAVE_KEY, v5)
+  const loaded5 = SaveSystem.load()
+  check('v5 save loads and reaches v6', loaded5?.version === 6)
+  check('v5 biz gains staff=0 + no upgrades', loaded5?.player.businesses[0]?.staff === 0 && JSON.stringify(loaded5?.player.businesses[0]?.upgrades ?? []) === '[]')
+  check('v5 keeps its till through the migration', loaded5?.player.businesses[0]?.accrued === 1500)
+  check('v5 gets a clean fleet ledger', loaded5?.fleet.day === 6 && loaded5?.fleet.done.length === 0)
 
   // corrupt → null
   mem.set(SaveSystem.SAVE_KEY, '{not json at all')
@@ -148,16 +164,18 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   mem.delete(SaveSystem.SAVE_KEY)
   const { freshCivicState } = await import('../src/game/systems/civic')
   const fresh: GameSave = {
-    version: 5, createdAt: 1, updatedAt: 2,
-    player: { ...basePlayer, skillXp: { hustle: 0, smart: 0, social: 0 }, activeOpportunities: [], cooldowns: {}, transactions: [], stats: { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }, vehicles: [{ id: 'okada-1-1', model: 'okada', plate: 'LKO-111-AB', boughtDay: 1 }], bankBalance: 9000, relationships: { musa: { familiarity: 40, lastChatDay: 3 } } },
+    version: 6, createdAt: 1, updatedAt: 2,
+    player: { ...basePlayer, skillXp: { hustle: 0, smart: 0, social: 0 }, activeOpportunities: [], cooldowns: {}, transactions: [], stats: { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }, vehicles: [{ id: 'okada-1-1', model: 'okada', plate: 'LKO-111-AB', boughtDay: 1 }], bankBalance: 9000, relationships: { musa: { familiarity: 40, lastChatDay: 3 } }, businesses: [{ id: 'kpata-stall', typeId: 'kpata-stall', level: 1, accrued: 0, lastAccrualDay: 6, openedDay: 6, lastCollectedAt: null, staff: 1, upgrades: ['solar'] }] },
     world: baseWorld,
     civic: freshCivicState(),
+    fleet: { day: 6, done: ['gig-6-okada-0'] },
     settings: { sound: true },
   }
   SaveSystem.write(fresh)
   const rt = SaveSystem.load()
   check('round-trip keeps vehicle, bank + paddy status', rt?.player.vehicles[0]?.plate === 'LKO-111-AB' && rt?.player.bankBalance === 9000 && rt?.player.relationships.musa.familiarity === 40)
   check('round-trip keeps the civic slice', rt?.civic.nepa.paidThrough === 5 && rt?.civic.police.fines === 0)
+  check('round-trip keeps staff, solar + the done-gig ledger', rt?.player.businesses[0]?.staff === 1 && rt?.player.businesses[0]?.upgrades[0] === 'solar' && rt?.fleet.done[0] === 'gig-6-okada-0')
 }
 
 /* --------------------------------- summary ----------------------------------- */

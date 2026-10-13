@@ -24,6 +24,7 @@ import { LOCATIONS, LOCATION_BY_ID, type LokojaLocation } from '@/game/data/loca
 import { bizAtLocation } from '@/game/systems/biz'
 import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import { BizBlock } from '../BizBlock'
+import { FleetBlock } from '../FleetBlock'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 import {
@@ -411,6 +412,7 @@ export function MapScreen({
       <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-center text-[11px] font-semibold text-[var(--lko-ink-soft)]">
         <span className="inline-flex items-center gap-1"><span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#3f6b4f] text-[7px]">🔧</span> Motor Park garage sells rides</span>
         <span className="inline-flex items-center gap-1">🏍️ Your rides sip fuel — no fare</span>
+        <span className="inline-flex items-center gap-1">🛵 Own a ride? Driver gigs wait at the park</span>
       </p>
       {/* M3/M2 — the civic & business layer legend */}
       <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-center text-[11px] font-semibold text-[var(--lko-ink-soft)]">
@@ -553,6 +555,9 @@ export function MapScreen({
                   </div>
                   {/* M3 — the shopfront: this location's business (buy/collect/upgrade) */}
                   {!isSelectedLocked && <BizBlock locationId={selected.id} />}
+
+                  {/* M5 — the Motor Park gig board: your garage becomes today's work */}
+                  {!isSelectedLocked && selected.id === 'transport-area' && <FleetBlock />}
                 </>
               )}
 

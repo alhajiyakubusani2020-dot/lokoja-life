@@ -27,9 +27,9 @@ import { canChat, relationshipFor, tierFor, TIER_META } from '@/game/systems/soc
 import { hustleDefFor } from '@/game/systems/opportunities'
 import { absoluteSlot } from '@/game/systems/world'
 import { nepaSettleCost, kgirsSettleCost, marketForDay } from '@/game/systems/civic'
-import { BIZ_TYPES, bizIncomeFor, bizUpgradeCost } from '@/game/systems/biz'
+import { BIZ_TYPES, bizIncomeFor, bizUpgradeCost, staffCapFor, hasPowerBackup } from '@/game/systems/biz'
 import { BIZ, CIVIC } from '@/game/data/config'
-import type { BusinessState } from '@/game/types'
+import type { BusinessState, ShopUpgradeId } from '@/game/types'
 import { NPCS } from '@/game/data/npcs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -739,13 +739,23 @@ function BizApp() {
   const civic = useGameStore((s) => s.civic)!
   const collectBiz = useGameStore((s) => s.collectBiz)
   const upgradeBiz = useGameStore((s) => s.upgradeBiz)
+  const hireStaff = useGameStore((s) => s.hireStaff)
+  const fireStaff = useGameStore((s) => s.fireStaff)
+  const installBizUpgrade = useGameStore((s) => s.installBizUpgrade)
 
   return (
     <div className="flex flex-col gap-2 pb-2">
       {Object.entries(BIZ_TYPES).map(([typeId, def]) => {
         const shop = player.businesses.find((b) => b.typeId === typeId)
         const where = LOCATION_BY_ID[def.locationId]?.shortName ?? def.locationId
-        const today = bizIncomeFor(typeId, shop?.level ?? 1, world.day, marketForDay(civic, world.day), player.reputation)
+        const today = bizIncomeFor(
+          typeId,
+          shop?.level ?? 1,
+          world.day,
+          marketForDay(civic, world.day),
+          player.reputation,
+          shop ? { staff: shop.staff, upgrades: shop.upgrades } : undefined,
+        )
         const cost = shop ? bizUpgradeCost(typeId, shop.level) : null
         return (
           <div key={typeId} className="rounded-2xl border border-black/[0.05] bg-white p-3">
@@ -767,6 +777,52 @@ function BizApp() {
                 <div className="mt-1.5 flex items-center justify-between text-[11.5px] font-bold text-[var(--lko-ink-soft)]">
                   <span>L{shop.level}/{BIZ.maxLevel} · ~{formatNaira(today)}/day</span>
                   <span className="lko-num font-extrabold text-[var(--lko-ink)]">{formatNaira(shop.accrued)}</span>
+                </div>
+                {civic.nepa.shedding && !hasPowerBackup(shop.upgrades) && (
+                  <p className="mt-1.5 rounded-lg bg-[#c0392b]/10 px-2 py-1 text-[10.5px] font-bold text-[#8a2a20]">
+                    🔌 Shop dey run dark today — shedding take −{Math.round((1 - BIZ.sheddingIncomeFactor) * 100)}%.
+                  </p>
+                )}
+                {/* M5 — staff + power, manageable from anywhere */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="rounded-full bg-black/[0.05] px-2 py-0.5 text-[10px] font-extrabold text-[var(--lko-ink-soft)]">
+                    👥 {shop.staff}/{staffCapFor(shop.level)} · wage {formatNaira(BIZ.staffWagePerDay)}/day
+                  </span>
+                  <button
+                    data-testid="phone-biz-hire"
+                    onClick={() => { audio.play('click'); hireStaff(typeId) }}
+                    disabled={shop.staff >= staffCapFor(shop.level) || player.cash < BIZ.staffHireFee}
+                    className="lko-press min-h-[34px] rounded-lg bg-[var(--lko-green)] px-2.5 text-[10.5px] font-extrabold text-white disabled:opacity-40"
+                  >
+                    Hire · {formatNaira(BIZ.staffHireFee)}
+                  </button>
+                  {shop.staff > 0 && (
+                    <button
+                      onClick={() => { audio.play('click'); fireStaff(typeId) }}
+                      className="lko-press min-h-[34px] rounded-lg border border-black/10 bg-white px-2.5 text-[10.5px] font-extrabold text-[var(--lko-ink-soft)]"
+                    >
+                      Let go
+                    </button>
+                  )}
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {(Object.entries(BIZ.upgrades) as [ShopUpgradeId, { label: string; emoji: string; cost: number }][]).map(([id, up]) =>
+                    shop.upgrades.includes(id) ? (
+                      <span key={id} className="rounded-full bg-[var(--lko-green)]/15 px-2 py-0.5 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
+                        {up.emoji} {up.label} fitted
+                      </span>
+                    ) : (
+                      <button
+                        key={id}
+                        data-testid={`phone-biz-install-${id}`}
+                        onClick={() => { audio.play('click'); installBizUpgrade(typeId, id) }}
+                        disabled={player.cash < up.cost}
+                        className="lko-press min-h-[34px] rounded-lg border border-[var(--lko-green)]/40 bg-white px-2.5 text-[10.5px] font-extrabold text-[var(--lko-green-deep)] disabled:opacity-40"
+                      >
+                        {up.emoji} {up.label} · {formatNaira(up.cost)}
+                      </button>
+                    ),
+                  )}
                 </div>
                 <div className="mt-2 flex gap-2">
                   <button
