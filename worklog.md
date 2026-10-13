@@ -479,3 +479,21 @@ Stage Summary:
 - M1 IS NOW COMPLETE: roads (real network + lane paint), street lights (440, shoulder law), zero buildings on carriageways, 16 lit bridges — plus the mountain itself: Patti now wears sedimentary terraces, strata-coloured flanks, 110 boulders, a grassy crown, and the savanna around it carries the real tree guild (broadleaf/palm/acacia/baobab). Every art law is test-enforced, not hope-enforced.
 - Honest limitations: headless browser self-destructs ~70-100s into 3D (progressive-shot workaround); strata terraces are subtle up close (silhouette + colour bands carry them); baobab giant placement is plains-biased (nearest is 69u from the Patti summit — the mountain foot shot shows the gullies instead); university-area travel appears level-locked for a fresh character.
 - Next: Milestone 2 — CIVIC MESH (government, police, EFCC, NEPA+bills, KGIRS taxes, markets as living rule systems).
+
+---
+Task ID: 12
+Agent: Main Agent (Super Z)
+Task: M1 VERIFICATION — "then begin it and verify it, work smartly" — verify the committed street-lights/roads/bridges work end-to-end on the freshly restarted server
+
+Work Log:
+- Baseline: sandbox restart fixed the server (Task 9's remedy confirmed) — dev server alive on :3000 (boot-ancestry, health 200), git tree clean at 6ab8235 (m1-finale), so the M1 code IS what the server serves.
+- DETERMINISTIC SUITES (this hour, against the current tree): world3d 683/683 — including the M1 law blocks (0 building/stall/lamp corners on any carriageway; 350+ lamps facing their roads, tall highway masts, dry ground, school-yard clip; 16 bridges landing on solid banks, above the waterline, urban abutments lit); schools 232/232; stage3 ✓; stage5 36/36; travel ✓.
+- tsc: exactly the 9 pre-existing errors (counted + file-listed), 0 new. eslint clean.
+- LIVE E2E on the running server (mobile 390×844): fresh 01-street-day.png (worn lane paint, clear carriageway, shoulder lamps, keke shelter set back), 02-highway-marks.png (tall masts + edge lines at Ganaja Junction), 04-street-night.png (honest night clock via rest system, luminous markings on dark tarmac, lamp arms) — night run: 0 console errors. Old 03/04 from 04:57 remain for the bridge/valley record.
+- E2E TOOLING hardened through 6 generations (scripts/e2e-m1-bridge.ts): every CDP call raced with a timeout (no more script hangs), progressive screenshots DURING walks (best frame survives the renderer wedge), fire-and-forget walk driver with Node-side sampling, stable-arrival polling for map travel. New offline constraint solver (scripts/tmp/bridge-dist*.ts) computes anchor→bridge distances × unlockLevel × transport × trip energy × travel-anim time from the layout itself.
+- TRUTHS discovered: map-travel animates a REAL walk (~50-90s for 124-170u trips) that outlives any safe headless browser life; several anchors are level-locked (L2/L3) or refuse 'walk' transport — the __lkl hook hardcodes 'walk'; from spawn the nearest bridge is #2 at 142u and the driver traps on the compound wall. Conclusion matches Task 10's: the live bridge-deck walk is impractical headless; bridge geometry/lighting stays locked by 4 deterministic tests + the valley crossing visible in m1-terrain-shots/03.
+
+Stage Summary:
+- M1 (street lights → road reconstruction with zero houses on tarmac → bridges) is VERIFIED on the restarted server: all law suites green, fresh day/highway/night proofs captured, no regressions (tsc/lint), committed as ecf16f1.
+- Honest limitations: no fresh close-up 3D bridge frame this round (headless wedge window ~90-120s vs travel-anim + 142u approach — deterministic tests carry the bridge proof); night frame shows glow on markings + lamp presence rather than a full sodium pool close-up.
+- Next: Milestone 2 — CIVIC MESH (government, police, EFCC, NEPA+bills, KGIRS taxes, markets as living rule systems).
