@@ -428,4 +428,72 @@ export const CIVIC = {
     /** chance (0–1) a day rolls a flavour event at all */
     eventChance: 0.55,
   },
+}
+
+/**
+ * M3 — OWN THE CITY. The player's businesses. Every shop sits at a REAL
+ * Lokoja location, pays into the SAME market engine that moves meal prices
+ * (Kpata/Food-Strip income follows that market's daily multiplier), and
+ * feeds the civic mesh: NEPA bills grow with every fridge you plug in, and
+ * collected income is REAL income — KGIRS assesses it like everything else.
+ */
+export const BIZ = {
+  /** unclaimed income stops accruing after this many days — go show your shop */
+  accrualCapDays: 7,
+  /** each owned business adds this share to the NEPA bill (fridges, freezers) */
+  nepaLoadPerBiz: 0.22,
+  /** income bonus: +1% per `repBonusDivisor` reputation above 500, capped */
+  repBonusDivisor: 100,
+  repBonusBase: 500,
+  repBonusCap: 0.25,
+  /** upgrade: cost = buyCost × upgradeCostMult × currentLevel */
+  upgradeCostMult: 0.6,
+  /** income multiplier per level: ×(1 + levelIncomeStep × (level−1)) */
+  levelIncomeStep: 0.35,
+  maxLevel: 5,
+  /** non-market shops wobble inside this seeded daily band instead of a market mult */
+  wobbleBand: 0.08,
+  types: {
+    'kpata-stall': {
+      name: 'Kpata Provisions Stall',
+      locationId: 'kpata-market',
+      emoji: '🧺',
+      buyCost: 18000,
+      baseIncome: 1100,
+      unlockLevel: 1,
+      blurb: 'A wooden stall in the row under the Kpata sheds. Rice in bags, groundnut in bottles.',
+      /** which market engine row moves this shop's prices (null = seeded wobble) */
+      marketId: 'kpata-market' as string | null,
+    },
+    'ganaja-kiosk': {
+      name: 'Ganaja Phone Kiosk',
+      locationId: 'ganaja-junction',
+      emoji: '📱',
+      buyCost: 22000,
+      baseIncome: 1250,
+      unlockLevel: 2,
+      blurb: 'Glass kiosk at Ganaja Junction — chargers, earpieces, transfer POS.',
+      marketId: null,
+    },
+    'okada-stand': {
+      name: 'Motor-Park Okada Stand',
+      locationId: 'transport-area',
+      emoji: '🛵',
+      buyCost: 30000,
+      baseIncome: 1450,
+      unlockLevel: 3,
+      blurb: 'Two bikes on your stand at the motor park. Riders bring the day’s take at night.',
+      marketId: null,
+    },
+    'food-joint': {
+      name: 'Food-Strip Buka',
+      locationId: 'food-area',
+      emoji: '🍲',
+      buyCost: 42000,
+      baseIncome: 1900,
+      unlockLevel: 4,
+      blurb: 'A buka of your own on the food strip — amala that makes people cross town.',
+      marketId: 'food-area' as string | null,
+    },
+  } as Record<string, { name: string; locationId: string; emoji: string; buyCost: number; baseIncome: number; unlockLevel: number; blurb: string; marketId: string | null }>,
 } as const

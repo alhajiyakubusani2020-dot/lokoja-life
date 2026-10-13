@@ -12,7 +12,7 @@ import type { GameSave, PlayerState, CivicState } from '../types'
 import { freshCivicState } from './civic'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 4
+const SAVE_VERSION = 5
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -62,6 +62,13 @@ function deserialize(raw: string): GameSave | null {
         save.version = 4
         break
       case 4:
+        // v4 → v5 (M3 — OWN THE CITY): businesses gain the accrual fields
+        // (accrued till, lastAccrualDay, openedDay). Any biz entry a v4 save
+        // somehow carries is defaulted below; normal v4 saves carry an
+        // empty array, which is already the correct v5 shape.
+        save.version = 5
+        break
+      case 5:
         // current version
         break
       default:
@@ -95,6 +102,15 @@ function deserialize(raw: string): GameSave | null {
     if (!p.vehicles) p.vehicles = []
     if (typeof p.bankBalance !== 'number') p.bankBalance = 0
     if (!p.relationships) p.relationships = {}
+
+    // --- M3 businesses (missing on v4-and-older saves; legacy entries upgraded) ---
+    if (!p.businesses) p.businesses = []
+    p.businesses = p.businesses.map((b) => ({
+      ...b,
+      accrued: typeof b.accrued === 'number' ? b.accrued : 0,
+      lastAccrualDay: typeof b.lastAccrualDay === 'number' ? b.lastAccrualDay : save.world?.day ?? 1,
+      openedDay: typeof b.openedDay === 'number' ? b.openedDay : save.world?.day ?? 1,
+    }))
 
     // --- M2 civic mesh (missing on v3-and-older saves) ---
     if (!save.civic) {

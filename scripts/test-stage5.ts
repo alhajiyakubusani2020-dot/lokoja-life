@@ -124,7 +124,7 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   mem.set(SaveSystem.SAVE_KEY, v2)
   const loaded2 = SaveSystem.load()
   check('v2 save loads', loaded2 !== null)
-  check('v2 upgraded to v4', loaded2?.version === 4)
+  check('v2 upgraded to v5', loaded2?.version === 5)
   check('v2 player gets empty garage / bank / strangers', loaded2?.player.vehicles.length === 0 && loaded2?.player.bankBalance === 0 && Object.keys(loaded2?.player.relationships ?? {}).length === 0)
   check('v2 player keeps cash + ledger', loaded2?.player.cash === 4200 && loaded2?.player.transactions.length === 0)
   check('v2 world untouched', loaded2?.world.day === 6 && loaded2?.world.currentLocation === 'kpata-market')
@@ -136,7 +136,7 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   const v1 = JSON.stringify({ version: 1, createdAt: 1, updatedAt: 2, player: v1Player, world: baseWorld, settings: { sound: true } })
   mem.set(SaveSystem.SAVE_KEY, v1)
   const loaded1 = SaveSystem.load()
-  check('v1 save loads and reaches v4', loaded1?.version === 4)
+  check('v1 save loads and reaches v5', loaded1?.version === 5)
   check('v1 gets Stage 3 defaults too', loaded1?.player.skillXp.hustle === 0 && Array.isArray(loaded1?.player.activeOpportunities))
   check('v1 gets Stage 5 defaults too', loaded1?.player.vehicles.length === 0 && loaded1?.player.bankBalance === 0)
 
@@ -148,7 +148,7 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   mem.delete(SaveSystem.SAVE_KEY)
   const { freshCivicState } = await import('../src/game/systems/civic')
   const fresh: GameSave = {
-    version: 4, createdAt: 1, updatedAt: 2,
+    version: 5, createdAt: 1, updatedAt: 2,
     player: { ...basePlayer, skillXp: { hustle: 0, smart: 0, social: 0 }, activeOpportunities: [], cooldowns: {}, transactions: [], stats: { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }, vehicles: [{ id: 'okada-1-1', model: 'okada', plate: 'LKO-111-AB', boughtDay: 1 }], bankBalance: 9000, relationships: { musa: { familiarity: 40, lastChatDay: 3 } } },
     world: baseWorld,
     civic: freshCivicState(),

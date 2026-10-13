@@ -73,6 +73,14 @@ import {
   marketForDay,
   type CivicDayResult,
 } from '../systems/civic'
+import {
+  bizDayRoll,
+  bizDef,
+  bizOwned,
+  bizUpgradeCost,
+  bizCollect,
+  freshBusiness,
+} from '../systems/biz'
 import { CIVIC } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
@@ -121,6 +129,14 @@ interface GameStore {
   fileEfccTip: () => boolean
   /** Today's honest market price of a meal at a given spot (UI display + eatMeal agree). */
   mealPriceAt: (mealKey: string, locationId: string) => number
+
+  /* M3 — OWN THE CITY (businesses) */
+  /** Buy the shop hosted at its real location (cash + level gated). */
+  buyBiz: (typeId: string) => boolean
+  /** Empty a shop's till. 'shop' = in person, free; 'phone' = transfer, minus fee. */
+  collectBiz: (typeId: string, channel: 'shop' | 'phone') => boolean
+  /** Upgrade a shop one level (cost from bizUpgradeCost). */
+  upgradeBiz: (typeId: string) => boolean
 
   /* Stage 5 — ownership, banking, social life */
   /** Buy a vehicle at the motor park (one per model). False = couldn't afford / owned. */
@@ -205,11 +221,11 @@ interface CivicAgg {
 }
 
 /** Pure: roll the civic mesh forward day by day (assessments land on exact days). */
-function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: number, newDay: number): { civic: CivicState; agg: CivicAgg } {
+function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: number, newDay: number, bizCount = 0): { civic: CivicState; agg: CivicAgg } {
   let cur = civic
   const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0 }
   for (let d = prevDay + 1; d <= newDay; d++) {
-    const r = civicDayRoll(cur, totalEarned, d)
+    const r = civicDayRoll(cur, totalEarned, d, bizCount)
     cur = r.next
     agg.nepaPosted += r.nepaPosted
     agg.nepaShed = agg.nepaShed || r.nepaShed
@@ -231,8 +247,24 @@ function commitCivicDays(
 ): void {
   const { civic, player, world } = get()
   if (!civic || !player || !world || newDay <= prevDay) return
-  const { civic: rolled, agg } = civicRollForDays(civic, player.stats.totalEarned, prevDay, newDay)
+  const bizCount = player.businesses.length
+  const { civic: rolled, agg } = civicRollForDays(civic, player.stats.totalEarned, prevDay, newDay, bizCount)
   set({ civic: rolled })
+
+  // M3 — the shops earn while the city turns: accrue into each till (market
+  // multipliers read the ALREADY-ROLLED civic slice). Tax only sees this
+  // money when it is collected (addMoney → ledger → totalEarned).
+  if (player.businesses.length > 0) {
+    const bizRes = bizDayRoll(player.businesses, prevDay, newDay, rolled, player.reputation)
+    if (bizRes.total > 0) {
+      const p0 = get().player!
+      set({ player: { ...p0, businesses: bizRes.next } })
+      get().notify({ icon: '🧺', text: `Your shop${player.businesses.length > 1 ? 's' : ''} made ${formatNaira(bizRes.total)} — go collect am.`, tone: 'good' })
+    } else {
+      const p0 = get().player!
+      set({ player: { ...p0, businesses: bizRes.next } })
+    }
+  }
 
   // whistleblower rewards land as honest hustle income (ledger remembers)
   if (agg.tipReward > 0) {
@@ -572,6 +604,96 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!meal || !world) return meal?.price ?? 0
     const c = marketForDay(civic ?? freshCivicState(), world.day)
     return marketMealPrice(meal.price, mealKey, locationId, c, world.day)
+  },
+
+  /* ---------------------- M3 — OWN THE CITY (biz) ---------------------- */
+
+  buyBiz: (typeId) => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const def = bizDef(typeId)
+    if (!def) return false
+    if (bizOwned(player.businesses, typeId)) {
+      get().notify({ icon: def.emoji, text: `You already run the ${def.name}. One per man for now.`, tone: 'neutral' })
+      return false
+    }
+    if (player.level < def.unlockLevel) {
+      get().notify({ icon: '🔒', text: `${def.name} opens at Level ${def.unlockLevel}. Keep pushing.`, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(def.buyCost, { label: `Bought: ${def.name}`, category: 'other' })) {
+      get().notify({ icon: '💰', text: `${def.name} costs ${formatNaira(def.buyCost)}. You no reach yet.`, tone: 'bad' })
+      return false
+    }
+    const shop = freshBusiness(typeId, world.day)
+    const p = get().player!
+    set({ player: { ...p, businesses: [...p.businesses, shop] } })
+    get().notify({ icon: def.emoji, text: `${def.name} na yours now! Income go dey enter the till daily.`, tone: 'good' })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  collectBiz: (typeId, channel) => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const def = bizDef(typeId)
+    const shop = bizOwned(player.businesses, typeId)
+    if (!def || !shop) return false
+    if (channel === 'shop' && world.currentLocation !== def.locationId) {
+      const where = LOCATION_BY_ID[def.locationId]?.shortName ?? def.locationId
+      get().notify({ icon: def.emoji, text: `The ${def.name} dey ${where} — the money dey wait for you there.`, tone: 'neutral' })
+      return false
+    }
+    const gross = Math.round(shop.accrued)
+    if (gross <= 0) {
+      get().notify({ icon: '🧺', text: 'The till is empty — come back tomorrow.', tone: 'neutral' })
+      return false
+    }
+    const fee = channel === 'phone' ? CIVIC.phonePayFee : 0
+    const net = Math.max(0, gross - fee)
+    if (net <= 0) {
+      get().notify({ icon: '📱', text: 'The money never even reach transfer fee. Wait small.', tone: 'neutral' })
+      return false
+    }
+    const { next } = bizCollect(shop, world.day)
+    const p = get().player!
+    set({ player: { ...p, businesses: p.businesses.map((b) => (b.typeId === typeId ? next : b)) } })
+    get().addMoney(net, {
+      label: fee ? `${def.name} till (phone, incl. fee)` : `${def.name} till`,
+      category: 'hustle',
+    })
+    get().notify({
+      icon: def.emoji,
+      text: fee ? `Collected ${formatNaira(net)} by transfer (₦${fee} fee don go).` : `Collected ${formatNaira(net)} from the till. Solid.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  upgradeBiz: (typeId) => {
+    const { player } = get()
+    if (!player) return false
+    const def = bizDef(typeId)
+    const shop = bizOwned(player.businesses, typeId)
+    if (!def || !shop) return false
+    const cost = bizUpgradeCost(typeId, shop.level)
+    if (cost === null) {
+      get().notify({ icon: def.emoji, text: `${def.name} don reach max level. Na big name you be.`, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(cost, { label: `Upgraded: ${def.name} → L${shop.level + 1}`, category: 'other' })) {
+      get().notify({ icon: '💰', text: `Upgrade costs ${formatNaira(cost)}. Gather am first.`, tone: 'bad' })
+      return false
+    }
+    const p = get().player!
+    set({ player: { ...p, businesses: p.businesses.map((b) => (b.typeId === typeId ? { ...b, level: b.level + 1 } : b)) } })
+    get().notify({ icon: def.emoji, text: `${def.name} don level up to L${shop.level + 1} — income go show am.`, tone: 'good' })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
   },
 
   /* ------------------ Stage 5 — ownership, bank, social ------------------ */

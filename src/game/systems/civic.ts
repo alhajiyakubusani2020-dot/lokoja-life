@@ -16,7 +16,7 @@
  */
 
 import type { CivicState, EfccTip, MarketEvent } from '../types'
-import { CIVIC } from '../data/config'
+import { BIZ, CIVIC } from '../data/config'
 
 /* ------------------------------ tiny hash core ------------------------------ */
 
@@ -61,9 +61,15 @@ export function freshCivicState(): CivicState {
 /* ---------------------------------- NEPA ------------------------------------ */
 
 /** The bill posted on a given billing day — deterministic per day. */
-export function nepaBillFor(day: number): number {
+/**
+ * The metered bill for a billing day. `bizCount` = owned businesses — every
+ * fridge/freezer/POS on your meter loads it (M3: BIZ.nepaLoadPerBiz each).
+ */
+export function nepaBillFor(day: number, bizCount = 0): number {
   const { baseBill, billVariance } = CIVIC.nepa
-  return Math.round((baseBill + unit('nepa', day) * billVariance) / 10) * 10
+  const flat = baseBill + unit('nepa', day) * billVariance
+  const loaded = flat * (1 + Math.max(0, bizCount) * BIZ.nepaLoadPerBiz)
+  return Math.round(loaded / 10) * 10
 }
 
 /** Is a NEPA bill posting today? Bills post every cycleDays from day 1. */
@@ -78,13 +84,14 @@ export function nepaBillDueToday(civic: CivicState, day: number): boolean {
 export function nepaDayRoll(
   civic: CivicState,
   day: number,
+  bizCount = 0,
 ): { next: CivicState; posted: number; shed: boolean } {
   let nepa = { ...civic.nepa }
   let posted = 0
   let shed = false
 
   if (nepaBillDueToday(civic, day)) {
-    posted = nepaBillFor(day)
+    posted = nepaBillFor(day, bizCount)
     nepa.owed += posted
     nepa.cycleStart = day
     nepa.paidThrough = day + CIVIC.nepa.cycleDays - 1
@@ -330,8 +337,8 @@ export interface CivicDayResult {
  * advances (sleep). Idempotent per (state, day): every sub-roll is
  * guarded by its own "already done" marker.
  */
-export function civicDayRoll(civic: CivicState, totalEarned: number, day: number): CivicDayResult {
-  const nepa = nepaDayRoll(civic, day)
+export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0): CivicDayResult {
+  const nepa = nepaDayRoll(civic, day, bizCount)
   const kgirs = kgirsDayRoll(nepa.next, totalEarned, day)
   const efcc = efccDayRoll(kgirs.next, day)
   const market = marketDayRoll(efcc.next, day)

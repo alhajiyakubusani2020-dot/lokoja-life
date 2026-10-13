@@ -51,11 +51,21 @@ export interface InventoryItem {
   quantity: number
 }
 
+/**
+ * M3 — one business the player owns (data only; rules live in systems/biz).
+ * `id` and `typeId` both carry the BIZ.types key (one shop per type).
+ */
 export interface BusinessState {
   id: string
   typeId: string
   level: number
-  /** last time income was collected (epoch ms) */
+  /** unclaimed naira sitting in the shop till */
+  accrued: number
+  /** absolute in-game day the shop last accrued income (accrual cap + idempotence) */
+  lastAccrualDay: number
+  /** in-game day the shop opened */
+  openedDay: number
+  /** last time income was collected (epoch ms) — legacy field, kept for old saves */
   lastCollectedAt: number | null
 }
 

@@ -26,8 +26,10 @@ import { formatNaira } from '@/game/systems/progression'
 import { canChat, relationshipFor, tierFor, TIER_META } from '@/game/systems/social'
 import { hustleDefFor } from '@/game/systems/opportunities'
 import { absoluteSlot } from '@/game/systems/world'
-import { nepaSettleCost, kgirsSettleCost } from '@/game/systems/civic'
-import { CIVIC } from '@/game/data/config'
+import { nepaSettleCost, kgirsSettleCost, marketForDay } from '@/game/systems/civic'
+import { BIZ_TYPES, bizIncomeFor, bizUpgradeCost } from '@/game/systems/biz'
+import { BIZ, CIVIC } from '@/game/data/config'
+import type { BusinessState } from '@/game/types'
 import { NPCS } from '@/game/data/npcs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -47,7 +49,7 @@ import {
   TargetIcon,
 } from '../icons'
 
-type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'settings'
+type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings'
 
 const APP_VERSION = 'Lokoja Life • Stage 5'
 
@@ -614,6 +616,13 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
       icon: CoinsIcon,
     },
     {
+      key: 'biz',
+      label: 'My Biz',
+      sub: bizTileSub(player.businesses),
+      tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]',
+      icon: TargetIcon,
+    },
+    {
       key: 'settings',
       label: 'Settings',
       sub: settings.sound ? 'Sound dey on' : 'Sound dey off',
@@ -627,6 +636,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     bank: 'Bank',
     hustle: 'Hustle Board',
     civic: 'Civic',
+    biz: 'My Biz',
     settings: 'Settings',
   }
 
@@ -685,6 +695,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
                   {app === 'bank' && <BankApp />}
                   {app === 'hustle' && <HustleApp onOpenWork={() => onOpenWork?.()} />}
                   {app === 'civic' && <CivicApp />}
+                  {app === 'biz' && <BizApp />}
                   {app === 'settings' && <SettingsApp />}
                 </div>
               </>
@@ -704,6 +715,85 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* --------------------------------- biz app --------------------------------- */
+
+/** tile subtitle: shops owned + the total waiting in their tills */
+function bizTileSub(list: BusinessState[]): string {
+  if (!list.length) return 'Own a shop for Lokoja'
+  const till = list.reduce((s, b) => s + b.accrued, 0)
+  return till > 0 ? `${list.length} shop${list.length > 1 ? 's' : ''} · ${formatNaira(till)} inside` : `${list.length} shop${list.length > 1 ? 's' : ''} · tills empty`
+}
+
+/**
+ * M3 — My Biz: every Lokoja shopfront, owned or not. Owned shops collect
+ * by phone (the same ₦50 convenience fee every remote civic payment pays)
+ * or in person at the shop for free; upgrades land right here too.
+ */
+function BizApp() {
+  const player = useGameStore((s) => s.player)!
+  const world = useGameStore((s) => s.world)!
+  const civic = useGameStore((s) => s.civic)!
+  const collectBiz = useGameStore((s) => s.collectBiz)
+  const upgradeBiz = useGameStore((s) => s.upgradeBiz)
+
+  return (
+    <div className="flex flex-col gap-2 pb-2">
+      {Object.entries(BIZ_TYPES).map(([typeId, def]) => {
+        const shop = player.businesses.find((b) => b.typeId === typeId)
+        const where = LOCATION_BY_ID[def.locationId]?.shortName ?? def.locationId
+        const today = bizIncomeFor(typeId, shop?.level ?? 1, world.day, marketForDay(civic, world.day), player.reputation)
+        const cost = shop ? bizUpgradeCost(typeId, shop.level) : null
+        return (
+          <div key={typeId} className="rounded-2xl border border-black/[0.05] bg-white p-3">
+            <p className="flex items-center gap-1.5 text-[12.5px] font-extrabold">
+              <span aria-hidden>{def.emoji}</span> {def.name}
+              <span className="ml-auto rounded-full bg-[var(--lko-cream)] px-2 py-0.5 text-[9.5px] font-extrabold text-[var(--lko-ink-soft)]">
+                {where}
+              </span>
+            </p>
+            {!shop && (
+              <p className="mt-1.5 text-[11.5px] font-bold text-[var(--lko-ink-soft)]">
+                {player.level < def.unlockLevel
+                  ? `Opens at Level ${def.unlockLevel} · ${formatNaira(def.buyCost)}`
+                  : `For sale at ${where} · ${formatNaira(def.buyCost)} — go there buy am`}
+              </p>
+            )}
+            {shop && (
+              <>
+                <div className="mt-1.5 flex items-center justify-between text-[11.5px] font-bold text-[var(--lko-ink-soft)]">
+                  <span>L{shop.level}/{BIZ.maxLevel} · ~{formatNaira(today)}/day</span>
+                  <span className="lko-num font-extrabold text-[var(--lko-ink)]">{formatNaira(shop.accrued)}</span>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => { audio.play('click'); collectBiz(typeId, 'phone') }}
+                    disabled={shop.accrued <= CIVIC.phonePayFee}
+                    className="lko-press min-h-[40px] flex-1 rounded-xl bg-[var(--lko-green)] text-[12px] font-extrabold text-white disabled:opacity-45"
+                  >
+                    Collect (+{formatNaira(CIVIC.phonePayFee)} fee)
+                  </button>
+                  {cost !== null && (
+                    <button
+                      onClick={() => { audio.play('click'); upgradeBiz(typeId) }}
+                      disabled={player.cash < cost}
+                      className="lko-press min-h-[40px] flex-1 rounded-xl border border-[var(--lko-green)]/40 bg-white text-[12px] font-extrabold text-[var(--lko-green-deep)] disabled:opacity-45"
+                    >
+                      Upgrade · {formatNaira(cost)}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )
+      })}
+      <p className="px-1.5 pt-1 text-center text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
+        Collecting in person at the shop is always free — the fee na for phone transfer.
+      </p>
     </div>
   )
 }

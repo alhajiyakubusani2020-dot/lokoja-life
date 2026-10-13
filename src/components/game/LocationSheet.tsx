@@ -15,8 +15,9 @@ import { Btn, SheetShell } from './ui/kit'
 import { audio } from '@/game/systems/audio'
 import { formatNaira } from '@/game/systems/progression'
 import { calculateTravel, type TravelPlan } from '@/game/systems/travel'
-import { ECONOMY } from '@/game/data/config'
+import { ECONOMY, BIZ } from '@/game/data/config'
 import { LOCATION_BY_ID } from '@/game/data/locations'
+import { BizBlock } from './BizBlock'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 
@@ -186,6 +187,9 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
           </div>
         </>
       )}
+
+      {/* M3 — the shopfront: this location's business (buy / collect / upgrade) */}
+      {!isSelectedLocked && <BizBlock locationId={selected.id} />}
 
       {/* travel confirmation */}
       {!isSelectedCurrent && !isSelectedLocked && (

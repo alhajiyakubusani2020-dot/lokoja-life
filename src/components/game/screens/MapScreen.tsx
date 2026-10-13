@@ -20,6 +20,8 @@ import { formatNaira } from '@/game/systems/progression'
 import { calculateTravel, type TravelPlan } from '@/game/systems/travel'
 import { ECONOMY, TRAVEL, WORLD3D, FOOD } from '@/game/data/config'
 import { LOCATIONS, LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
+import { bizAtLocation } from '@/game/systems/biz'
+import { BizBlock } from '../BizBlock'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 import {
@@ -48,11 +50,17 @@ function Marker({
   location,
   isCurrent,
   isLocked,
+  bizDot,
+  civicAlert,
   onSelect,
 }: {
   location: LokojaLocation
   isCurrent: boolean
   isLocked: boolean
+  /** M3 — an owned business here has money sitting in the till */
+  bizDot?: boolean
+  /** M2 — the civic mesh is waiting at this pin (bill due / tax / warrant) */
+  civicAlert?: boolean
   onSelect: () => void
 }) {
   return (
@@ -80,6 +88,14 @@ function Marker({
           <span className="absolute -bottom-1.5 -right-1.5 flex items-center justify-center rounded-full border-2 border-white bg-[#5a5a52]" style={{ width: 18, height: 18 }}>
             <LockIcon size={9} className="text-white" />
           </span>
+        )}
+        {bizDot && !isLocked && (
+          <span className="absolute -top-1.5 -left-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 border-white bg-[var(--lko-gold)] text-[8px] font-black text-[#3d2a00]" style={{ width: 18, height: 18 }} aria-hidden>
+            ₦
+          </span>
+        )}
+        {civicAlert && !isLocked && (
+          <span className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 animate-pulse rounded-full border-2 border-white bg-[#c0392b]" style={{ width: 14, height: 14 }} aria-hidden />
         )}
       </span>
       <span
@@ -171,6 +187,7 @@ export function MapScreen({
 }: MapScreenProps) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
+  const civic = useGameStore((s) => s.civic)!
   const isTravelling = useGameStore((s) => s.isTravelling)
   const travel = useGameStore((s) => s.travel)
   const eatMeal = useGameStore((s) => s.eatMeal)
@@ -279,15 +296,26 @@ export function MapScreen({
       <div className="-mx-2 sm:mx-auto w-auto sm:w-full sm:max-w-[620px] lg:max-w-[640px]">
         <div className="lko-card relative aspect-square w-full overflow-hidden p-0">
           <MapCanvas />
-          {LOCATIONS.map((l) => (
-            <Marker
-              key={l.id}
-              location={l}
-              isCurrent={l.id === origin.id && !isTravelling}
-              isLocked={player.level < l.unlockLevel}
-              onSelect={() => openLocation(l.id)}
-            />
-          ))}
+          {LOCATIONS.map((l) => {
+            // M3/M2 map layer — the city tells you where business & civic business waits
+            const host = bizAtLocation(l.id)
+            const owned = host ? player.businesses.find((b) => b.typeId === host.typeId) : undefined
+            const bizDot = !!owned && owned.accrued > 0
+            const civicAlert =
+              l.id === 'government-area' && !!civic &&
+              (civic.nepa.owed > 0 || civic.kgirs.assessed > 0 || civic.kgirs.warrant)
+            return (
+              <Marker
+                key={l.id}
+                location={l}
+                isCurrent={l.id === origin.id && !isTravelling}
+                isLocked={player.level < l.unlockLevel}
+                bizDot={bizDot}
+                civicAlert={civicAlert}
+                onSelect={() => openLocation(l.id)}
+              />
+            )
+          })}
           {isTravelling && (
             <div className="lko-scrim absolute inset-0 z-20 flex items-center justify-center bg-[var(--lko-cream)]/40 backdrop-blur-[1px]">
               <span className="lko-display flex items-center gap-2 rounded-full border border-[var(--lko-gold)]/40 bg-white/95 px-4 py-2 text-sm shadow-md">
@@ -331,6 +359,11 @@ export function MapScreen({
         <span className="inline-flex items-center gap-1"><TransportIcon name="walk" size={13} /> Walk is free but tiring</span>
         <span className="inline-flex items-center gap-1"><TransportIcon name="keke" size={13} /> Keke is cheap</span>
         <span className="inline-flex items-center gap-1"><TransportIcon name="taxi" size={13} /> Taxi is fastest</span>
+      </p>
+      {/* M3/M2 — the civic & business layer legend */}
+      <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-center text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+        <span className="inline-flex items-center gap-1"><span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--lko-gold)] text-[7px] font-black text-[#3d2a00]">₦</span> Your shop has money</span>
+        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-[#c0392b]" /> Government wan see you</span>
       </p>
 
       {/* ------------------------ location bottom sheet ------------------------ */}
@@ -466,6 +499,8 @@ export function MapScreen({
                       )
                     })}
                   </div>
+                  {/* M3 — the shopfront: this location's business (buy/collect/upgrade) */}
+                  {!isSelectedLocked && <BizBlock locationId={selected.id} />}
                 </>
               )}
 
