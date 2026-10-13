@@ -60,6 +60,7 @@ import {
   absoluteSlot,
 } from '../systems/world'
 import { calculateTravel, rollTravelEvent } from '../systems/travel'
+import { personalModelOf, resaleValue, transportAllowed } from '../systems/garage'
 import {
   freshCivicState,
   civicDayRoll,
@@ -141,6 +142,8 @@ interface GameStore {
   /* Stage 5 — ownership, banking, social life */
   /** Buy a vehicle at the motor park (one per model). False = couldn't afford / owned. */
   buyVehicle: (model: VehicleModel) => boolean
+  /** M4 — sell a garage ride back at the park (deterministic depreciation). */
+  sellVehicle: (vehicleId: string) => boolean
   /** Wardrobe — change appearance (merges over DEFAULT_AVATAR). */
   setAvatar: (avatar: AvatarConfig) => void
   /** Gym workout — needs shift + one honest clock slot. */
@@ -743,6 +746,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return true
   },
 
+  sellVehicle: (vehicleId) => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const vehicle = player.vehicles.find((v) => v.id === vehicleId)
+    if (!vehicle) return false
+    const def = VEHICLE_BY_MODEL[vehicle.model]
+    const value = resaleValue(vehicle.model, vehicle.boughtDay, world.day)
+    set({ player: { ...player, vehicles: player.vehicles.filter((v) => v.id !== vehicleId) } })
+    get().addMoney(value, {
+      label: `Sold ${def.short} (${vehicle.plate})`,
+      category: 'other',
+    })
+    get().notify({
+      icon: def.emoji,
+      text: `${def.short} sold for ${formatNaira(value)}. The park sabi your price.`,
+      tone: 'neutral',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
   setAvatar: (avatar) => {
     const { player } = get()
     if (!player) return
@@ -977,7 +1002,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       })
       return
     }
-    if (!destination.transport.includes(transportId)) return
+    // M4 — personal transport: the ride must be IN the garage first
+    const ownModel = personalModelOf(transportId)
+    if (ownModel && !player.vehicles.some((v) => v.model === ownModel)) {
+      audio.play('notify')
+      get().notify({
+        icon: '🔑',
+        text: `You no own that ride yet — the Motor Park sells them.`,
+        tone: 'bad',
+      })
+      return
+    }
+    // the ONE offer law: location data for public modes, ownership + road
+    // access for personal modes (a danfo cannot follow a keke trail)
+    if (!transportAllowed(destination, transportId, player.vehicles)) return
 
     // pure calculation — same inputs always give the same plan
     const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay)
@@ -1022,7 +1060,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const txs: Transaction[] = []
       if (plan.cost > 0) {
         txs.push(
-          recordTransaction(`Fare to ${destination.name}`, 'transport', -plan.cost, clock.day, arrivalSlot),
+          recordTransaction(
+            ownModel
+              ? `Fuel — ${VEHICLE_BY_MODEL[ownModel].short} to ${destination.name}`
+              : `Fare to ${destination.name}`,
+            'transport',
+            -plan.cost,
+            clock.day,
+            arrivalSlot,
+          ),
         )
       }
       if (event?.cashDelta && event.cashDelta > 0) {

@@ -24,6 +24,7 @@ import { audio } from '@/game/systems/audio'
 import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
 import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen } from './controls'
+import { sampleFor } from '@/game/systems/perfProbe'
 import { ALL_DOORS } from '@/game/world3d/schools'
 import { BRIDGES } from '@/game/world3d/layout'
 import { WorldScene } from './WorldScene'
@@ -183,6 +184,8 @@ export function WorldTab({
       bridges: () => BRIDGES.map((b) => ({ x: b.x, z: b.z, len: b.length, w: b.width, cls: b.cls })),
       /** M1 E2E — the current world clock slot (night screenshots) */
       timeOfDay: () => useGameStore.getState().world?.timeOfDay ?? 'morning',
+      /** M4 E2E — real-device fps capture: sample fresh frames, return the report */
+      fpsReport: (ms?: number) => sampleFor(ms ?? 3000, 'e2e capture'),
     }
     return () => {
       delete (window as unknown as { __lkl?: unknown }).__lkl

@@ -24,10 +24,12 @@ import { INTERIOR_BY_ID, type HotspotKind, type InteriorDef } from '@/game/world
 import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import type { TransportId, VehicleModel } from '@/game/types'
 import { calculateTravel } from '@/game/systems/travel'
+import { allTravelOptions } from '@/game/systems/garage'
 import { formatNaira } from '@/game/systems/progression'
 import { ambience } from '@/game/systems/ambience'
 import { audio } from '@/game/systems/audio'
 import { GaragePanel } from './GaragePanel'
+import { PerfChip } from './PerfChip'
 import {
   ArrowLeftIcon, CheckIcon, ClockIcon, CoinsIcon, EnergyIcon, KekeIcon,
   LockIcon, MapIcon, MoonIcon, PinIcon, PlaceIcon, TaxiIcon, WalkIcon,
@@ -44,6 +46,11 @@ const TRANSPORT_ICON: Record<TransportId, (p: { size?: number }) => React.ReactN
   walk: (p) => <WalkIcon {...p} />,
   keke: (p) => <KekeIcon {...p} />,
   taxi: (p) => <TaxiIcon {...p} />,
+  // M4 — personal rides ride their vehicle emoji (the garage is the icon source)
+  'own-okada': (p) => <span style={{ fontSize: (p.size ?? 20) * 0.95, lineHeight: 1 }} aria-hidden>🏍️</span>,
+  'own-keke': (p) => <span style={{ fontSize: (p.size ?? 20) * 0.95, lineHeight: 1 }} aria-hidden>🛺</span>,
+  'own-taxi': (p) => <span style={{ fontSize: (p.size ?? 20) * 0.95, lineHeight: 1 }} aria-hidden>🚕</span>,
+  'own-danfo': (p) => <span style={{ fontSize: (p.size ?? 20) * 0.95, lineHeight: 1 }} aria-hidden>🚐</span>,
 }
 
 /** anchors AND physical props (job boards) resolve to a real location panel */
@@ -704,6 +711,8 @@ export function HudOverlay({
           </div>
           {/* live minimap — north-up, discovered pins in colour (outdoors only) */}
           {!interior && <MiniMap discovered={discovered} />}
+          {/* M4 — real-device fps capture: live number + report the player can share */}
+          <PerfChip />
         </div>
       </div>
 
@@ -1131,20 +1140,27 @@ export function HudOverlay({
 
 function TravelSheet({ loc, onConfirm }: { loc: LokojaLocation; onConfirm: (t: TransportId) => void }) {
   const world = useGameStore((s) => s.world)!
+  const player = useGameStore((s) => s.player)!
   const origin = LOCATION_BY_ID[world.currentLocation]
 
-  const plans = loc.transport.map((t) => ({
-    t,
-    plan: calculateTravel(origin, loc, t, world.weather, world.timeOfDay),
-  }))
+  // M4 — public modes + YOUR rides, one shared offer law with the 2D map
+  const options = allTravelOptions(origin, loc, world.weather, world.timeOfDay, player.vehicles)
 
   return (
     <div className="flex flex-col gap-2 px-5 pb-4 pt-3">
       <p className="text-[12px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
         {loc.description}
       </p>
-      {plans.map(({ t, plan }) => (
-        <TravelRow key={t} transport={t} loc={loc} plan={plan} onConfirm={() => onConfirm(t)} />
+      {options.map((option) => (
+        <TravelRow
+          key={option.transport}
+          transport={option.transport}
+          loc={loc}
+          plan={option.plan}
+          label={option.label}
+          personal={option.personal}
+          onConfirm={() => onConfirm(option.transport)}
+        />
       ))}
       <p className="lko-num mt-1 text-center text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
         Trip time and fares follow the real weather and road conditions.
@@ -1157,11 +1173,17 @@ function TravelRow({
   transport,
   loc,
   plan,
+  label,
+  personal,
   onConfirm,
 }: {
   transport: TransportId
   loc: LokojaLocation
   plan: ReturnType<typeof calculateTravel>
+  /** M4 — display label ("Keke" / "Your Okada") */
+  label?: string
+  /** M4 — your own ride: fuel, not a fare */
+  personal?: boolean
   onConfirm: () => void
 }) {
   const player = useGameStore((s) => s.player)!
@@ -1170,19 +1192,24 @@ function TravelRow({
   const disabled = noCash || noEnergy
 
   const reason = noCash
-    ? `You need ${formatNaira(plan.cost)}`
+    ? `You need ${formatNaira(plan.cost)}${personal ? ' for fuel' : ''}`
     : noEnergy
       ? 'Too tired for this trip'
       : null
 
   return (
-    <div className={`lko-card flex items-center gap-3 p-3 ${disabled ? 'opacity-60' : ''}`}>
+    <div className={`lko-card flex items-center gap-3 p-3 ${disabled ? 'opacity-60' : ''} ${personal && !disabled ? 'border border-[var(--lko-gold)]/45' : ''}`}>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-cream)] text-[var(--lko-green-deep)]">
         {TRANSPORT_ICON[transport]({ size: 20 })}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] font-extrabold capitalize leading-tight">
-          {transport === 'walk' ? 'Walk' : transport}
+        <p className="text-[13.5px] font-extrabold leading-tight">
+          {label ?? (transport === 'walk' ? 'Walk' : transport)}
+          {personal && (
+            <span className="ml-1.5 rounded-full bg-[var(--lko-gold)]/25 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#8a5a00]">
+              fuel · no fare
+            </span>
+          )}
         </p>
         <p className="lko-num truncate text-[11px] font-semibold text-[var(--lko-ink-soft)]">
           {plan.minutes} min · {plan.energyCost} energy · {plan.distanceKm.toFixed(1)} km

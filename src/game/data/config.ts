@@ -154,7 +154,13 @@ export const ECONOMY = {
     walk: { label: 'Walk', emoji: '🚶', cost: { base: 0, perKm: 0 }, minutesPerKm: 4.8, energyPerKm: 3.2 },
     keke: { label: 'Keke', emoji: '🛺', cost: { base: 100, perKm: 60 }, minutesPerKm: 2.6, energyPerKm: 0.65 },
     taxi: { label: 'Taxi', emoji: '🚕', cost: { base: 300, perKm: 220 }, minutesPerKm: 1.3, energyPerKm: 0.32 },
-    // future: bus, motorcycle, personal car, boat — add entries here only
+    // M4 — THE GARAGE: your own rides. No fare — FUEL only, bought at the pump
+    // on departure (the store charges it like a fare but the ledger says fuel).
+    // Fuel < the public fare for the same trip: that is what ownership MEANS.
+    'own-okada': { label: 'Your Okada', emoji: '🏍️', cost: { base: 0, perKm: 45 }, minutesPerKm: 2.0, energyPerKm: 0.55 },
+    'own-keke': { label: 'Your Keke', emoji: '🛺', cost: { base: 0, perKm: 40 }, minutesPerKm: 2.4, energyPerKm: 0.6 },
+    'own-taxi': { label: 'Your Taxi', emoji: '🚕', cost: { base: 0, perKm: 130 }, minutesPerKm: 1.2, energyPerKm: 0.32 },
+    'own-danfo': { label: 'Your Danfo', emoji: '🚐', cost: { base: 0, perKm: 85 }, minutesPerKm: 2.1, energyPerKm: 0.38 },
   },
 
   /** Rent charged every N days per home (Stage 4). */
@@ -271,10 +277,10 @@ export const TRAVEL = {
   slotsPerTrip: 1,
   /** Minutes multiplier per transport in each weather (kept gentle by design). */
   weatherMinutesMultiplier: {
-    sunny: { walk: 1, keke: 1, taxi: 1 },
-    cloudy: { walk: 1, keke: 1, taxi: 1 },
-    rain: { walk: 1.4, keke: 1.15, taxi: 1.08 },
-    'night-clear': { walk: 1, keke: 1, taxi: 1 },
+    sunny: { walk: 1, keke: 1, taxi: 1, 'own-okada': 1, 'own-keke': 1, 'own-taxi': 1, 'own-danfo': 1 },
+    cloudy: { walk: 1, keke: 1, taxi: 1, 'own-okada': 1, 'own-keke': 1, 'own-taxi': 1, 'own-danfo': 1 },
+    rain: { walk: 1.4, keke: 1.15, taxi: 1.08, 'own-okada': 1.35, 'own-keke': 1.14, 'own-taxi': 1.06, 'own-danfo': 1.1 },
+    'night-clear': { walk: 1, keke: 1, taxi: 1, 'own-okada': 1, 'own-keke': 1, 'own-taxi': 1, 'own-danfo': 1 },
   },
   /** Chance (0–1) that a travel event rolls on a completed trip. */
   eventChance: 0.3,

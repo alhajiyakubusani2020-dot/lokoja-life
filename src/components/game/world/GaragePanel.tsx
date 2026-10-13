@@ -13,13 +13,16 @@ import { useGameStore } from '@/game/store/useGameStore'
 import { VEHICLES, VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import type { VehicleModel } from '@/game/types'
 import { formatNaira } from '@/game/systems/progression'
+import { resaleValue } from '@/game/systems/garage'
 import { audio } from '@/game/systems/audio'
 import { CheckIcon, CoinsIcon } from '../icons'
 import { requestEnterVehicle } from './controls'
 
 export function GaragePanel({ onClose }: { onClose: () => void }) {
   const player = useGameStore((s) => s.player)!
+  const world = useGameStore((s) => s.world)!
   const buyVehicle = useGameStore((s) => s.buyVehicle)
+  const sellVehicle = useGameStore((s) => s.sellVehicle)
   const cash = player.cash
   const owned = player.vehicles
 
@@ -32,6 +35,11 @@ export function GaragePanel({ onClose }: { onClose: () => void }) {
   const buy = (model: VehicleModel) => {
     audio.play('click')
     buyVehicle(model) // store notifies + plays its own reward sound
+  }
+
+  const sell = (vehicleId: string) => {
+    audio.play('click')
+    sellVehicle(vehicleId) // store notifies with the honest resale price
   }
 
   return (
@@ -66,7 +74,7 @@ export function GaragePanel({ onClose }: { onClose: () => void }) {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-extrabold leading-tight">{def.label}</span>
                     <span className="lko-num block truncate text-[10.5px] font-bold text-[var(--lko-green)]">
-                      OWNED · plate {v.plate}
+                      OWNED · plate {v.plate} · sells for {formatNaira(resaleValue(v.model, v.boughtDay, world.day))}
                     </span>
                   </span>
                   <button
@@ -74,6 +82,14 @@ export function GaragePanel({ onClose }: { onClose: () => void }) {
                     className="lko-press flex h-10 shrink-0 items-center gap-1 rounded-xl bg-[var(--lko-green)] px-3.5 text-[12.5px] font-extrabold text-white"
                   >
                     Drive
+                  </button>
+                  <button
+                    data-testid="garage-sell"
+                    onClick={() => sell(v.id)}
+                    aria-label={`Sell ${def.short} for ${formatNaira(resaleValue(v.model, v.boughtDay, world.day))}`}
+                    className="lko-press flex h-10 shrink-0 items-center rounded-xl border border-black/10 bg-black/[0.04] px-3 text-[12px] font-extrabold text-[var(--lko-ink-soft)]"
+                  >
+                    Sell
                   </button>
                 </div>
               )
@@ -121,7 +137,7 @@ export function GaragePanel({ onClose }: { onClose: () => void }) {
       })}
 
       <p className="text-center text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
-        One ride per model. Driving sip small energy — no be trekking.
+        One ride per model. Your rides run on FUEL on the map — no fare. Driving sip small energy — no be trekking.
       </p>
 
       <button

@@ -21,6 +21,7 @@ import { CityMesh } from './CityMesh'
 import { SchoolMesh } from './SchoolMesh'
 import { Birds, Npcs, PlayerController, Rain, SmokeWisps, Traffic } from './Actors'
 import { DriveSystem } from './DriveSystem'
+import { setPerfRenderer } from '@/game/systems/perfProbe'
 
 /* --------------------------------- device tier -------------------------------- */
 
@@ -351,6 +352,9 @@ export function WorldScene({
             ;(window as unknown as Record<string, unknown>).__lklRenderer = gl
           }
         }
+        // M4: the perf probe reads renderer.info on BOTH tiers — real-device
+        // diagnostics must work in production and on weak phones too
+        setPerfRenderer(gl)
         onReady?.()
       }}
       style={{ position: 'absolute', inset: 0, touchAction: 'none' }}

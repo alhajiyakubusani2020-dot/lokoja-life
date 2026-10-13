@@ -17,10 +17,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { MapCanvas } from '../MapCanvas'
 import { audio } from '@/game/systems/audio'
 import { formatNaira } from '@/game/systems/progression'
-import { calculateTravel, type TravelPlan } from '@/game/systems/travel'
+import { type TravelPlan } from '@/game/systems/travel'
+import { allTravelOptions } from '@/game/systems/garage'
 import { ECONOMY, TRAVEL, WORLD3D, FOOD } from '@/game/data/config'
 import { LOCATIONS, LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
 import { bizAtLocation } from '@/game/systems/biz'
+import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import { BizBlock } from '../BizBlock'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -52,6 +54,7 @@ function Marker({
   isLocked,
   bizDot,
   civicAlert,
+  garageDot,
   onSelect,
 }: {
   location: LokojaLocation
@@ -61,6 +64,8 @@ function Marker({
   bizDot?: boolean
   /** M2 — the civic mesh is waiting at this pin (bill due / tax / warrant) */
   civicAlert?: boolean
+  /** M4 — the Motor Park garage sells rides here */
+  garageDot?: boolean
   onSelect: () => void
 }) {
   return (
@@ -97,6 +102,16 @@ function Marker({
         {civicAlert && !isLocked && (
           <span className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 animate-pulse rounded-full border-2 border-white bg-[#c0392b]" style={{ width: 14, height: 14 }} aria-hidden />
         )}
+        {garageDot && !isLocked && (
+          <span
+            data-testid="map-garage-dot"
+            className="absolute -bottom-1.5 -left-1.5 flex items-center justify-center rounded-full border-2 border-white bg-[#3f6b4f] text-[8px]"
+            style={{ width: 18, height: 18 }}
+            aria-hidden
+          >
+            🔧
+          </span>
+        )}
       </span>
       <span
         className={`mt-1 rounded-md px-1.5 py-px text-[9px] font-extrabold leading-tight shadow-sm ${
@@ -115,6 +130,8 @@ function TravelOptionRow({
   plan,
   label,
   transport,
+  personal,
+  emoji,
   disabled,
   disabledReason,
   onConfirm,
@@ -122,6 +139,10 @@ function TravelOptionRow({
   plan: TravelPlan
   label: string
   transport: TransportId
+  /** M4 — your own ride: fuel, not a fare */
+  personal?: boolean
+  /** M4 — emoji for personal rides (TransportIcon only knows public modes) */
+  emoji?: string
   disabled: boolean
   disabledReason: string
   onConfirm: () => void
@@ -133,7 +154,9 @@ function TravelOptionRow({
       className={`lko-press flex min-h-[56px] w-full items-center gap-3 rounded-xl border px-3 py-2 text-left ${
         disabled
           ? 'cursor-not-allowed border-black/[0.05] bg-black/[0.03] opacity-60'
-          : 'border-black/[0.07] bg-white hover:border-[var(--lko-green)]/50'
+          : personal
+            ? 'border-[var(--lko-gold)]/50 bg-[var(--lko-gold-soft)]/40 hover:border-[var(--lko-gold)]'
+            : 'border-black/[0.07] bg-white hover:border-[var(--lko-green)]/50'
       }`}
     >
       <span
@@ -142,10 +165,17 @@ function TravelOptionRow({
         }`}
         aria-hidden
       >
-        <TransportIcon name={transport} size={20} />
+        {personal && emoji ? <span className="text-[19px] leading-none">{emoji}</span> : <TransportIcon name={transport as 'walk' | 'keke' | 'taxi'} size={20} />}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-extrabold text-[var(--lko-ink)]">{label}</span>
+        <span className="block text-sm font-extrabold text-[var(--lko-ink)]">
+          {label}
+          {personal && (
+            <span className="ml-1.5 rounded-full bg-[var(--lko-gold)]/25 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#8a5a00]">
+              fuel · no fare
+            </span>
+          )}
+        </span>
         <span className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
           {disabled ? (
             disabledReason
@@ -238,13 +268,11 @@ export function MapScreen({
   const isSelectedCurrent = selected?.id === origin.id
   const isSelectedLocked = !!selected && player.level < selected.unlockLevel
 
-  // travel plans for the selected destination — one per available transport
-  const plans = useMemo<TravelPlan[]>(() => {
+  // travel options for the selected destination — public modes + YOUR rides (M4)
+  const plans = useMemo(() => {
     if (!selected || isSelectedCurrent || isSelectedLocked) return []
-    return selected.transport.map((t) =>
-      calculateTravel(origin, selected, t, world.weather, world.timeOfDay),
-    )
-  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay])
+    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles)
+  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles])
 
   const openLocation = (id: string) => {
     audio.play('click')
@@ -284,6 +312,24 @@ export function MapScreen({
           Day {world.day}
         </span>
       </div>
+      {/* M4 — your rides: the garage follows you onto the map */}
+      {player.vehicles.length > 0 && (
+        <p
+          data-testid="map-rides"
+          className="mb-2 flex flex-wrap items-center gap-1.5 px-1 text-[11px] font-bold text-[var(--lko-ink-soft)]"
+        >
+          <span className="text-[10px] font-extrabold uppercase tracking-wide">Your rides:</span>
+          {player.vehicles.map((v) => (
+            <span
+              key={v.id}
+              className="inline-flex items-center gap-1 rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[10.5px] font-extrabold text-[#8a5a00]"
+            >
+              {VEHICLE_BY_MODEL[v.model].emoji} {VEHICLE_BY_MODEL[v.model].short}
+              <span className="lko-num font-bold opacity-70">{v.plate}</span>
+            </span>
+          ))}
+        </p>
+      )}
       {WEATHER_HINT[world.weather] && (
         <p className="mb-2 flex items-center gap-1.5 px-1 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
           <WeatherIcon name={world.weather} size={13} />
@@ -312,6 +358,7 @@ export function MapScreen({
                 isLocked={player.level < l.unlockLevel}
                 bizDot={bizDot}
                 civicAlert={civicAlert}
+                garageDot={l.id === 'transport-area'}
                 onSelect={() => openLocation(l.id)}
               />
             )
@@ -359,6 +406,11 @@ export function MapScreen({
         <span className="inline-flex items-center gap-1"><TransportIcon name="walk" size={13} /> Walk is free but tiring</span>
         <span className="inline-flex items-center gap-1"><TransportIcon name="keke" size={13} /> Keke is cheap</span>
         <span className="inline-flex items-center gap-1"><TransportIcon name="taxi" size={13} /> Taxi is fastest</span>
+      </p>
+      {/* M4 — the garage layer legend */}
+      <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-center text-[11px] font-semibold text-[var(--lko-ink-soft)]">
+        <span className="inline-flex items-center gap-1"><span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#3f6b4f] text-[7px]">🔧</span> Motor Park garage sells rides</span>
+        <span className="inline-flex items-center gap-1">🏍️ Your rides sip fuel — no fare</span>
       </p>
       {/* M3/M2 — the civic & business layer legend */}
       <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-center text-[11px] font-semibold text-[var(--lko-ink-soft)]">
@@ -508,26 +560,27 @@ export function MapScreen({
               {!isSelectedCurrent && !isSelectedLocked && (
                 <>
                   <h4 className="lko-num mb-1.5 mt-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
-                    Travel to {selected.name}? ({plans[0]?.distanceKm.toFixed(1)} km from {origin.shortName})
+                    Travel to {selected.name}? ({plans[0]?.plan.distanceKm.toFixed(1)} km from {origin.shortName})
                   </h4>
                   <div className="flex flex-col gap-2">
-                    {plans.map((plan) => {
-                      const params = ECONOMY.transport[plan.transport]
-                      const tooPoor = player.cash < plan.cost
-                      const tooTired = player.needs.energy < plan.energyCost
+                    {plans.map((option) => {
+                      const tooPoor = player.cash < option.plan.cost
+                      const tooTired = player.needs.energy < option.plan.energyCost
                       return (
                         <TravelOptionRow
-                          key={plan.transport}
-                          plan={plan}
-                          label={params.label}
-                          transport={plan.transport}
+                          key={option.transport}
+                          plan={option.plan}
+                          label={option.label}
+                          transport={option.transport}
+                          personal={option.personal}
+                          emoji={option.emoji}
                           disabled={tooPoor || tooTired}
                           disabledReason={
                             tooPoor
-                              ? `You need ${formatNaira(plan.cost)} for this fare`
+                              ? `You need ${formatNaira(option.plan.cost)} for this ${option.personal ? 'fuel' : 'fare'}`
                               : 'You are too tired for this trip'
                           }
-                          onConfirm={() => confirmTravel(plan.transport)}
+                          onConfirm={() => confirmTravel(option.transport)}
                         />
                       )
                     })}

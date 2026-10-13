@@ -238,8 +238,15 @@ export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night'
 
 export type Weather = 'sunny' | 'cloudy' | 'rain' | 'night-clear'
 
-/** Player-usable transport modes (Stage 2). Future: bus, motorcycle, car, boat. */
-export type TransportId = 'walk' | 'keke' | 'taxi'
+/** Player-usable transport modes. M4: `own-*` = your garage rides (fuel, no fare). */
+export type TransportId = 'walk' | 'keke' | 'taxi' | 'own-okada' | 'own-keke' | 'own-taxi' | 'own-danfo'
+
+/** The personal (garage-owned) transport modes, one per vehicle model. */
+export type PersonalTransportId = 'own-okada' | 'own-keke' | 'own-taxi' | 'own-danfo'
+
+export function isPersonalTransport(t: TransportId): t is PersonalTransportId {
+  return t.startsWith('own-')
+}
 
 export interface WorldState {
   /** in-game day counter, starts at 1 */

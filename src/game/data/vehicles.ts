@@ -13,6 +13,8 @@ import type { VehicleModel } from '../types'
 export interface VehicleDef {
   model: VehicleModel
   label: string
+  /** short display name — "Your Okada" rows on the map/travel sheets */
+  short: string
   emoji: string
   /** 💰 showroom price */
   price: number
@@ -30,6 +32,7 @@ export const VEHICLES: VehicleDef[] = [
   {
     model: 'okada',
     label: 'Okada (Motorcycle)',
+    short: 'Okada',
     emoji: '🏍️',
     price: 85_000,
     description: 'The people\'s engine. Slip through traffic, own the back streets.',
@@ -40,6 +43,7 @@ export const VEHICLES: VehicleDef[] = [
   {
     model: 'keke',
     label: 'Keke Napep (Tricycle)',
+    short: 'Keke',
     emoji: '🛺',
     price: 180_000,
     description: 'Yellow-and-green hustle. Steady, honest, everywhere welcome.',
@@ -50,6 +54,7 @@ export const VEHICLES: VehicleDef[] = [
   {
     model: 'taxi',
     label: 'Taxi (Saloon Car)',
+    short: 'Taxi',
     emoji: '🚕',
     price: 420_000,
     description: 'Four doors and a meter. Respect arrives before you do.',
@@ -60,6 +65,7 @@ export const VEHICLES: VehicleDef[] = [
   {
     model: 'danfo',
     label: 'Danfo (Minibus)',
+    short: 'Danfo',
     emoji: '🚐',
     price: 750_000,
     description: 'A moving enterprise. When you buy this one, Lokoja knows your name.',

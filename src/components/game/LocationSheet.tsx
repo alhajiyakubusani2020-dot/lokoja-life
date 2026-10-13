@@ -14,8 +14,9 @@ import { Icon } from './ui/icons'
 import { Btn, SheetShell } from './ui/kit'
 import { audio } from '@/game/systems/audio'
 import { formatNaira } from '@/game/systems/progression'
-import { calculateTravel, type TravelPlan } from '@/game/systems/travel'
-import { ECONOMY, BIZ } from '@/game/data/config'
+import { type TravelPlan } from '@/game/systems/travel'
+import { allTravelOptions } from '@/game/systems/garage'
+import { BIZ } from '@/game/data/config'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { BizBlock } from './BizBlock'
 import type { TransportId } from '@/game/types'
@@ -25,6 +26,7 @@ function TravelOptionRow({
   plan,
   label,
   emoji,
+  personal,
   disabled,
   disabledReason,
   onConfirm,
@@ -32,6 +34,8 @@ function TravelOptionRow({
   plan: TravelPlan
   label: string
   emoji: string
+  /** M4 — your own ride: fuel, not a fare */
+  personal?: boolean
   disabled: boolean
   disabledReason: string
   onConfirm: () => void
@@ -43,7 +47,9 @@ function TravelOptionRow({
       className={`lko-press flex min-h-[56px] w-full items-center gap-3 rounded-xl border px-3 py-2 text-left ${
         disabled
           ? 'cursor-not-allowed border-[var(--lko-line)] bg-black/[0.02] opacity-55'
-          : 'border-[var(--lko-line)] bg-[var(--lko-surface)] hover:border-[var(--lko-green)]/50'
+          : personal
+            ? 'border-[var(--lko-gold)]/45 bg-[var(--lko-gold-soft)]/30 hover:border-[var(--lko-gold)]'
+            : 'border-[var(--lko-line)] bg-[var(--lko-surface)] hover:border-[var(--lko-green)]/50'
       }`}
     >
       <span
@@ -54,7 +60,14 @@ function TravelOptionRow({
         {emoji}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-extrabold text-[var(--lko-ink)]">{label}</span>
+        <span className="block text-sm font-extrabold text-[var(--lko-ink)]">
+          {label}
+          {personal && (
+            <span className="ml-1.5 rounded-full bg-[var(--lko-gold)]/20 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#8a5a00]">
+              fuel · no fare
+            </span>
+          )}
+        </span>
         <span className="block text-[11px] font-semibold text-[var(--lko-ink-soft)]">
           {disabled ? disabledReason : `${plan.minutes} min trip`}
         </span>
@@ -93,13 +106,11 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
   const isSelectedCurrent = selected?.id === origin.id
   const isSelectedLocked = !!selected && player.level < selected.unlockLevel
 
-  // travel plans for the selected destination — one per available transport
-  const plans = useMemo<TravelPlan[]>(() => {
+  // travel options for the selected destination — public modes + YOUR rides (M4)
+  const plans = useMemo(() => {
     if (!selected || isSelectedCurrent || isSelectedLocked) return []
-    return selected.transport.map((t) =>
-      calculateTravel(origin, selected, t, world.weather, world.timeOfDay),
-    )
-  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay])
+    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles)
+  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles])
 
   if (!selected) return null
 
@@ -195,26 +206,26 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
       {!isSelectedCurrent && !isSelectedLocked && (
         <>
           <h4 className="lko-label mb-1.5 mt-3.5">
-            Travel to {selected.name}? ({plans[0]?.distanceKm.toFixed(1)} km from {origin.shortName})
+            Travel to {selected.name}? ({plans[0]?.plan.distanceKm.toFixed(1)} km from {origin.shortName})
           </h4>
           <div className="flex flex-col gap-2">
-            {plans.map((plan) => {
-              const params = ECONOMY.transport[plan.transport]
-              const tooPoor = player.cash < plan.cost
-              const tooTired = player.needs.energy < plan.energyCost
+            {plans.map((option) => {
+              const tooPoor = player.cash < option.plan.cost
+              const tooTired = player.needs.energy < option.plan.energyCost
               return (
                 <TravelOptionRow
-                  key={plan.transport}
-                  plan={plan}
-                  label={params.label}
-                  emoji={params.emoji}
+                  key={option.transport}
+                  plan={option.plan}
+                  label={option.label}
+                  emoji={option.emoji}
+                  personal={option.personal}
                   disabled={tooPoor || tooTired}
                   disabledReason={
                     tooPoor
-                      ? `You need ${formatNaira(plan.cost)} for this fare`
+                      ? `You need ${formatNaira(option.plan.cost)} for this ${option.personal ? 'fuel' : 'fare'}`
                       : 'You are too tired for this trip'
                   }
-                  onConfirm={() => confirmTravel(plan.transport)}
+                  onConfirm={() => confirmTravel(option.transport)}
                 />
               )
             })}
