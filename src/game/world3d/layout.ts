@@ -11,7 +11,8 @@
  *  - district anchors derived from the LOCATIONS registry (same ids, same
  *    mapX/mapY grid the 2D map uses — 3D world and map can never disagree)
  *  - the Patti summit trail (the real hike route, gameplay-walkable)
- *  - plateaus, buildings, trees, grass, lamps, stalls, traffic loops
+ *  - plateaus, buildings, the savanna tree guild (broadleaf/palm/acacia/
+ *    baobab), Patti boulders, grass, lamps, stalls, traffic loops
  *
  * Nothing in this file mutates game state and nothing here knows about
  * the economy: it is pure geometry + placement, generated once from a
@@ -94,7 +95,8 @@ export const ANCHOR_BY_ID: Record<string, WorldAnchor> = Object.fromEntries(
   ANCHORS.map((a) => [a.id, a]),
 )
 
-const MOUNT_PATTI = ANCHOR_BY_ID['mount-patti']
+/** the guardian hill's anchor — exported for the terrain art + rock scatter */
+export const MOUNT_PATTI = ANCHOR_BY_ID['mount-patti']
 
 /* --------------------------------- rivers ---------------------------------- */
 
@@ -380,6 +382,24 @@ function baseNoise(x: number, z: number): number {
   )
 }
 
+/** terrace band period in height units — the real Patti's laterite strata */
+const PATTI_TERRACE_PERIOD = 7.4
+
+/**
+ * Sedimentary terracing for Mount Patti. The real hill is a chain of small
+ * plateaus, not a smooth cone: heights inside the mound's influence are
+ * gently pulled toward band centres so the flanks read as strata from the
+ * plain while the risers between bands stay steep. The pull is capped at
+ * ~0.45u so walking and driving the summit trail stays perfectly smooth.
+ */
+function pattiTerrace(h: number): number {
+  if (h < 3.2 || h > 31) return h
+  const k = h / PATTI_TERRACE_PERIOD
+  const f = k - Math.floor(k)
+  const flat = smoothstep(0.18, 0.42, f) * (1 - smoothstep(0.58, 0.82, f))
+  return h - (f - 0.5) * PATTI_TERRACE_PERIOD * flat * 0.6
+}
+
 // plateau heights must exist before heightAt is ever called
 for (const a of ANCHORS) {
   a.plateauH = Math.max(0.4, baseNoise(a.x, a.z) * 0.55 + (a.id === 'mount-patti' ? 30 : 0))
@@ -497,6 +517,9 @@ export function heightAt(x: number, z: number): number {
   const pd = Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z)
   const pattiRise = smoothstep(85, 8, pd) // 1 at summit → 0 at the plains
   h += Math.pow(pattiRise, 1.3) * 34
+
+  // sedimentary terracing on the Patti flanks (strata bands, see above)
+  if (pd < 96) h = pattiTerrace(h)
 
   // anchor plateaus — flat buildable/walkable sites
   for (const a of ANCHORS) {
@@ -865,7 +888,7 @@ export const DOORS: DoorDef[] = (() => {
 
 /* --------------------------------- trees ----------------------------------- */
 
-export type TreeKind = 'tree' | 'palm'
+export type TreeKind = 'tree' | 'palm' | 'acacia' | 'baobab'
 
 export interface TreeDef {
   x: number
@@ -878,6 +901,8 @@ export interface TreeDef {
 
 export const TREE_TONES = ['#3d6b2f', '#4c7a2e', '#5d8a37', '#6ea344', '#446e3a']
 export const PALM_TONES = ['#5d8a37', '#6ea344', '#4c7a2e']
+export const ACACIA_TONES = ['#6e7a34', '#7d8a3c', '#8a8f45']
+export const BAOBAB_TONES = ['#5d7038', '#6a7c40']
 
 function scatterTrees(): TreeDef[] {
   const rng = makeRng(51197)
@@ -903,17 +928,89 @@ function scatterTrees(): TreeDef[] {
     if (rng() > 0.34 + pattiBoost * 0.5) continue
     // riverside riverine vegetation — palms line the watersides
     const riverside = nearRiver.d < nearRiver.halfWidth + 26
+    /**
+     * THE TREE GUILD — the real Guinea-savanna mix around Lokoja:
+     *  • palms hold the wet riversides (raffia/elder palms, as in life)
+     *  • broadleaf neem/mango fills the town and the moister ground
+     *  • flat-topped acacias own the open dry plains (the classic silhouette)
+     *  • sparse baobab giants stand over the gentle laterite flats
+     */
+    const moisture = Math.max(0, 1 - nearRiver.d / 60)
+    const slope = (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
+    let kind: TreeKind = 'tree'
+    if (riverside && rng() < 0.55) {
+      kind = 'palm'
+    } else if (moisture < 0.42 && slope < 0.3 && rng() < 0.38) {
+      kind = 'acacia'
+    } else if (moisture < 0.5 && slope < 0.2 && rng() < 0.05) {
+      kind = 'baobab'
+    }
     out.push({
       x, z, y,
-      scale: 0.75 + rng() * 0.8,
+      scale: kind === 'baobab' ? 1.5 + rng() * 0.8 : 0.75 + rng() * 0.8,
       tone: Math.floor(rng() * (riverside ? PALM_TONES.length : TREE_TONES.length)),
-      kind: riverside && rng() < 0.55 ? 'palm' : 'tree',
+      kind,
     })
   }
   return out
 }
 
 export const TREES: TreeDef[] = scatterTrees()
+
+/* ---------------------------------- rocks ----------------------------------- */
+
+export interface RockDef {
+  x: number
+  z: number
+  y: number
+  scale: number
+  rotY: number
+  tone: number
+  /** vertical squash — cliff slabs lie low, crown boulders sit rounder */
+  squash: number
+}
+
+/** laterite/ironstone boulder palette (the stone Patti is made of) */
+export const ROCK_TONES = ['#8f7f63', '#7a6a50', '#9a8868']
+
+/**
+ * THE ROCKS OF PATTI — boulders and cliff slabs strewn over the mountain's
+ * steep flanks, the way the real hill sheds sandstone blocks onto its slopes.
+ * The same placement law as everything else: never on the trail or any
+ * carriageway, never inside a school compound, an anchor site or a building,
+ * never down on the plains (rock belongs to the hill), half-sunk so each
+ * boulder reads as part of the slope it sits on. Deterministic.
+ */
+export const ROCKS: RockDef[] = (() => {
+  const rng = makeRng(61223)
+  const out: RockDef[] = []
+  let guard = 0
+  while (out.length < 110 && guard < 9000) {
+    guard++
+    const ang = rng() * Math.PI * 2
+    const rad = 12 + Math.pow(rng(), 0.72) * 88 // denser toward the crown
+    const x = MOUNT_PATTI.x + Math.cos(ang) * rad
+    const z = MOUNT_PATTI.z + Math.sin(ang) * rad
+    const y = heightAt(x, z)
+    if (y < 2.2) continue // the Niger plain has no Patti stone
+    const slope = (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
+    // steep flanks and the cliff bands carry the rock; gentle foot slopes get few
+    if (slope < 0.26 && rng() > 0.18) continue
+    if (roadDistance(x, z) < 4.6) continue // trail + streets stay walkable
+    if (Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z) < PLATEAU_R * 1.75) continue
+    if (ANCHORS.some((a) => a.id !== 'mount-patti' && Math.hypot(a.x - x, a.z - z) < 15)) continue
+    if (SCHOOL_SITES.some((sp) => Math.hypot(sp.x - x, sp.z - z) < sp.plateauR + 3)) continue
+    if (BUILDINGS.some((b) => Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) * 0.75 + 2.2)) continue
+    out.push({
+      x, z, y: y - 0.3,
+      scale: 0.5 + Math.pow(rng(), 1.6) * 2.1,
+      rotY: rng() * Math.PI * 2,
+      tone: Math.floor(rng() * ROCK_TONES.length),
+      squash: 0.55 + rng() * 0.4,
+    })
+  }
+  return out
+})()
 
 /* --------------------------------- grass ----------------------------------- */
 

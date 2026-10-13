@@ -26,7 +26,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  BRIDGES, CONFLUENCE_POINT, DISTRICTS, GRASS, GRASS_TONES, heightAt, inSchoolYard, riverInfo, ROADS,
+  BRIDGES, CONFLUENCE_POINT, DISTRICTS, GRASS, GRASS_TONES, heightAt, inSchoolYard, MOUNT_PATTI, riverInfo, ROADS,
   ROAD_RENDER_W, RIVERS,
   WATER_Y, WORLD_HALF, roadDistance, roadDistanceMajors,
 } from '@/game/world3d/layout'
@@ -69,6 +69,9 @@ function TerrainMesh() {
     const dustD = new THREE.Color('#a1764a') // packed earth right by roads
     const dryHi = new THREE.Color('#a39a5e') // parched high ground
     const rock = new THREE.Color('#8f7f63') // Patti stone on slopes
+    const iron = new THREE.Color('#7c5c40') // ironstone strata band
+    const paleBand = new THREE.Color('#a58f66') // pale laterite strata band
+    const footFan = new THREE.Color('#b09a68') // erosion fan at the mountain foot
     const sand = new THREE.Color('#c2aa72') // bank sand
     const mud = new THREE.Color('#66543a') // wet waterline mud
     const bed = new THREE.Color('#4c5a40') // riverbed, hints through the water
@@ -116,11 +119,29 @@ function TerrainMesh() {
         }
       }
 
-      // rocky slopes — steeper ground reveals the Patti laterite stone
+      // rocky slopes — steeper ground reveals the Patti stone, but the real
+      // hill wears its geology in BANDS: ironstone and pale laterite strata
+      // alternate as the mountain rises, the grassy savanna crown keeps its
+      // top (the rest house lawn), and a pale erosion fan spreads at the foot
       const slope =
         (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
-      if (slope > 0.32) c.lerp(rock, Math.min(1, (slope - 0.32) * 2.2))
-      if (y > 16) c.lerp(rock, Math.min(1, (y - 16) / 14))
+      const pd = Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z)
+      let rockT = 0
+      if (slope > 0.32) rockT = Math.min(1, (slope - 0.32) * 2.2)
+      if (y > 16) rockT = Math.max(rockT, Math.min(1, (y - 16) / 14))
+      // the summit crown stays grassy — pull the stone back where the hill tops out
+      const crownT = 1 - smoothstep(24, 40, pd)
+      if (crownT > 0 && y > 20) rockT *= 1 - crownT * 0.85
+      if (rockT > 0.02) {
+        const band = Math.sin(y * 1.35 + Math.sin(x * 0.11 + z * 0.09) * 0.85)
+        c.lerp(band > 0 ? iron : paleBand, rockT * 0.82)
+      } else if (slope > 0.32) {
+        // non-Patti steep ground (stream gullies) keeps the neutral stone
+        c.lerp(rock, Math.min(1, (slope - 0.32) * 2.2))
+      }
+      // the erosion fan — where the hill sheds into the plain, on gentle ground only
+      const fanT = (1 - Math.abs(pd - 76) / 14) * (1 - smoothstep(0.26, 0.48, slope))
+      if (fanT > 0) c.lerp(footFan, Math.min(0.42, fanT * 0.55))
 
       // river banks — sand shelf, wet dark line, darker bed under the water
       if (d < halfWidth + 9) {

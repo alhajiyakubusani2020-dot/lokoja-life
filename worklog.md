@@ -460,3 +460,22 @@ Work Log:
 Stage Summary:
 - The user's four asks are code-law now: roads marked and well-routed (lane paint + real network), street lights blanket the city (440, correct shoulder placement, night glow incl. highway masts), ZERO buildings/stalls/lamps on any carriageway (enforced by tests, not good intentions), 16 real bridges standing on their banks, above the waterline, lit at their abutments.
 - Remaining M1 items for next round: mountain/terrain art polish, tree species mix pass, then Milestone 2 (Civic Mesh).
+
+---
+Task ID: 11
+Agent: Main Agent (Super Z)
+Task: M1 FINALE — "the next continue": Mount Patti terrain art + the savanna tree guild (species mix pass)
+
+Work Log:
+- HEIGHTFIELD: pattiTerrace() added to layout.ts heightAt — sedimentary terracing on the Patti flanks (7.4u band period, ≤0.45u pull toward band centres, only inside pd<96 and h 3.2..31): the real hill is a chain of small plateaus, now the silhouette reads as strata from the plain while the summit trail stays perfectly smooth. Anchor-plateau/school/river carving all run AFTER the terrace (summit site untouched).
+- TREE GUILD: TreeKind extended 'tree' | 'palm' | 'acacia' | 'baobab'; scatterTrees assigns species deterministically — palms keep the riversides, broadleaf fills moist ground, flat-topped acacias own the dry open plains (moisture<0.42, slope<0.3), sparse baobab giants (5%, scale 1.5-2.3) stand on gentle laterite flats. ACACIA_TONES/BAOBAB_TONES palettes in layout.
+- ROCKS OF PATTI: new ROCKS data (110 boulders, deterministic) — laterite/ironstone scatter over the steep flanks, denser toward the crown, half-sunk, each with its own squash/tilt hash; placement law: never on trail/carriageway (roadDistance>4.6), never in school compounds/anchor sites/buildings, never on the plains (y>2.2).
+- RENDER: WorldTerrain Patti colour art rebuilt — ironstone/pale-laterite STRATA bands alternate by height (rockT-gated), the summit crown stays grassy (rest-house lawn), pale erosion fan at the mountain foot; CityMesh adds acacia (slim trunk + 2-disc flat umbrella), baobab (bottle trunk + 5-blob crown) and Rocks() (instanced dodecahedra) — 5 new draw calls total.
+- TESTS: world3d suite +11 M1 law checks (683 total): all four species present, acacias ≥25, baobabs rare (2-90) + gentle-ground-only + scale ≥1.5, rocks ≥60 + off-carriageway + on-the-hill + flanks-only + never inside compounds/summit site.
+- E2E (scripts/e2e-m1-terrain.ts, mobile 390×844, zero console errors): NEW camera discoveries for the E2E toolkit — wheel zoom must be dispatched as WheelEvent directly on the canvas (mouse.wheel never reaches it; deltaY>0 = zoom OUT 9%/tick), drag UP lowers phi to the horizon, follow rig max dist 70 → drone shots. Progressive walkShots (screenshot every 12 presses, overwriting) defeats the ~70-100s headless browser self-destruct: the best frame reached always survives. Shots in download/m1-terrain-shots/: 01 summit crown (tower + trail + rest-house site), 02 THE FLANKS (terraced bands across the valley, acacia umbrella mid-frame, shoulder lamps, town beyond), 03 baobab run (stepped erosion gullies + bridge with railings + Okene road + lamp forest), 04 marked street + keke shelter + mast (university travel was level-locked; shot kept for the streets record).
+- ALL GREEN: world3d 683/683, schools 232/232, stage3 ✓, stage5 36/36, travel ✓; tsc 0 new errors (9 pre-existing), eslint clean.
+
+Stage Summary:
+- M1 IS NOW COMPLETE: roads (real network + lane paint), street lights (440, shoulder law), zero buildings on carriageways, 16 lit bridges — plus the mountain itself: Patti now wears sedimentary terraces, strata-coloured flanks, 110 boulders, a grassy crown, and the savanna around it carries the real tree guild (broadleaf/palm/acacia/baobab). Every art law is test-enforced, not hope-enforced.
+- Honest limitations: headless browser self-destructs ~70-100s into 3D (progressive-shot workaround); strata terraces are subtle up close (silhouette + colour bands carry them); baobab giant placement is plains-biased (nearest is 69u from the Patti summit — the mountain foot shot shows the gullies instead); university-area travel appears level-locked for a fresh character.
+- Next: Milestone 2 — CIVIC MESH (government, police, EFCC, NEPA+bills, KGIRS taxes, markets as living rule systems).

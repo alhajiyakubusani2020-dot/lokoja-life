@@ -20,9 +20,11 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  ANCHORS, ANCHOR_BY_ID, BUILDINGS, heightAt, LAMPS, makeRng, PALM_TONES, POINTS_OF_INTEREST, ROOF_TONES,
+  ACACIA_TONES, ANCHORS, ANCHOR_BY_ID, BAOBAB_TONES, BUILDINGS, heightAt, LAMPS, makeRng, PALM_TONES,
+  POINTS_OF_INTEREST, ROCKS, ROCK_TONES, ROOF_TONES,
   RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type BuildingDef, type LampDef, type WorldAnchor,
 } from '@/game/world3d/layout'
+import { hash1 } from '@/game/world3d/terrainArt'
 import { ALL_DOORS, SCHOOL_TREES } from '@/game/world3d/schools'
 import { atmoLive } from './atmosphere'
 import {
@@ -766,15 +768,20 @@ function makeFrondGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * Savanna broadleaf trees (layered flat-shaded canopies, some dry-season
- * gold) and riverine palms (segmented curved trunks, radial arched
- * fronds, coconut clusters). Instanced per part — 5 draw calls total.
+ * The savanna tree guild, rendered as four instanced families:
+ *  • broadleaf neem/mango (layered flat-shaded canopies, some dry-season gold)
+ *  • riverine palms (segmented curved trunks, radial arched fronds, coconuts)
+ *  • acacias (tall slim trunk + the flat-topped umbrella canopy)
+ *  • baobab giants (bottle trunk + sparse branch-blob crown)
+ * Plus the Rocks() boulders of Patti. All instanced per part.
  */
 function Trees() {
   // Stage 7 — compound trees (mango/neem rows + gate palms) join the scatter
   const ALL_TREE_DEFS = useMemo(() => [...TREES, ...SCHOOL_TREES], [])
   const palms = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'palm'), [ALL_TREE_DEFS])
   const trees = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'tree'), [ALL_TREE_DEFS])
+  const acacias = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'acacia'), [ALL_TREE_DEFS])
+  const baobabs = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'baobab'), [ALL_TREE_DEFS])
 
   // per-tree character, decided once by the seeded RNG
   const treeVars = useMemo(() => {
@@ -793,6 +800,20 @@ function Trees() {
       frondJit: rng() * 0.4,
     }))
   }, [palms])
+  const acaciaVars = useMemo(() => {
+    const rng = makeRng(91007)
+    return acacias.map(() => ({
+      lean: (rng() - 0.5) * 0.12,
+      yaw: rng() * Math.PI * 2,
+    }))
+  }, [acacias])
+  const baobabVars = useMemo(() => {
+    const rng = makeRng(92013)
+    return baobabs.map(() => ({
+      lean: (rng() - 0.5) * 0.08,
+      yaw: rng() * Math.PI * 2,
+    }))
+  }, [baobabs])
 
   const GOLD_REF = useMemo(() => new THREE.Color('#c09a3e'), [])
   const frondGeo = useMemo(() => makeFrondGeometry(), [])
@@ -896,7 +917,103 @@ function Trees() {
         <sphereGeometry args={[0.14, 6, 5]} />
         <meshStandardMaterial color="#6e5222" roughness={1} />
       </InstancedGroup>
+
+      {/* --- acacia trunks: tall and slim, reaching for the umbrella --- */}
+      <InstancedGroup count={acacias.length} castShadow setup={(i, m) => {
+        const t = acacias[i]
+        const v = acaciaVars[i]
+        m.position.set(t.x, t.y + 1.4 * t.scale - 0.08, t.z)
+        m.rotation.set(v.lean * 0.4, v.yaw, v.lean * 0.5)
+        m.scale.set(t.scale, t.scale * 1.25, t.scale)
+      }}>
+        <cylinderGeometry args={[0.1, 0.24, 2.9, 5]} />
+        <meshStandardMaterial color="#6a5136" roughness={1} flatShading />
+      </InstancedGroup>
+
+      {/* --- acacia canopies: the flat-topped umbrella, two stacked discs --- */}
+      <InstancedGroup count={acacias.length * 2} castShadow setup={(i, m, color) => {
+        const t = acacias[Math.floor(i / 2)]
+        const v = acaciaVars[Math.floor(i / 2)]
+        const layer = i % 2
+        const s = t.scale
+        if (layer === 0) {
+          m.position.set(t.x, t.y + 3.35 * s, t.z)
+          m.rotation.set(v.lean * 0.3, v.yaw, v.lean * 0.4)
+          m.scale.set(s * 2.3, s * 0.52, s * 2.3)
+        } else {
+          m.position.set(
+            t.x + Math.cos(v.yaw) * 0.6 * s,
+            t.y + 3.85 * s,
+            t.z + Math.sin(v.yaw) * 0.6 * s,
+          )
+          m.rotation.set(v.lean * 0.6, v.yaw * 1.7, v.lean * 0.8)
+          m.scale.set(s * 1.3, s * 0.36, s * 1.3)
+        }
+        color.set(ACACIA_TONES[t.tone % ACACIA_TONES.length])
+        if (layer === 1) color.multiplyScalar(0.88)
+      }}>
+        <icosahedronGeometry args={[1, 1]} />
+        <meshStandardMaterial roughness={0.95} flatShading />
+      </InstancedGroup>
+
+      {/* --- baobab bottles: the massive water-holding trunk --- */}
+      <InstancedGroup count={baobabs.length} castShadow setup={(i, m) => {
+        const t = baobabs[i]
+        const v = baobabVars[i]
+        m.position.set(t.x, t.y + 1.55 * t.scale - 0.08, t.z)
+        m.rotation.set(v.lean * 0.3, v.yaw, v.lean * 0.4)
+        m.scale.set(t.scale, t.scale, t.scale)
+      }}>
+        <cylinderGeometry args={[0.3, 0.8, 3.2, 7]} />
+        <meshStandardMaterial color="#7a6248" roughness={1} flatShading />
+      </InstancedGroup>
+
+      {/* --- baobab crowns: a sparse burst of branch-blobs on stubby arms --- */}
+      <InstancedGroup count={baobabs.length * 5} castShadow setup={(i, m, color) => {
+        const t = baobabs[Math.floor(i / 5)]
+        const v = baobabVars[Math.floor(i / 5)]
+        const k = i % 5
+        const s = t.scale
+        const ang = v.yaw + k * 2.51
+        const rad = k === 0 ? 0 : (0.6 + (k % 3) * 0.32) * s
+        m.position.set(
+          t.x + Math.cos(ang) * rad,
+          t.y + (3.1 + (k === 0 ? 0.55 : (k % 2) * 0.9)) * s,
+          t.z + Math.sin(ang) * rad,
+        )
+        m.rotation.set(k * 1.3, v.yaw + k, k * 0.7)
+        m.scale.setScalar(s * (k === 0 ? 0.8 : 0.46 + (k % 3) * 0.13))
+        color.set(BAOBAB_TONES[t.tone % BAOBAB_TONES.length])
+        if (k > 2) color.multiplyScalar(0.9)
+      }}>
+        <icosahedronGeometry args={[1, 1]} />
+        <meshStandardMaterial roughness={1} flatShading />
+      </InstancedGroup>
     </group>
+  )
+}
+
+/**
+ * The boulders of Patti — half-sunk dodecahedra in the laterite palette,
+ * each tilted and squashed by its own deterministic hash so no two read
+ * alike. One draw call for the whole scatter.
+ */
+function Rocks() {
+  return (
+    <InstancedGroup count={ROCKS.length} castShadow receiveShadow setup={(i, m, color) => {
+      const r = ROCKS[i]
+      m.position.set(r.x, r.y + r.scale * r.squash * 0.42, r.z)
+      m.rotation.set(hash1(i * 3.7) * 0.5 - 0.25, r.rotY, hash1(i * 9.1) * 0.5 - 0.25)
+      m.scale.set(
+        r.scale * (0.8 + hash1(i * 5.3) * 0.5),
+        r.scale * r.squash,
+        r.scale * (0.9 + hash1(i * 7.7) * 0.4),
+      )
+      color.set(ROCK_TONES[r.tone % ROCK_TONES.length])
+    }}>
+      <dodecahedronGeometry args={[1, 0]} />
+      <meshStandardMaterial roughness={1} flatShading />
+    </InstancedGroup>
   )
 }
 
@@ -1935,6 +2052,7 @@ export function CityMesh() {
       <StreetProps />
       <Stalls />
       <Trees />
+      <Rocks />
       <Lamps />
       <AnchorStructures />
       <PointOfInterestProps />

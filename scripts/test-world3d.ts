@@ -17,6 +17,7 @@ import {
   ANCHORS, ROADS, BRIDGES, GRASS, TREES, TRAFFIC_LOOPS, roadDistance,
   ROAD_RENDER_W, CONFLUENCE_POINT, WORLD_HALF, MAP_SCALE,
   BUILDINGS, STALLS, LAMPS, roadGap, inSchoolYard,
+  MOUNT_PATTI, ROCKS, SCHOOL_SITES,
 } from '../src/game/world3d/layout'
 
 let passed = 0
@@ -165,6 +166,52 @@ check('grass scatter is deterministic', (() => {
   return GRASS.every((g) => Number.isFinite(g.x) && Number.isFinite(g.y) && g.y > WATER_Y) && first.length > 0
 })())
 check('trees include riverine palms', TREES.some((t) => t.kind === 'palm'))
+
+console.log('\nM1 — THE SAVANNA TREE GUILD + THE ROCKS OF PATTI (terrain art pass)')
+check('the guild carries all four savanna species', (() => {
+  const kinds = new Set(TREES.map((t) => t.kind))
+  return kinds.has('tree') && kinds.has('palm') && kinds.has('acacia') && kinds.has('baobab')
+})())
+check(
+  'acacias own the dry open plains (25+)',
+  TREES.filter((t) => t.kind === 'acacia').length >= 25,
+  `count=${TREES.filter((t) => t.kind === 'acacia').length}`,
+)
+check(
+  'baobab giants are rare but present (2–90)',
+  (() => {
+    const n = TREES.filter((t) => t.kind === 'baobab').length
+    return n >= 2 && n <= 90
+  })(),
+  `count=${TREES.filter((t) => t.kind === 'baobab').length}`,
+)
+check(
+  'baobabs stand only on gentle ground (never on a cliff)',
+  TREES.filter((t) => t.kind === 'baobab').every((t) => {
+    const slope = (Math.abs(heightAt(t.x + 2, t.z) - t.y) + Math.abs(heightAt(t.x, t.z + 2) - t.y)) / 4
+    return slope < 0.3
+  }),
+)
+check(
+  'baobab giants tower over the guild (scale ≥ 1.5)',
+  TREES.filter((t) => t.kind === 'baobab').every((t) => t.scale >= 1.5),
+)
+check(
+  'Patti sheds real rock (60+ boulders)',
+  ROCKS.length >= 60,
+  `count=${ROCKS.length}`,
+)
+check('every boulder keeps off the trail and every carriageway', ROCKS.every((r) => roadDistance(r.x, r.z) > 4))
+check('every boulder stands up on the hill (rock belongs to the hill)', ROCKS.every((r) => r.y > 1.9))
+check('every boulder hugs the Patti flanks', ROCKS.every(
+  (r) => Math.hypot(r.x - MOUNT_PATTI.x, r.z - MOUNT_PATTI.z) < 105,
+))
+check('no boulder inside a school compound', ROCKS.every((r) =>
+  SCHOOL_SITES.every((sp) => Math.hypot(sp.x - r.x, sp.z - r.z) > sp.plateauR),
+))
+check('no boulder inside the summit site', ROCKS.every(
+  (r) => Math.hypot(r.x - MOUNT_PATTI.x, r.z - MOUNT_PATTI.z) > 24,
+))
 check('every traffic loop is closed and contiguous', TRAFFIC_LOOPS.every((loop) => {
   for (let i = 0; i < loop.length; i++) {
     const a = loop[i]
