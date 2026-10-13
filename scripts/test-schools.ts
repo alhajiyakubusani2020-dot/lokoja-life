@@ -333,7 +333,7 @@ check('door ↔ interior location agreement', SCHOOL_DOORS.every((d) => INTERIOR
 check('school doors on dry land + inside the walk bound', SCHOOL_DOORS.every((d) =>
   heightAt(d.x, d.z) > WATER_Y + 0.5 && Math.hypot(d.x, d.z) < WALK_BOUND,
 ))
-check('ALL_DOORS = city doors + school doors', ALL_DOORS.length === SCHOOL_DOORS.length + 6)
+check('ALL_DOORS = city doors + school doors', ALL_DOORS.length === SCHOOL_DOORS.length + 10)
 check('no two doors collide within 1.5u', (() => {
   for (let i = 0; i < ALL_DOORS.length; i++) {
     for (let j = i + 1; j < ALL_DOORS.length; j++) {

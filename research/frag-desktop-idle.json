@@ -1,0 +1,276 @@
+{
+  "scenario": "desktop-idle",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "ts": "2026-10-13T17:29:08.106Z",
+  "wallMs": 64048,
+  "hooks": null,
+  "samples": {
+    "idle": {
+      "stalled": true,
+      "frames": 0,
+      "elapsedMs": 15000,
+      "avgFps": 0,
+      "p50Gap": 0,
+      "p95Gap": 0,
+      "p99Gap": 0,
+      "maxGap": 0,
+      "jank50": 0,
+      "jank100": 0,
+      "memStartMB": null,
+      "memEndMB": null,
+      "posStart": null,
+      "posEnd": {
+        "x": -86.52000000000001,
+        "z": 39.1,
+        "heading": 0
+      },
+      "stationary": null
+    }
+  },
+  "localStorage": {
+    "keys": [
+      {
+        "key": "lko-world-disc-v1",
+        "bytes": 25
+      },
+      {
+        "key": "lokoja-life:save",
+        "bytes": 1172
+      }
+    ],
+    "totalBytes": 1197
+  },
+  "network": {
+    "totalWireBytes": 2126317,
+    "failed": 0,
+    "count": 43,
+    "byType": {
+      "Font": 100584,
+      "Stylesheet": 31250,
+      "Document": 9643,
+      "Script": 1873094,
+      "Image": 111746
+    },
+    "items": [
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_three_build_three_core_996ef05a.js",
+        "type": "Script",
+        "wire": 293242
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_1dd7fb59.js",
+        "type": "Script",
+        "wire": 224375
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js",
+        "type": "Script",
+        "wire": 182290
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_72435030._.js",
+        "type": "Script",
+        "wire": 169525
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_three_build_three_module_0c59ee63.js",
+        "type": "Script",
+        "wire": 133979
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_17643121._.js",
+        "type": "Script",
+        "wire": 122818
+      },
+      {
+        "url": "http://localhost:3000/_next/image?url=%2Fart%2Fmenu-hero.webp&w=1920&q=75",
+        "type": "Image",
+        "wire": 111746
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_game_world3d_geo_ts_8ee5adf1._.js",
+        "type": "Script",
+        "wire": 85913
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_components_game_world_690147aa._.js",
+        "type": "Script",
+        "wire": 75919
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_components_game_51d5da2c._.js",
+        "type": "Script",
+        "wire": 63821
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_game_world3d_436d697c._.js",
+        "type": "Script",
+        "wire": 56315
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_components_game_screens_37b91040._.js",
+        "type": "Script",
+        "wire": 53102
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_394613a2._.js",
+        "type": "Script",
+        "wire": 44509
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_dist_f3530cac._.js",
+        "type": "Script",
+        "wire": 39329
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_1dcd17cd._.js",
+        "type": "Script",
+        "wire": 34618
+      },
+      {
+        "url": "http://localhost:3000/_next/static/media/1b99372b3eaef0c8-s.p.758e15a8.woff2",
+        "type": "Font",
+        "wire": 32528
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/%5Broot-of-the-server%5D__46e8e60c._.css",
+        "type": "Stylesheet",
+        "wire": 31250
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_game_data_53ca5427._.js",
+        "type": "Script",
+        "wire": 31204
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_9212ccad._.js",
+        "type": "Script",
+        "wire": 31151
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_components_game_world_CityMesh_tsx_d92141a8._.js",
+        "type": "Script",
+        "wire": 29635
+      },
+      {
+        "url": "http://localhost:3000/_next/static/media/caa3a2e1cccd8315-s.p.3b6cae6d.woff2",
+        "type": "Font",
+        "wire": 29588
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_a0e4c7b4._.js",
+        "type": "Script",
+        "wire": 28771
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_game_3b7674b2._.js",
+        "type": "Script",
+        "wire": 28632
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_71e330a9._.js",
+        "type": "Script",
+        "wire": 28092
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_components_game_world_InteriorScene_tsx_d1cfd2b8._.js",
+        "type": "Script",
+        "wire": 28052
+      },
+      {
+        "url": "http://localhost:3000/_next/static/media/797e433ab948586e-s.p.29207c2f.woff2",
+        "type": "Font",
+        "wire": 23408
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_dist_be32b49c._.js",
+        "type": "Script",
+        "wire": 22600
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_components_game_world_HudOverlay_tsx_bc5036d2._.js",
+        "type": "Script",
+        "wire": 21480
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/turbopack-_23a915ee._.js",
+        "type": "Script",
+        "wire": 18932
+      },
+      {
+        "url": "http://localhost:3000/_next/static/media/b2ea385cb5ae8625-s.866357a4.woff2",
+        "type": "Font",
+        "wire": 15060
+      },
+      {
+        "url": "http://localhost:3000/?e2e=1",
+        "type": "Document",
+        "wire": 9643
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_three_build_three_module_f7d46d9b.js",
+        "type": "Script",
+        "wire": 4947
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_2bc135c0._.js",
+        "type": "Script",
+        "wire": 4274
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_c8c997ce._.js",
+        "type": "Script",
+        "wire": 4207
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_components_ui_767cba4e._.js",
+        "type": "Script",
+        "wire": 2763
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_app_page_tsx_b4090435._.js",
+        "type": "Script",
+        "wire": 2586
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_%40swc_helpers_cjs_d80fb378._.js",
+        "type": "Script",
+        "wire": 1126
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/_a0ff3932._.js",
+        "type": "Script",
+        "wire": 1120
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_956a0d3a._.js",
+        "type": "Script",
+        "wire": 1008
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_app_page_tsx_5d1b00fa._.js",
+        "type": "Script",
+        "wire": 853
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/src_app_layout_tsx_1cf6b850._.js",
+        "type": "Script",
+        "wire": 682
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_c7192189._.js",
+        "type": "Script",
+        "wire": 625
+      },
+      {
+        "url": "http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_components_builtin_global-error_1cf6b850.js",
+        "type": "Script",
+        "wire": 599
+      }
+    ]
+  },
+  "consoleErrors": []
+}

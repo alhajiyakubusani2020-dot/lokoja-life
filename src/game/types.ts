@@ -240,6 +240,96 @@ export interface WorldState {
   currentLocation: string
 }
 
+/* --------------------------------- M2 — civic -------------------------------- */
+
+/**
+ * Milestone 2 — the civic mesh: the state as a living rule system.
+ * NEPA bills, KGIRS taxes, police fines, EFCC whistleblower tips and the
+ * daily market prices all live in ONE persisted slice. Every rule that
+ * touches these numbers lives in systems/civic.ts — this is data only.
+ */
+export interface NepaState {
+  /** day the current billing cycle started */
+  cycleStart: number
+  /** unpaid naira currently owed to the disco */
+  owed: number
+  /** last day a payment has covered — bills post when day > paidThrough + cycleDays */
+  paidThrough: number
+  /** load-shedding active (debt ran past the grace window) */
+  shedding: boolean
+  /** lifetime naira paid to the disco (stats) */
+  totalPaid: number
+}
+
+export interface KgirsState {
+  /** player.stats.totalEarned as of the last assessment — the delta IS the cycle income */
+  lastSeenEarned: number
+  /** assessed tax awaiting payment (0 = nothing due) */
+  assessed: number
+  /** day the current assessment became payable (0 = nothing due) */
+  dueDay: number
+  /** how many assessments have been settled (stats) */
+  paid: number
+  /** past grace — police holds the warrant until it is cleared in person */
+  warrant: boolean
+}
+
+export interface PoliceState {
+  /** outstanding fine naira (currently only KGIRS warrants land here) */
+  fines: number
+  /** fines settled (stats) */
+  paid: number
+}
+
+export interface EfccTip {
+  id: string
+  /** day the tip was filed */
+  filedDay: number
+  /** naira recovered by the commission — the reward is a % of this */
+  recovery: number
+  /** short flavour label of the case */
+  label: string
+}
+
+export interface EfccState {
+  /** tips under investigation — resolve on the day roll */
+  pending: EfccTip[]
+  /** lifetime whistleblower rewards (stats) */
+  rewardsTotal: number
+  /** day of the last filed tip (cooldown gate) */
+  lastTipDay: number
+}
+
+export interface MarketEvent {
+  icon: string
+  label: string
+  /** one flavour line shown on the market board */
+  note: string
+  /** optional meal key this event biases (price leans further) */
+  mealBias?: string
+  /** extra multiplier applied to the biased meal (0.8 = cheaper) */
+  biasMult?: number
+}
+
+export interface MarketState {
+  /** last day the daily roll ran */
+  rolledDay: number
+  /** today's price multiplier per market location id (0.85–1.35) */
+  prices: Record<string, number>
+  /** today's flavour event (null on plain days) */
+  event: MarketEvent | null
+  /** true when today is a market day (every 3rd day) — blanket discount */
+  marketDay: boolean
+}
+
+export interface CivicState {
+  nepa: NepaState
+  kgirs: KgirsState
+  police: PoliceState
+  efcc: EfccState
+  market: MarketState
+}
+
 /* --------------------------------- Settings -------------------------------- */
 
 export interface GameSettings {
@@ -260,6 +350,8 @@ export interface GameSave {
   player: PlayerState
   world: WorldState
   settings: GameSettings
+  /** M2 — the civic mesh (bills, taxes, fines, tips, market prices) */
+  civic: CivicState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

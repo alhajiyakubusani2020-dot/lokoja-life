@@ -26,6 +26,8 @@ import { formatNaira } from '@/game/systems/progression'
 import { canChat, relationshipFor, tierFor, TIER_META } from '@/game/systems/social'
 import { hustleDefFor } from '@/game/systems/opportunities'
 import { absoluteSlot } from '@/game/systems/world'
+import { nepaSettleCost, kgirsSettleCost } from '@/game/systems/civic'
+import { CIVIC } from '@/game/data/config'
 import { NPCS } from '@/game/data/npcs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -33,9 +35,9 @@ import { ChatThread, tierChipClass } from './phone/ChatThread'
 import {
   ArrowLeftIcon,
   BankIcon,
+  CoinsIcon,
   CheckIcon,
   ChevronRightIcon,
-  CoinsIcon,
   HourglassIcon,
   PlaceIcon,
   SaveIcon,
@@ -45,7 +47,7 @@ import {
   TargetIcon,
 } from '../icons'
 
-type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'settings'
+type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'settings'
 
 const APP_VERSION = 'Lokoja Life • Stage 5'
 
@@ -415,11 +417,151 @@ function SettingsApp() {
   )
 }
 
+/* -------------------------------- civic app -------------------------------- */
+
+/**
+ * M2 — the civic mesh in your pocket: what you owe, what the state owes
+ * you, today's market truth. Payments from the phone carry the convenience
+ * fee; warrants refuse the phone entirely — some things demand a presence.
+ */
+function CivicApp() {
+  const civic = useGameStore((s) => s.civic)
+  const world = useGameStore((s) => s.world)!
+  const payNepa = useGameStore((s) => s.payNepa)
+  const payKgirs = useGameStore((s) => s.payKgirs)
+  const mealPriceAt = useGameStore((s) => s.mealPriceAt)
+  const day = world.day
+
+  if (!civic) return null
+  const m = civic.market
+  const nepaCost = nepaSettleCost(civic) + CIVIC.phonePayFee
+  const taxCost = kgirsSettleCost(civic) + (civic.kgirs.warrant ? 0 : CIVIC.phonePayFee)
+
+  return (
+    <div className="flex flex-col gap-2 pb-2">
+      {/* NEPA */}
+      <div className="rounded-2xl border border-black/[0.05] bg-white p-3">
+        <p className="flex items-center gap-1.5 text-[12.5px] font-extrabold">
+          💡 NEPA
+          {civic.nepa.shedding && (
+            <span className="ml-auto rounded-full bg-red-50 px-2 py-0.5 text-[9.5px] font-extrabold text-red-600">LIGHT CUT</span>
+          )}
+        </p>
+        <div className="mt-1.5 flex items-center justify-between text-[11.5px] font-bold text-[var(--lko-ink-soft)]">
+          <span>{civic.nepa.owed > 0 || civic.nepa.shedding ? 'Bill due' : 'You dey current'}</span>
+          <span className="lko-num font-extrabold text-[var(--lko-ink)]">
+            {(civic.nepa.owed > 0 || civic.nepa.shedding) ? formatNaira(nepaCost) : formatNaira(0)}
+          </span>
+        </div>
+        {(civic.nepa.owed > 0 || civic.nepa.shedding) && (
+          <button
+            onClick={() => { audio.play('click'); payNepa('phone') }}
+            className="lko-press mt-2 min-h-[42px] w-full rounded-xl bg-[var(--lko-gold)] text-[12.5px] font-extrabold text-[#33230a]"
+          >
+            Pay online (+{formatNaira(CIVIC.phonePayFee)} fee)
+          </button>
+        )}
+      </div>
+
+      {/* KGIRS */}
+      <div className="rounded-2xl border border-black/[0.05] bg-white p-3">
+        <p className="flex items-center gap-1.5 text-[12.5px] font-extrabold">
+          🧮 KGIRS Tax
+          {civic.kgirs.warrant && (
+            <span className="ml-auto rounded-full bg-red-50 px-2 py-0.5 text-[9.5px] font-extrabold text-red-600">WARRANT</span>
+          )}
+        </p>
+        <div className="mt-1.5 flex items-center justify-between text-[11.5px] font-bold text-[var(--lko-ink-soft)]">
+          <span>{civic.kgirs.assessed > 0 ? `Assessment (day ${civic.kgirs.dueDay})` : 'No assessment dey wait'}</span>
+          <span className="lko-num font-extrabold text-[var(--lko-ink)]">
+            {civic.kgirs.assessed > 0 ? formatNaira(taxCost) : formatNaira(0)}
+          </span>
+        </div>
+        {civic.kgirs.warrant && (
+          <p className="mt-1 text-[10.5px] font-semibold leading-relaxed text-red-600">
+            Warrants no fit clear by phone — walk to the police station for GRA.
+          </p>
+        )}
+        {civic.kgirs.assessed > 0 && !civic.kgirs.warrant && (
+          <button
+            onClick={() => { audio.play('click'); payKgirs('phone') }}
+            className="lko-press mt-2 min-h-[42px] w-full rounded-xl bg-[var(--lko-gold)] text-[12.5px] font-extrabold text-[#33230a]"
+          >
+            Pay online (+{formatNaira(CIVIC.phonePayFee)} fee)
+          </button>
+        )}
+      </div>
+
+      {/* EFCC */}
+      <div className="rounded-2xl border border-black/[0.05] bg-white p-3">
+        <p className="text-[12.5px] font-extrabold">🕵️ EFCC Whistleblower</p>
+        {civic.efcc.pending.length === 0 ? (
+          <p className="mt-1 text-[11px] font-semibold leading-relaxed text-[var(--lko-ink-soft)]">
+            No tip dey investigate. File one at the zonal command for GRA — your cut na 5% of any recovery.
+          </p>
+        ) : (
+          <div className="mt-1.5 flex flex-col gap-1">
+            {civic.efcc.pending.map((t) => (
+              <div key={t.id} className="flex items-center justify-between rounded-lg bg-black/[0.03] px-2.5 py-1.5">
+                <span className="truncate text-[11px] font-bold">{t.label}</span>
+                <span className="lko-num shrink-0 text-[10.5px] font-extrabold text-[var(--lko-ink-soft)]">
+                  day {t.filedDay + CIVIC.efcc.resolveDays}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {civic.efcc.rewardsTotal > 0 && (
+          <p className="mt-1.5 text-[11px] font-bold text-[var(--lko-green)]">
+            Rewards so far: <span className="lko-num">{formatNaira(civic.efcc.rewardsTotal)}</span>
+          </p>
+        )}
+      </div>
+
+      {/* Market board */}
+      <div className="rounded-2xl border border-black/[0.05] bg-white p-3">
+        <p className="flex items-center gap-1.5 text-[12.5px] font-extrabold">
+          🛒 Market Board
+          {m.marketDay && (
+            <span className="ml-auto rounded-full bg-[var(--lko-green-soft)] px-2 py-0.5 text-[9.5px] font-extrabold text-[var(--lko-green-deep)]">
+              MARKET DAY
+            </span>
+          )}
+        </p>
+        {m.event && (
+          <p className="mt-1.5 rounded-lg bg-[var(--lko-gold-soft)]/50 px-2.5 py-1.5 text-[11px] font-semibold leading-relaxed">
+            {m.event.icon} <b>{m.event.label}</b> — {m.event.note}
+          </p>
+        )}
+        <div className="mt-1.5 flex flex-col gap-1">
+          {CIVIC.market.markets.map((mk) => {
+            const mult = m.prices[mk] ?? 1
+            const sample = mealPriceAt('amala', mk)
+            const loc = LOCATION_BY_ID[mk]
+            return (
+              <div key={mk} className="flex items-center justify-between rounded-lg bg-black/[0.03] px-2.5 py-1.5">
+                <span className="text-[11px] font-bold">{loc?.shortName ?? mk}</span>
+                <span className="lko-num text-[10.5px] font-extrabold text-[var(--lko-ink-soft)]">
+                  ×{mult.toFixed(2)} · amala {formatNaira(sample)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-1 text-[10px] font-semibold text-[var(--lko-ink-soft)]">
+          Day {day} — every {CIVIC.market.marketDayEvery}rd day na market day: prices soft small everywhere.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 /* ------------------------------- PhoneScreen ------------------------------ */
 
 export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
+  const civic = useGameStore((s) => s.civic)
   const settings = useGameStore((s) => s.settings)
   const isTravelling = useGameStore((s) => s.isTravelling)
   const isWorking = useGameStore((s) => s.isWorking)
@@ -465,6 +607,13 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
       icon: TargetIcon,
     },
     {
+      key: 'civic',
+      label: 'Civic',
+      sub: civic?.nepa.shedding ? 'NEPA don cut light' : civic && (civic.nepa.owed > 0 || civic.kgirs.assessed > 0) ? 'Bills dey wait' : 'Everything dey calm',
+      tint: 'bg-emerald-50 text-emerald-700',
+      icon: CoinsIcon,
+    },
+    {
       key: 'settings',
       label: 'Settings',
       sub: settings.sound ? 'Sound dey on' : 'Sound dey off',
@@ -477,6 +626,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     chats: 'Chats',
     bank: 'Bank',
     hustle: 'Hustle Board',
+    civic: 'Civic',
     settings: 'Settings',
   }
 
@@ -534,6 +684,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
                   {app === 'chats' && <ChatsApp onOpenThread={(npcId) => setOpenNpc(npcId)} />}
                   {app === 'bank' && <BankApp />}
                   {app === 'hustle' && <HustleApp onOpenWork={() => onOpenWork?.()} />}
+                  {app === 'civic' && <CivicApp />}
                   {app === 'settings' && <SettingsApp />}
                 </div>
               </>

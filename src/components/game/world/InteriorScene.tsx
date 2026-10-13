@@ -31,6 +31,7 @@ import { useGameStore } from '@/game/store/useGameStore'
 import { audio } from '@/game/systems/audio'
 import { BankPanel } from './panels/BankPanel'
 import { LoungeConfirm } from './panels/LoungeConfirm'
+import { CivicPanel } from './panels/CivicPanel'
 
 /* --------------------------------- furniture --------------------------------- */
 
@@ -1664,6 +1665,7 @@ function InteriorPlayer({
 const ACTION_ICON: Record<ActionDef['kind'], string> = {
   workout: '💪',
   'bank-teller': '🏦',
+  'civic-desk': '🏛️',
   'night-out': '🍾',
   wardrobe: '👕',
   study: '📚',
@@ -1689,9 +1691,9 @@ export function InteriorScene({
   // Sheet state carries its owning interior id so a (defensive) interior
   // swap can never show a stale panel; walking-input freeze mirrors it.
   const [nearAction, setNearAction] = useState<ActionDef | null>(null)
-  const [sheet, setSheet] = useState<{ owner: string; kind: 'bank' | 'lounge' } | null>(null)
+  const [sheet, setSheet] = useState<{ owner: string; kind: 'bank' | 'lounge' | 'civic' } | null>(null)
   const nearActionRef = useRef<ActionDef | null>(null)
-  const sheetRef = useRef<{ owner: string; kind: 'bank' | 'lounge' } | null>(null)
+  const sheetRef = useRef<{ owner: string; kind: 'bank' | 'lounge' | 'civic' } | null>(null)
   useEffect(() => {
     nearActionRef.current = nearAction
   }, [nearAction])
@@ -1726,6 +1728,12 @@ export function InteriorScene({
       case 'bank-teller':
         setSheet({ owner: def.id, kind: 'bank' })
         sheetRef.current = { owner: def.id, kind: 'bank' }
+        freezeInput(true)
+        break
+      case 'civic-desk':
+        // M2 — one action kind, four agencies; the panel reads the interior id
+        setSheet({ owner: def.id, kind: 'civic' })
+        sheetRef.current = { owner: def.id, kind: 'civic' }
         freezeInput(true)
         break
       case 'night-out':
@@ -1849,6 +1857,12 @@ export function InteriorScene({
       {/* ---- Stage 5-b — self-owned bottom sheets ---- */}
       {shownSheet === 'bank' && <BankPanel onClose={closeSheet} />}
       {shownSheet === 'lounge' && <LoungeConfirm onClose={closeSheet} />}
+      {shownSheet === 'civic' && (
+        <CivicPanel
+          office={def.id as 'kgirs-office' | 'nepa-office' | 'police-station' | 'efcc-office'}
+          onClose={closeSheet}
+        />
+      )}
     </>
   )
 }

@@ -148,7 +148,7 @@ export interface HotspotDef {
  * the InteriorScene layer owns the whole interaction for these (its own
  * prompt chip + panels) and reports `null` to the HUD while one is near.
  */
-export type ActionKind = 'workout' | 'bank-teller' | 'night-out' | 'wardrobe' | 'study'
+export type ActionKind = 'workout' | 'bank-teller' | 'night-out' | 'wardrobe' | 'study' | 'civic-desk'
 
 export interface ActionDef {
   id: string
@@ -528,7 +528,109 @@ const LOUNGE: InteriorDef = (() => {
   }
 })()
 
-export const INTERIORS: InteriorDef[] = [HOME, MAMAS, KPATA_SHOP, GYM, BANK, LOUNGE]
+/* --------------------------- M2 — the civic mesh ------------------------------
+ * Four service halls around the GRA clearing. One shared anatomy — a service
+ * counter with its queue, waiting benches, a ceiling fan that actually
+ * spins, the agency's notice wall — because every Nigerian office is the
+ * same room with a different colour of paint. The desks carry ONE action
+ * kind ('civic-desk'); CivicPanel reads the interior id and serves the
+ * right agency. Payments flow through the same store actions the phone uses.
+ * ---------------------------------------------------------------------------- */
+
+function civicHall(opts: {
+  id: string
+  name: string
+  deskLabel: string
+  palette: InteriorDef['palette']
+  counterTone: number
+}): InteriorDef {
+  const { id, name, deskLabel, palette, counterTone } = opts
+  // 10 × 8 m, door gap on the SOUTH wall (x −0.9..0.9) — the bank's plan,
+  // one size smaller: government offices never built big since '76
+  const walls: WallSeg[] = [
+    wall(-5, -4, 5, -4),
+    wall(-5, -4, -5, 4),
+    wall(5, -4, 5, 4),
+    wall(-5, 4, -0.9, 4),
+    wall(0.9, 4, 5, 4),
+  ]
+  return {
+    id,
+    name,
+    locationId: 'government-area',
+    size: { w: 10, d: 8 },
+    rooms: [
+      { name: 'Waiting hall', x: 0, z: 1.2, w: 10, d: 5.2 },
+      { name: 'Service row', x: 0, z: -2.4, w: 10, d: 3 },
+    ],
+    walls,
+    furniture: [
+      // the service counter + glass partition, queue board beside it
+      { kind: 'counter', x: 0, z: -2.6, rotY: 0, tone: counterTone },
+      { kind: 'partition', x: 0, z: -1.82, rotY: 0, tone: 0 },
+      { kind: 'queueboard', x: 2.9, z: -2.6, rotY: -Math.PI / 2, tone: 0 },
+      // the officer's side — desk, chair, filing shelf, the agency notice wall
+      { kind: 'table', x: -1.6, z: -3.3, rotY: 0, tone: counterTone },
+      { kind: 'chair', x: -1.6, z: -3.9, rotY: Math.PI, tone: counterTone },
+      { kind: 'shelf', x: -4.55, z: -3, rotY: Math.PI / 2, tone: counterTone },
+      { kind: 'sign', x: 4.3, z: -3.8, rotY: 0, s: 1.1, tone: counterTone },
+      // the queue — patient benches under a spinning fan
+      { kind: 'bench', x: -1.8, z: 1.4, rotY: 0, tone: 1 },
+      { kind: 'bench', x: -1.8, z: 2.7, rotY: 0, tone: 1 },
+      { kind: 'ceilingfan', x: 0, z: 0.2, rotY: 0, tone: 0 },
+      { kind: 'crate', x: 4.4, z: 3.4, rotY: 0.2, tone: 0 },
+    ],
+    hotspots: [
+      { id: `${id}-exit`, kind: 'exit', x: 0, z: 3.1, label: 'Step back to the GRA' },
+    ],
+    actions: [
+      { id: `${id}-desk`, kind: 'civic-desk', x: 0, z: -1.05, label: deskLabel },
+    ],
+    spawn: { x: 0, z: 2.4, facing: Math.PI },
+    door: { x: 0, z: 3.55 },
+    palette,
+    floorTiles: true,
+    mealSpot: false,
+    shopSpot: false,
+  }
+}
+
+const KGIRS_OFFICE = civicHall({
+  id: 'kgirs-office',
+  name: 'KGIRS Revenue Office',
+  deskLabel: 'Join the revenue queue',
+  palette: { floor: '#cfd4c2', floorAlt: '#bfc5ae', wall: '#e9ecd8', accent: '#5C6E3A' },
+  counterTone: 3,
+})
+
+const NEPA_OFFICE = civicHall({
+  id: 'nepa-office',
+  name: 'NEPA District Office',
+  deskLabel: 'Join the light queue',
+  palette: { floor: '#d8d2c4', floorAlt: '#c6bfae', wall: '#efe9da', accent: '#b9821f' },
+  counterTone: 1,
+})
+
+const POLICE_STATION = civicHall({
+  id: 'police-station',
+  name: 'GRA Police Station',
+  deskLabel: 'Approach the duty desk',
+  palette: { floor: '#c9ccd4', floorAlt: '#b6bac4', wall: '#e6e8ee', accent: '#1f3a5c' },
+  counterTone: 5,
+})
+
+const EFCC_OFFICE = civicHall({
+  id: 'efcc-office',
+  name: 'EFCC Zonal Command',
+  deskLabel: 'Speak to the commission',
+  palette: { floor: '#d4cdc4', floorAlt: '#c2bab0', wall: '#ece5da', accent: '#2e5c46' },
+  counterTone: 2,
+})
+
+export const INTERIORS: InteriorDef[] = [
+  HOME, MAMAS, KPATA_SHOP, GYM, BANK, LOUNGE,
+  KGIRS_OFFICE, NEPA_OFFICE, POLICE_STATION, EFCC_OFFICE,
+]
 
 /* ------------------------- school interiors (Stage 7) -------------------------
  * Registered here so INTERIOR_BY_ID stays the single source every consumer

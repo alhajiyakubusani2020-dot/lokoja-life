@@ -13,7 +13,7 @@ import { LOCATION_BY_ID } from '../src/game/data/locations'
 import { NPCS } from '../src/game/data/npcs'
 import { HUSTLES } from '../src/game/data/hustles'
 import {
-  heightAt, NPC_ZONES, POINTS_OF_INTEREST, riverInfo, WALK_BOUND, WATER_Y,
+  heightAt, inCivicCampus, NPC_ZONES, POINTS_OF_INTEREST, riverInfo, WALK_BOUND, WATER_Y, roadGapMajors,
   ANCHORS, ROADS, BRIDGES, GRASS, TREES, TRAFFIC_LOOPS, roadDistance,
   ROAD_RENDER_W, CONFLUENCE_POINT, WORLD_HALF, MAP_SCALE,
   BUILDINGS, STALLS, LAMPS, roadGap, inSchoolYard,
@@ -250,8 +250,8 @@ import type { Needs } from '../src/game/types'
 
 console.log('\nINC 4 — INTERIOR DATA VALIDITY')
 check(
-  `six city interiors + ${88} school interiors (the great schools)`,
-  INTERIORS.length === 6 + 88,
+  `ten city interiors + ${88} school interiors (the great schools + the M2 civic mesh)`,
+  INTERIORS.length === 10 + 88,
 )
 check('interior ids unique', new Set(INTERIORS.map((i) => i.id)).size === INTERIORS.length)
 check('every interior belongs to a real location', INTERIORS.every((i) => !!LOCATION_BY_ID[i.locationId]))
@@ -522,7 +522,9 @@ const cornerGapWorst = (b: { x: number; z: number; w: number; d: number; rotY: n
   for (const [hw, hd] of [[b.w / 2, b.d / 2], [-b.w / 2, b.d / 2], [b.w / 2, -b.d / 2], [-b.w / 2, -b.d / 2]]) {
     const cx = b.x + c * hw + s * hd
     const cz = b.z - s * hw + c * hd
-    worst = Math.min(worst, roadGap(cx, cz))
+    // M2 — inside the fenced civic campus the minor lanes clip at the fence:
+    // the majors carry the law there (mirrors buildingClearOfRoad + render)
+    worst = Math.min(worst, inCivicCampus(cx, cz) ? roadGapMajors(cx, cz) : roadGap(cx, cz))
   }
   return worst
 }

@@ -20,7 +20,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  ACACIA_TONES, ANCHORS, ANCHOR_BY_ID, BAOBAB_TONES, BUILDINGS, heightAt, LAMPS, makeRng, PALM_TONES,
+  ACACIA_TONES, ANCHORS, ANCHOR_BY_ID, BAOBAB_TONES, BUILDINGS, CIVIC_CAMPUS, heightAt, LAMPS, makeRng, PALM_TONES,
   POINTS_OF_INTEREST, ROCKS, ROCK_TONES, ROOF_TONES,
   RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type BuildingDef, type LampDef, type WorldAnchor,
 } from '@/game/world3d/layout'
@@ -1910,7 +1910,145 @@ function AnchorStructures() {
 
 /* ----------------------------- points of interest ----------------------------- */
 
-/** physical job board — walk up and read the REAL work board of that district */
+/**
+ * M2 — THE CIVIC MESH dressing: the Government House flag and one agency
+ * fascia per GRA service office. Six small meshes total (performance law:
+ * this city carries no decoration it cannot justify) — the buildings
+ * themselves stay on the standard instanced block path.
+ */
+const CIVIC_FASCIA: Record<string, string> = {
+  kgirs: '#5C6E3A',
+  nepa: '#b9821f',
+  police: '#1f3a5c',
+  efcc: '#2e5c46',
+}
+
+function CivicDressing() {
+  const tagged = useMemo(() => BUILDINGS.filter((b) => b.tag), [])
+  const poles = useMemo(() => tagged.filter((b) => b.tag === 'gov-house'), [tagged])
+  const offices = useMemo(() => tagged.filter((b) => b.tag && b.tag !== 'gov-house'), [tagged])
+  const campus = useMemo(() => BUILDINGS.some((b) => b.tag), [])
+  if (!campus) return null
+  // THE GOVERNMENT GROUNDS — fence, gate and the laterite drive from the GRA
+  const { minX, maxX, minZ, maxZ, gateZmin, gateZmax } = CIVIC_CAMPUS
+  const midX = (minX + maxX) / 2
+  const w = maxX - minX
+  const d = maxZ - minZ
+  const fenceY = heightAt(minX, minZ)
+  const gateZ = (gateZmin + gateZmax) / 2
+  const fenceMat = { color: '#b8ab90', roughness: 0.95 } as const
+  return (
+    <group>
+      {/* the fence — four low walls, the east one split by the gate */}
+      <mesh position={[midX, fenceY + 0.55, minZ]} castShadow>
+        <boxGeometry args={[w, 1.1, 0.35]} />
+        <meshStandardMaterial {...fenceMat} />
+      </mesh>
+      <mesh position={[midX, fenceY + 0.55, maxZ]} castShadow>
+        <boxGeometry args={[w, 1.1, 0.35]} />
+        <meshStandardMaterial {...fenceMat} />
+      </mesh>
+      <mesh position={[minX, fenceY + 0.55, (minZ + maxZ) / 2]} castShadow>
+        <boxGeometry args={[0.35, 1.1, d]} />
+        <meshStandardMaterial {...fenceMat} />
+      </mesh>
+      <mesh position={[maxX, fenceY + 0.55, (minZ + gateZmin) / 2]} castShadow>
+        <boxGeometry args={[0.35, 1.1, gateZmin - minZ]} />
+        <meshStandardMaterial {...fenceMat} />
+      </mesh>
+      <mesh position={[maxX, fenceY + 0.55, (gateZmax + maxZ) / 2]} castShadow>
+        <boxGeometry args={[0.35, 1.1, maxZ - gateZmax]} />
+        <meshStandardMaterial {...fenceMat} />
+      </mesh>
+      {/* gate posts — the green-white claim on the entrance */}
+      {[gateZmin, gateZmax].map((gz) => (
+        <mesh key={gz} position={[maxX, fenceY + 1.35, gz]} castShadow>
+          <boxGeometry args={[0.5, 2.7, 0.5]} />
+          <meshStandardMaterial color="#1b7a43" roughness={0.6} />
+        </mesh>
+      ))}
+      {/* the laterite drive — gate spine, then the cross to the door row */}
+      <mesh position={[maxX + 8, fenceY + 0.06, gateZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[16, 2.6]} />
+        <meshStandardMaterial color="#b06a3a" roughness={1} />
+      </mesh>
+      <mesh position={[midX, fenceY + 0.06, gateZ]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[w - 3, 2.4]} />
+        <meshStandardMaterial color="#b06a3a" roughness={1} />
+      </mesh>
+      <mesh position={[midX, fenceY + 0.06, (maxZ + gateZ) / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[2.4, (maxZ - gateZ) / 2 + 2]} />
+        <meshStandardMaterial color="#b06a3a" roughness={1} />
+      </mesh>
+
+      {poles.map((b) => {
+        const px = b.x + Math.sin(b.rotY) * (b.d / 2 + 0.4)
+        const pz = b.z + Math.cos(b.rotY) * (b.d / 2 + 0.4)
+        const py = heightAt(px, pz)
+        return (
+          <group key="gov-house-flag" position={[px, py, pz]}>
+            {/* the mast */}
+            <mesh position={[0, 4.2, 0]} castShadow>
+              <cylinderGeometry args={[0.055, 0.075, 8.4, 6]} />
+              <meshStandardMaterial color="#d8d6c8" roughness={0.6} />
+            </mesh>
+            {/* the flag — green-white-green, live in the wind */}
+            <FlagCloth />
+          </group>
+        )
+      })}
+      {offices.map((b) => {
+        const out = b.d / 2 + 0.07
+        const fx = b.x + Math.sin(b.rotY) * out
+        const fz = b.z + Math.cos(b.rotY) * out
+        return (
+          <mesh
+            key={b.tag}
+            position={[fx, b.y + b.h * 0.82, fz]}
+            rotation={[0, b.rotY, 0]}
+            castShadow
+          >
+            <boxGeometry args={[b.w * 0.62, 0.62, 0.1]} />
+            <meshStandardMaterial color={CIVIC_FASCIA[b.tag!] ?? '#1c5c3a'} roughness={0.55} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
+/** the Government House flag — a small waving plane driven by useFrame */
+function FlagCloth() {
+  const ref = useRef<THREE.Mesh>(null)
+  const matRef = useRef<THREE.MeshStandardMaterial>(null)
+  useEffect(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 96
+    canvas.height = 64
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#f7f7f2'
+    ctx.fillRect(0, 0, 96, 64)
+    ctx.fillStyle = '#1b7a43'
+    ctx.fillRect(0, 0, 32, 64)
+    ctx.fillRect(64, 0, 32, 64)
+    const tex = new THREE.CanvasTexture(canvas)
+    if (matRef.current) matRef.current.map = tex
+  }, [])
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      const t = clock.getElapsedTime()
+      ref.current.rotation.y = Math.sin(t * 1.7) * 0.22
+      ref.current.rotation.z = Math.sin(t * 2.3) * 0.06
+    }
+  })
+  return (
+    <mesh ref={ref} position={[0.62, 7.6, 0]}>
+      <planeGeometry args={[1.24, 0.82]} />
+      <meshStandardMaterial ref={matRef} side={THREE.DoubleSide} roughness={0.9} />
+    </mesh>
+  )
+}
+
 function JobBoard({ x, y, z, rotY }: { x: number; y: number; z: number; rotY: number }) {
   return (
     <group position={[x, y, z]} rotation={[0, rotY, 0]}>
@@ -2055,6 +2193,7 @@ export function CityMesh() {
       <Rocks />
       <Lamps />
       <AnchorStructures />
+      <CivicDressing />
       <PointOfInterestProps />
       <Doorways />
       <LocationLabels />

@@ -1355,6 +1355,7 @@ function MealMenu({
 }) {
   const cash = useGameStore((s) => s.player?.cash ?? 0)
   const hunger = useGameStore((s) => s.player?.needs.hunger ?? 100)
+  const mealPriceAt = useGameStore((s) => s.mealPriceAt)
   return (
     <div className="rounded-xl border border-black/[0.06] bg-[var(--lko-gold-soft)]/40 p-2.5">
       <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
@@ -1365,7 +1366,8 @@ function MealMenu({
       </p>
       <div className="flex flex-col gap-1.5">
         {FOOD.meals.map((m) => {
-          const afford = cash >= m.price
+          const price = mealPriceAt(m.key, atLocationId)
+          const afford = cash >= price
           return (
             <button
               key={m.key}
@@ -1383,7 +1385,7 @@ function MealMenu({
                 <span className="block truncate text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">{m.detail}</span>
               </span>
               <span className="flex shrink-0 flex-col items-end">
-                <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(m.price)}</span>
+                <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(price)}{price !== m.price && <span className="ml-0.5 text-[9px] font-bold text-[var(--lko-gold-deep)]">today</span>}</span>
                 <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">+{m.hunger} 🍲</span>
               </span>
             </button>

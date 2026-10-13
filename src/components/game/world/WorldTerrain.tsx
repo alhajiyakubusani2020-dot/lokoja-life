@@ -26,7 +26,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  BRIDGES, CONFLUENCE_POINT, DISTRICTS, GRASS, GRASS_TONES, heightAt, inSchoolYard, MOUNT_PATTI, riverInfo, ROADS,
+  BRIDGES, CONFLUENCE_POINT, DISTRICTS, GRASS, GRASS_TONES, heightAt, inCivicCampus, inSchoolYard, MOUNT_PATTI, riverInfo, ROADS,
   ROAD_RENDER_W, RIVERS,
   WATER_Y, WORLD_HALF, roadDistance, roadDistanceMajors,
 } from '@/game/world3d/layout'
@@ -371,7 +371,7 @@ function roadGeometry(
   let cursor = 0
   // Stage 7 — mapped streets stop at the school fence (the swept yard owns
   // its ground, exactly like a real satellite view of a Lokoja school)
-  const yard = dense.map(([x, z]) => inSchoolYard(x, z))
+  const yard = dense.map(([x, z]) => inSchoolYard(x, z) || inCivicCampus(x, z))
   for (let i = 0; i < dense.length; i++) {
     const [x, z] = dense[i]
     const prev = dense[Math.max(0, i - 1)]
@@ -412,7 +412,7 @@ function junctionDiscs(): THREE.BufferGeometry | null {
   const geos: THREE.BufferGeometry[] = []
   for (let i = 0; i < pts.length; i++) {
     if (used[i]) continue
-    if (inSchoolYard(pts[i][0], pts[i][1])) continue // yard owns its ground
+    if (inSchoolYard(pts[i][0], pts[i][1]) || inCivicCampus(pts[i][0], pts[i][1])) continue // yard owns its ground
     used[i] = true
     let cx = pts[i][0]
     let cz = pts[i][1]
@@ -465,7 +465,7 @@ function Roads() {
           const x = ax + (bx - ax) * t
           const z = az + (bz - az) * t
           acc += 3.7
-          if (inSchoolYard(x, z)) continue
+          if (inSchoolYard(x, z) || inCivicCampus(x, z)) continue
           const ri = riverInfo(x, z)
           if (ri.d < ri.halfWidth + 1.2) continue
           const dash = new THREE.PlaneGeometry(0.1, 1.5)
@@ -480,7 +480,7 @@ function Roads() {
             const t = eAcc / seg
             const x = ax + (bx - ax) * t
             const z = az + (bz - az) * t
-            if (inSchoolYard(x, z)) continue
+            if (inSchoolYard(x, z) || inCivicCampus(x, z)) continue
             const ri = riverInfo(x, z)
             if (ri.d < ri.halfWidth + 1.2) continue
             for (const side of [-1, 1]) {

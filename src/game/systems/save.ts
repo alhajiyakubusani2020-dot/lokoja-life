@@ -8,10 +8,11 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState } from '../types'
+import type { GameSave, PlayerState, CivicState } from '../types'
+import { freshCivicState } from './civic'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 3
+const SAVE_VERSION = 4
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -55,6 +56,12 @@ function deserialize(raw: string): GameSave | null {
         save.version = 3
         break
       case 3:
+        // v3 → v4 (M2): the civic mesh — NEPA/KGIRS/police/EFCC/market.
+        // freshCivicState() below gives a v3 player a clean civic slate:
+        // no bills owed, no warrant, a rolled market for their current day.
+        save.version = 4
+        break
+      case 4:
         // current version
         break
       default:
@@ -88,6 +95,21 @@ function deserialize(raw: string): GameSave | null {
     if (!p.vehicles) p.vehicles = []
     if (typeof p.bankBalance !== 'number') p.bankBalance = 0
     if (!p.relationships) p.relationships = {}
+
+    // --- M2 civic mesh (missing on v3-and-older saves) ---
+    if (!save.civic) {
+      save.civic = freshCivicState()
+    } else {
+      // defensive merge — a partially-written civic slice still loads
+      const fresh = freshCivicState()
+      save.civic = {
+        nepa: { ...fresh.nepa, ...save.civic.nepa },
+        kgirs: { ...fresh.kgirs, ...save.civic.kgirs },
+        police: { ...fresh.police, ...save.civic.police },
+        efcc: { ...fresh.efcc, ...save.civic.efcc, pending: save.civic.efcc?.pending ?? [] },
+        market: { ...fresh.market, ...save.civic.market },
+      }
+    }
 
     save.version = SAVE_VERSION
     return save

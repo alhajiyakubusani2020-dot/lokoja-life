@@ -326,7 +326,7 @@ export const WORLD3D = {
   driveEnergyPerKm: 0.35,
 } as const
 
-/* ------------------------------- food & eating -------------------------------- */
+/* ------------------------------ food & eating -------------------------------- */
 
 /**
  * Stage 4 goes live — the eating loop. A real meal: costs cash, fills
@@ -357,3 +357,75 @@ export const FOOD: { meals: MealDef[] } = {
 export const MEAL_BY_KEY: Record<string, MealDef> = Object.fromEntries(
   FOOD.meals.map((m) => [m.key, m]),
 )
+
+/* ------------------------------- M2 — civic mesh ------------------------------ */
+
+/**
+ * Milestone 2 — the state as a living rule system. Every number the civic
+ * mesh needs lives here: NEPA billing, KGIRS assessment, warrant escalation,
+ * whistleblower rewards and the daily market engine. The pure rules sit in
+ * systems/civic.ts; the store executes them; nothing hard-codes civic naira.
+ */
+export const CIVIC = {
+  /** NEPA — the disco. Bills post every cycleDays; debt past grace cuts light. */
+  nepa: {
+    cycleDays: 5,
+    /** metered flat for a basic room */
+    baseBill: 1400,
+    /** seeded daily variance added on top (deterministic per billing day) */
+    billVariance: 900,
+    /** days after a bill posts before load-shedding starts */
+    graceDays: 3,
+    /** one-time mood hit the day the light goes */
+    sheddingMoodHit: 4,
+    /** reconnection fee on top of the debt once shedding has started */
+    reconnectFee: 300,
+  },
+  /** paying a civic bill remotely (phone) costs this convenience fee —
+   *  walking into the government-area office is always free */
+  phonePayFee: 50,
+  /** KGIRS — the state revenue service. Assesses a cut of what you EARNED. */
+  kgirs: {
+    cycleDays: 10,
+    /** flat share of the cycle's income (Nigeria-ish PAYE metaphor) */
+    rate: 0.075,
+    /** even a hustler with ₦0 income files something small */
+    minAssessment: 300,
+    /** days after assessment before the warrant issues */
+    graceDays: 4,
+    /** extra share of the assessed tax when the police collects it */
+    warrantFineRate: 0.25,
+    /** reputation hit the day the warrant issues */
+    warrantReputationHit: 5,
+  },
+  /** EFCC — whistleblowers eat too: file a tip, the commission recovers. */
+  efcc: {
+    tipCooldownDays: 3,
+    /** your reward is this share of what the commission recovers */
+    rewardRate: 0.05,
+    /** days until a filed tip resolves */
+    resolveDays: 2,
+    /** seeded recovery amounts (deterministic per tip id) */
+    recoveries: [4000, 9000, 18000, 42000, 120000],
+  },
+  /** the markets breathe: prices move daily, every 3rd day is market day */
+  market: {
+    markets: ['kpata-market', 'food-area'],
+    minMult: 0.85,
+    maxMult: 1.35,
+    /** every Nth day is a market day — blanket discount at both markets */
+    marketDayEvery: 3,
+    marketDayMult: 0.9,
+    /** seasonal flavour events (weighted pick, deterministic per day) */
+    events: [
+      { icon: '🍅', label: 'Tomato glut', note: 'Tomatoes full everywhere — peppers dey almost free.', mealBias: 'groceries', biasMult: 0.82, weight: 3 },
+      { icon: '🛢️', label: 'Fuel scarcity', note: 'Queue for fuel reach two junctions — everything cost small more.', weight: 3 },
+      { icon: '🎉', label: 'Festive season', note: 'Ram and rice prices climb — everybody dey cook for somebody.', mealBias: 'jollof', biasMult: 1.25, weight: 2 },
+      { icon: '🐮', label: 'Suya rush', note: 'Wedding season — ram meat scarce round the grill.', mealBias: 'suya', biasMult: 1.2, weight: 2 },
+      { icon: '🌧️', label: 'Rain scatter market', note: 'Rain beat Kpata today — some traders no open at all.', weight: 2 },
+      { icon: '🚚', label: 'New supply enter', note: 'Fresh trailer offload — market soft small today.', mealBias: 'bread-akara', biasMult: 0.85, weight: 2 },
+    ] as { icon: string; label: string; note: string; mealBias?: string; biasMult?: number; weight: number }[],
+    /** chance (0–1) a day rolls a flavour event at all */
+    eventChance: 0.55,
+  },
+} as const

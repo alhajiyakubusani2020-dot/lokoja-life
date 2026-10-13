@@ -14,6 +14,7 @@ import type {
   ActiveOpportunity,
   AvatarConfig,
   ChatOutcome,
+  CivicState,
   GameNotification,
   GameSave,
   GameSettings,
@@ -59,6 +60,20 @@ import {
   absoluteSlot,
 } from '../systems/world'
 import { calculateTravel, rollTravelEvent } from '../systems/travel'
+import {
+  freshCivicState,
+  civicDayRoll,
+  nepaSettleCost,
+  nepaApplyPayment,
+  kgirsSettleCost,
+  kgirsApplyPayment,
+  efccFileTip,
+  efccRewardFor,
+  marketMealPrice,
+  marketForDay,
+  type CivicDayResult,
+} from '../systems/civic'
+import { CIVIC } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
 
@@ -72,6 +87,8 @@ interface GameStore {
   /* live game state (null until a game starts) */
   player: PlayerState | null
   world: WorldState | null
+  /** M2 — the civic mesh: NEPA debt, KGIRS assessment, fines, tips, market */
+  civic: CivicState | null
   settings: GameSettings
 
   /* lifecycle */
@@ -94,6 +111,16 @@ interface GameStore {
   eatMeal: (mealKey: string, atLocationId?: string) => boolean
   /** Stage 3D — settle the energy cost of one 3D-world visit's walking (0 → no-op) */
   settleWorldWalk: (meters: number) => void
+
+  /* M2 — the civic mesh (payments all validate, ledger, notify, autosave) */
+  /** Settle the electricity bill. 'office' (in GRA) is free; 'phone' adds the convenience fee. */
+  payNepa: (channel: 'office' | 'phone') => boolean
+  /** Settle the tax assessment. 'police' pays the warrant fine too; 'phone' refuses warrants. */
+  payKgirs: (channel: 'office' | 'police' | 'phone') => boolean
+  /** File a whistleblower tip at the commission (cooldown per CIVIC config). */
+  fileEfccTip: () => boolean
+  /** Today's honest market price of a meal at a given spot (UI display + eatMeal agree). */
+  mealPriceAt: (mealKey: string, locationId: string) => number
 
   /* Stage 5 — ownership, banking, social life */
   /** Buy a vehicle at the motor park (one per model). False = couldn't afford / owned. */
@@ -165,12 +192,87 @@ let notificationId = 0
 /** Ledger cap — newest entries survive, old ones fall off. */
 const LEDGER_CAP = 50
 
+/* ------------------------- M2 — civic day machinery ------------------------- */
+
+/** Aggregated results of rolling the civic mesh across one or more days. */
+interface CivicAgg {
+  nepaPosted: number
+  nepaShed: boolean
+  taxAssessed: number
+  warrantIssued: boolean
+  tipsResolved: import('../types').EfccTip[]
+  tipReward: number
+}
+
+/** Pure: roll the civic mesh forward day by day (assessments land on exact days). */
+function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: number, newDay: number): { civic: CivicState; agg: CivicAgg } {
+  let cur = civic
+  const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0 }
+  for (let d = prevDay + 1; d <= newDay; d++) {
+    const r = civicDayRoll(cur, totalEarned, d)
+    cur = r.next
+    agg.nepaPosted += r.nepaPosted
+    agg.nepaShed = agg.nepaShed || r.nepaShed
+    agg.taxAssessed += r.taxAssessed
+    agg.warrantIssued = agg.warrantIssued || r.warrantIssued
+    agg.tipsResolved = [...agg.tipsResolved, ...r.tipsResolved]
+    agg.tipReward += r.tipReward
+  }
+  return { civic: cur, agg }
+}
+
+/** Execute a civic day crossing: set the slice, pay whistleblower rewards,
+ *  apply the shedding mood hit and the warrant reputation hit, narrate it. */
+function commitCivicDays(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+  prevDay: number,
+  newDay: number,
+): void {
+  const { civic, player, world } = get()
+  if (!civic || !player || !world || newDay <= prevDay) return
+  const { civic: rolled, agg } = civicRollForDays(civic, player.stats.totalEarned, prevDay, newDay)
+  set({ civic: rolled })
+
+  // whistleblower rewards land as honest hustle income (ledger remembers)
+  if (agg.tipReward > 0) {
+    get().addMoney(agg.tipReward, {
+      label: `Whistleblower reward — ${agg.tipsResolved.map((t) => t.label).join(', ')}`,
+      category: 'hustle',
+    })
+  }
+  // the day the light goes stings a little
+  if (agg.nepaShed) {
+    const p = get().player
+    if (p) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood: -CIVIC.nepa.sheddingMoodHit }) } })
+  }  // a warrant makes the state learn your name — the wrong way
+  if (agg.warrantIssued) {
+    get().addReputation(-CIVIC.kgirs.warrantReputationHit)
+  }
+
+  if (agg.nepaPosted > 0) {
+    get().notify({ icon: '🧾', text: `NEPA bill posted — ${formatNaira(agg.nepaPosted)} due.`, tone: 'neutral' })
+  }
+  if (agg.nepaShed) {
+    get().notify({ icon: '🔌', text: 'Load-shedding: NEPA don cut your light. Settle the bill to reconnect.', tone: 'bad' })
+  }
+  if (agg.taxAssessed > 0) {
+    get().notify({ icon: '🧮', text: `KGIRS assessment: ${formatNaira(agg.taxAssessed)} tax due.`, tone: 'neutral' })
+  }
+  if (agg.warrantIssued) {
+    get().notify({ icon: '🚨', text: 'Tax warrant issued — settle it at the police station.', tone: 'bad' })
+  }
+  for (const t of agg.tipsResolved) {
+    get().notify({ icon: '🕵️', text: `EFCC recovered funds from “${t.label}” — your share: ${formatNaira(efccRewardFor(t))}.`, tone: 'good' })
+  }
+}
+
 /** Debounced autosave — called after every state-mutating action. */
 function scheduleAutosave(get: () => GameStore) {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    const { player, world, settings } = get()
-    if (!player || !world) return
+    const { player, world, civic, settings } = get()
+    if (!player || !world || !civic) return
     const existing = SaveSystem.load()
     SaveSystem.write({
       version: SaveSystem.SAVE_VERSION,
@@ -178,6 +280,7 @@ function scheduleAutosave(get: () => GameStore) {
       updatedAt: Date.now(),
       player,
       world,
+      civic,
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -191,6 +294,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   player: null,
   world: null,
+  civic: null,
   settings: { sound: true },
 
   isTravelling: false,
@@ -243,7 +347,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       weather: 'sunny',
       currentLocation: 'home',
     }
-    set({ player, world, screen: 'game', offers: [] })
+    set({ player, world, civic: freshCivicState(), screen: 'game', offers: [] })
     scheduleAutosave(get)
   },
 
@@ -251,7 +355,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const save = SaveSystem.load()
     if (!save) return false
     syncAudioWithSettings(save.settings)
-    set({ player: save.player, world: save.world, settings: save.settings, screen: 'game' })
+    set({ player: save.player, world: save.world, civic: save.civic, settings: save.settings, screen: 'game' })
     return true
   },
 
@@ -298,6 +402,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('notify')
+    // M2 — the civic mesh rolls as the day (or days) turn
+    commitCivicDays(get, set, world.day, newWorld.day)
     scheduleAutosave(get)
   },
 
@@ -310,14 +416,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ? { ...player, needs: applySlotDecay(player.needs, slots) }
       : player
     set({ player: player2, world: { ...world, ...clock } })
+    // M2 — slots can cross midnight; the civic mesh follows the day
+    commitCivicDays(get, set, world.day, clock.day)
     scheduleAutosave(get)
   },
 
   /** INC 4 — home downtime: watch TV or freshen up. Costs one honest clock
    *  slot (time really passes) + small needs shift from INTERIOR config. */
   relaxIndoors: (kind) => {
-    const { player, world } = get()
+    const { player, world, civic } = get()
     if (!player || !world) return
+    // M2 — load-shedding is real: no light, no TV
+    if (kind === 'tv' && civic?.nepa.shedding) {
+      get().notify({
+        icon: '🔌',
+        text: 'NEPA don take the light — the TV just dey look you. Settle the bill first.',
+        tone: 'bad',
+      })
+      audio.play('notify')
+      return
+    }
     const r = INTERIOR.relax[kind]
     const needs = applyNeedsDelta(applySlotDecay(player.needs, 1), r)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
@@ -346,6 +464,114 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().notify({ icon: '🚶', text: `${label} — ${cost} energy spent.`, tone: 'neutral' })
     }
     scheduleAutosave(get)
+  },
+
+  /* --------------------- M2 — the civic mesh actions --------------------- */
+
+  /** Settle the electricity bill. In the GRA office it costs the debt
+   *  (+ reconnection once cut); from the phone it adds the convenience fee. */
+  payNepa: (channel) => {
+    const { player, world, civic } = get()
+    if (!player || !world || !civic) return false
+    if (civic.nepa.owed <= 0 && !civic.nepa.shedding) {
+      get().notify({ icon: '💡', text: 'You no owe NEPA anything. Enjoy the light.', tone: 'neutral' })
+      return false
+    }
+    if (channel === 'office' && world.currentLocation !== 'government-area') {
+      get().notify({ icon: '🏢', text: 'The NEPA counter is in the Government Area — or pay from your phone for a small fee.', tone: 'neutral' })
+      return false
+    }
+    const fee = channel === 'phone' ? CIVIC.phonePayFee : 0
+    const cost = nepaSettleCost(civic) + fee
+    if (!get().removeMoney(cost, {
+      label: fee ? 'NEPA bill — online payment (incl. fee)' : civic.nepa.shedding ? 'NEPA bill + reconnection fee' : 'NEPA bill',
+      category: 'other',
+    })) {
+      get().notify({ icon: '🧾', text: `You need ${formatNaira(cost)} to clear the disco.`, tone: 'bad' })
+      return false
+    }
+    set({ civic: nepaApplyPayment(get().civic!, world.day) })
+    get().notify({
+      icon: '💡',
+      text: civic?.nepa.shedding ? 'Light don come back! NEPA staff dey smile small.' : 'NEPA bill settled — meter dey smile.',
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Settle the KGIRS assessment. A clean assessment pays anywhere (office
+   *  free / phone + fee); a WARRANT only clears at the police desk in the GRA,
+   *  where the fine comes on top. */
+  payKgirs: (channel) => {
+    const { player, world, civic } = get()
+    if (!player || !world || !civic) return false
+    if (civic.kgirs.assessed <= 0) {
+      get().notify({ icon: '🧮', text: 'No tax assessment dey wait. KGIRS dey sleep — for now.', tone: 'neutral' })
+      return false
+    }
+    const warrant = civic.kgirs.warrant
+    if (channel === 'phone' && warrant) {
+      get().notify({ icon: '🚨', text: 'A warrant no fit clear by phone. Walk to the police station.', tone: 'bad' })
+      return false
+    }
+    if (channel !== 'phone' && world.currentLocation !== 'government-area') {
+      get().notify({ icon: '🏢', text: warrant ? 'The warrant desk is at the GRA police station.' : 'KGIRS office dey Government Area — or use the phone app (+fee).', tone: 'neutral' })
+      return false
+    }
+    const fee = channel === 'phone' ? CIVIC.phonePayFee : 0
+    const cost = kgirsSettleCost(civic) + fee
+    if (!get().removeMoney(cost, {
+      label: warrant ? 'KGIRS tax + warrant fine (police)' : fee ? 'KGIRS tax — online payment (incl. fee)' : 'KGIRS tax assessment',
+      category: 'other',
+    })) {
+      get().notify({ icon: '🧮', text: `You need ${formatNaira(cost)} to settle the taxman.`, tone: 'bad' })
+      return false
+    }
+    set({ civic: kgirsApplyPayment(get().civic!, warrant) })
+    get().notify({
+      icon: '🧮',
+      text: warrant ? 'Warrant cleared at the desk — the police sef smile.' : 'Tax settled. Your name clean for KGIRS book.',
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** File a whistleblower tip at the EFCC zonal command (in person only). */
+  fileEfccTip: () => {
+    const { player, world, civic } = get()
+    if (!player || !world || !civic) return false
+    if (world.currentLocation !== 'government-area') {
+      get().notify({ icon: '🏢', text: 'The commission sits in the Government Area. Carry your gist there.', tone: 'neutral' })
+      return false
+    }
+    if (world.day - civic.efcc.lastTipDay < CIVIC.efcc.tipCooldownDays) {
+      get().notify({ icon: '🕵️', text: 'The commission dey still investigate your last tip. Come back small later.', tone: 'neutral' })
+      return false
+    }
+    const { next, tip } = efccFileTip(civic, world.day)
+    set({ civic: next })
+    get().notify({
+      icon: '🕵️',
+      text: `Tip filed: “${tip.label}”. If EFCC recover, your cut na ${Math.round(CIVIC.efcc.rewardRate * 100)}%.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Today's honest market price of a meal at a spot — the ONE source the
+   *  menu rows and eatMeal both read, so display can never drift from charge. */
+  mealPriceAt: (mealKey, locationId) => {
+    const { world, civic } = get()
+    const meal = MEAL_BY_KEY[mealKey]
+    if (!meal || !world) return meal?.price ?? 0
+    const c = marketForDay(civic ?? freshCivicState(), world.day)
+    return marketMealPrice(meal.price, mealKey, locationId, c, world.day)
   },
 
   /* ------------------ Stage 5 — ownership, bank, social ------------------ */
@@ -560,22 +786,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!player || !world) return false
     const meal = MEAL_BY_KEY[mealKey]
     if (!meal) return false
-    if (!canAfford(player.cash, meal.price)) {
+    // M2 — markets breathe: today's honest price at this spot (base outside markets)
+    const spot = atLocationId ?? world.currentLocation
+    let civic = get().civic ?? freshCivicState()
+    const rolled = marketForDay(civic, world.day)
+    if (rolled !== civic) {
+      civic = rolled
+      set({ civic })
+    }
+    const price = marketMealPrice(meal.price, mealKey, spot, civic, world.day)
+    if (!canAfford(player.cash, price)) {
       get().notify({
         icon: '🍲',
-        text: `${meal.label} costs ${formatNaira(meal.price)} — you no carry enough cash.`,
+        text: `${meal.label} costs ${formatNaira(price)}${price !== meal.price ? ' today' : ''} — you no carry enough cash.`,
         tone: 'bad',
       })
       return false
     }
     // ledger label: eaten there, or delivered to where you actually are
-    const spotName = LOCATION_BY_ID[atLocationId ?? world.currentLocation]?.name ?? 'Lokoja'
+    const spotName = LOCATION_BY_ID[spot]?.name ?? 'Lokoja'
     const delivered = atLocationId !== undefined && atLocationId !== world.currentLocation
     const label = delivered
       ? `${meal.label} — delivery to ${LOCATION_BY_ID[world.currentLocation]?.name ?? 'home'}`
       : `${meal.label} at ${spotName}`
     // pay first — the ledger remembers every plate
-    const ok = get().removeMoney(meal.price, {
+    const ok = get().removeMoney(price, {
       label,
       category: 'shop',
     })
@@ -690,6 +925,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         isTravelling: false,
         offers: [], // left the area — unclaimed gist goes cold
       })
+
+      // M2 — a trip can cross midnight; the civic mesh follows the day
+      commitCivicDays(get, set, w.day, clock.day)
 
       // arrival feedback: destination + a compact time/money/energy summary
       get().notify({
@@ -1122,8 +1360,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   saveNow: () => {
-    const { player, world, settings } = get()
-    if (!player || !world) return
+    const { player, world, civic, settings } = get()
+    if (!player || !world || !civic) return
     const existing = SaveSystem.load()
     SaveSystem.write({
       version: SaveSystem.SAVE_VERSION,
@@ -1131,6 +1369,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       updatedAt: Date.now(),
       player,
       world,
+      civic,
       settings,
     })
     set({ hasSave: true })
@@ -1138,7 +1377,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   resetGame: () => {
     SaveSystem.clear()
-    set({ player: null, world: null, screen: 'menu', hasSave: false })
+    set({ player: null, world: null, civic: null, screen: 'menu', hasSave: false })
   },
 
   /* ------------------------------ feedback ------------------------------ */

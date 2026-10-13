@@ -174,6 +174,7 @@ export function MapScreen({
   const isTravelling = useGameStore((s) => s.isTravelling)
   const travel = useGameStore((s) => s.travel)
   const eatMeal = useGameStore((s) => s.eatMeal)
+  const mealPriceAt = useGameStore((s) => s.mealPriceAt)
 
   const [userSelectedId, setUserSelectedId] = useState<string | null>(focusLocationId ?? null)
 
@@ -394,7 +395,8 @@ export function MapScreen({
                       </p>
                       <div className="flex flex-col gap-1.5">
                         {FOOD.meals.map((m) => {
-                          const afford = player.cash >= m.price
+                          const price = mealPriceAt(m.key, selected.id)
+                          const afford = player.cash >= price
                           return (
                             <button
                               key={m.key}
@@ -412,7 +414,7 @@ export function MapScreen({
                                 <span className="block truncate text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">{m.detail}</span>
                               </span>
                               <span className="flex shrink-0 flex-col items-end">
-                                <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(m.price)}</span>
+                                <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(price)}{price !== m.price && <span className="ml-0.5 text-[9px] font-bold text-[var(--lko-gold-deep)]">today</span>}</span>
                                 <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">+{m.hunger} hunger</span>
                               </span>
                             </button>

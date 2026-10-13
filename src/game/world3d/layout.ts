@@ -351,6 +351,10 @@ export function roadGapMajors(x: number, z: number, radius = ROAD_Q_CAP): number
  */
 export function buildingClearOfRoad(x: number, z: number, w: number, d: number): boolean {
   const cornerR = Math.hypot(w, d) * 0.5
+  // M2 — inside the fenced civic campus the mapped MINOR lanes stop at the
+  // fence (satellite-true, the school-compound precedent): only the major
+  // classes bind the law there. Majors/highways still bind EVERYWHERE.
+  if (inCivicCampus(x, z)) return roadGapMajors(x, z) >= cornerR + 0.7
   return roadGap(x, z) >= cornerR + 0.3 && roadGapMajors(x, z) >= cornerR + 0.7
 }
 
@@ -364,6 +368,32 @@ export function inSchoolYard(x: number, z: number): boolean {
     if (Math.hypot(sp.x - x, sp.z - z) < sp.plateauR * 0.92) return true
   }
   return false
+}
+
+/*
+ * M2 — THE GOVERNMENT GROUNDS: a fenced civic campus ~30u west of the GRA
+ * anchor, on the one stretch of majors-clear plain in the quarter. The real
+ * GRA is blanket road-dense (the road law measured its best clear gap at
+ * 3.4u — no office can legally stand there), so the quarter's government
+ * buildings sit on their own fenced ground the way the real reservation
+ * keeps its low fences and internal drives. Inside the fence the mapped
+ * MINOR estate lanes stop at the gate (the school-compound precedent); the
+ * major classes bind the law everywhere, always.
+ */
+export const CIVIC_CAMPUS = {
+  /** fence rect (world units) */
+  minX: -135.5,
+  maxX: -120.5,
+  minZ: 7,
+  maxZ: 31,
+  /** gate gap on the EAST fence, facing the GRA anchor */
+  gateZmin: 18,
+  gateZmax: 20.6,
+} as const
+
+/** is this spot inside the fenced civic campus? (minor roads clip at the fence) */
+export function inCivicCampus(x: number, z: number): boolean {
+  return x >= CIVIC_CAMPUS.minX && x <= CIVIC_CAMPUS.maxX && z >= CIVIC_CAMPUS.minZ && z <= CIVIC_CAMPUS.maxZ
 }
 
 /* --------------------------------- terrain --------------------------------- */
@@ -656,6 +686,9 @@ export interface BuildingDef {
   tone: number
   roof: 'hip' | 'flat' | 'shed'
   roofTone: number
+  /** M2 — stable name for signature civic buildings (doors match by tag,
+   *  CityMesh dresses them). Rides through pushSafe untouched. */
+  tag?: 'gov-house' | 'kgirs' | 'nepa' | 'police' | 'efcc'
 }
 
 /** Nigerian neighbourhood wall palette — cream, ochre, terracotta, teal-wash… */
@@ -776,8 +809,30 @@ function buildDistrictBuildings(d: District, rng: () => number): BuildingDef[] {
       break
     }
     case 'gov': {
+      // M2 — THE CIVIC MESH. The hand-set clearing died under the road law
+      // (this quarter is blanket road-dense — probe: best gap 3.4u), so the
+      // five signature buildings stand on their own fenced campus ~30u west
+      // (THE GOVERNMENT GROUNDS), where the majors-clear plain allows them.
+      // Placement is direct and hand-set (the school-compound trust level);
+      // the campus law (majors never touched) is asserted below and the M1
+      // suite re-verifies every corner. A building that would ever break
+      // the majors law is SKIPPED — nothing stands on tarmac, period.
+      const campus: [BuildingDef['tag'], number, number, number, number, number][] = [
+        // rotY = π/2 (front faces EAST, the gate): w runs along Z, d along X
+        ['gov-house', -128, 26, 9.5, 6.5, 6.8],
+        ['kgirs', -132.2, 11, 5.4, 4.4, 4.4],
+        ['nepa', -123.8, 11, 5.4, 4.4, 4.2],
+        ['police', -132.2, 17.5, 5.6, 4.6, 4.6],
+        ['efcc', -123.8, 17.5, 5.4, 4.4, 4.2],
+      ]
+      for (const [tag, x, z, w, dd, h] of campus) {
+        if (!inCivicCampus(x, z) || !buildingClearOfRoad(x, z, w, dd)) continue
+        if (riverInfo(x, z).d < 16) continue
+        push({ x, z, w, d: dd, h, rotY: Math.PI / 2, kind: 'block', tone: 6, roof: 'flat', roofTone: 4, tag })
+      }
+      // the microfinance bank keeps its old spot by the anchor — pushSafe
+      // slides it as the road law demands (never inside the campus)
       pushSafe({ x: d.x, z: d.z, w: 12.5, d: 7.5, h: 6.2, rotY: 0, kind: 'block', tone: 6, roof: 'flat', roofTone: 4 })
-      for (let i = 0; i < 2; i++) tryPlace(15, 29, 6, 5, 4.4, 'block', 'flat', 0.2)
       break
     }
     case 'university': {
@@ -865,12 +920,17 @@ export const DOORS: DoorDef[] = (() => {
   const uniGym = BUILDINGS.find(
     (b) => b.kind === 'shop' && Math.hypot(b.x - ANCHOR_BY_ID['university-area'].x, b.z - ANCHOR_BY_ID['university-area'].z) < 34,
   ) ?? null
-  // Stage 5-b — the microfinance bank: the civic block standing at the gov anchor
+  // Stage 5-b — the microfinance bank: the untagged civic block at the gov
+  // anchor (the nearest plain 'block' to the clearing centre)
   const govA = ANCHOR_BY_ID['government-area']
   const govBlock =
-    BUILDINGS.filter((b) => b.kind === 'block' && Math.hypot(b.x - govA.x, b.z - govA.z) < 16).sort(
+    BUILDINGS.filter((b) => b.kind === 'block' && !b.tag && Math.hypot(b.x - govA.x, b.z - govA.z) < 34).sort(
       (a, b) => Math.hypot(a.x - govA.x, a.z - govA.z) - Math.hypot(b.x - govA.x, b.z - govA.z),
     )[0] ?? null
+  // M2 — the civic mesh offices (matched by tag — pushSafe may slide them,
+  // the door follows the building wherever the law puts it)
+  const byTag = (t: NonNullable<BuildingDef['tag']>): BuildingDef | null =>
+    BUILDINGS.find((b) => b.tag === t) ?? null
   // Stage 5-b — the lounge: the SECOND shop in the food strip (the first is Mama's)
   const foodShop2 =
     BUILDINGS.filter(
@@ -883,6 +943,11 @@ export const DOORS: DoorDef[] = (() => {
     doorFor('peak-gym', 'university-area', uniGym, { dx: 6.5, dz: -4.5 }),
     doorFor('lokoja-microfinance', 'government-area', govBlock, { dx: -6.5, dz: -5.5 }),
     doorFor('golden-nights', 'food-area', foodShop2, { dx: 4.5, dz: 4.5 }),
+    // M2 — the civic mesh: revenue, power, police, anti-graft
+    doorFor('kgirs-office', 'government-area', byTag('kgirs'), { dx: -11, dz: 7 }),
+    doorFor('nepa-office', 'government-area', byTag('nepa'), { dx: 12, dz: 6 }),
+    doorFor('police-station', 'government-area', byTag('police'), { dx: -12, dz: -7 }),
+    doorFor('efcc-office', 'government-area', byTag('efcc'), { dx: 13, dz: -8 }),
   ]
 })()
 
@@ -1090,7 +1155,7 @@ export const LAMPS: LampDef[] = (() => {
     const k = `${Math.round(x / 3.5)}:${Math.round(z / 3.5)}`
     if (!force && seen.has(k)) return
     if (heightAt(x, z) <= WATER_Y + 0.15) return // never standing in carved water ground
-    if (inSchoolYard(x, z)) return // yards clip mapped streets — no lamps either
+    if (inSchoolYard(x, z) || inCivicCampus(x, z)) return // yards clip mapped streets — no lamps either
     if (Math.hypot(x, z) > WALK_BOUND) return
     // THE LAW: the lamp must clear EVERY carriageway — its own shoulder spot
     // is invalid where a highway/feeder road runs through it (dual carriageways)
