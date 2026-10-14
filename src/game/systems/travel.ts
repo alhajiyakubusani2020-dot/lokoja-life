@@ -59,6 +59,7 @@ export function calculateTravel(
   weather: Weather,
   currentTimeOfDay: TimeOfDay,
   fuelMult = 1,
+  minutesMult = 1,
 ): TravelPlan {
   const params = ECONOMY.transport[transport]
   const km = mapDistanceKm(origin, destination)
@@ -71,9 +72,10 @@ export function calculateTravel(
   const rawFare = (params.cost.base + params.cost.perKm * km) * (transport.startsWith('own-') ? fuelMult : 1)
   const cost = Math.round(rawFare / TRAVEL.fareRounding) * TRAVEL.fareRounding
 
-  // minutes: distance × speed × location × weather
+  // minutes: distance × speed × location × weather × road quality
+  // (M10 — the town union's paved streets ride the last multiplier)
   const baseMinutes = km * params.minutesPerKm
-  const minutes = Math.max(1, Math.round(baseMinutes * locationMod * weatherMod))
+  const minutes = Math.max(1, Math.round(baseMinutes * locationMod * weatherMod * minutesMult))
 
   // energy: distance × rate × location modifier (walking uphill costs!)
   const energyCost = Math.max(1, Math.round(km * params.energyPerKm * locationMod))

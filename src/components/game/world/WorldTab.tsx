@@ -27,6 +27,7 @@ import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFroz
 import { sampleFor } from '@/game/systems/perfProbe'
 import { getDeviceProfile } from '@/game/systems/device'
 import { setDebugScarcity } from '@/game/systems/chaos'
+import { setDebugYearDay, festivalForDay, weddingForCycle } from '@/game/systems/calendar'
 import { ALL_DOORS } from '@/game/world3d/schools'
 import { BRIDGES } from '@/game/world3d/layout'
 import { WorldScene } from './WorldScene'
@@ -236,6 +237,18 @@ export function WorldTab({
       },
       /** M8 E2E — force/clear the cash-scarcity day law (deterministic shots) */
       forceScarcity: (v: boolean) => setDebugScarcity(v),
+      /** M10 E2E — force the calendar's year-day reading (1–72; null = the real year) */
+      forceYearDay: (n: number | null) => setDebugYearDay(n),
+      /** M10 E2E — the live calendar slice + today's derived laws */
+      calendar: () => {
+        const s = useGameStore.getState()
+        return {
+          slice: s.calendar,
+          today: s.world ? festivalForDay(s.world.day) : null,
+          wedding: s.world ? weddingForCycle(s.world.day) : null,
+          yearDay: s.world ? ((s.world.day - 1) % 72) + 1 : 0,
+        }
+      },
     }
     return () => {
       delete (window as unknown as { __lkl?: unknown }).__lkl

@@ -108,6 +108,8 @@ export interface TravelOption {
  * would refuse — the same transportAllowed() law gates here.
  * M8 — `fuelMult` rides through to personal-ride plans so the sheet's
  * number is the number the pump will charge (black-market days).
+ * M10 — `minutesMult` rides through to EVERY plan so the sheets show the
+ * same smooth-road minutes the store will charge (paved destinations).
  */
 export function allTravelOptions(
   origin: LokojaLocation,
@@ -116,12 +118,13 @@ export function allTravelOptions(
   timeOfDay: TimeOfDay,
   vehicles: OwnedVehicle[],
   fuelMult = 1,
+  minutesMult = 1,
 ): TravelOption[] {
   const options: TravelOption[] = destination.transport.map((t) => {
     const params = ECONOMY.transport[t]
     return {
       transport: t,
-      plan: calculateTravel(origin, destination, t, weather, timeOfDay),
+      plan: calculateTravel(origin, destination, t, weather, timeOfDay, 1, minutesMult),
       personal: false,
       label: params.label,
       emoji: params.emoji,
@@ -133,7 +136,7 @@ export function allTravelOptions(
     const def = VEHICLE_BY_MODEL[model]
     options.push({
       transport: t,
-      plan: calculateTravel(origin, destination, t, weather, timeOfDay, fuelMult),
+      plan: calculateTravel(origin, destination, t, weather, timeOfDay, fuelMult, minutesMult),
       personal: true,
       label: `Your ${def.short}`,
       emoji: def.emoji,

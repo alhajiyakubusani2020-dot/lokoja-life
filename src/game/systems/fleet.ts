@@ -23,7 +23,8 @@ import { canPersonalReach, publicCounterpartId } from './garage'
 import { calculateTravel } from './travel'
 import { weatherBlocksLocation, isRainSky } from './seasons'
 import { civicHash } from './civic'
-import type { OwnedVehicle, VehicleModel, Weather, FleetState } from '../types'
+import { calendarFleetMult, pavedMinutesMult } from './calendar'
+import type { CalendarState, OwnedVehicle, VehicleModel, Weather, FleetState } from '../types'
 
 /* -------------------------------- the board -------------------------------- */
 
@@ -78,13 +79,13 @@ export function gigDestinationsFor(model: VehicleModel, level: number, weather?:
  * fatter the pay). Rounded to the fare step so the board never shows
  * kobo-dust numbers.
  */
-export function gigPayout(model: VehicleModel, dest: LokojaLocation, weather: Weather): number {
+export function gigPayout(model: VehicleModel, dest: LokojaLocation, weather: Weather, fleetMult = 1): number {
   const park = LOCATION_BY_ID[GIG_ORIGIN_ID]
   const km = Math.hypot(dest.mapX - park.mapX, dest.mapY - park.mapY) * TRAVEL.kmPerMapUnit
   const pub = ECONOMY.transport[publicCounterpartId(model)]
   const rain = isRainSky(weather) ? (FLEET.rainPayout[model] ?? 1) : 1
   const rough = isRainSky(weather) ? (FLEET.roughSkyBonus[weather] ?? 1) : 1
-  const raw = (pub.cost.base + pub.cost.perKm * km) * FLEET.payoutMult * rain * rough
+  const raw = (pub.cost.base + pub.cost.perKm * km) * FLEET.payoutMult * rain * rough * fleetMult
   return Math.round(raw / TRAVEL.fareRounding) * TRAVEL.fareRounding
 }
 
@@ -92,8 +93,10 @@ export function gigPayout(model: VehicleModel, dest: LokojaLocation, weather: We
  * The day's board for one garage: FLEET.gigsPerModelPerDay offers per owned
  * vehicle, destinations picked by hash (distinct within a model), fully
  * priced against the CURRENT weather. Deterministic per (day, garage, level).
+ * M10 — the festival premium rides the fare (Detty December's returnees
+ * pay like tourists), and a paved destination shortens the drive minutes.
  */
-export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, weather: Weather, fuelMult = 1): GigDef[] {
+export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, weather: Weather, fuelMult = 1, cal?: CalendarState): GigDef[] {
   const park = LOCATION_BY_ID[GIG_ORIGIN_ID]
   if (!park) return []
   const gigs: GigDef[] = []
@@ -118,13 +121,13 @@ export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, w
       }
       prevToId = dests[idx].id
       const dest = dests[idx]
-      const plan = calculateTravel(park, dest, `own-${model}` as const, weather, 'morning', fuelMult)
+      const plan = calculateTravel(park, dest, `own-${model}` as const, weather, 'morning', fuelMult, cal ? pavedMinutesMult(cal, day, dest.id) : 1)
       gigs.push({
         id: `gig-${day}-${model}-${i}`,
         day,
         model,
         toId: dest.id,
-        payout: gigPayout(model, dest, weather),
+        payout: gigPayout(model, dest, weather, calendarFleetMult(day)),
         fuel: plan.cost,
         energyCost: plan.energyCost,
         minutes: plan.minutes,

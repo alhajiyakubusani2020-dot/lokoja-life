@@ -8,14 +8,15 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState } from '../types'
 import { freshCivicState } from './civic'
 import { freshChaosState } from './chaos'
 import { freshGoalState } from './goals'
 import { freshOnboardingState, freshAccountState } from './guest'
+import { freshCalendarState } from './calendar'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 10
+const SAVE_VERSION = 11
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -105,6 +106,13 @@ function deserialize(raw: string): GameSave | null {
         save.version = 10
         break
       case 10:
+        // v10 → v11 (M10 — THE LIVING CALENDAR): the calendar slice joins
+        // the save — festival participation, ram meat, regatta stakes,
+        // aso-ebi, the paving projects. Defaulted below — a v10 player
+        // wakes up with the year's celebrations waiting, nothing owed.
+        save.version = 11
+        break
+      case 11:
         // current version
         break
       default:
@@ -187,6 +195,22 @@ function deserialize(raw: string): GameSave | null {
     if (!save.account) save.account = freshAccountState()
     if (typeof save.account.linked !== 'boolean') save.account.linked = false
     if (typeof save.account.gateGraceDay !== 'number') save.account.gateGraceDay = 0
+
+    // --- M10 living calendar (missing on v10-and-older saves; partial data healed) ---
+    const freshCal = freshCalendarState()
+    const cal: CalendarState = save.calendar ?? freshCal
+    if (typeof cal.day !== 'number') cal.day = freshCal.day
+    if (typeof cal.meatPacks !== 'number') cal.meatPacks = 0
+    if (!Array.isArray(cal.meatShares)) cal.meatShares = []
+    if (!Array.isArray(cal.sponsored)) cal.sponsored = []
+    if (!Array.isArray(cal.bets)) cal.bets = []
+    if (!Array.isArray(cal.asoEbi)) cal.asoEbi = []
+    if (!Array.isArray(cal.attended)) cal.attended = []
+    if (!Array.isArray(cal.paved)) cal.paved = []
+    if (!cal.paving || typeof cal.paving.zoneId !== 'string') cal.paving = null
+    if (!cal.stats) cal.stats = freshCal.stats
+    cal.paved = cal.paved.filter((r) => typeof r.zoneId === 'string' && typeof r.untilDay === 'number')
+    save.calendar = cal
 
     // --- M2 civic mesh (missing on v3-and-older saves) ---
     if (!save.civic) {

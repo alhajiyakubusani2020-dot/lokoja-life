@@ -18,8 +18,9 @@
  */
 
 import type { TimeOfDay, TransportId, Weather } from '../types'
-import { CIVIC, TRAVEL } from '../data/config'
+import { CIVIC, TRAVEL, FESTIVALS } from '../data/config'
 import { civicHash } from './civic'
+import { inRamadan } from './calendar'
 
 /* ------------------------------ the rain family ----------------------------- */
 
@@ -95,10 +96,13 @@ export const NIGHT_MARKET_LOCATION_ID = CIVIC.nightMarket.locationId
  * Seeded per-day night-market discount. Night stalls feed the late
  * hustler: prices BELOW the day rate, breathing 0.78–0.95 day by day.
  * Deterministic from the day number — reload-proof by construction.
+ * M10 — during the Ramadan fast the night market is the city's real
+ * kitchen: the discount deepens (×0.92 on top of tonight's roll).
  */
 export function nightMarketMultFor(day: number): number {
   const u = civicHash('night-mkt', day) / 0xffffffff
-  return CIVIC.nightMarket.minMult + u * (CIVIC.nightMarket.maxMult - CIVIC.nightMarket.minMult)
+  const base = CIVIC.nightMarket.minMult + u * (CIVIC.nightMarket.maxMult - CIVIC.nightMarket.minMult)
+  return base * (inRamadan(day) ? FESTIVALS.ramadanNightMult : 1)
 }
 
 /**

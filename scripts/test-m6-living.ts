@@ -180,11 +180,13 @@ console.log('\nNIGHT MARKET LAW — the food strip turns after dark')
   check('opens evening and night only', isNightMarketOpen('evening') && isNightMarketOpen('night'))
   check('daylight keeps it shut', !isNightMarketOpen('morning') && !isNightMarketOpen('afternoon'))
   check('the seeded discount sits in its band and is deterministic', (() => {
-    for (let d = 1; d <= 30; d++) {
+    for (let d = 21; d <= 50; d++) {
+      // M10 — Ramadan days DEEPEN the discount by law (×0.92): the raw band
+      // holds on plain year-days only (the fast wraps the year's first days)
       const m1 = nightMarketMultFor(d)
       const m2 = nightMarketMultFor(d)
       if (m1 !== m2) return false
-      if (m1 < CIVIC.nightMarket.minMult || m1 > CIVIC.nightMarket.maxMult) return false
+      if (m1 < CIVIC.nightMarket.minMult * 0.92 - 1e-9 || m1 > CIVIC.nightMarket.maxMult) return false
     }
     return true
   })())

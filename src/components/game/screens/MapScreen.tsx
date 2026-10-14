@@ -26,8 +26,10 @@ import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import { WEATHER_META } from '@/game/data/config'
 import { weatherBlocksLocation, isNightMarketOpen } from '@/game/systems/seasons'
 import { fuelMultFor } from '@/game/systems/chaos'
+import { pavedMinutesMult, festivalForDay, weddingForCycle, ramMarketDayIndex } from '@/game/systems/calendar'
 import { BizBlock } from '../BizBlock'
 import { FleetBlock } from '../FleetBlock'
+import { FestivalPanel } from '../FestivalPanel'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 import {
@@ -59,6 +61,7 @@ function Marker({
   civicAlert,
   garageDot,
   darkZone,
+  festivalDot,
   onSelect,
 }: {
   location: LokojaLocation
@@ -72,6 +75,8 @@ function Marker({
   garageDot?: boolean
   /** M8 — this zone's transformer is down (the whole area is dark) */
   darkZone?: boolean
+  /** M10 — the calendar is live here today (festival / wedding / ram market / paving) */
+  festivalDot?: boolean
   onSelect: () => void
 }) {
   return (
@@ -126,6 +131,16 @@ function Marker({
             aria-hidden
           >
             ⚡
+          </span>
+        )}
+        {festivalDot && !isLocked && !darkZone && (
+          <span
+            data-testid="map-festival-dot"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 animate-pulse rounded-full border-2 border-white bg-[#ffd166] px-1 text-[8px]"
+            style={{ height: 18, minWidth: 18 }}
+            aria-hidden
+          >
+            🎉
           </span>
         )}
       </span>
@@ -235,6 +250,7 @@ export function MapScreen({
   const world = useGameStore((s) => s.world)!
   const civic = useGameStore((s) => s.civic)!
   const chaos = useGameStore((s) => s.chaos)
+  const calendar = useGameStore((s) => s.calendar)
   const isTravelling = useGameStore((s) => s.isTravelling)
   const travel = useGameStore((s) => s.travel)
   const eatMeal = useGameStore((s) => s.eatMeal)
@@ -292,8 +308,8 @@ export function MapScreen({
   const plans = useMemo(() => {
     if (!selected || isSelectedCurrent || isSelectedLocked) return []
     if (weatherBlocksLocation(world.weather, selected.id)) return []
-    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles, fuelMultFor(world.day))
-  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles, world.day])
+    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles, fuelMultFor(world.day), pavedMinutesMult(calendar, world.day, selected.id))
+  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles, world.day, calendar])
 
   const openLocation = (id: string) => {
     audio.play('click')
@@ -378,6 +394,14 @@ export function MapScreen({
               (civic.nepa.owed > 0 || civic.kgirs.assessed > 0 || civic.kgirs.warrant)
             // M8 — the dark zone wears the boom badge on the map
             const darkZone = !!chaos.active && chaos.active.zoneId === l.id
+            // M10 — the calendar wears the party badge on the map
+            const f = festivalForDay(world.day)
+            const wedding = weddingForCycle(world.day)
+            const festivalDot =
+              (f?.venueId === l.id) ||
+              (wedding.isToday && wedding.venueId === l.id) ||
+              (ramMarketDayIndex(world.day) > 0 && l.id === 'kpata-market') ||
+              (!!calendar.paving && calendar.paving.zoneId === l.id)
             return (
               <Marker
                 key={l.id}
@@ -388,6 +412,7 @@ export function MapScreen({
                 civicAlert={civicAlert}
                 garageDot={l.id === 'transport-area'}
                 darkZone={darkZone}
+                festivalDot={festivalDot}
                 onSelect={() => openLocation(l.id)}
               />
             )
@@ -623,6 +648,9 @@ export function MapScreen({
 
                   {/* M5 — the Motor Park gig board: your garage becomes today's work */}
                   {!isSelectedLocked && selected.id === 'transport-area' && <FleetBlock />}
+
+                  {/* M10 — the living calendar: this venue's festival actions */}
+                  {!isSelectedLocked && <FestivalPanel location={selected} />}
                 </>
               )}
 

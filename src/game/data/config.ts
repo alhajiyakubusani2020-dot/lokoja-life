@@ -586,6 +586,128 @@ export const CHILL = {
 } as const
 
 /**
+ * M10 — THE LIVING CALENDAR. Lokoja's year runs on 72 game days so a real
+ * player actually MEETS the city's celebrations: the Confluence Regatta,
+ * the two Eids (drifting a little every year), the Ramadan fast and the
+ * ram market before them, New Yam, the national days, Detty December and
+ * a wedding every nine days. systems/calendar.ts holds the pure laws.
+ */
+export const FESTIVALS = {
+  /** the length of one Lokoja year, in game days */
+  yearDays: 72,
+  /** year-day anchors (1-based). The Eid family shifts by the drift. */
+  anchors: {
+    newYear: 1,
+    /** Eid-el-Fitr — day 1 of 2 (Ramadan fast runs the 10 days before it) */
+    eidFitr: 13,
+    eidFitrDays: 2,
+    ramadanDays: 10,
+    workersDay: 27,
+    childrensDay: 30,
+    regatta: 37,
+    regattaDays: 2,
+    democracyDay: 43,
+    /** Eid-el-Kabir — the ram market runs the 3 days before it */
+    eidKabir: 51,
+    eidKabirDays: 2,
+    ramMarketDays: 3,
+    newYam: 57,
+    independenceDay: 59,
+    /** Detty December — the year's last 9 days */
+    dettyStart: 64,
+  },
+  /** the Islamic-calendar drift: the Eid family slides this far per year,
+   *  deterministically, bounded so it can never collide with the Regatta
+   *  or Detty December */
+  eidDriftStep: 3,
+  eidDriftMod: 9,
+  /** day-festival market folds (ride the SAME market roll as everything) */
+  marketMult: {
+    ramadan: 0.95,
+    eid: 1.06,
+    regatta: 1.1,
+    ramMarket: 1.04,
+    newYam: 1.08,
+    independence: 1.05,
+    detty: 1.2,
+  } as Record<string, number>,
+  /** the returnees' city: Motor Park gigs pay these festival premiums */
+  fleetMult: {
+    detty: 1.35,
+    regatta: 1.25,
+    independence: 1.2,
+  } as Record<string, number>,
+  /** morning mood gifts on festival days */
+  mood: {
+    newYear: 3,
+    eid: 4,
+    workers: 1,
+    children: 2,
+    regatta: 2,
+    democracy: 1,
+    newYam: 2,
+    independence: 3,
+    detty: 2,
+    wedding: 1,
+  } as Record<string, number>,
+  /** attending a festival in person: mood / reputation / seeded spray */
+  attend: {
+    mood: 4,
+    repFestivals: ['eid-fitr', 'eid-kabir', 'independence'] as string[],
+    rep: 2,
+    sprayMin: 100,
+    sprayMax: 800,
+  },
+  /** the regatta: four neighbourhood boat teams a year */
+  regattaTeams: ['Ganaja Lightning', 'Kpata Warriors', 'Patti Eagles', 'Adankolo Sharks'] as const,
+  sponsorFee: 2000,
+  sponsorWinPayout: 6000,
+  sponsorWinRep: 8,
+  sponsorLoseRep: 2,
+  betTiers: [500, 1000, 2000] as const,
+  betOdds: 2.5,
+  /** ram market: base price × proximity ladder (day 1 → Eid-eve) */
+  ramBasePrice: 40000,
+  ramLadder: [0.9, 1.0, 1.15] as const,
+  ramWobble: 0.06,
+  /** one ram butchers into this many meat packs to share */
+  meatPacksPerRam: 6,
+  meatShareFamiliarity: 12,
+  meatShareMood: 4,
+  meatShareRep: 1,
+  /** aso-ebi: the wedding fabric, bought at Kpata */
+  asoEbiPrice: 1500,
+  /** wedding gift tiers + the rewards (aso-ebi doubles the respect) */
+  weddingGiftTiers: [500, 1000, 2000] as const,
+  weddingMood: 8,
+  weddingRep: 2,
+  weddingRepAsoEbi: 4,
+  /** a wedding every N days, seeded inside day 1–7 of the cycle */
+  weddingEvery: 9,
+  weddingVenues: ['historic-lokoja', 'confluence', 'kpata-market'] as const,
+  /** town-union paving: a project every N days, one zone, community pool */
+  pavingEvery: 14,
+  pavingTarget: 10000,
+  pavingNpcMin: 800,
+  pavingNpcMax: 1800,
+  pavingTiers: [500, 1000, 2500] as const,
+  /** a finished street stays smooth this many days — journeys in ×cheaper */
+  pavedDays: 20,
+  pavedMinutesMult: 0.85,
+  pavedRep: 4,
+  pavedMood: 2,
+  /** Ramadan: the iftar blessing on an evening/night meal */
+  iftarMood: 3,
+  /** Ramadan's quieter days deepen the night market's discount */
+  ramadanNightMult: 0.92,
+  /** weddings are seeded from the streets' name pool */
+  coupleFirstNames: [
+    'Musa', 'Hauwa', 'Emeka', 'Ngozi', 'Abubakar', 'Zainab', 'Chidi', 'Amaka',
+    'Sule', 'Blessing', 'Ibrahim', 'Halima', 'Tunde', 'Funke', 'Yakubu', 'Rukayya',
+  ] as const,
+} as const
+
+/**
  * M3 — OWN THE CITY. The player's businesses. Every shop sits at a REAL
  * Lokoja location, pays into the SAME market engine that moves meal prices
  * (Kpata/Food-Strip income follows that market's daily multiplier), and

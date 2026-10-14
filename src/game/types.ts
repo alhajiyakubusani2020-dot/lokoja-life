@@ -484,6 +484,91 @@ export interface AccountState {
   gateGraceDay: number
 }
 
+/* ------------------------------ M10 — calendar ------------------------------ */
+
+/**
+ * M10 — THE LIVING CALENDAR. Lokoja runs on a 72-day year: the Confluence
+ * Regatta, the two Eids (which drift a little every year — the Islamic
+ * calendar never sits still), the Ramadan fast before them, the ram market
+ * before THAT, New Yam, the national days, Detty December and a wedding
+ * in somebody's compound every nine days. Pure data — every law lives in
+ * systems/calendar.ts.
+ */
+/** A day-festival the player can attend: one venue, one day (or a run). */
+export interface FestivalDay {
+  /** stable id — 'new-year' | 'eid-fitr' | 'regatta' | … */
+  id: string
+  name: string
+  icon: string
+  /** where the action happens (a location id) */
+  venueId: string
+  /** the year-day (1–72) of this instance's FIRST day */
+  dayOfYear: number
+  /** days from today through the festival's last day (1 = last day) */
+  daysLeft: number
+  /** flavour line for the banner */
+  note: string
+}
+
+/** A seeded wedding: one compound, one couple, one day every ~9 days. */
+export interface WeddingDay {
+  /** stable per-cycle id — `w<cycle>` */
+  id: string
+  /** "Musa & Hauwa" — seeded from the streets' name pool */
+  couple: string
+  /** where the canopies stand (a location id) */
+  venueId: string
+  /** the absolute in-game day of the wedding */
+  day: number
+  /** true when the wedding happens TODAY */
+  isToday: boolean
+  /** days until the wedding (0 when today) */
+  inDays: number
+}
+
+/** The town union's paving project — one zone at a time, every 14 days. */
+export interface PavingProject {
+  /** the project's cycle index (stable id for ledgers/tests) */
+  cycle: number
+  /** the zone being paved (a location id) */
+  zoneId: string
+  /** naira gathered so far (NPC flow + player tiers) */
+  pool: number
+  /** absolute days the player already contributed (one gift per day) */
+  contribDays: number[]
+}
+
+/** The persisted M10 slice — participation and stats only. The schedule
+ *  itself is DERIVED from the day (reload-proof, zero state). */
+export interface CalendarState {
+  /** last rolled day (idempotence marker) */
+  day: number
+  /** ram meat packs ready to share (a bought ram = 6 packs) */
+  meatPacks: number
+  /** `${year}:${npcId}` keys already shared this Eid (once per paddy per Eid) */
+  meatShares: string[]
+  /** this year's regatta sponsorships (one team per player per year) */
+  sponsored: { year: number; teamId: string }[]
+  /** this year's regatta bets (resolve the morning after the race) */
+  bets: { year: number; teamId: string; amount: number }[]
+  /** wedding ids the player bought aso-ebi for */
+  asoEbi: string[]
+  /** attended keys — `${day}:${festivalId}` for festivals, wedding ids for weddings */
+  attended: string[]
+  /** streets the union finished — smooth roads for a season */
+  paved: { zoneId: string; untilDay: number }[]
+  /** the live paving project (null between cycles / after completion) */
+  paving: PavingProject | null
+  stats: {
+    festivalsAttended: number
+    ramsBought: number
+    meatShared: number
+    regattaWins: number
+    weddings: number
+    projectsDone: number
+  }
+}
+
 /* --------------------------------- Settings -------------------------------- */
 
 export interface GameSettings {
@@ -504,7 +589,8 @@ export interface GameSettings {
 export interface GameSave {
   /** v8 (M7): settings.graphics joins the schema
    *  v9 (M8): the chaos slice joins the schema
-   *  v10 (M9): goals, onboarding, account + settings.chill join the schema */
+   *  v10 (M9): goals, onboarding, account + settings.chill join the schema
+   *  v11 (M10): the living calendar joins the schema */
   version: number
   createdAt: number
   updatedAt: number
@@ -521,6 +607,8 @@ export interface GameSave {
   goals: GoalState
   onboarding: OnboardingState
   account: AccountState
+  /** M10 — the living calendar: festivals, weddings, paving, participation */
+  calendar: CalendarState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

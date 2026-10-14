@@ -34,6 +34,9 @@ import type {
   GoalState,
   OnboardingState,
   AccountState,
+  CalendarState,
+  FestivalDay,
+  WeddingDay,
   ShopUpgradeId,
 } from '../types'
 import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY, TIME, WEATHER_META, SOCIAL, GOALS, CHILL } from '../data/config'
@@ -115,10 +118,36 @@ import {
   type ChaosDayResult,
 } from '../systems/chaos'
 import { bumpGoal, freshGoalState } from '../systems/goals'
+import {
+  freshCalendarState,
+  calendarDayRoll,
+  calendarMarketMult,
+  festivalForDay,
+  weddingForCycle,
+  attendSprayFor,
+  canAttendFestival,
+  canBuyRam,
+  buyRamApply,
+  canShareMeat,
+  shareMeatApply,
+  canSponsor,
+  sponsorApply,
+  canBet,
+  betApply,
+  canBuyAsoEbi,
+  buyAsoEbiApply,
+  canAttendWedding,
+  attendWeddingApply,
+  canContributePaving,
+  contributePavingApply,
+  pavedMinutesMult,
+  isIftarHour,
+  type RegattaResult,
+} from '../systems/calendar'
 import { gateVerdict, applyGrace, freshAccountState, freshOnboardingState, validateHandle, validatePin, validateContact, ageBandForYear, mergeVerdict, backupPayload, BACKUP_KEY } from '../systems/guest'
 import { gigBoard, gigLabel } from '../systems/fleet'
 import { HUSTLE_BY_ID } from '../data/hustles'
-import { BIZ, CIVIC, FLEET, CHAOS } from '../data/config'
+import { BIZ, CIVIC, FLEET, CHAOS, FESTIVALS } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
 
@@ -138,6 +167,8 @@ interface GameStore {
   fleet: FleetState
   /** M8 — the chaos engine: transformer outages, scarcity, the fix pool */
   chaos: ChaosState
+  /** M10 — the living calendar: festivals, weddings, paving, participation */
+  calendar: CalendarState
   /** M9 — the casual shell: today's goals, the onboarding arc, the account */
   goals: GoalState
   onboarding: OnboardingState
@@ -216,6 +247,23 @@ interface GameStore {
   bankWithdraw: (amount: number, channel?: 'atm' | 'pos') => boolean
   /** M8 — give to the community light fund while YOUR zone is dark. */
   contributeToPool: (tier: number) => boolean
+  /* M10 — THE LIVING CALENDAR (venue-gated, ledgered, festival-hearted) */
+  /** Join today's festival in person (mood, rep, the crowd's naira spray). */
+  attendFestival: () => boolean
+  /** Buy a ram at the Kpata ram market — butchers into 6 meat packs. */
+  buyRam: () => boolean
+  /** Share a meat pack with a paddy (once per paddy per Eid). */
+  shareMeat: (npcId: string) => boolean
+  /** Sponsor a regatta crew (₦2k — the trophy pays the faithful back). */
+  sponsorBoat: (teamId: string) => boolean
+  /** Back a boat on race-eve (adults only; resolves the morning after). */
+  betBoat: (teamId: string, tier: number) => boolean
+  /** Buy the wedding fabric at Kpata (once per wedding). */
+  buyAsoEbi: () => boolean
+  /** Attend today's wedding with a gift tier (aso-ebi doubles the respect). */
+  attendWedding: (giftTier: number) => boolean
+  /** Give to the town union's paving pool while standing in the zone. */
+  contributePaving: (tier: number) => boolean
   /** M9 — one life event lands on today's goals (rewards flow the engines) */
   bumpGoal: (kind: string) => void
   /** Talk with an NPC — familiarity + one warm line. Null = cooldown / guard. */
@@ -331,15 +379,24 @@ interface CivicAgg {
   outageFixed: { zoneId: string; fixedBy: 'community' | 'disco' } | null
   scarcityDay: boolean
   payoutDay: boolean
+  /** M10 — calendar narration flags */
+  festivalMorning: FestivalDay | null
+  weddingToday: WeddingDay | null
+  pavingDone: { zoneId: string } | null
+  pavingStalled: { zoneId: string } | null
+  regattaResult: RegattaResult | null
 }
 
-/** Pure: roll the civic mesh + the chaos engine forward day by day (assessments
- *  land on exact days). M6 — the NEW day's weather rides in so the market roll
- *  folds weather stress. M8 — the chaos roll runs in the SAME loop and its
- *  liquidity fold (crunch / payout) rides into the SAME prices. */
+/** Pure: roll the civic mesh + the chaos engine + the calendar forward day
+ *  by day (assessments land on exact days). M6 — the NEW day's weather rides
+ *  in so the market roll folds weather stress. M8 — the chaos roll runs in
+ *  the SAME loop and its liquidity fold (crunch / payout) rides into the
+ *  SAME prices. M10 — the calendar's festival folds ride the SAME channel
+ *  too, and the year's parties narrate themselves at the day crossings. */
 function civicRollForDays(
   civic: CivicState,
   chaos: ChaosState,
+  calendar: CalendarState,
   totalEarned: number,
   prevDay: number,
   newDay: number,
@@ -348,10 +405,11 @@ function civicRollForDays(
   weather?: import('../types').Weather,
   liquidityMultOverride?: number,
   chill = false,
-): { civic: CivicState; chaos: ChaosState; agg: CivicAgg } {
+): { civic: CivicState; chaos: ChaosState; calendar: CalendarState; agg: CivicAgg } {
   let cur = civic
   let curChaos = chaos
-  const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0, blowoutZone: null, outageFixed: null, scarcityDay: false, payoutDay: false }
+  let curCal = calendar
+  const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0, blowoutZone: null, outageFixed: null, scarcityDay: false, payoutDay: false, festivalMorning: null, weddingToday: null, pavingDone: null, pavingStalled: null, regattaResult: null }
   for (let d = prevDay + 1; d <= newDay; d++) {
     // chaos first: today's grid + naira mood decide the market's liquidity
     const c = chaosDayRoll(curChaos, d, weather ?? 'sunny')
@@ -360,7 +418,17 @@ function civicRollForDays(
     if (c.fixed) agg.outageFixed = c.fixed
     agg.scarcityDay = agg.scarcityDay || c.scarcity
     agg.payoutDay = agg.payoutDay || c.payout
-    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather, liquidityMultOverride ?? liquidityMultFor(d), chill)
+    // M10 — the year turns: paving lifecycle, regatta stakes, festivals
+    const cal = calendarDayRoll(curCal, d)
+    curCal = cal.next
+    if (cal.pavingDone) agg.pavingDone = cal.pavingDone
+    if (cal.pavingStalled) agg.pavingStalled = cal.pavingStalled
+    if (cal.regattaResult) agg.regattaResult = cal.regattaResult
+    const todayFestival = festivalForDay(d)
+    if (todayFestival) agg.festivalMorning = todayFestival
+    const wedding = weddingForCycle(d)
+    if (wedding.isToday) agg.weddingToday = wedding
+    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather, liquidityMultOverride ?? liquidityMultFor(d) * calendarMarketMult(d), chill)
     cur = r.next
     agg.nepaPosted += r.nepaPosted
     agg.nepaShed = agg.nepaShed || r.nepaShed
@@ -369,7 +437,7 @@ function civicRollForDays(
     agg.tipsResolved = [...agg.tipsResolved, ...r.tipsResolved]
     agg.tipReward += r.tipReward
   }
-  return { civic: cur, chaos: curChaos, agg }
+  return { civic: cur, chaos: curChaos, calendar: curCal, agg }
 }
 
 /** Execute a civic day crossing: set the slice, pay whistleblower rewards,
@@ -380,7 +448,7 @@ function commitCivicDays(
   prevDay: number,
   newDay: number,
 ): void {
-  const { civic, chaos, player, world } = get()
+  const { civic, chaos, calendar, player, world } = get()
   if (!civic || !player || !world || newDay <= prevDay) return
   const bizCount = player.businesses.length
   // M5 — solar shops draw from the sun: their share of the meter load drops
@@ -390,8 +458,8 @@ function commitCivicDays(
   const newWeather = get().world?.weather
   // M9 — Chill Mode runs the whole civic roll kinder (2× disco grace, 3× warrant)
   const chill = get().settings.chill
-  const { civic: rolled, chaos: rolledChaos, agg } = civicRollForDays(civic, chaos, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather, undefined, chill)
-  set({ civic: rolled, chaos: rolledChaos })
+  const { civic: rolled, chaos: rolledChaos, calendar: rolledCal, agg } = civicRollForDays(civic, chaos, calendar, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather, undefined, chill)
+  set({ civic: rolled, chaos: rolledChaos, calendar: rolledCal })
 
   // M3 — the shops earn while the city turns: accrue into each till (market
   // multipliers read the ALREADY-ROLLED civic slice; M8 — the chaos thread
@@ -460,6 +528,49 @@ function commitCivicDays(
     get().notify({ icon: '🐷', text: 'Ajo payout day — market traders carry cash today, prices soft small.', tone: 'neutral' })
   }
 
+  // M10 — the calendar narrates itself: festivals, weddings, streets, stakes
+  if (agg.festivalMorning) {
+    const f = agg.festivalMorning
+    const p = get().player
+    const mood = FESTIVALS.mood[f.id] ?? 0
+    if (p && mood > 0) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood }) } })
+    get().notify({ icon: f.icon, text: `${f.name}${f.daysLeft > 1 ? ' (final day)' : ''} — ${f.note}`, tone: 'good' })
+  }
+  if (agg.weddingToday) {
+    const w = agg.weddingToday
+    const p = get().player
+    const venueName = LOCATION_BY_ID[w.venueId]?.name ?? w.venueId
+    if (p) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood: FESTIVALS.mood.wedding }) } })
+    get().notify({ icon: '💍', text: `Wedding today! ${w.couple} don tie knot at ${venueName} — aso-ebi dey Kpata.`, tone: 'good' })
+  }
+  if (agg.pavingDone) {
+    const zoneName = LOCATION_BY_ID[agg.pavingDone.zoneId]?.name ?? agg.pavingDone.zoneId
+    get().addReputation(FESTIVALS.pavedRep)
+    get().notify({ icon: '🛣️', text: `The union don finish paving ${zoneName} — smooth road for the next ${FESTIVALS.pavedDays} days!`, tone: 'good' })
+  }
+  if (agg.pavingStalled) {
+    const zoneName = LOCATION_BY_ID[agg.pavingStalled.zoneId]?.name ?? agg.pavingStalled.zoneId
+    get().notify({ icon: '🧱', text: `The ${zoneName} paving pool never full — the union don carry am go next project.`, tone: 'neutral' })
+  }
+  if (agg.regattaResult) {
+    const rr = agg.regattaResult
+    if (rr.sponsorWin) {
+      get().addMoney(rr.sponsorWin.payout, { label: `Regatta sponsor payout — ${rr.sponsorWin.teamId} win the trophy`, category: 'hustle' })
+      get().addReputation(FESTIVALS.sponsorWinRep)
+      get().notify({ icon: '🏆', text: `${rr.winner} don win the Regatta! Your sponsorship pay ${formatNaira(rr.sponsorWin.payout)} — the whole shoreline dey call your name.`, tone: 'good' })
+      audio.play('levelup')
+    } else if (rr.sponsorLose) {
+      get().addReputation(FESTIVALS.sponsorLoseRep)
+      get().notify({ icon: '🚤', text: `${rr.winner} carry the Regatta trophy. Your crew no win but the street respect the support.`, tone: 'neutral' })
+    }
+    if (rr.betWin) {
+      get().addMoney(rr.betWin.payout, { label: `Regatta bet won — ${rr.betWin.teamId} at ${FESTIVALS.betOdds}×`, category: 'other' })
+      get().notify({ icon: '💸', text: `Your bet don land! ${formatNaira(rr.betWin.payout)} from the shoreline bookie.`, tone: 'good' })
+    } else if (rr.betLose > 0) {
+      get().notify({ icon: '🎲', text: `Your boat no win — ${formatNaira(rr.betLose)} stay for the bookie hand. Next year again.`, tone: 'bad' })
+    }
+  }
+
   if (agg.nepaPosted > 0) {
     get().notify({ icon: '🧾', text: `NEPA bill posted — ${formatNaira(agg.nepaPosted)} due.`, tone: 'neutral' })
   }
@@ -493,6 +604,7 @@ function scheduleAutosave(get: () => GameStore) {
       civic,
       fleet: get().fleet,
       chaos: get().chaos,
+      calendar: get().calendar,
       goals: get().goals,
       onboarding: get().onboarding,
       account: get().account,
@@ -512,6 +624,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   civic: null,
   fleet: { day: 1, done: [] },
   chaos: freshChaosState(),
+  calendar: freshCalendarState(),
   goals: freshGoalState(),
   onboarding: freshOnboardingState(),
   account: freshAccountState(),
@@ -575,6 +688,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       world,
       civic: freshCivicState(),
       chaos: freshChaosState(),
+      calendar: freshCalendarState(),
       goals: freshGoalState(),
       onboarding: freshOnboardingState(),
       account: freshAccountState(),
@@ -598,6 +712,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       world: save.world,
       civic: save.civic,
       chaos: save.chaos ?? freshChaosState(),
+      calendar: save.calendar ?? freshCalendarState(),
       goals: save.goals ?? freshGoalState(),
       onboarding: save.onboarding ?? freshOnboardingState(),
       account: save.account ?? freshAccountState(),
@@ -1026,7 +1141,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { player, world, fleet, isWorking, isTravelling } = get()
     if (!player || !world || isWorking || isTravelling) return false
 
-    const gig = gigBoard(world.day, player.vehicles, player.level, world.weather, fuelMultFor(world.day)).find((g) => g.id === gigId)
+    const gig = gigBoard(world.day, player.vehicles, player.level, world.weather, fuelMultFor(world.day), get().calendar).find((g) => g.id === gigId)
     if (!gig) return false
     if (fleet.day === world.day && fleet.done.includes(gigId)) {
       get().notify({ icon: '🛵', text: 'You don run this one today — tomorrow get their own runs.', tone: 'neutral' })
@@ -1360,6 +1475,253 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return true
   },
 
+  /* --------------------- M10 — the living calendar ---------------------- */
+
+  /** Join today's festival in person — mood, rep where it is due, and the
+   *  crowd's seeded naira spray. Venue-gated, once per festival-day. */
+  attendFestival: () => {
+    const { player, world, calendar } = get()
+    if (!player || !world) return false
+    const gate = canAttendFestival(calendar, world.day, world.currentLocation)
+    if (!gate.ok || !gate.festival) {
+      get().notify({ icon: '🎉', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    const f = gate.festival
+    const after = {
+      ...calendar,
+      attended: [...calendar.attended, `${world.day}:${f.id}`],
+      stats: { ...calendar.stats, festivalsAttended: calendar.stats.festivalsAttended + 1 },
+    }
+    set({ calendar: after })
+    const p0 = get().player!
+    const rep = FESTIVALS.attend.repFestivals.includes(f.id) ? FESTIVALS.attend.rep : 0
+    const spray = attendSprayFor(world.day, f.id)
+    set({
+      player: {
+        ...p0,
+        needs: applyNeedsDelta(p0.needs, { mood: FESTIVALS.attend.mood }),
+        reputation: Math.max(0, p0.reputation + rep),
+        cash: p0.cash + spray,
+        transactions: [recordTransaction(`Naira spray — ${f.name}`, 'tip', spray, world.day, absoluteSlot(world.day, world.timeOfDay)), ...p0.transactions].slice(0, LEDGER_CAP),
+        stats: { ...p0.stats, totalEarned: p0.stats.totalEarned + spray },
+      },
+    })
+    get().notify({
+      icon: f.icon,
+      text: rep > 0
+        ? `You don attend ${f.name}! The street see you — +${rep} rep, and the crowd spray ${formatNaira(spray)}.`
+        : `You don attend ${f.name}! Mood don lift, and the crowd spray ${formatNaira(spray)}.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    get().bumpGoal('festival')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Buy a ram at the Kpata ram market — the butcher cuts 6 meat packs. */
+  buyRam: () => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const gate = canBuyRam(world.day, world.currentLocation, player.cash)
+    if (!gate.ok) {
+      get().notify({ icon: '🐏', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(gate.price, { label: 'Ram — Sallah', category: 'shop' })) {
+      get().notify({ icon: '🐏', text: `The ram na ${formatNaira(gate.price)} — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    set({ calendar: buyRamApply(get().calendar) })
+    get().notify({
+      icon: '🐏',
+      text: `Ram don land — ${FESTIVALS.meatPacksPerRam} meat packs ready. Share am around before the season pass.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Share a meat pack with a paddy — +familiarity, +mood, +rep, once each. */
+  shareMeat: (npcId) => {
+    const { player, world, calendar } = get()
+    if (!player || !world) return false
+    const gate = canShareMeat(calendar, world.day, npcId)
+    if (!gate.ok) {
+      get().notify({ icon: '🍖', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    set({ calendar: shareMeatApply(calendar, world.day, npcId) })
+    const rel = player.relationships[npcId]
+    const nextFam = Math.min(100, (rel?.familiarity ?? 0) + FESTIVALS.meatShareFamiliarity)
+    const p0 = get().player!
+    set({
+      player: {
+        ...p0,
+        needs: applyNeedsDelta(p0.needs, { mood: FESTIVALS.meatShareMood }),
+        reputation: p0.reputation + FESTIVALS.meatShareRep,
+        relationships: {
+          ...p0.relationships,
+          [npcId]: { familiarity: nextFam, lastChatDay: rel?.lastChatDay ?? 0, lastGiftDay: rel?.lastGiftDay ?? 0, lastHangoutDay: rel?.lastHangoutDay ?? 0 },
+        },
+      },
+    })
+    const npcName = NPC_BY_ID[npcId]?.name ?? npcId
+    get().notify({
+      icon: '🍖',
+      text: `Meat don reach ${npcName} hand — blessing dey flow. (+${FESTIVALS.meatShareFamiliarity} familiarity)`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Sponsor a regatta crew — ₦2k on the shoreline, the trophy pays back. */
+  sponsorBoat: (teamId) => {
+    const { player, world, calendar } = get()
+    if (!player || !world) return false
+    const gate = canSponsor(calendar, world.day, world.currentLocation, teamId)
+    if (!gate.ok) {
+      get().notify({ icon: '🚤', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(FESTIVALS.sponsorFee, { label: `Regatta sponsorship — ${teamId}`, category: 'fun' })) {
+      get().notify({ icon: '🚤', text: `Sponsorship na ${formatNaira(FESTIVALS.sponsorFee)} — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    set({ calendar: sponsorApply(get().calendar, world.day, teamId) })
+    get().notify({
+      icon: '🚤',
+      text: `You don sponsor ${teamId}! If they carry the trophy, ${formatNaira(FESTIVALS.sponsorWinPayout)} dey wait you.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Back a boat on race-eve — adults only; the bookie settles the morning after. */
+  betBoat: (teamId, tier) => {
+    const { player, world, calendar, account } = get()
+    if (!player || !world) return false
+    if (!(FESTIVALS.betTiers as readonly number[]).includes(tier)) return false
+    const gate = canBet(calendar, world.day, world.currentLocation, account.ageBand)
+    if (!gate.ok) {
+      get().notify({ icon: '🎲', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(tier, { label: `Regatta bet — ${teamId}`, category: 'fun' })) {
+      get().notify({ icon: '🎲', text: `The stake na ${formatNaira(tier)} — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    set({ calendar: betApply(get().calendar, world.day, teamId, tier) })
+    get().notify({
+      icon: '🎲',
+      text: `Stake don drop on ${teamId} — if they win, ${formatNaira(Math.round(tier * FESTIVALS.betOdds))} dey wait you tomorrow morning.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Buy the wedding fabric at Kpata — the aunties respect the uniform. */
+  buyAsoEbi: () => {
+    const { player, world, calendar } = get()
+    if (!player || !world) return false
+    const wedding = weddingForCycle(world.day)
+    const gate = canBuyAsoEbi(calendar, world.day, world.currentLocation, wedding)
+    if (!gate.ok) {
+      get().notify({ icon: '👗', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(FESTIVALS.asoEbiPrice, { label: `Aso-ebi — ${wedding.couple} wedding`, category: 'shop' })) {
+      get().notify({ icon: '👗', text: `The fabric na ${formatNaira(FESTIVALS.asoEbiPrice)} — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    set({ calendar: buyAsoEbiApply(get().calendar, wedding.id) })
+    get().notify({
+      icon: '👗',
+      text: `Aso-ebi don set for ${wedding.couple} wedding — you go shine for the canopy.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Attend today's wedding with a gift — aso-ebi doubles the respect. */
+  attendWedding: (giftTier) => {
+    const { player, world, calendar } = get()
+    if (!player || !world) return false
+    if (!(FESTIVALS.weddingGiftTiers as readonly number[]).includes(giftTier)) return false
+    const wedding = weddingForCycle(world.day)
+    const gate = canAttendWedding(calendar, world.currentLocation, wedding)
+    if (!gate.ok) {
+      get().notify({ icon: '💍', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(giftTier, { label: `Wedding gift — ${wedding.couple}`, category: 'fun' })) {
+      get().notify({ icon: '💍', text: `The gift na ${formatNaira(giftTier)} — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    const hasAsoEbi = calendar.asoEbi.includes(wedding.id)
+    const rep = hasAsoEbi ? FESTIVALS.weddingRepAsoEbi : FESTIVALS.weddingRep
+    set({ calendar: attendWeddingApply(get().calendar, wedding.id) })
+    const p0 = get().player!
+    set({
+      player: {
+        ...p0,
+        needs: applyNeedsDelta(p0.needs, { mood: FESTIVALS.weddingMood }),
+        reputation: p0.reputation + rep,
+      },
+    })
+    get().notify({
+      icon: '💍',
+      text: hasAsoEbi
+        ? `You don flex the aso-ebi at ${wedding.couple} wedding — the aunties dey nod. (+${rep} rep, mood don high)`
+        : `You don attend ${wedding.couple} wedding. Next time buy the aso-ebi — the aunties dey look.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    get().bumpGoal('festival')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Give to the town union's paving pool — a smooth road repays everybody. */
+  contributePaving: (tier) => {
+    const { player, world, calendar } = get()
+    if (!player || !world) return false
+    if (!(FESTIVALS.pavingTiers as readonly number[]).includes(tier)) return false
+    const gate = canContributePaving(calendar, world.day, world.currentLocation)
+    if (!gate.ok) {
+      get().notify({ icon: '🛣️', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    const zoneName = LOCATION_BY_ID[calendar.paving!.zoneId]?.name ?? calendar.paving!.zoneId
+    if (!get().removeMoney(tier, { label: `Street paving fund — ${zoneName}`, category: 'other' })) {
+      get().notify({ icon: '🛣️', text: `Contribution na ${formatNaira(tier)} — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    const after = contributePavingApply(get().calendar, world.day, tier)
+    set({ calendar: after })
+    const need = Math.max(0, FESTIVALS.pavingTarget - after.paving!.pool)
+    get().notify({
+      icon: '🛣️',
+      text: need <= 0
+        ? `Pool don complete! The union crew go finish ${zoneName} tomorrow morning.`
+        : `You drop ${formatNaira(tier)} — ${formatNaira(need)} more and ${zoneName} road go smooth.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
   chatNpc: (npcId) => {
     const { player, world } = get()
     if (!player || !world) return null
@@ -1575,14 +1937,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!paid) return false
     const needs = applySlotDecay(applyNeedsDelta(paid.needs, {
       hunger: meal.hunger,
-      mood: meal.mood,
+      mood: meal.mood + (isIftarHour(world.day, world.timeOfDay) ? FESTIVALS.iftarMood : 0),
       energy: meal.energy,
     }), 1, get().settings.chill ? CHILL.decayMult : 1)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...paid, needs }, world: { ...world, ...clock } })
     get().notify({
       icon: '🍲',
-      text: `${meal.label} — hunger restored. You feel better.`,
+      text: isIftarHour(world.day, world.timeOfDay)
+        ? `${meal.label} — iftar blessing! The fast don break proper.`
+        : `${meal.label} — hunger restored. You feel better.`,
       tone: 'good',
     })
     get().bumpGoal('meal')
@@ -1650,7 +2014,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // pure calculation — same inputs always give the same plan
     // M8 — the pump surges on scarcity days (personal rides pay black-market)
-    const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay, fuelMultFor(world.day))
+    // M10 — a paved destination rides the union's smooth road (minutes ×0.85)
+    const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay, fuelMultFor(world.day), pavedMinutesMult(get().calendar, world.day, destinationId))
     const event = rollTravelEvent(transportId, world.weather)
 
     if (player.cash < plan.cost) {
@@ -2332,7 +2697,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   saveNow: () => {
-    const { player, world, civic, fleet, chaos, goals, onboarding, account, settings } = get()
+    const { player, world, civic, fleet, chaos, calendar, goals, onboarding, account, settings } = get()
     if (!player || !world || !civic) return
     const existing = SaveSystem.load()
     SaveSystem.write({
@@ -2344,6 +2709,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       civic,
       fleet,
       chaos,
+      calendar,
       goals,
       onboarding,
       account,

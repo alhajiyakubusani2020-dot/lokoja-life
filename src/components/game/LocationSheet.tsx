@@ -17,10 +17,12 @@ import { formatNaira } from '@/game/systems/progression'
 import { type TravelPlan } from '@/game/systems/travel'
 import { allTravelOptions } from '@/game/systems/garage'
 import { fuelMultFor } from '@/game/systems/chaos'
+import { pavedMinutesMult } from '@/game/systems/calendar'
 import { BIZ } from '@/game/data/config'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { BizBlock } from './BizBlock'
 import { FleetBlock } from './FleetBlock'
+import { FestivalPanel } from './FestivalPanel'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 
@@ -101,6 +103,7 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const travel = useGameStore((s) => s.travel)
+  const calendar = useGameStore((s) => s.calendar)
 
   const selected = LOCATION_BY_ID[locationId]
   const origin = LOCATION_BY_ID[world.currentLocation]
@@ -110,10 +113,11 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
 
   // travel options for the selected destination — public modes + YOUR rides (M4)
   // M8 — fuel surge rides through: the sheet shows the black-market pump price
+  // M10 — a paved destination rides the union's smooth road in the SAME numbers
   const plans = useMemo(() => {
     if (!selected || isSelectedCurrent || isSelectedLocked) return []
-    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles, fuelMultFor(world.day))
-  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles, world.day])
+    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles, fuelMultFor(world.day), pavedMinutesMult(calendar, world.day, selected.id))
+  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles, world.day, calendar])
 
   if (!selected) return null
 
@@ -207,6 +211,9 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
 
       {/* M5 — the Motor Park gig board: your garage becomes today's work */}
       {!isSelectedLocked && selected.id === 'transport-area' && <FleetBlock />}
+
+      {/* M10 — the living calendar: this venue's festival actions */}
+      {!isSelectedLocked && <FestivalPanel location={selected} />}
 
       {/* travel confirmation */}
       {!isSelectedCurrent && !isSelectedLocked && (

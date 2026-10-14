@@ -18,6 +18,7 @@ import { NeedsBar } from '../NeedsBar'
 import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
 import { LivingScene } from '../LivingScene'
 import { ChaosBanner } from '../ChaosBanner'
+import { FestivalBanner } from '../FestivalBanner'
 import { GoalsCard, OnboardingCard } from '../CasualShell'
 import { GuestGate } from '../GuestGate'
 import { MoneyPop, Shockwave } from '../Juice'
@@ -95,6 +96,9 @@ function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
     <div className="px-4 pt-3 sm:px-6">
       {/* ---- M8 — the grid and the naira's mood, one glance ---- */}
       <ChaosBanner />
+
+      {/* ---- M10 — the living calendar: the city's year, one glance ---- */}
+      <FestivalBanner />
 
       {/* ---- M9 — the casual shell: learn the streets, then today's goals ---- */}
       <OnboardingCard />
