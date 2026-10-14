@@ -1,4 +1,7 @@
 // LOKOJA LIFE — the city's register + the cloud save vault (M9 Guest Loop)
+// M13 FAMILY SHIELD — a minor account only exists behind a parent PIN and
+// collects NOTHING: `contact` is nullable and stays null for kid/teen. The
+// parent's PIN hashes with its OWN salt. Columns are added, never broken.
 
 generator client {
   provider = "prisma-client-js"
@@ -11,19 +14,21 @@ datasource db {
 
 /// M9 — a claimed name on the register. The PIN hashes with a per-account
 /// salt (scrypt); the session token is the bearer for cloud push/pull.
-/// M14 Fortress will harden this (signed saves, kobo-chain) — the schema
-/// is shaped so that migration adds columns, never breaks players.
+/// M13 — minors (kid/teen) carry no contact at all and answer to the
+/// parent PIN (scrypt, its own salt) for any tier climb.
 model Account {
-  id        String     @id @default(cuid())
-  handle    String     @unique
-  contact   String     @unique
-  pinHash   String
-  salt      String
-  ageBand   String     @default("adult")
-  token     String?
-  cloudSave CloudSave?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id            String     @id @default(cuid())
+  handle        String     @unique
+  contact       String?    @unique
+  pinHash       String
+  salt          String
+  ageBand       String     @default("adult")
+  parentPinHash String?
+  parentSalt    String?
+  token         String?
+  cloudSave     CloudSave?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }
 
 /// M9 — the cloud save vault: one row per account, the whole GameSave as

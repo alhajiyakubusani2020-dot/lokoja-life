@@ -13,7 +13,7 @@
 import { useState } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
 import { audio } from '@/game/systems/audio'
-import { validateHandle, validatePin, validateContact } from '@/game/systems/guest'
+import { validateHandle, validatePin, validateContact, ageBandForYear } from '@/game/systems/guest'
 
 const NOW_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 60 }, (_, i) => NOW_YEAR - 6 - i)
@@ -31,8 +31,14 @@ export function GuestGate() {
   const [contact, setContact] = useState('')
   const [pin, setPin] = useState('')
   const [birthYear, setBirthYear] = useState(String(NOW_YEAR - 20))
+  const [parentPin, setParentPin] = useState('')
   const [busy, setBusy] = useState(false)
   const [why, setWhy] = useState<string | null>(null)
+
+  // M13 — the family shield reads the birth year LIVE: a minor claims
+  // behind a parent PIN and collects NOTHING (no contact field at all).
+  const band = ageBandForYear(Number(birthYear), NOW_YEAR)
+  const minor = band !== null && band !== 'adult'
 
   if (!gateOpen || account.linked) return null
 
@@ -42,7 +48,7 @@ export function GuestGate() {
     try {
       const res =
         mode === 'claim'
-          ? await registerAccount({ handle, contact, pin, birthYear: Number(birthYear) })
+          ? await registerAccount({ handle, contact, pin, birthYear: Number(birthYear), parentPin: minor ? parentPin : undefined })
           : await loginAccount({ handle, pin })
       if (!res.ok) {
         setWhy(res.why ?? 'E no gree — try again.')
@@ -110,14 +116,26 @@ export function GuestGate() {
           />
           {mode === 'claim' && (
             <>
-              <input
-                data-testid="gate-contact"
-                className="w-full rounded-xl border border-[var(--lko-line)] bg-white px-3 py-2.5 text-[13px] font-bold outline-none focus:border-[var(--lko-green)]"
-                placeholder="Phone number or email (recovery)"
-                value={contact}
-                onChange={(e) => setContact(e.target.value)}
-                autoComplete="tel"
-              />
+              {minor ? (
+                <div
+                  data-testid="gate-minor-branch"
+                  className="rounded-xl border-2 border-[var(--lko-gold)] bg-[var(--lko-gold-soft)] px-3 py-2"
+                >
+                  <p className="text-[11px] font-extrabold leading-snug text-[#6b4a08]">
+                    🛡️ Family Shield — {band === 'kid' ? 'pikin' : 'teen'} account. A parent sets the shield PIN.
+                    We collect NOTHING: no phone, no email, no contact — the PIN is the only key.
+                  </p>
+                </div>
+              ) : (
+                <input
+                  data-testid="gate-contact"
+                  className="w-full rounded-xl border border-[var(--lko-line)] bg-white px-3 py-2.5 text-[13px] font-bold outline-none focus:border-[var(--lko-green)]"
+                  placeholder="Phone number or email (recovery)"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                  autoComplete="tel"
+                />
+              )}
               <div className="flex items-center gap-2">
                 <label className="shrink-0 text-[11px] font-extrabold text-[var(--lko-ink-soft)]" htmlFor="gate-year">
                   Born
@@ -134,12 +152,21 @@ export function GuestGate() {
                   ))}
                 </select>
                 <span className="shrink-0 rounded-full bg-black/[0.05] px-2 py-1 text-[10px] font-extrabold text-[var(--lko-ink-soft)]">
-                  {(() => {
-                    const y = Number(birthYear)
-                    return y <= NOW_YEAR - 13 ? '18+/teen' : 'kid — parent PIN later'
-                  })()}
+                  {band === null ? '6+' : band === 'kid' ? '🛡️ pikin' : band === 'teen' ? '🛡️ teen' : '18+'}
                 </span>
               </div>
+              {minor && (
+                <input
+                  data-testid="gate-parent-pin"
+                  className="w-full rounded-xl border-2 border-[var(--lko-gold)] bg-white px-3 py-2.5 text-[13px] font-bold tracking-[0.3em] outline-none focus:border-[var(--lko-green)]"
+                  placeholder="Parent shield PIN (6 digits)"
+                  value={parentPin}
+                  maxLength={6}
+                  inputMode="numeric"
+                  onChange={(e) => setParentPin(e.target.value.replace(/\D/g, ''))}
+                  autoComplete="new-password"
+                />
+              )}
             </>
           )}
           <input
@@ -162,11 +189,11 @@ export function GuestGate() {
 
         <button
           data-testid="gate-submit"
-          disabled={busy || handle.length < 3 || pin.length < 4 || (mode === 'claim' && contact.length < 5)}
+          disabled={busy || handle.length < 3 || pin.length < 4 || (mode === 'claim' && (minor ? parentPin.length !== 6 : contact.length < 5))}
           onClick={() => { audio.play('click'); void submit() }}
           className="lko-press mt-3 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-[var(--lko-green)] text-[14px] font-extrabold text-white disabled:opacity-40"
         >
-          {busy ? 'The register dey write…' : mode === 'claim' ? 'Claim my name' : 'Return to my name'}
+          {busy ? 'The register dey write…' : mode === 'claim' ? (minor ? 'Claim with the parent shield' : 'Claim my name') : 'Return to my name'}
         </button>
 
         <div className="mt-2 flex items-center justify-between gap-2">

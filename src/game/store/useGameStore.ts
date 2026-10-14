@@ -39,6 +39,7 @@ import type {
   EducationState,
   HousingState,
   JapaState,
+  ShieldState,
   FestivalDay,
   WeddingDay,
   ShopUpgradeId,
@@ -229,8 +230,23 @@ import {
   papersComplete,
 } from '../systems/japa'
 import { gigBoard, gigLabel } from '../systems/fleet'
+import {
+  freshShieldState,
+  crimeAllowed,
+  canHustle as shieldCanHustle,
+  canJapa,
+  CRIME_REFUSALS,
+  canPlayScammer,
+  scamRound,
+  scamAnswerApply,
+  validateParentPin,
+  localPinHash,
+  makeLocalSalt,
+  tierGateVerdict,
+  type CrimeContentId,
+} from '../systems/shield'
 import { HUSTLE_BY_ID } from '../data/hustles'
-import { BIZ, CIVIC, FLEET, CHAOS, FESTIVALS, RIVERS, LADDER } from '../data/config'
+import { BIZ, CIVIC, FLEET, CHAOS, FESTIVALS, RIVERS, LADDER, SHIELD, ELDER } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
 
@@ -258,6 +274,8 @@ interface GameStore {
   education: EducationState
   housing: HousingState
   japa: JapaState
+  /** M13 — the family shield: the scammer game's book + the local parent gate */
+  shield: ShieldState
   /** M9 — the casual shell: today's goals, the onboarding arc, the account */
   goals: GoalState
   onboarding: OnboardingState
@@ -274,7 +292,7 @@ interface GameStore {
   setScreen: (screen: Screen) => void
 
   /* core actions */
-  startNewGame: (name: string, gender: Gender, avatar: AvatarConfig) => void
+  startNewGame: (name: string, gender: Gender, avatar: AvatarConfig, ageBand?: import('../types').AgeBand) => void
   continueGame: () => boolean
   returnToMenu: () => void
 
@@ -392,6 +410,8 @@ interface GameStore {
   bumpGoal: (kind: string) => void
   /** Talk with an NPC — familiarity + one warm line. Null = cooldown / guard. */
   chatNpc: (npcId: string) => ChatOutcome | null
+  /** M13 — kid socials: preset emotes ONLY (no free lines, ever). */
+  emoteChat: (npcId: string, emoteId: string) => ChatOutcome | null
   /** M6 — hand a paddy a gift (cash → familiarity, once per NPC per day). */
   giveGift: (npcId: string, giftId: string) => boolean
   /** M6 — pull a paddy out for the evening (cash + mood + familiarity, night only). */
@@ -441,8 +461,16 @@ interface GameStore {
   setGraphics: (q: GameSettings['graphics']) => void
   /** M9 — Chill Mode: a gentler Lokoja (half decay, kinder grace windows) */
   setChill: (chill: boolean) => void
+  /** M13 — Elder mode: large text, high contrast, reduced motion, slow pacing */
+  setElder: (elder: boolean) => void
+  /** M13 — SPOT THE SCAMMER: play today's round (once per in-game day). */
+  playScammer: (pickIndex: number) => void
+  /** M13 — the local parent-PIN gate (guests): set it the first time. */
+  setLocalParentPin: (pin: string) => boolean
+  /** M13 — the local tier gate: climb the band ladder with the parent's yes. */
+  unlockTierLocal: (to: import('../types').AgeBand, parentPin: string) => boolean
   /** M9 — the Guest Loop: claim a name (register) or return (login) */
-  registerAccount: (input: { handle: string; contact: string; pin: string; birthYear: number }) => Promise<{ ok: boolean; why?: string }>
+  registerAccount: (input: { handle: string; contact: string; pin: string; birthYear: number; parentPin?: string }) => Promise<{ ok: boolean; why?: string }>
   loginAccount: (input: { handle: string; pin: string }) => Promise<{ ok: boolean; why?: string }>
   /** M9 — "Maybe later": the gate buys the rest of today, tomorrow it stands */
   acceptGateGrace: () => void
@@ -465,9 +493,12 @@ let pulseId = 0
 /** Ledger cap — newest entries survive, old ones fall off. */
 const LEDGER_CAP = 50
 
-/** M9 — the store-wide decay law: Chill Mode runs the body at half drain. */
+/** M9 — the store-wide decay law: Chill Mode runs the body at half drain.
+ *  M13 — Elder mode runs it at 0.75×; the kinder law wins when both on. */
 function slotDecay(get: () => GameStore, needs: import('../types').Needs, slots: number) {
-  return applySlotDecay(needs, slots, get().settings.chill ? CHILL.decayMult : 1)
+  const chill = get().settings.chill ? CHILL.decayMult : 1
+  const elder = get().settings.elder ? ELDER.decayMult : 1
+  return applySlotDecay(needs, slots, Math.min(chill, elder))
 }
 
 /** M9 — the onboarding bump: steps land once, the ₦1,000 lands once. */
@@ -833,6 +864,7 @@ function scheduleAutosave(get: () => GameStore) {
       goals: get().goals,
       onboarding: get().onboarding,
       account: get().account,
+      shield: get().shield,
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -857,10 +889,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   goals: freshGoalState(),
   onboarding: freshOnboardingState(),
   account: freshAccountState(),
+  shield: freshShieldState(),
   gateOpen: false,
   pulse: null,
   shockwave: 0,
-  settings: { sound: true, graphics: 'auto' as const, chill: false },
+  settings: { sound: true, graphics: 'auto' as const, chill: false, elder: false },
 
   isTravelling: false,
   isWorking: false,
@@ -871,19 +904,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   boot: () => {
     const save = SaveSystem.load()
-    syncAudioWithSettings(save?.settings ?? { sound: true, graphics: 'auto', chill: false })
-    set({ booted: true, hasSave: SaveSystem.hasSave(), settings: save?.settings ?? { sound: true, graphics: 'auto', chill: false } })
+    const bootSettings = save?.settings ?? { sound: true, graphics: 'auto', chill: false, elder: false }
+    syncAudioWithSettings(bootSettings)
+    set({ booted: true, hasSave: SaveSystem.hasSave(), settings: bootSettings })
   },
 
   setScreen: (screen) => set({ screen }),
 
   /* ---------------------------- core actions ---------------------------- */
 
-  startNewGame: (name, gender, avatar) => {
+  startNewGame: (name, gender, avatar, ageBand = 'adult') => {
     const player: PlayerState = {
       name: name.trim() || 'New Hustler',
       gender,
       avatar: { ...DEFAULT_AVATAR, ...avatar },
+      ageBand,
       cash: STARTING.cash,
       needs: { ...STARTING.needs },
       skills: { ...STARTING.skills },
@@ -925,6 +960,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       goals: freshGoalState(),
       onboarding: freshOnboardingState(),
       account: freshAccountState(),
+      shield: freshShieldState(),
       gateOpen: false,
       fleet: { day: 1, done: [] },
       screen: 'game',
@@ -953,6 +989,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       goals: save.goals ?? freshGoalState(),
       onboarding: save.onboarding ?? freshOnboardingState(),
       account: save.account ?? freshAccountState(),
+      shield: save.shield ?? freshShieldState(),
       fleet: save.fleet,
       settings,
       screen: 'game',
@@ -1558,12 +1595,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { player, world } = get()
     if (!player || !world) return
     const cfg = INTERIOR.study
+    // M13 — education-first: young bands' brains harvest the boost
+    const boost = player.ageBand === 'adult' ? 1 : SHIELD.studyBoost
     const needs = applySlotDecay(applyNeedsDelta(player.needs, cfg), 1, get().settings.chill ? CHILL.decayMult : 1)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...player, needs }, world: { ...world, ...clock } })
     // the skill gain flows through the SAME authority every other XP uses
-    get().addSkillXp('smart', cfg.smartXp)
-    get().notify({ icon: '📚', text: `${label ?? 'Lesson'} done. Brain dey sharp.`, tone: 'good' })
+    get().addSkillXp('smart', Math.round(cfg.smartXp * boost))
+    get().notify({ icon: '📚', text: boost > 1 ? `${label ?? 'Lesson'} done. Young brain dey sharp ×${boost}.` : `${label ?? 'Lesson'} done. Brain dey sharp.`, tone: 'good' })
     get().bumpGoal('study')
     audio.play('notify')
     scheduleAutosave(get)
@@ -1572,6 +1611,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   nightOut: () => {
     const { player, world } = get()
     if (!player || !world) return
+    // M13 — THE FAMILY SHIELD: the night lounge is crime-adjacent, 18+ only
+    if (!crimeAllowed(player.ageBand, 'night-out')) {
+      get().notify({ icon: '🛡️', text: CRIME_REFUSALS['night-out'], tone: 'neutral' })
+      audio.play('notify')
+      return
+    }
     const isNight = world.timeOfDay === 'evening' || world.timeOfDay === 'night'
     if (!canAfford(player.cash, INTERIOR.NIGHT_OUT.cost)) {
       get().notify({
@@ -1850,10 +1895,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   /** Back a boat on race-eve — adults only; the bookie settles the morning after. */
   betBoat: (teamId, tier) => {
-    const { player, world, calendar, account } = get()
+    const { player, world, calendar } = get()
     if (!player || !world) return false
     if (!(FESTIVALS.betTiers as readonly number[]).includes(tier)) return false
-    const gate = canBet(calendar, world.day, world.currentLocation, account.ageBand)
+    // M13 — the family shield reads the CHARACTER's life stage (the honest law)
+    const gate = canBet(calendar, world.day, world.currentLocation, player.ageBand)
     if (!gate.ok) {
       get().notify({ icon: '🎲', text: gate.why, tone: 'neutral' })
       return false
@@ -2233,6 +2279,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   enrollFul: () => {
     const { player, world, education } = get()
     if (!player || !world) return false
+    // M13 — the family shield: FUL na teen/adult road (kids dey primary/secondary)
+    if (player.ageBand === 'kid') {
+      get().notify({ icon: '🛡️', text: 'University na teen/adult road — your school na the scammer game and the library.', tone: 'neutral' })
+      return false
+    }
     const gate = canEnroll(education, player.level)
     if (!gate.ok) {
       get().notify({ icon: '🎓', text: gate.why, tone: 'neutral' })
@@ -2413,6 +2464,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   requestNimc: () => {
     const { player, world, japa } = get()
     if (!player || !world) return false
+    // M13 — the JAPA gauntlet is adult paperwork (kids dey grow first)
+    if (!canJapa(player.ageBand)) {
+      get().notify({ icon: '🛡️', text: 'JAPA na adult road — grow first, the documents go wait.', tone: 'neutral' })
+      return false
+    }
     const atGrades = world.currentLocation === 'government-area'
     const gate = canRequestNimc(japa, player.level, atGrades)
     if (!gate.ok) {
@@ -2484,6 +2540,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   tryAgent: () => {
     const { player, world, japa, account } = get()
     if (!player || !world) return false
+    // M13 — THE FAMILY SHIELD: the street agent is crime-adjacent — kids
+    // can't japa at all, teens can't touch the 419 road. 18+ only.
+    if (!canJapa(player.ageBand) || !crimeAllowed(player.ageBand, 'japa-agent')) {
+      get().notify({ icon: '🛡️', text: CRIME_REFUSALS['japa-agent'], tone: 'neutral' })
+      return false
+    }
     const atGanaja = world.currentLocation === 'ganaja-junction'
     const gate = canTryAgent(japa, player.cash, atGanaja)
     if (!gate.ok) {
@@ -2544,6 +2606,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   takeFlight: () => {
     const { player, world, japa } = get()
     if (!player || !world) return false
+    // M13 — the send-off na adult departure (the shield holds the gate)
+    if (!canJapa(player.ageBand)) {
+      get().notify({ icon: '🛡️', text: 'The send-off na adult road — grow first, JAPA go wait.', tone: 'neutral' })
+      return false
+    }
     const atPark = world.currentLocation === 'transport-area'
     const gate = canTakeFlight(japa, player.cash, atPark)
     if (!gate.ok) {
@@ -2628,6 +2695,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     scheduleAutosave(get)
     return { npcId, tier, familiarity: next.familiarity, reply, firstMeeting, favorOffer }
+  },
+
+  /** M13 — KID SOCIALS: the emote road. Same relationship clock, same
+   *  cooldown law, same familiarity ledger — but the words are preset
+   *  emotes and the replies are preset warmth. No free text, ever. */
+  emoteChat: (npcId, emoteId) => {
+    const { player, world } = get()
+    if (!player || !world) return null
+    if (player.ageBand !== 'kid') return null
+    const npc = NPC_BY_ID[npcId]
+    const emote = SHIELD.kidEmotes.find((e) => e.id === emoteId)
+    if (!npc || !emote) return null
+    const rel = relationshipFor(player.relationships, npcId)
+    if (!canChat(rel, world.day)) {
+      get().notify({ icon: '💬', text: `You don greet ${npc.name} today — tomorrow another level.`, tone: 'neutral' })
+      return null
+    }
+    const next = afterChat(rel, world.day)
+    next.familiarity = Math.min(100, rel.familiarity + emote.fam)
+    const tier = tierFor(next.familiarity)
+    set({ player: { ...player, relationships: { ...player.relationships, [npcId]: next } } })
+    get().addSkillXp('social', 1)
+    get().bumpGoal('chat')
+    audio.play('click')
+    scheduleAutosave(get)
+    return { npcId, tier, familiarity: next.familiarity, reply: emote.reply, firstMeeting: rel.familiarity === 0 }
   },
 
   /* --------------------- M6 — social depth (gifts / hangout) --------------------- */
@@ -3479,31 +3572,123 @@ export const useGameStore = create<GameStore>((set, get) => ({
     else SaveSystem.patchSettings(settings)
   },
 
-  /** M9 — the Guest Loop: claim a name. The account lives on the city's
-   *  register (SQLite); the guest save merges into it, nothing is lost. */
+  /** M13 — Elder mode: large text, high contrast, reduced motion, slow pacing. */
+  setElder: (elder) => {
+    const settings = { ...get().settings, elder }
+    set({ settings })
+    if (get().player) scheduleAutosave(get)
+    else SaveSystem.patchSettings(settings)
+    get().notify({ icon: elder ? '🔍' : '👓', text: elder ? 'Elder mode on — bigger text, kinder streets.' : 'Elder mode off.', tone: 'neutral' })
+  },
+
+  /** M13 — SPOT THE SCAMMER: one round per day, honest money for sharp eyes. */
+  playScammer: (pickIndex) => {
+    const { player, world, shield } = get()
+    if (!player || !world) return
+    if (!canPlayScammer(shield.scammerDay, world.day)) {
+      get().notify({ icon: '⏳', text: 'The street teaches once a day — come back tomoro.', tone: 'neutral' })
+      audio.play('notify')
+      return
+    }
+    const round = scamRound(world.day)
+    const res = scamAnswerApply(shield, round, pickIndex, world.day)
+    set({ shield: res.next })
+    if (res.correct && res.reward) {
+      get().addMoney(res.reward.cash, { label: 'Spot the Scammer — sharp eye', category: 'tip' })
+      get().addSkillXp('smart', res.reward.smartXp)
+      set({ player: { ...get().player!, needs: applyNeedsDelta(get().player!.needs, { mood: res.reward.mood }) } })
+      get().notify({ icon: '🛡️', text: `Correct! ${res.lesson} (+${formatNaira(res.reward.cash)})`, tone: 'good' })
+      audio.play('chime')
+      get().bumpGoal('study')
+    } else {
+      get().notify({ icon: '📚', text: `That one na honest talk. Lesson: ${res.lesson}`, tone: 'neutral' })
+      audio.play('notify')
+    }
+    scheduleAutosave(get)
+  },
+
+  /** M13 — the local parent-PIN gate (guests): first set stores the salted hash. */
+  setLocalParentPin: (pin) => {
+    const v = validateParentPin(pin)
+    if (!v.ok) {
+      get().notify({ icon: '🔒', text: v.why, tone: 'bad' })
+      audio.play('notify')
+      return false
+    }
+    if (get().shield.parentPinHash) {
+      get().notify({ icon: '🔒', text: 'A parent PIN already guards this device.', tone: 'bad' })
+      return false
+    }
+    set({ shield: { ...get().shield, parentPinHash: localPinHash(pin, makeLocalSalt()) } })
+    get().notify({ icon: '🛡️', text: 'Parent PIN set — the tier ladder dey under your watch now.', tone: 'good' })
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** M13 — the local tier gate: climb kid→teen→adult with the parent's yes. */
+  unlockTierLocal: (to, parentPin) => {
+    const { player, shield } = get()
+    if (!player) return false
+    const from = player.ageBand
+    const pinOk = shield.parentPinHash !== null && localPinHash(parentPin, shield.parentPinHash.slice(8)) === shield.parentPinHash
+    const verdict = tierGateVerdict(from, to, pinOk)
+    if (!verdict.allowed) {
+      get().notify({ icon: '🔒', text: verdict.why, tone: 'bad' })
+      audio.play('notify')
+      return false
+    }
+    set({ player: { ...player, ageBand: to } })
+    get().notify({ icon: '🛡️', text: `Life stage moved to ${to.toUpperCase()} — the city adjusts to you.`, tone: 'good' })
+    audio.play('levelup')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** M13 — THE FAMILY SHIELD register law: a minor account only exists
+   *  behind a parent's PIN and collects NOTHING — no contact, no recovery
+   *  line. The birth year is the honest truth: if it yields a different
+   *  band than the character's, the birth year wins (and the city tells you). */
   registerAccount: async (input) => {
     const vHandle = validateHandle(input.handle)
     if (!vHandle.ok) return { ok: false, why: vHandle.why }
     const vPin = validatePin(input.pin)
     if (!vPin.ok) return { ok: false, why: vPin.why }
-    const vContact = validateContact(input.contact)
-    if (!vContact.ok) return { ok: false, why: vContact.why }
     const year = new Date().getFullYear()
     const band = ageBandForYear(input.birthYear, year)
     if (!band) return { ok: false, why: 'Enter the year you were born.' }
+    const minor = band !== 'adult'
+    // M13 — zero collection: minors answer to the parent PIN alone
+    let contact = input.contact.trim()
+    let parentPin: string | undefined
+    if (minor) {
+      if (!input.parentPin) return { ok: false, why: 'A parent must set the shield PIN — minors dey register behind a parent.' }
+      const vParent = validateParentPin(input.parentPin)
+      if (!vParent.ok) return { ok: false, why: vParent.why }
+      parentPin = input.parentPin
+      contact = '' // never stored for a minor — zero data collection
+    } else {
+      const vContact = validateContact(input.contact)
+      if (!vContact.ok) return { ok: false, why: vContact.why }
+    }
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle: input.handle.trim(), contact: input.contact.trim(), pin: input.pin, ageBand: band }),
+        body: JSON.stringify({ handle: input.handle.trim(), contact, pin: input.pin, ageBand: band, parentPin }),
       })
       const data = (await res.json()) as { ok?: boolean; why?: string; token?: string }
       if (!res.ok || !data.ok || !data.token) return { ok: false, why: data.why ?? 'The register no gree — try again.' }
+      // the birth year is the law: the character's band syncs to it
+      const p = get().player
+      const changed = p && p.ageBand !== band
+      if (p && changed) set({ player: { ...p, ageBand: band } })
       set({
         account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: band, gateGraceDay: get().world?.day ?? 0 },
         gateOpen: false,
       })
-      get().notify({ icon: '🪪', text: `You don claim your name — welcome, ${input.handle.trim()}! Your hustle don dey cloud now.`, tone: 'good' })
+      get().notify({ icon: '🪪', text: changed
+        ? `You don claim your name — welcome, ${input.handle.trim()}! (Birth year say ${band.toUpperCase()} — the city adjust to am.)`
+        : `You don claim your name — welcome, ${input.handle.trim()}! Your hustle don dey cloud now.`, tone: 'good' })
       audio.play('levelup')
       scheduleAutosave(get)
       void get().pushCloud()
@@ -3622,6 +3807,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       goals,
       onboarding,
       account,
+      shield: get().shield,
       settings,
     })
     set({ hasSave: true })
@@ -3643,6 +3829,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       goals: freshGoalState(),
       onboarding: freshOnboardingState(),
       account: freshAccountState(),
+      shield: freshShieldState(),
       gateOpen: false,
       screen: 'menu',
       hasSave: false,

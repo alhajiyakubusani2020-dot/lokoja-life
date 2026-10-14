@@ -388,3 +388,33 @@
   0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
   100% { transform: translate(-50%, -50%) scale(4.2); opacity: 0; }
 }
+
+/* ==================== M13 — THE FAMILY SHIELD ==================== */
+
+/* ELDER MODE — the accessibility law. Large text, high contrast,
+   reduced motion, slower taps. One class on <html> runs the whole city. */
+.elder-mode {
+  font-size: 118%;
+}
+.elder-mode .lko-card {
+  border-color: rgba(0, 0, 0, 0.28);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+}
+.elder-mode .text-\[10px\],
+.elder-mode .text-\[10\.5px\],
+.elder-mode .text-\[11px\],
+.elder-mode .text-\[11\.5px\] {
+  font-size: 13.5px;
+}
+.elder-mode .lko-press {
+  transition-duration: 260ms;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .elder-mode *,
+  .elder-mode *::before,
+  .elder-mode *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

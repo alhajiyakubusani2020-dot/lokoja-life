@@ -8,7 +8,7 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState, RiversState, EducationState, HousingState, JapaState } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState, RiversState, EducationState, HousingState, JapaState, ShieldState } from '../types'
 import { freshCivicState } from './civic'
 import { freshChaosState } from './chaos'
 import { freshGoalState } from './goals'
@@ -18,9 +18,10 @@ import { freshRiversState } from './rivers'
 import { freshEducationState } from './education'
 import { freshHousingState } from './housing'
 import { freshJapaState } from './japa'
+import { freshShieldState } from './shield'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 13
+const SAVE_VERSION = 14
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -130,6 +131,14 @@ function deserialize(raw: string): GameSave | null {
         save.version = 13
         break
       case 13:
+        // v13 → v14 (M13 — THE FAMILY SHIELD): the character gains a life
+        // stage, the settings gain elder mode, and the shield slice joins
+        // the save — the scammer game's book and the local parent gate.
+        // Defaulted below — a v13 player wakes up as an adult (the honest
+        // default for existing hustlers) with the literacy game waiting.
+        save.version = 14
+        break
+      case 14:
         // current version
         break
       default:
@@ -147,10 +156,11 @@ function deserialize(raw: string): GameSave | null {
       }
     }
     if (!save.world.currentLocation) save.world.currentLocation = 'home'
-    if (!save.settings) save.settings = { sound: true, graphics: 'auto', chill: false }
+    if (!save.settings) save.settings = { sound: true, graphics: 'auto', chill: false, elder: false }
     if (typeof save.settings.sound !== 'boolean') save.settings.sound = true
     if (!['auto', 'low', 'mid', 'high'].includes(save.settings.graphics)) save.settings.graphics = 'auto'
     if (typeof save.settings.chill !== 'boolean') save.settings.chill = false
+    if (typeof save.settings.elder !== 'boolean') save.settings.elder = false
 
     // --- Stage 3 player fields (missing on v1 saves / corrupt data) ---
     const p = save.player as PlayerState
@@ -161,6 +171,8 @@ function deserialize(raw: string): GameSave | null {
     if (!p.stats) {
       p.stats = { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }
     }
+    // --- M13 family shield (missing on v13-and-older saves) ---
+    if (p.ageBand !== 'kid' && p.ageBand !== 'teen' && p.ageBand !== 'adult') p.ageBand = 'adult'
 
     // --- Stage 5 player fields (missing on v2-and-older saves) ---
     if (!p.vehicles) p.vehicles = []
@@ -285,6 +297,16 @@ function deserialize(raw: string): GameSave | null {
     }
     if (!jap.stats) jap.stats = freshJap.stats
     save.japa = jap
+
+    // --- M13 shield (missing on v13-and-older saves; partial data healed) ---
+    const freshSh = freshShieldState()
+    const sh: ShieldState = save.shield ?? freshSh
+    if (typeof sh.scammerDay !== 'number') sh.scammerDay = freshSh.scammerDay
+    if (typeof sh.scammerCorrect !== 'number') sh.scammerCorrect = freshSh.scammerCorrect
+    if (typeof sh.scammerWrong !== 'number') sh.scammerWrong = freshSh.scammerWrong
+    if (typeof sh.scammerStreak !== 'number') sh.scammerStreak = freshSh.scammerStreak
+    if (typeof sh.parentPinHash !== 'string' && sh.parentPinHash !== null) sh.parentPinHash = null
+    save.shield = sh
 
     // --- M2 civic mesh (missing on v3-and-older saves) ---
     if (!save.civic) {

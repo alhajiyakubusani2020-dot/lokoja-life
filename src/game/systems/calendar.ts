@@ -559,7 +559,8 @@ export function canBet(cal: CalendarState, day: number, locationId: string, ageB
   const f = festivalForDay(day)
   if (!f || f.id !== 'regatta' || f.daysLeft !== A.regattaDays) return { ok: false, why: 'Bets close before the race — day one only.' }
   if (locationId !== 'confluence') return { ok: false, why: 'You must stand at the Confluence shoreline.' }
-  if (ageBand === 'kid') return { ok: false, why: 'Betting na for adults — you can still sponsor a team.' }
+  // M13 — THE FAMILY SHIELD: race-eve betting is crime-adjacent — 18+ only.
+  if (ageBand !== 'adult') return { ok: false, why: 'Betting na 18+ — small paddies dey sponsor team, that one better pass.' }
   const year = yearOf(day)
   if (cal.bets.some((b) => b.year === year)) return { ok: false, why: 'One bet per year — you don carry stake already.' }
   return { ok: true, why: '' }

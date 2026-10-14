@@ -481,7 +481,7 @@ console.log('\nREAL STORE PASS — bun runs the live Zustand store through the c
     useGameStore.getState().saveNow()
     const raw = memStore.get('lokoja-life:save')
     const parsed = raw ? JSON.parse(raw) : null
-    check('the save (v13) carries the chaos slice', parsed?.version === 13 && typeof parsed?.chaos?.stats?.fixes === 'number')
+    check('the save (v14) carries the chaos slice', parsed?.version === 14 && typeof parsed?.chaos?.stats?.fixes === 'number')
   } finally {
     Math.random = realRandom
     setDebugScarcity(null)

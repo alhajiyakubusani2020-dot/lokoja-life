@@ -44,6 +44,7 @@ function makePlayer(over: Partial<PlayerState> = {}): PlayerState {
   return {
     name: 'Test',
     gender: 'male',
+    ageBand: 'adult',
     avatar: { skinTone: 'a', hairColor: 'a', hairstyle: 'a', clothingStyle: 'a', clothingColor: 'a' },
     cash: 5000,
     needs: { health: 100, energy: 100, hunger: 100, mood: 60 },
@@ -74,8 +75,8 @@ function makePlayer(over: Partial<PlayerState> = {}): PlayerState {
 console.log('\n— Data integrity —')
 {
   check(
-    `10 launch jobs + 8 school jobs (Stage 7), all reference real locations`,
-    JOBS.length === 18 && JOBS.every((j) => LOCATIONS.some((l) => l.id === j.locationId)),
+    `10 launch + 8 school + 3 ladder jobs, all reference real locations`,
+    JOBS.length === 21 && JOBS.every((j) => LOCATIONS.some((l) => l.id === j.locationId)),
   )
   check('all hustles reference real NPCs + locations', HUSTLES.every((h) => NPCS.some((n) => n.id === h.npcId) && LOCATIONS.some((l) => l.id === h.locationId)))
   check('every location except home offers work (home = rest)', LOCATIONS.filter((l) => l.id !== 'home').every((l) => HUSTLES.some((h) => h.locationId === l.id) || JOBS.some((j) => j.locationId === l.id)))

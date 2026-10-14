@@ -44,6 +44,10 @@ export function isEligible(
   currentAbsSlot: number,
   active: ActiveOpportunity[],
 ): boolean {
+  // M13 — THE FAMILY SHIELD: kids (6–12) only see the light honest chores
+  // (kidSafe). The gate lives HERE so every pipeline that offers work —
+  // the search board, NPC favours, future gists — inherits the same law.
+  if (player.ageBand === 'kid' && !def.kidSafe) return false
   // already carrying this exact hustle — no duplicate stacking
   if (active.some((o) => o.defId === def.id)) return false
   // personal cooldown after finishing this hustle

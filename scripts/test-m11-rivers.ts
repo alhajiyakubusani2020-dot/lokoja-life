@@ -59,7 +59,7 @@ import { SaveSystem } from '../src/game/systems/save'
 import { freshCivicState } from '../src/game/systems/civic'
 import type { RiversState } from '../src/game/types'
 
-const SAVE_V = 13
+const SAVE_V = 14
 
 let passed = 0
 let failed = 0
@@ -449,7 +449,7 @@ section('the save v11 → v12 migration')
   }
   mem.set(SaveSystem.SAVE_KEY, JSON.stringify(v11))
   const loaded = SaveSystem.load()
-  check('v11 save migrates to v12', loaded?.version === SAVE_V)
+  check('v11 save migrates to v14', loaded?.version === SAVE_V)
   check('the rivers slice arrives fresh and harmless', !!loaded?.rivers && loaded.rivers.day === 0 && loaded.rivers.sandbags === 0 && loaded.rivers.canoe === false && typeof loaded.rivers.walkways === 'object')
   check('nothing else moved (calendar/goals/chaos intact)', loaded?.calendar.meatPacks === 2 && loaded?.goals.streak === 2 && loaded?.chaos.stats.blowouts === 1)
   // partial data heals
@@ -594,7 +594,7 @@ section('the REAL store pass — force the surge, paddle the city')
   } catch {
     parsed = null
   }
-  check('the rivers slice persists into the v13 save', parsed?.version === SAVE_V && parsed?.rivers?.canoe === true && typeof parsed?.rivers?.sandbags === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
+  check('the rivers slice persists into the v14 save', parsed?.version === SAVE_V && parsed?.rivers?.canoe === true && typeof parsed?.rivers?.sandbags === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
   setDebugRiverLevel(null)
 }
 

@@ -35,6 +35,7 @@ import {
   BACKUP_KEY,
 } from '../src/game/systems/guest'
 import { applySlotDecay } from '../src/game/systems/needs'
+import { freshShieldState } from '../src/game/systems/shield'
 import { civicDayRoll, freshCivicState } from '../src/game/systems/civic'
 import { GOALS, CHILL, NEEDS } from '../src/game/data/config'
 import { freshCalendarState } from '../src/game/systems/calendar'
@@ -207,12 +208,14 @@ console.log('\nGUEST LAWS — play first, login to continue, lose nothing')
     education: freshEducationState(),
     housing: freshHousingState(),
     japa: freshJapaState(),
+    shield: freshShieldState(),
     createdAt: 1,
     updatedAt: 2,
     player: {
       ...({} as GameSave['player']),
       name: 'Ada',
       gender: 'female',
+      ageBand: 'adult' as const,
       avatar: DEFAULT_AVATAR,
       cash: 1000,
       needs: { health: 100, energy: 100, hunger: 100, mood: 100 },
@@ -237,7 +240,7 @@ console.log('\nGUEST LAWS — play first, login to continue, lose nothing')
       relationships: {},
     },
     world: { day, timeOfDay: 'morning', weather: 'sunny', currentLocation: 'home' },
-    settings: { sound: true, graphics: 'auto', chill: false },
+    settings: { sound: true, graphics: 'auto', chill: false, elder: false },
     civic: freshCivicState(),
     fleet: { day: 1, done: [] },
     chaos: {
@@ -335,8 +338,8 @@ console.log('\nREAL STORE PASS — goals, onboarding, the gate, through the live
   const raw = memStore.get('lokoja-life:save')
   const parsed = raw ? JSON.parse(raw) : null
   check(
-    'the save (v13) carries goals + onboarding + account',
-    parsed?.version === 13 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
+    'the save carries goals + onboarding + account',
+    parsed?.version === 14 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
     `v${parsed?.version} ids:${JSON.stringify(parsed?.goals?.ids)} rewarded:${parsed?.onboarding?.rewarded} linked:${parsed?.account?.linked}`,
   )
 }

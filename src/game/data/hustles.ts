@@ -50,6 +50,9 @@ export interface HustleDef {
   cooldownSlots: number
   /** relative likelihood when the board picks offers */
   weight: number
+  /** M13 — FAMILY SHIELD: light honest chore a kid (6–12) can run?
+   *  Only the two long solo cross-town deliveries stay adult/teen. */
+  kidSafe: boolean
 }
 
 export const HUSTLES: HustleDef[] = [
@@ -69,6 +72,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 0,
     cooldownSlots: 1,
     weight: 3,
+    kidSafe: true
   },
   {
     id: 'hajiya-pepper-bags',
@@ -85,6 +89,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 0,
     cooldownSlots: 1,
     weight: 3,
+    kidSafe: true
   },
   {
     id: 'kpata-price-runner',
@@ -101,6 +106,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
 
   /* ------------------------------ Food Strip ------------------------------- */
@@ -119,6 +125,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 1,
     weight: 3,
+    kidSafe: false
   },
   {
     id: 'mama-ngozi-basins',
@@ -135,6 +142,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 0,
     cooldownSlots: 1,
     weight: 3,
+    kidSafe: true
   },
 
   /* ---------------------------- Ganaja Junction ----------------------------- */
@@ -153,6 +161,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 0,
     cooldownSlots: 1,
     weight: 3,
+    kidSafe: true
   },
   {
     id: 'emeka-last-mile',
@@ -169,6 +178,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: false
   },
 
   /* ------------------------------ Motor Park -------------------------------- */
@@ -187,6 +197,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 1,
     weight: 3,
+    kidSafe: true
   },
   {
     id: 'baba-t-fare-collect',
@@ -203,6 +214,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
 
   /* ---------------------------- University Area ----------------------------- */
@@ -221,6 +233,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 1,
     weight: 3,
+    kidSafe: true
   },
   {
     id: 'chantel-laptop-fix',
@@ -237,6 +250,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
 
   /* ---------------------------- Government Area ----------------------------- */
@@ -255,6 +269,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
   {
     id: 'alhaji-sule-errand',
@@ -271,6 +286,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
 
   /* ---------------------------- Historic Lokoja ----------------------------- */
@@ -289,6 +305,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
 
   /* ------------------------------- Confluence ------------------------------- */
@@ -307,6 +324,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
 
   /* ------------------------------ Mount Patti ------------------------------- */
@@ -325,6 +343,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
 
   /* --------------------------- The Schools (Stage 7) ------------------------ */
@@ -343,6 +362,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 0,
     cooldownSlots: 1,
     weight: 2,
+    kidSafe: true
   },
   {
     id: 'chidi-notes-run',
@@ -359,6 +379,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
   {
     id: 'abubakar-workshop-tidy',
@@ -375,6 +396,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
   {
     id: 'miss-grace-library-sort',
@@ -391,6 +413,7 @@ export const HUSTLES: HustleDef[] = [
     timeSlots: 1,
     cooldownSlots: 2,
     weight: 2,
+    kidSafe: true
   },
 ]
 

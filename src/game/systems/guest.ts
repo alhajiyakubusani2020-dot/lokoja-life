@@ -16,7 +16,12 @@
  *    a single naira to the guest loop.
  */
 
-import type { AccountState, GameSave, OnboardingState } from '../types'
+import type { AccountState, AgeBand, GameSave, OnboardingState } from '../types'
+
+// M13 — the band type lives on the core types (the save, the shield and
+// this file all speak it); re-exported here for the surfaces that imported
+// it from here first.
+export type { AgeBand } from '../types'
 
 /* ------------------------------ fresh slices -------------------------------- */
 
@@ -88,8 +93,6 @@ export function validateContact(contact: string): { ok: boolean; why: string } {
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return { ok: true, why: '' }
   return { ok: false, why: 'Enter a phone number or an email.' }
 }
-
-export type AgeBand = 'kid' | 'teen' | 'adult'
 
 /** The honest age band from a birth year (kids never walk the adult road). */
 export function ageBandForYear(birthYear: number, nowYear: number): AgeBand | null {

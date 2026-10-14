@@ -28,8 +28,9 @@ import { hustleDefFor } from '@/game/systems/opportunities'
 import { absoluteSlot } from '@/game/systems/world'
 import { nepaSettleCost, kgirsSettleCost, marketForDay } from '@/game/systems/civic'
 import { BIZ_TYPES, bizIncomeFor, bizUpgradeCost, staffCapFor, hasPowerBackup } from '@/game/systems/biz'
-import { BIZ, CIVIC } from '@/game/data/config'
-import type { BusinessState, ShopUpgradeId } from '@/game/types'
+import { canPlayScammer, scamRound, scamReward, AGE_LAW } from '@/game/systems/shield'
+import { BIZ, CIVIC, SHIELD } from '@/game/data/config'
+import type { AgeBand, BusinessState, ShopUpgradeId } from '@/game/types'
 import { NPCS } from '@/game/data/npcs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -46,11 +47,12 @@ import {
   SaveIcon,
   SettingsIcon,
   SocialIcon,
+  ShieldIcon,
   SoundIcon,
   TargetIcon,
 } from '../icons'
 
-type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings'
+type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield'
 
 const APP_VERSION = 'Lokoja Life • Stage 5'
 
@@ -564,6 +566,204 @@ function CivicApp() {
 
 /* ------------------------------- PhoneScreen ------------------------------ */
 
+/* --------------------- M13 — the FAMILY SHIELD app ------------------------ */
+
+const BAND_LABEL: Record<AgeBand, string> = {
+  kid: '🛡️ Pikin (6–12)',
+  teen: '🛡️ Teen (13–17)',
+  adult: '🪪 Adult (18+)',
+}
+
+function ShieldApp() {
+  const player = useGameStore((s) => s.player)!
+  const world = useGameStore((s) => s.world)!
+  const shield = useGameStore((s) => s.shield)
+  const settings = useGameStore((s) => s.settings)
+  const account = useGameStore((s) => s.account)
+  const playScammer = useGameStore((s) => s.playScammer)
+  const setElder = useGameStore((s) => s.setElder)
+  const setLocalParentPin = useGameStore((s) => s.setLocalParentPin)
+  const unlockTierLocal = useGameStore((s) => s.unlockTierLocal)
+
+  const band = player.ageBand
+  const law = AGE_LAW[band]
+  const playedToday = !canPlayScammer(shield.scammerDay, world.day)
+  const round = scamRound(world.day)
+  const [picked, setPicked] = useState<number | null>(null)
+  const [pinInput, setPinInput] = useState('')
+  const [pinMode, setPinMode] = useState<'none' | 'set' | 'unlock'>('none')
+  const nextBand: AgeBand | null = band === 'kid' ? 'teen' : band === 'teen' ? 'adult' : null
+
+  const pick = (i: number) => {
+    if (playedToday) return
+    setPicked(i)
+    audio.play('click')
+    // the store rolls the SAME deterministic round and commits the verdict
+    setTimeout(() => playScammer(i), 420)
+  }
+
+  return (
+    <div className="space-y-2.5 px-1 pb-2" aria-label="Family Shield app">
+      {/* the band card */}
+      <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[13px] font-extrabold">{BAND_LABEL[band]}</p>
+            <p className="mt-0.5 text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+              {band === 'kid' && 'Safe streets: light hustles, emote greetings, no crime road.'}
+              {band === 'teen' && 'Hustle dey flow, school pays ×1.25 — the crime road stay locked.'}
+              {band === 'adult' && 'The whole Lokoja dey open — every road, every desk.'}
+            </p>
+          </div>
+          <div className="shrink-0 text-center">
+            <p className="lko-num text-lg font-extrabold text-[var(--lko-green-deep)]">{shield.scammerCorrect}</p>
+            <p className="text-[9px] font-extrabold uppercase text-[var(--lko-ink-soft)]">scams caught</p>
+          </div>
+        </div>
+        {account.linked && (
+          <p className="mt-2 rounded-lg bg-[var(--lko-green-soft)] px-2 py-1.5 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
+            🪪 Cloud account tier: {account.ageBand?.toUpperCase() ?? 'ADULT'} — climbs go through the register (parent PIN).
+          </p>
+        )}
+      </div>
+
+      {/* SPOT THE SCAMMER */}
+      <div className="rounded-2xl border-2 border-[var(--lko-gold)]/50 bg-[var(--lko-gold-soft)]/40 p-3.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[13px] font-extrabold text-[var(--lko-gold-deep)]">🛡️ Spot the Scammer</p>
+          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold text-[var(--lko-gold-deep)]">
+            streak {shield.scammerStreak} 🔥
+          </span>
+        </div>
+        <p className="mt-0.5 text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+          {law.scammerFeatured ? 'Your daily literacy drill — one card na 419. Catch am.' : 'The street teaches once a day — sharp eyes earn honest money.'}
+        </p>
+        {!playedToday ? (
+          <div className="mt-2 space-y-1.5">
+            {round.options.map((o, i) => (
+              <button
+                key={i}
+                data-testid={`scam-card-${i}`}
+                disabled={picked !== null}
+                onClick={() => pick(i)}
+                className={`lko-press w-full rounded-xl border bg-white px-3 py-2.5 text-left text-[12px] font-semibold leading-snug ${
+                  picked === null ? 'border-black/[0.08]' : picked === i ? 'border-[var(--lko-green)]' : 'border-black/[0.08] opacity-60'
+                }`}
+              >
+                “{o.text}”
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div data-testid="scam-done" className="mt-2 rounded-xl bg-white px-3 py-2.5 text-[11.5px] font-bold leading-snug text-[var(--lko-ink-soft)]">
+            {picked !== null && round.options[picked].scam ? (
+              <p className="text-[var(--lko-green-deep)]">
+                ✅ Caught! {round.options[picked].why} Next round lands tomorrow (+{formatNaira(scamReward(Math.max(0, shield.scammerStreak - 1)).cash)} banked).
+              </p>
+            ) : picked !== null ? (
+              <p>📚 The card you pick na honest talk. The 419 na: “{round.options[round.scamIndex].text}” — {round.options[round.scamIndex].why}</p>
+            ) : (
+              <p>You don play today — come back tomoro for the next round.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* the tier gate (local guests) */}
+      {!account.linked && (
+        <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
+          <p className="text-[13px] font-extrabold">🔒 The Tier Ladder</p>
+          {nextBand ? (
+            shield.parentPinHash === null ? (
+              pinMode !== 'set' ? (
+                <>
+                  <p className="mt-0.5 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
+                    Climbing to {nextBand.toUpperCase()} needs a parent's yes. Set the Parent PIN first.
+                  </p>
+                  <button
+                    data-testid="tier-set-pin"
+                    onClick={() => { audio.play('click'); setPinMode('set') }}
+                    className="lko-press mt-2 min-h-[40px] w-full rounded-xl bg-[var(--lko-gold)] text-[12px] font-extrabold text-[#33230a]"
+                  >
+                    Set the Parent PIN
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    data-testid="tier-pin-input"
+                    className="mt-2 w-full rounded-xl border-2 border-[var(--lko-gold)] bg-white px-3 py-2.5 text-[13px] font-bold tracking-[0.3em] outline-none"
+                    placeholder="6 digits"
+                    value={pinInput}
+                    maxLength={6}
+                    inputMode="numeric"
+                    onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                  />
+                  <button
+                    onClick={() => {
+                      if (setLocalParentPin(pinInput)) { setPinMode('none'); setPinInput('') }
+                    }}
+                    className="lko-press mt-2 min-h-[40px] w-full rounded-xl bg-[var(--lko-green)] text-[12px] font-extrabold text-white"
+                  >
+                    Save the PIN
+                  </button>
+                </>
+              )
+            ) : (
+              <>
+                <p className="mt-0.5 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
+                  Parent PIN dey guard the ladder. Enter am to climb to {nextBand.toUpperCase()}.
+                </p>
+                <input
+                  data-testid="tier-pin-input"
+                  className="mt-2 w-full rounded-xl border border-black/[0.1] bg-white px-3 py-2.5 text-[13px] font-bold tracking-[0.3em] outline-none"
+                  placeholder="Parent PIN"
+                  value={pinInput}
+                  maxLength={6}
+                  inputMode="numeric"
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                />
+                <button
+                  data-testid="tier-unlock"
+                  onClick={() => {
+                    if (unlockTierLocal(nextBand, pinInput)) { setPinInput('') }
+                  }}
+                  className="lko-press mt-2 min-h-[40px] w-full rounded-xl bg-[var(--lko-green)] text-[12px] font-extrabold text-white"
+                >
+                  Climb to {nextBand.toUpperCase()}
+                </button>
+              </>
+            )
+          ) : (
+            <p className="mt-0.5 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
+              You don reach the top rung — the whole city don open.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* elder mode */}
+      <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/[0.06] bg-white p-3.5">
+        <div className="min-w-0">
+          <p className="text-[13px] font-extrabold">🔍 Elder Mode</p>
+          <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+            Large text, high contrast, no motion, body drains 25% slower.
+          </p>
+        </div>
+        <button
+          data-testid="elder-toggle"
+          onClick={() => { audio.play('click'); setElder(!settings.elder) }}
+          className={`lko-press relative h-8 w-14 shrink-0 rounded-full transition-colors ${settings.elder ? 'bg-[var(--lko-green)]' : 'bg-black/[0.12]'}`}
+          aria-pressed={settings.elder}
+          aria-label="Toggle Elder Mode"
+        >
+          <span className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform" style={{ left: settings.elder ? 30 : 4 }} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
@@ -597,6 +797,13 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
       sub: `${paddyCount} paddy dem`,
       tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green)]',
       icon: SocialIcon,
+    },
+    {
+      key: 'shield',
+      label: 'Family Shield',
+      sub: player.ageBand === 'adult' ? 'Scam drill + elder mode' : `🛡️ ${player.ageBand.toUpperCase()} — scam drill`,
+      tint: 'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]',
+      icon: ShieldIcon,
     },
     {
       key: 'bank',
@@ -642,6 +849,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     civic: 'Civic',
     biz: 'My Biz',
     settings: 'Settings',
+    shield: 'Family Shield',
   }
 
   return (
@@ -700,6 +908,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
                   {app === 'hustle' && <HustleApp onOpenWork={() => onOpenWork?.()} />}
                   {app === 'civic' && <CivicApp />}
                   {app === 'biz' && <BizApp />}
+                  {app === 'shield' && <ShieldApp />}
                   {app === 'settings' && <SettingsApp />}
                 </div>
               </>

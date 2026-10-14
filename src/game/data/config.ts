@@ -586,6 +586,50 @@ export const CHILL = {
 } as const
 
 /**
+ * M13 — THE FAMILY SHIELD. One download, three generations. Kids (6–12)
+ * walk a safer Lokoja: no crime road, light hustles, emote socials and
+ * the Spot-the-Scammer literacy game. Teens (13–17) hustle but the crime
+ * road stays locked and school pays better. Adults see everything. A
+ * minor's cloud account only exists behind a parent's PIN and collects
+ * NOTHING — no contact, no recovery line, nothing. systems/shield.ts
+ * holds the pure laws.
+ */
+export const SHIELD = {
+  /** smart-skill XP multiplier for kid + teen (education-first) */
+  studyBoost: 1.25,
+  /** the scammer game pays once per in-game day */
+  scammer: {
+    baseCash: 150,
+    streakBonus: 25,
+    /** streak bonus stops growing here (the honest ceiling) */
+    streakCap: 10,
+    smartXp: 8,
+    mood: 2,
+    /** wrong answers reset the streak but still teach the lesson */
+  },
+  /** kid-band chat: preset emotes only (no free lines, ever) */
+  kidEmotes: [
+    { id: 'wave', glyph: '👋', label: 'Greet', reply: 'Ah, you dey greet! Blessings, pikin.', fam: 1 },
+    { id: 'smile', glyph: '😊', label: 'Smile', reply: 'That your smile na free medicine.', fam: 1 },
+    { id: 'fire', glyph: '🔥', label: 'Hype', reply: 'Haha! You too much!', fam: 2 },
+    { id: 'clap', glyph: '👏', label: 'Applaud', reply: 'Thank you my dear. God go bless you.', fam: 2 },
+    { id: 'pray', glyph: '🙏', label: 'Pray', reply: 'Amen o! You be correct pikin.', fam: 2 },
+    { id: 'fist', glyph: '✊', label: 'Solidarity', reply: 'One love! We dey together.', fam: 1 },
+  ] as { id: string; glyph: string; label: string; reply: string; fam: number }[],
+} as const
+
+/**
+ * M13 — ELDER MODE. The accessibility law: large text, high contrast,
+ * reduced motion, slow pacing. A settings toggle — the body drains at
+ * 0.75× (kinder than the street, gentler than Chill) and the UI breathes.
+ */
+export const ELDER = {
+  decayMult: 0.75,
+  /** travel/working transitions breathe longer (× on the ms) */
+  transitionMult: 1.4,
+} as const
+
+/**
  * M10 — THE LIVING CALENDAR. Lokoja's year runs on 72 game days so a real
  * player actually MEETS the city's celebrations: the Confluence Regatta,
  * the two Eids (drifting a little every year), the Ramadan fast and the

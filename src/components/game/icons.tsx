@@ -307,6 +307,17 @@ export function GradCapIcon(p: IconProps) {
   )
 }
 
+/** M13 — the family shield: a shield with a keyhole. */
+export function ShieldIcon(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path d="M12 2.8 4.5 5.6v5.2c0 4.6 3 8.8 7.5 10.4 4.5-1.6 7.5-5.8 7.5-10.4V5.6L12 2.8Z" />
+      <circle cx="12" cy="10.2" r="1.6" />
+      <path d="M12 11.8v3.4" />
+    </Svg>
+  )
+}
+
 export function PotIcon(p: IconProps) {
   return (
     <Svg {...p}>

@@ -37,6 +37,13 @@ export default function Home() {
   const booted = useGameStore((s) => s.booted)
   const boot = useGameStore((s) => s.boot)
   const saveNow = useGameStore((s) => s.saveNow)
+  const elder = useGameStore((s) => s.settings.elder)
+
+  // M13 — ELDER MODE: one root class drives the accessibility law
+  // (large text, high contrast, reduced motion) for the WHOLE app.
+  useEffect(() => {
+    document.documentElement.classList.toggle('elder-mode', elder)
+  }, [elder])
 
   // boot once on mount: detect existing save, sync audio settings
   useEffect(() => {

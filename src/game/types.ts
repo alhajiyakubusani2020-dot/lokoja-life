@@ -36,6 +36,14 @@ export interface Needs {
 
 export type SkillId = 'hustle' | 'smart' | 'social'
 
+/**
+ * M13 — THE FAMILY SHIELD: the life stage. One download, three
+ * generations — the band decides what the game offers (systems/shield.ts
+ * holds the pure laws). Defined here so the save, the guest loop and the
+ * shield all speak the same type without import cycles.
+ */
+export type AgeBand = 'kid' | 'teen' | 'adult'
+
 export interface Skills {
   /** 💪 physical / market / practical */
   hustle: number
@@ -167,6 +175,8 @@ export interface PlayerState {
   name: string
   gender: Gender
   avatar: AvatarConfig
+  /** M13 — the life stage this character plays (kid/teen/adult content law) */
+  ageBand: AgeBand
 
   /** 💰 Nigerian Naira */
   cash: number
@@ -648,6 +658,27 @@ export interface GameSettings {
   graphics: QualitySetting
   /** M9 — Chill Mode: a gentler Lokoja (half decay, kinder grace windows) */
   chill: boolean
+  /** M13 — Elder mode: large text, high contrast, reduced motion, slow pacing */
+  elder: boolean
+}
+
+/* ------------------------------- M13 — shield ------------------------------- */
+
+/**
+ * M13 — THE FAMILY SHIELD slice. Participation and bookkeeping only:
+ * the Spot-the-Scammer game's once-a-day book, the streak the reward
+ * rides, and the LOCAL parent-PIN gate (guests). The pure laws live in
+ * systems/shield.ts; the real minor-account PIN law lives on the server.
+ */
+export interface ShieldState {
+  /** absolute day the scammer game was last played (0 = never) */
+  scammerDay: number
+  scammerCorrect: number
+  scammerWrong: number
+  /** consecutive correct picks (the streak the reward rides) */
+  scammerStreak: number
+  /** the LOCAL parent-PIN gate (guests): salted hash, null = not set */
+  parentPinHash: string | null
 }
 
 /* -------------------------------- M11 — rivers ------------------------------ */
@@ -745,6 +776,8 @@ export interface GameSave {
   education: EducationState
   housing: HousingState
   japa: JapaState
+  /** M13 — the family shield: the scammer game's book + the local parent gate */
+  shield: ShieldState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

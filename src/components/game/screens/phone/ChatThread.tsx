@@ -19,7 +19,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { audio } from '@/game/systems/audio'
 import { canChat, canGift, canHangout, relationshipFor, tierFor, TIER_META } from '@/game/systems/social'
-import { SOCIAL } from '@/game/data/config'
+import { SOCIAL, SHIELD } from '@/game/data/config'
 import { NPC_BY_ID } from '@/game/data/npcs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -132,8 +132,12 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const chatNpc = useGameStore((s) => s.chatNpc)
+  const emoteChat = useGameStore((s) => s.emoteChat)
   const giveGift = useGameStore((s) => s.giveGift)
   const hangout = useGameStore((s) => s.hangout)
+
+  // M13 — THE FAMILY SHIELD: kid socials are preset emotes ONLY
+  const kidMode = player.ageBand === 'kid'
 
   const npc = NPC_BY_ID[npcId]
   const rel = relationshipFor(player.relationships, npcId)
@@ -203,6 +207,29 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
           ? [{ from: 'sys' as const, text: `You don add ${npc.name} — small small na im paddy dey grow.` }]
           : []),
       ])
+    }, TYPING_MS)
+  }
+
+  /** M13 — kid socials: an emote carries the day (same clock, same ledger). */
+  const sendEmote = (emoteId: string, glyph: string) => {
+    if (typing || chattedToday) return
+    audio.play('click')
+    setMsgs((m) => [...m, { from: 'me', text: glyph }])
+    setTyping(true)
+    chatTimer.current = window.setTimeout(() => {
+      setTyping(false)
+      const outcome = emoteChat(npcId, emoteId)
+      if (!outcome) {
+        setMsgs((m) => [...m, { from: 'sys', text: 'You don greet today. Tomorrow another level.' }])
+        return
+      }
+      if (outcome.tier !== tierBefore.current) {
+        setTierUp(outcome.tier)
+        audio.play('levelup')
+        bannerTimer.current = window.setTimeout(() => setTierUp(null), 5000)
+      }
+      tierBefore.current = outcome.tier
+      setMsgs((m) => [...m, { from: 'npc', text: outcome.reply }])
     }, TYPING_MS)
   }
 
@@ -348,10 +375,41 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
         <div ref={bottomRef} />
       </div>
 
-      {/* composer — one canned opener per day, store enforces the gate */}
+      {/* composer — M13: kids get the EMOTE GRID only (no free lines, no gifts, no hangout) */}
       <div className="border-t border-black/[0.06] bg-white/70 px-3 py-2.5 backdrop-blur">
-        {/* M6 — social depth: gift / hangout strip */}
-        <div className="mb-2 flex gap-1.5">
+        {kidMode ? (
+          <>
+            {msgs.length === 0 && !typing && (
+              <p className="mb-2 text-center text-[11px] font-extrabold text-[var(--lko-ink-soft)]">
+                🛡️ Pikin mode — greet with emotes, one a day.
+              </p>
+            )}
+            {chattedToday ? (
+              <div className="flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-black/[0.05] px-4 text-[13px] font-bold text-[var(--lko-ink-soft)]">
+                <CheckIcon size={15} className="text-[var(--lko-green)]" aria-hidden />
+                You don greet today
+              </div>
+            ) : (
+              <div data-testid="kid-emote-grid" className="grid grid-cols-6 gap-1.5">
+                {SHIELD.kidEmotes.map((e) => (
+                  <button
+                    key={e.id}
+                    data-testid={`kid-emote-${e.id}`}
+                    onClick={() => sendEmote(e.id, e.glyph)}
+                    disabled={typing}
+                    aria-label={e.label}
+                    className="lko-press flex min-h-[44px] items-center justify-center rounded-xl border border-black/[0.06] bg-white text-xl disabled:opacity-50"
+                  >
+                    {e.glyph}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* M6 — social depth: gift / hangout strip */}
+            <div className="mb-2 flex gap-1.5">
           <button
             onClick={() => {
               audio.play('click')
@@ -418,6 +476,8 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
           >
             {OPENER}
           </button>
+        )}
+          </>
         )}
       </div>
     </div>

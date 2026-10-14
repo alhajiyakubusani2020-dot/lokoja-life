@@ -24,8 +24,16 @@ import {
   NIGERIAN_SURNAMES,
 } from '@/game/data/flavor'
 import type { AvatarConfig, Gender } from '@/game/types'
+import type { AgeBand } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 import { ArrowLeftIcon, DiceIcon, SparkleIcon } from '../icons'
+
+/** M13 — the life stages: one download, three generations. */
+const LIFE_STAGES: { band: AgeBand; label: string; note: string }[] = [
+  { band: 'kid', label: 'Pikin (6–12)', note: 'Safe streets: no crime road, light hustles, emote greetings + Spot the Scammer.' },
+  { band: 'teen', label: 'Teen (13–17)', note: 'Hustle hard, school pays ×1.25 smart — but betting, the agent and the lounge stay locked.' },
+  { band: 'adult', label: 'Adult (18+)', note: 'The whole Lokoja: every hustle, every road, the JAPA gauntlet and the night life.' },
+]
 
 /** small circular swatch button used for colours */
 function Swatch({
@@ -78,6 +86,7 @@ export function CharacterCreation() {
   const [name, setName] = useState('')
   const [gender, setGender] = useState<Gender>('male')
   const [avatar, setAvatar] = useState<AvatarConfig>({ ...DEFAULT_AVATAR })
+  const [ageBand, setAgeBand] = useState<AgeBand>('adult')
 
   const patch = (p: Partial<AvatarConfig>) => setAvatar((a) => ({ ...a, ...p }))
 
@@ -152,6 +161,39 @@ export function CharacterCreation() {
             </button>
           </div>
         </div>
+
+        {/* M13 — life stage: the family shield reads this for the whole game */}
+        <section aria-label="Life stage" className="mt-4">
+          <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[var(--lko-ink-soft)]">
+            Life stage — who dey play?
+          </h3>
+          <div className="grid grid-cols-3 gap-1.5">
+            {LIFE_STAGES.map((s) => (
+              <button
+                key={s.band}
+                data-testid={`stage-${s.band}`}
+                onClick={() => {
+                  audio.play('click')
+                  setAgeBand(s.band)
+                }}
+                aria-pressed={ageBand === s.band}
+                className={`lko-press min-h-[52px] rounded-xl border-2 px-2 py-2 text-[12px] font-extrabold leading-tight ${
+                  ageBand === s.band
+                    ? 'border-[var(--lko-green)] bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'
+                    : 'border-black/10 bg-white text-[var(--lko-ink-soft)]'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <p
+            data-testid="stage-note"
+            className="mt-1.5 rounded-lg bg-black/[0.04] px-2.5 py-1.5 text-[11px] font-semibold italic leading-snug text-[var(--lko-ink-soft)]"
+          >
+            {LIFE_STAGES.find((s) => s.band === ageBand)?.note}
+          </p>
+        </section>
 
         {/* gender */}
         <OptionStrip label="Gender / Avatar type">
@@ -266,7 +308,7 @@ export function CharacterCreation() {
             onClick={() => {
               if (!canStart) return
               audio.play('levelup')
-              startNewGame(name, gender, avatar)
+              startNewGame(name, gender, avatar, ageBand)
             }}
             disabled={!canStart}
             className="lko-press flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-[var(--lko-green)] text-lg font-extrabold tracking-wide text-white shadow-[inset_0_-4px_0_rgba(0,0,0,0.18)] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
