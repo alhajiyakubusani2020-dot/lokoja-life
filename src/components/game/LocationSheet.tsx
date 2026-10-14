@@ -24,6 +24,7 @@ import { BizBlock } from './BizBlock'
 import { FleetBlock } from './FleetBlock'
 import { FestivalPanel } from './FestivalPanel'
 import { RiversPanel } from './RiversPanel'
+import { EducationPanel, HousingPanel, JapaPanel } from './LadderPanels'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 
@@ -218,6 +219,11 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
 
       {/* M11 — the rivers awake: sand, walkways, tolls, canoes, the rescue */}
       {!isSelectedLocked && <RiversPanel location={selected} />}
+
+      {/* M12 — the ladder: FUL desks, the housing agent, the JAPA counters */}
+      {!isSelectedLocked && <EducationPanel location={selected} />}
+      {!isSelectedLocked && <HousingPanel location={selected} />}
+      {!isSelectedLocked && <JapaPanel location={selected} />}
 
       {/* travel confirmation */}
       {!isSelectedCurrent && !isSelectedLocked && (

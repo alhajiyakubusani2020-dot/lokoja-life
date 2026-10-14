@@ -8,16 +8,19 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState, RiversState } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState, RiversState, EducationState, HousingState, JapaState } from '../types'
 import { freshCivicState } from './civic'
 import { freshChaosState } from './chaos'
 import { freshGoalState } from './goals'
 import { freshOnboardingState, freshAccountState } from './guest'
 import { freshCalendarState } from './calendar'
 import { freshRiversState } from './rivers'
+import { freshEducationState } from './education'
+import { freshHousingState } from './housing'
+import { freshJapaState } from './japa'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 12
+const SAVE_VERSION = 13
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -120,6 +123,13 @@ function deserialize(raw: string): GameSave | null {
         save.version = 12
         break
       case 12:
+        // v12 → v13 (M12 — THE LADDER): the education, housing and japa
+        // slices join the save — the FUL semester clock, the rent book,
+        // and the JAPA document chain. Defaulted below — a v12 player
+        // wakes up with the ladder waiting at the bottom rung.
+        save.version = 13
+        break
+      case 13:
         // current version
         break
       default:
@@ -239,6 +249,42 @@ function deserialize(raw: string): GameSave | null {
     if (!Array.isArray(rivers.ferryDone)) rivers.ferryDone = []
     if (!rivers.stats) rivers.stats = freshRiv.stats
     save.rivers = rivers
+
+    // --- M12 ladder (missing on v12-and-older saves; partial data healed) ---
+    const freshEd = freshEducationState()
+    const ed: EducationState = save.education ?? freshEd
+    if (typeof ed.enrolled !== 'boolean') ed.enrolled = false
+    if (typeof ed.semester !== 'number' || ed.semester < 1) ed.semester = freshEd.semester
+    if (typeof ed.semesterStartDay !== 'number') ed.semesterStartDay = 0
+    if (typeof ed.lecturesDone !== 'number') ed.lecturesDone = 0
+    if (typeof ed.lastLectureDay !== 'number') ed.lastLectureDay = 0
+    if (typeof ed.lastGrantSemester !== 'number') ed.lastGrantSemester = 0
+    if (typeof ed.examsPassed !== 'number') ed.examsPassed = 0
+    if (typeof ed.failedExams !== 'number') ed.failedExams = 0
+    if (typeof ed.graduated !== 'boolean') ed.graduated = false
+    if (typeof ed.convocationDay !== 'number') ed.convocationDay = null
+    if (typeof ed.convocationAttended !== 'boolean') ed.convocationAttended = false
+    if (!ed.stats) ed.stats = freshEd.stats
+    save.education = ed
+
+    const freshHou = freshHousingState()
+    const hou: HousingState = save.housing ?? freshHou
+    if (hou.owned !== null && typeof hou.owned !== 'string') hou.owned = null
+    if (!hou.furnishing || typeof hou.furnishing !== 'object') hou.furnishing = {}
+    if (typeof hou.rentPaidThrough !== 'number') hou.rentPaidThrough = 0
+    if (typeof hou.lastPostedDay !== 'number') hou.lastPostedDay = 0
+    if (typeof hou.rentOwed !== 'number' || hou.rentOwed < 0) hou.rentOwed = 0
+    if (!hou.wahala || typeof hou.wahala.kind !== 'string') hou.wahala = null
+    if (!hou.stats) hou.stats = freshHou.stats
+    save.housing = hou
+
+    const freshJap = freshJapaState()
+    const jap: JapaState = save.japa ?? freshJap
+    for (const k of ['nimcReadyDay', 'nimcDay', 'passportReadyDay', 'passportDay', 'agentTries', 'agentScams', 'clearanceDay', 'policeDay', 'flownDay', 'remitDay', 'policeShifts', 'sirenUntilDay', 'lastEscortDay'] as const) {
+      if (typeof jap[k] !== 'number') jap[k] = 0
+    }
+    if (!jap.stats) jap.stats = freshJap.stats
+    save.japa = jap
 
     // --- M2 civic mesh (missing on v3-and-older saves) ---
     if (!save.civic) {

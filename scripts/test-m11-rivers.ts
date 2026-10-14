@@ -59,7 +59,7 @@ import { SaveSystem } from '../src/game/systems/save'
 import { freshCivicState } from '../src/game/systems/civic'
 import type { RiversState } from '../src/game/types'
 
-const SAVE_V = 12
+const SAVE_V = 13
 
 let passed = 0
 let failed = 0
@@ -594,7 +594,7 @@ section('the REAL store pass — force the surge, paddle the city')
   } catch {
     parsed = null
   }
-  check('the rivers slice persists into the v12 save', parsed?.version === SAVE_V && parsed?.rivers?.canoe === true && typeof parsed?.rivers?.sandbags === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
+  check('the rivers slice persists into the v13 save', parsed?.version === SAVE_V && parsed?.rivers?.canoe === true && typeof parsed?.rivers?.sandbags === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
   setDebugRiverLevel(null)
 }
 

@@ -957,3 +957,93 @@ export const RIVERS = {
   reliefBelow: 0.35,
   reliefMood: 3,
 } as const
+
+/* ------------------------------- M12 — ladder ------------------------------- */
+
+/**
+ * M12 — THE LADDER. The life above the hustle: the FUL education loop
+ * (semester → lectures → ASUU strikes → exam → the certificate → the
+ * career gate), the housing ladder (rent cycles with the landlord's
+ * wahala → family room → self-contain → GRA flat → the Adankolo duplex,
+ * each warmer than the last), and the JAPA gauntlet (NIMC → passport →
+ * the street agent's gamble → KGIRS clearance → police certificate → the
+ * send-off). systems/education.ts, housing.ts and japa.ts hold the laws.
+ */
+export const LADDER = {
+  education: {
+    /** FUL enrollment: the fee, the level, the semester clock */
+    enrollFee: 25000,
+    enrollLevel: 2,
+    semesterDays: 18,
+    examDays: 3,
+    /** lectures a semester expects (the exam reads them) */
+    lecturesNeeded: 12,
+    /** one lecture: smart-skill XP + the tutorial stipend */
+    lectureSmartXp: 12,
+    lectureStipend: 150,
+    /** the exam's honest bar: smart + lectures × 0.5 ≥ this */
+    examPassScore: 8,
+    semestersToGraduate: 4,
+    convocationInDays: 2,
+    graduateRep: 12,
+    graduateMood: 10,
+    /** the Dean's hustle grant: 8 lectures in one semester pays once */
+    deansGrant: 2000,
+    deansGrantRep: 3,
+    deansLectures: 8,
+    /** ASUU: the strike chance per semester + the length band */
+    strikeChance: 0.3,
+    strikeMinDays: 5,
+    strikeMaxDays: 8,
+    /** the strike lands on this lecture-day of the semester */
+    strikeStartDay: 7,
+  },
+  housing: {
+    rentCycleDays: 6,
+    baseRent: 900,
+    lateFee: 400,
+    /** chance a rent cycle lands the landlord's wahala */
+    wahalaChance: 0.35,
+    properties: [
+      { id: 'family-room', name: 'Family Room — Adankolo', locationId: 'university-area', price: 85000, level: 3, comfort: 1 },
+      { id: 'self-contain', name: 'Self-Contain — Ganaja', locationId: 'ganaja-junction', price: 180000, level: 5, comfort: 2 },
+      { id: 'flat-gra', name: 'Two-Bedroom Flat — GRA', locationId: 'government-area', price: 420000, level: 7, comfort: 3 },
+      { id: 'duplex', name: 'Duplex — Adankolo Layout', locationId: 'university-area', price: 950000, level: 9, comfort: 5 },
+    ] as { id: string; name: string; locationId: string; price: number; level: number; comfort: number }[],
+    furnishTiers: [
+      { tier: 1, cost: 15000, label: 'Fan + curtains', mood: 1 },
+      { tier: 2, cost: 40000, label: 'Generator + TV', mood: 2 },
+      { tier: 3, cost: 90000, label: 'Full AC + solar', mood: 3 },
+    ] as { tier: number; cost: number; label: string; mood: number }[],
+    /** the sleep law: +this energy per comfort point */
+    sleepEnergyPerComfort: 3,
+  },
+  japa: {
+    unlockLevel: 8,
+    nimcFee: 3000,
+    nimcQueueDays: 1,
+    passportFee: 25000,
+    passportQueueDays: 3,
+    /** the street agent: cheaper, faster, and sometimes a wash */
+    agentFee: 12000,
+    agentRealChance: 0.6,
+    agentRepHit: 3,
+    policeFee: 5000,
+    ticketFee: 150000,
+    repReward: 15,
+    moodReward: 15,
+    /** the morning after the send-off: the first remittance lands */
+    remittance: 50000,
+  },
+  mopol: {
+    /** police shifts before the escort detail trusts you */
+    shiftsToUnlock: 5,
+    /** the detail runs every Nth day */
+    escortEvery: 3,
+    escortPay: 8000,
+    escortRep: 3,
+    /** the siren: the next journeys ride ×this minutes while it lasts */
+    sirenMinutesMult: 0.8,
+    sirenDays: 2,
+  },
+} as const

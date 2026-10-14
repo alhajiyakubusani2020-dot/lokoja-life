@@ -27,10 +27,13 @@ export interface RequirementCheck {
   reasons: string[]
 }
 
-/** Level / skill / reputation gates shared by jobs and hustles. */
+/** Level / skill / reputation gates shared by jobs and hustles.
+ *  M12 — `ctx.graduated` feeds the career gate: the desk reads the FUL
+ *  certificate from the live education slice, not the player object. */
 export function checkRequirements(
   player: PlayerState,
-  req: { minSkills?: Partial<Record<SkillId, number>>; minReputation?: number; minLevel?: number },
+  req: { minSkills?: Partial<Record<SkillId, number>>; minReputation?: number; minLevel?: number; requiresDegree?: boolean },
+  ctx?: { graduated?: boolean },
 ): RequirementCheck {
   const reasons: string[] = []
 
@@ -45,6 +48,9 @@ export function checkRequirements(
   if (req.minReputation && player.reputation < req.minReputation) {
     const tier = REPUTATION_TIERS.find((t) => t.threshold === req.minReputation)
     reasons.push(tier ? `Needs “${tier.name}” reputation (${req.minReputation})` : `Needs ${req.minReputation} reputation`)
+  }
+  if (req.requiresDegree && !ctx?.graduated) {
+    reasons.push('Needs the FUL certificate — enroll and climb the ladder')
   }
 
   return { ok: reasons.length === 0, reasons }

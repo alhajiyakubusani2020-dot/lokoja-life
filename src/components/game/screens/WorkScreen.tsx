@@ -291,8 +291,9 @@ function FreshOfferCard({
 function JobRow({ job, onOpen }: { job: JobDef; onOpen: () => void }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
+  const education = useGameStore((s) => s.education)
   const abs = absoluteSlot(world.day, world.timeOfDay)
-  const req = checkRequirements(player, job.requirements)
+  const req = checkRequirements(player, job.requirements, { graduated: education.graduated && education.convocationAttended })
   const cd = cooldownRemaining(player.cooldowns, job.id, abs)
   const pay = calculateJobPay(job, player)
 
@@ -348,8 +349,9 @@ function JobRow({ job, onOpen }: { job: JobDef; onOpen: () => void }) {
 function JobSheet({ job, onClose, onStart }: { job: JobDef; onClose: () => void; onStart: () => void }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
+  const education = useGameStore((s) => s.education)
   const abs = absoluteSlot(world.day, world.timeOfDay)
-  const req = checkRequirements(player, job.requirements)
+  const req = checkRequirements(player, job.requirements, { graduated: education.graduated && education.convocationAttended })
   const cd = cooldownRemaining(player.cooldowns, job.id, abs)
   const tooTired = player.needs.energy < job.energyCost
   const pay = calculateJobPay(job, player)

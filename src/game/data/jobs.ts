@@ -29,6 +29,8 @@ export interface JobDef {
   requirements: {
     minSkills?: Partial<{ hustle: number; smart: number; social: number }>
     minReputation?: number
+    /** M12 — the FUL certificate is the paper the desk reads */
+    requiresDegree?: boolean
   }
 }
 
@@ -306,6 +308,53 @@ export const JOBS: JobDef[] = [
     skillTraining: { skill: 'social', xp: 10 },
     reputationReward: 3,
     requirements: {},
+  },
+  /* ---------------- M12 — THE LADDER: the careers the certificate opens ---------------- */
+  {
+    id: 'govt-officer',
+    name: 'Civil Servant — GRA',
+    description: 'A desk of your own at the Government Area: files, stamps, and steady respect. The FUL certificate opened this door.',
+    emoji: '🏢',
+    locationId: 'government-area',
+    unlockLevel: 5,
+    energyCost: 22,
+    timeSlots: 1,
+    basePay: 3800,
+    xpReward: 40,
+    skillTraining: { skill: 'smart', xp: 14 },
+    reputationReward: 5,
+    requirements: { minReputation: 300, requiresDegree: true },
+  },
+  {
+    id: 'lec-assistant',
+    name: 'Tutorial Assistant — FUL',
+    description: 'Take the smaller groups in LT B and mark their quizzes. The campus dey call you abeg now.',
+    emoji: '🎓',
+    locationId: 'ful-felele',
+    unlockLevel: 4,
+    energyCost: 20,
+    timeSlots: 1,
+    basePay: 3200,
+    xpReward: 36,
+    skillTraining: { skill: 'smart', xp: 16 },
+    reputationReward: 4,
+    requirements: { minReputation: 150, requiresDegree: true },
+  },
+  /* ------------- M12 — the uniform: the police recruit (no degree, pure respect) ------------- */
+  {
+    id: 'police-recruit',
+    name: 'Police Recruit',
+    description: 'The uniform earns the street’s respect — checkpoints, patrols, and the MOPOL detail watching your record.',
+    emoji: '👮',
+    locationId: 'government-area',
+    unlockLevel: 6,
+    energyCost: 24,
+    timeSlots: 1,
+    basePay: 2800,
+    xpReward: 34,
+    skillTraining: { skill: 'social', xp: 12 },
+    reputationReward: 4,
+    requirements: { minReputation: 200 },
   },
 ]
 

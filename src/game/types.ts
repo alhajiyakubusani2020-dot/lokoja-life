@@ -569,6 +569,76 @@ export interface CalendarState {
   }
 }
 
+
+/* -------------------------------- M12 — ladder ------------------------------ */
+
+/**
+ * M12 — THE LADDER. The life above the hustle: education (FUL's semester
+ * clock — only PARTICIPATION persists, the strikes and phases derive from
+ * the day), housing (ownership, furnishing, the rent book), and the JAPA
+ * document gauntlet. Pure data — the laws live in systems/education.ts,
+ * housing.ts and japa.ts.
+ */
+export interface EducationState {
+  enrolled: boolean
+  /** the semester in session (1..semestersToGraduate; repeats on a fail) */
+  semester: number
+  /** absolute day the current semester started */
+  semesterStartDay: number
+  /** lectures attended this semester */
+  lecturesDone: number
+  /** absolute day of the last lecture (one per day) */
+  lastLectureDay: number
+  /** the absolute semester index the Dean's grant last paid (0 = never) */
+  lastGrantSemester: number
+  examsPassed: number
+  failedExams: number
+  graduated: boolean
+  /** absolute day of the convocation (null until the final exam passes) */
+  convocationDay: number | null
+  convocationAttended: boolean
+  stats: { lectures: number; semestersPassed: number; examSits: number }
+}
+
+export interface HousingState {
+  /** the owned property id (null = still renting the basic room) */
+  owned: string | null
+  /** propertyId → furnishing tier (1-3) */
+  furnishing: Record<string, number>
+  /** day through which the rent book is settled */
+  rentPaidThrough: number
+  /** the last day a cycle POSTED (each cycle lands once, paid or not) */
+  lastPostedDay: number
+  /** unpaid rent waiting for the landlord */
+  rentOwed: number
+  /** the landlord's live wahala (null = quiet compound) */
+  wahala: { day: number; kind: string; cost: number; note: string } | null
+  stats: { rentPaid: number; wahalaResolved: number; cyclesLate: number }
+}
+
+export interface JapaState {
+  /** day the NIMC slip is ready for collection (0 = not requested) */
+  nimcReadyDay: number
+  /** day the slip was collected (0 = not yet) */
+  nimcDay: number
+  passportReadyDay: number
+  passportDay: number
+  /** the street agent's ledger */
+  agentTries: number
+  agentScams: number
+  clearanceDay: number
+  policeDay: number
+  /** day of THE SEND-OFF (0 = still here) */
+  flownDay: number
+  /** day the first remittance landed (0 = not yet) */
+  remitDay: number
+  /** MOPOL: police shifts served + the escort detail's book */
+  policeShifts: number
+  sirenUntilDay: number
+  lastEscortDay: number
+  stats: { escorts: number; escortEarned: number }
+}
+
 /* --------------------------------- Settings -------------------------------- */
 
 export interface GameSettings {
@@ -671,6 +741,10 @@ export interface GameSave {
   calendar: CalendarState
   /** M11 — the rivers: sandbags, walkways, tolls, the canoe, the rescue bowl */
   rivers: RiversState
+  /** M12 — the ladder: education, housing, and the JAPA gauntlet */
+  education: EducationState
+  housing: HousingState
+  japa: JapaState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

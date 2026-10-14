@@ -20,6 +20,7 @@ import { LivingScene } from '../LivingScene'
 import { ChaosBanner } from '../ChaosBanner'
 import { FestivalBanner } from '../FestivalBanner'
 import { RiversBanner } from '../RiversBanner'
+import { LadderBanner } from '../LadderBanner'
 import { GoalsCard, OnboardingCard } from '../CasualShell'
 import { GuestGate } from '../GuestGate'
 import { MoneyPop, Shockwave } from '../Juice'
@@ -103,6 +104,9 @@ function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
 
       {/* ---- M11 — the rivers awake: the Niger's surge, one glance ---- */}
       <RiversBanner />
+
+      {/* ---- M12 — the ladder: education, housing, JAPA, one glance ---- */}
+      <LadderBanner />
 
       {/* ---- M9 — the casual shell: learn the streets, then today's goals ---- */}
       <OnboardingCard />
