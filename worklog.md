@@ -656,3 +656,23 @@ Work Log:
 Stage Summary:
 - Roadmap v2 ratified; numbering collision resolved (internal M8+ continues; master-plan names mapped)
 - Next build target per doctrine: M8 THE CHAOS ENGINE (rides civic/biz/weather infra — cheapest viral fire, IS the launch event)
+
+---
+Task ID: PLAN-3
+Agent: Main Agent (Super Z)
+Task: Add THE GUEST LOOP (play-first, login-to-continue) to ROADMAP.md per user directive
+
+Work Log:
+- Counter-doctrine #2 updated: no account to START (M16) + Guest Loop login-to-continue (M9)
+- M9 CASUAL SHELL now carries the Guest Loop as a first-class block: guest plays instantly → tours starter
+  environment → first hustle/₦ → GATE on forward progression → phone OTP/Google/email login → guest save
+  MERGES into account (never-lose-progress) → unlocks cloud save, streaks, leaderboards, teleport claims, Live Nation eligibility
+- M14 FORTRESS: cloud = signed backup/leaderboards for logged-in accounts only; guests stay local/offline
+- M16 PWA: Guest Loop offline-first — login + sync whenever a connection appears
+- M17 LIVE NATION: identity arrives free from the Guest Loop; no separate multiplayer signup ever
+- M13 FAMILY SHIELD: minor accounts parent-PIN-created, zero data collection, adult contact blocked in graph
+
+Stage Summary:
+- ROADMAP.md v2.1 ratified with the Guest Loop threaded through M9/M13/M14/M16/M17
+- Loop: TAP → PLAY AS GUEST → see the environment → GATE → LOGIN → keep going, nothing lost
+- Next build target unchanged: M8 THE CHAOS ENGINE

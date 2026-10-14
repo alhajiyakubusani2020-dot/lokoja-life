@@ -16,7 +16,8 @@
 1. **Public awareness** → We never out-spend; we out-identity. Every share carries proof ("this is REAL
    Lokoja — find your street"). WhatsApp-first share engine (M15), 3-second PWA link (M16), City expansion
    votes (M18), FUL ground-zero quest (M12), real-vs-render clips (photo mode already shipped).
-2. **Casual appeal** → Friction war, not feature war. <3s load, no download, no account (M16) + 60-second
+2. **Casual appeal** → Friction war, not feature war. <3s load, no download, no account to START (M16) +
+   THE GUEST LOOP — play first, login-to-continue, never a wall at the door (M9) + 60-second
    hustle loops, one-tap daily goals, Chill Mode, first-₦-in-60s onboarding (M9).
 3. **Player familiarity** → Mirror the genre vocabulary they already know (joystick ✓, go→do→earn→flex,
    okada→Benz ladder), then give depth Lagos Life can't (civic mesh, seasons, honest economy). M9 + M12.
@@ -36,6 +37,14 @@
 ### M9 — THE CASUAL SHELL (Beat Lagos Life: casual + familiarity) — size M — NEW
 - 60-second hustle loops (one gig, one dish, one collection), one-tap daily goal cards on the dashboard,
   Chill Mode (no survival pressure), first-5-minutes arc: drive okada → first ₦ → first fit.
+- **THE GUEST LOOP (play-first, login-to-continue):** every new user plays INSTANTLY as a guest — no
+  wall, no form, no account. They tour the starter environment, run the first hustle, earn the first ₦.
+  The GATE fires only when they try to move forward past that environment (first map travel beyond the
+  starter zone / first day roll / first ₦ — exact trigger tuned by playtest data): a friendly in-world
+  prompt — "Lokoja knows your face. Claim your name to keep going." Login via phone OTP / Google / email.
+  Guest save MERGES into the account (never-lose-progress law) — nothing earned is lost. Accounts unlock:
+  cloud save, streaks, leaderboards, teleport-claim rewards, and Live Nation eligibility (M17). Kids'
+  accounts are parent-PIN-created and managed (M13) — zero minor data collection.
 - Juice pass: money-pop particles, level-up shockwave, market-day combo streaks. Familiar mission
   vocabulary (go → do → earn → flex). Every later milestone ships casual-first through this shell.
 
@@ -61,13 +70,17 @@
 ### M13 — FAMILY SHIELD (Master M3) — size M — the family moat
 - Kids (6–12): no crime path, "Spot the Scammer" literacy games, preset-emote socials only. Teen (13–17):
   education-first, hustles yes, crime locked. Adult: everything. Parent PIN gates tiers. Elder mode: large
-  text, high contrast, reduced motion, slow pacing. Zero minor data, no accounts. One download, three
-  generations — Lagos Life structurally cannot follow.
+  text, high contrast, reduced motion, slow pacing. Zero minor data collection: a minor's Guest Loop
+  account (M9) can only be created behind the Parent PIN, collects nothing, and can never be contacted by
+  adult accounts (blocked in the graph — structurally impossible). One download, three generations —
+  Lagos Life structurally cannot follow.
 
 ### M14 — FORTRESS (Master M6, the real one) — size M — prerequisite for virality + trading
 - HMAC-signed saves + tamper rollback, monotonic kobo-chain ledger, atomic double-buffer writes, income
   ceilings + rate limits + anomaly rollback, compiled constants, cheat-seed CI suite. Builds on the existing
   deterministic kernel + save v8 migration ladder.
+- Optional cloud = signed backup + leaderboards for logged-in accounts ONLY (the Guest Loop's graduates,
+  M9) — guests stay fully local, offline, zero server dependency.
 
 ### M15 — TELEPORT & PULSE + THE AWARENESS WAR (Master M7) — size M — rides M14 signatures
 - Signed ~100B teleport URLs for any moment, SSR OG cards that look like screenshots, ghost replays
@@ -79,11 +92,13 @@
 - Installable offline-first PWA <30MB, service worker, delta saves, <3s first load on 3G, skeletons, lazy
   3D. CI gates: TTI<3s, interaction<100ms, memory<300MB, Lighthouse + responsive screenshot matrix
   (360/390/768/1280/1920) on every milestone. Real 2GB RAM Android verification (device law already built
-  in M7). The "Zero Data / 3-Second" shock that wins WhatsApp.
+  in M7). The "Zero Data / 3-Second" shock that wins WhatsApp. The Guest Loop works offline-first:
+  guests play with zero network; login + cloud sync happen whenever a connection appears.
 
 ### M17 — LIVE NATION (Master M7.5) — size XL — rides M14 ledger signatures
-- Tiered protected chat: Kids = preset phrases/emotes ONLY; Teens = moderated group text; Adults = full,
-  no external links ever. Presence + join-teleport. Streams: spectate stalls/regattas/weddings, broadcast
+- Identity arrives FREE from the Guest Loop (M9): every player past the gate is multiplayer-ready — no
+  separate signup ever. Tiered protected chat: Kids = preset phrases/emotes ONLY; Teens = moderated group
+  text; Adults = full, no external links ever. Presence + join-teleport. Streams: spectate stalls/regattas/weddings, broadcast
   with viewers-as-crowd, city broadcasts (governor's address, election night). Associations with
   ledger-secured treasuries, co-op businesses with contracts (disputes → in-game court), player trading as
   signed ledger events, football matches/convoys/festival crowds. Real-player AJO/ESUSU circles with
