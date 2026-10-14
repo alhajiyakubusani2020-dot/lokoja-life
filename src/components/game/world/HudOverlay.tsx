@@ -18,7 +18,8 @@ import { useGameStore } from '@/game/store/useGameStore'
 import { LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
 import { NPCS } from '@/game/data/npcs'
 import { HUSTLES } from '@/game/data/hustles'
-import { WORLD3D, FOOD, INTERIOR } from '@/game/data/config'
+import { WORLD3D, FOOD, INTERIOR, WEATHER_META } from '@/game/data/config'
+import { isNightMarketOpen, isRainSky } from '@/game/systems/seasons'
 import { ANCHORS, ANCHOR_BY_ID, POINTS_OF_INTEREST, RIVERS, WORLD_HALF } from '@/game/world3d/layout'
 import { INTERIOR_BY_ID, type HotspotKind, type InteriorDef } from '@/game/world3d/interiors'
 import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
@@ -487,7 +488,7 @@ export function HudOverlay({
         const marketA = ANCHOR_BY_ID['kpata-market']
         ambience.update({
           night: world.timeOfDay === 'night',
-          rain: world.weather === 'rain',
+          rain: isRainSky(world.weather),
           indoors: interiorRef.current !== null,
           river: Math.hypot(riverA.x - playerPos.x, riverA.z - playerPos.z),
           market: Math.hypot(marketA.x - playerPos.x, marketA.z - playerPos.z),
@@ -670,7 +671,8 @@ export function HudOverlay({
             </span>
             <span className="flex items-center gap-1">
               <WeatherIcon name={world.weather} size={11} className="shrink-0 text-[#ffd88a]" />
-              {world.weather === 'night-clear' ? 'Clear' : world.weather.charAt(0).toUpperCase() + world.weather.slice(1)}
+              {/* M6 — the one weather dictionary */}
+              {WEATHER_META[world.weather]?.label ?? world.weather}
             </span>
           </span>
           <span className="flex items-center gap-1 whitespace-nowrap rounded-full bg-black/40 px-2.5 py-1 text-[10.5px] font-bold text-white/90 backdrop-blur-md">
@@ -1252,6 +1254,7 @@ function ActivitiesSheet({
 }) {
   const cash = useGameStore((s) => s.player?.cash ?? 0)
   const hunger = useGameStore((s) => s.player?.needs.hunger ?? 100)
+  const timeOfDay = useGameStore((s) => s.world?.timeOfDay ?? 'morning')
   const isHome = loc.id === 'home'
   // Stage 4 eating loop — real meals (food strip) + market groceries (Kpata)
   const isFoodSpot = loc.id === 'food-area' || loc.id === 'kpata-market'
@@ -1271,6 +1274,8 @@ function ActivitiesSheet({
             title={loc.id === 'food-area' ? '🍲 Mama’s menu — eat now' : '🧺 Market fresh — buy foodstuff'}
             atLocationId={loc.id}
             onEat={onEat}
+            // M6 — the outdoor food strip hosts the night stalls after dark
+            nightStalls={loc.id === 'food-area' && isNightMarketOpen(timeOfDay)}
           />
         ))}
 
@@ -1375,14 +1380,19 @@ function MealMenu({
   title,
   atLocationId,
   onEat,
+  nightStalls = false,
 }: {
   title: string
   atLocationId: string
   onEat: (mealKey: string, atLocationId?: string) => void
+  /** M6 — the OUTDOOR food-strip sheet only: the night stalls wake after dark */
+  nightStalls?: boolean
 }) {
   const cash = useGameStore((s) => s.player?.cash ?? 0)
   const hunger = useGameStore((s) => s.player?.needs.hunger ?? 100)
   const mealPriceAt = useGameStore((s) => s.mealPriceAt)
+  const timeOfDay = useGameStore((s) => s.world?.timeOfDay ?? 'morning')
+  const nightOpen = nightStalls && atLocationId === 'food-area' && isNightMarketOpen(timeOfDay)
   return (
     <div className="rounded-xl border border-black/[0.06] bg-[var(--lko-gold-soft)]/40 p-2.5">
       <p className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
@@ -1393,6 +1403,8 @@ function MealMenu({
       </p>
       <div className="flex flex-col gap-1.5">
         {FOOD.meals.map((m) => {
+          // M6 — night dishes live at the night stalls, and only after dark
+          if (m.night) return null
           const price = mealPriceAt(m.key, atLocationId)
           const afford = cash >= price
           return (
@@ -1418,6 +1430,40 @@ function MealMenu({
             </button>
           )
         })}
+        {nightOpen && (
+          <>
+            <p className="mt-1 flex items-center justify-between rounded-lg bg-[#0a1230] px-2.5 py-1.5 text-[10.5px] font-extrabold text-[#ffd88a]">
+              <span>🌙 Night market dey open</span>
+              <span className="font-bold opacity-80">late plates, fair price</span>
+            </p>
+            {FOOD.meals.filter((m) => m.night).map((m) => {
+              const price = mealPriceAt(m.key, atLocationId)
+              const afford = cash >= price
+              return (
+                <button
+                  key={m.key}
+                  disabled={!afford}
+                  onClick={() => {
+                    audio.play('click')
+                    onEat(m.key, atLocationId)
+                  }}
+                  className={`lko-press flex min-h-[48px] items-center gap-2.5 rounded-lg border border-[#0a1230]/15 bg-[#0a1230]/[0.04] px-2.5 py-1.5 text-left ${
+                    afford ? '' : 'cursor-not-allowed opacity-55'
+                  }`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-extrabold leading-tight">🌙 {m.label}</span>
+                    <span className="block truncate text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">{m.detail}</span>
+                  </span>
+                  <span className="flex shrink-0 flex-col items-end">
+                    <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(price)}</span>
+                    <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">+{m.hunger} 🍲</span>
+                  </span>
+                </button>
+              )
+            })}
+          </>
+        )}
       </div>
     </div>
   )

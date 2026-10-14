@@ -21,6 +21,7 @@ import { ECONOMY, FLEET, TRAVEL } from '../data/config'
 import { LOCATIONS, LOCATION_BY_ID, type LokojaLocation } from '../data/locations'
 import { canPersonalReach, publicCounterpartId } from './garage'
 import { calculateTravel } from './travel'
+import { weatherBlocksLocation, isRainSky } from './seasons'
 import { civicHash } from './civic'
 import type { OwnedVehicle, VehicleModel, Weather, FleetState } from '../types'
 
@@ -55,30 +56,35 @@ export const GIG_ORIGIN_ID = 'transport-area'
 /**
  * Destinations a model can be hired to: real map locations the vehicle can
  * physically reach (keke-class roads for bikes/trikes, taxi roads for cars),
- * excluding the park itself and anything the player's level cannot enter —
- * a locked destination would strand the drop-off.
+ * excluding the park itself, anything the player's level cannot enter —
+ * a locked destination would strand the drop-off — and (M6) any location
+ * today's weather closes: a flood day strands nobody at the riverfront.
  */
-export function gigDestinationsFor(model: VehicleModel, level: number): LokojaLocation[] {
+export function gigDestinationsFor(model: VehicleModel, level: number, weather?: Weather): LokojaLocation[] {
   return LOCATIONS.filter(
     (l) =>
       l.id !== GIG_ORIGIN_ID &&
       l.unlockLevel <= level &&
-      canPersonalReach(l, model),
+      canPersonalReach(l, model) &&
+      !(weather && weatherBlocksLocation(weather, l.id)),
   )
 }
 
 /**
  * What the passenger pays for a hired run to `dest`: the PUBLIC counterpart
  * fare (base + perKm × km — the number the whole city knows) × the hired-run
- * multiplier, × the rain premium when the sky is open. Rounded to the fare
- * step so the board never shows kobo-dust numbers.
+ * multiplier, × the rain premium when the sky is open (M6: a storm or a
+ * flood day stacks the rough-sky bonus on top — the harder the sky, the
+ * fatter the pay). Rounded to the fare step so the board never shows
+ * kobo-dust numbers.
  */
 export function gigPayout(model: VehicleModel, dest: LokojaLocation, weather: Weather): number {
   const park = LOCATION_BY_ID[GIG_ORIGIN_ID]
   const km = Math.hypot(dest.mapX - park.mapX, dest.mapY - park.mapY) * TRAVEL.kmPerMapUnit
   const pub = ECONOMY.transport[publicCounterpartId(model)]
-  const rain = weather === 'rain' ? (FLEET.rainPayout[model] ?? 1) : 1
-  const raw = (pub.cost.base + pub.cost.perKm * km) * FLEET.payoutMult * rain
+  const rain = isRainSky(weather) ? (FLEET.rainPayout[model] ?? 1) : 1
+  const rough = isRainSky(weather) ? (FLEET.roughSkyBonus[weather] ?? 1) : 1
+  const raw = (pub.cost.base + pub.cost.perKm * km) * FLEET.payoutMult * rain * rough
   return Math.round(raw / TRAVEL.fareRounding) * TRAVEL.fareRounding
 }
 
@@ -95,7 +101,7 @@ export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, w
   const order: VehicleModel[] = ['okada', 'keke', 'taxi', 'danfo']
   for (const model of order) {
     if (!vehicles.some((v) => v.model === model)) continue
-    const dests = gigDestinationsFor(model, level)
+    const dests = gigDestinationsFor(model, level, weather)
     if (dests.length === 0) continue
     let prevToId: string | null = null
     for (let i = 0; i < FLEET.gigsPerModelPerDay; i++) {
@@ -123,7 +129,7 @@ export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, w
         energyCost: plan.energyCost,
         minutes: plan.minutes,
         distanceKm: plan.distanceKm,
-        rainPremium: weather === 'rain',
+        rainPremium: isRainSky(weather),
       })
     }
   }

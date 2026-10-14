@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
+import { isRainSky, isHeavySky } from '@/game/systems/seasons'
 import { ANCHOR_BY_ID, DISTRICTS, heightAt, makeRng, NPC_ZONES, POINTS_OF_INTEREST, TRAFFIC_LOOPS,
 } from '@/game/world3d/layout'
 import { ALL_DOORS } from '@/game/world3d/schools'
@@ -1005,6 +1006,13 @@ export function Traffic({ timeOfDay }: { timeOfDay: TimeOfDay }) {
 export function Rain({ weather }: { weather: Weather }) {
   const COUNT = 620
   const ref = useRef<THREE.Points>(null)
+  // M6 — the wet-sky family: rain, storm and flood all shower; a storm
+  // day falls harder and darker, a flood day harder still.
+  const active = isRainSky(weather)
+  const heavy = isHeavySky(weather)
+  const fallSpeed = weather === 'storm' ? 40 : weather === 'flood' ? 36 : 27
+  const dropSize = heavy ? 0.12 : 0.09
+  const dropOpacity = weather === 'storm' ? 0.72 : weather === 'flood' ? 0.66 : 0.62
   const geo = useMemo(() => {
     const g = new THREE.BufferGeometry()
     const pos = new Float32Array(COUNT * 3)
@@ -1019,10 +1027,10 @@ export function Rain({ weather }: { weather: Weather }) {
 
   useFrame((state, dt) => {
     const pts = ref.current
-    if (!pts || weather !== 'rain') return
+    if (!pts || !active) return
     const attr = pts.geometry.attributes.position as THREE.BufferAttribute
     const arr = attr.array as Float32Array
-    const fall = 27 * Math.min(dt, 0.05)
+    const fall = fallSpeed * Math.min(dt, 0.05)
     for (let i = 0; i < COUNT; i++) {
       arr[i * 3 + 1] -= fall
       if (arr[i * 3 + 1] < 0) {
@@ -1040,10 +1048,10 @@ export function Rain({ weather }: { weather: Weather }) {
     )
   })
 
-  if (weather !== 'rain') return null
+  if (!active) return null
   return (
     <points ref={ref} geometry={geo} frustumCulled={false}>
-      <pointsMaterial color="#aebfc9" size={0.09} transparent opacity={0.62} sizeAttenuation />
+      <pointsMaterial color="#aebfc9" size={dropSize} transparent opacity={dropOpacity} sizeAttenuation />
     </points>
   )
 }

@@ -111,6 +111,39 @@ export function getAtmosphere(timeOfDay: TimeOfDay, weather: Weather): Atmospher
     base.skyTop = '#8a9a94'
     base.skyHorizon = '#c2c9b4'
     base.stars = 0
+  } else if (weather === 'harmattan') {
+    // M6 — the Sahara's dust rides the dry season: a pale ochre wash, the
+    // sun a dim orange coin, visibility cut hard. The city feels muffled.
+    base.sunIntensity *= 0.62
+    base.sunColor = '#e8a45e'
+    base.hemiIntensity *= 0.9
+    base.fogDensity *= 2.6
+    base.fogColor = '#d9c09a'
+    base.skyTop = '#b7a37e'
+    base.skyHorizon = '#e3cda4'
+    base.stars = 0
+  } else if (weather === 'storm') {
+    // M6 — a confluence thunderstorm: rain turned to eleven. Near-dark
+    // noon, green-grey sky, the town's windows fighting back.
+    base.sunIntensity *= 0.24
+    base.hemiIntensity *= 0.7
+    base.fogDensity *= 2.9
+    base.fogColor = '#6e7d78'
+    base.skyTop = '#3c4a4a'
+    base.skyHorizon = '#77857c'
+    base.nightGlow = Math.max(base.nightGlow, 0.55)
+    base.stars = 0
+  } else if (weather === 'flood') {
+    // M6 — flood watch: the rivers own the day. Heavy grey-green veil,
+    // soaked light, the town holding its breath.
+    base.sunIntensity *= 0.32
+    base.hemiIntensity *= 0.74
+    base.fogDensity *= 2.4
+    base.fogColor = '#7d8a80'
+    base.skyTop = '#44524e'
+    base.skyHorizon = '#8a9488'
+    base.nightGlow = Math.max(base.nightGlow, 0.5)
+    base.stars = 0
   } else if (weather === 'night-clear' && timeOfDay === 'night') {
     base.stars = 1
   }

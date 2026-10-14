@@ -186,6 +186,11 @@ export function WorldTab({
       timeOfDay: () => useGameStore.getState().world?.timeOfDay ?? 'morning',
       /** M4 E2E — real-device fps capture: sample fresh frames, return the report */
       fpsReport: (ms?: number) => sampleFor(ms ?? 3000, 'e2e capture'),
+      /** M6 E2E — force today's sky (storm / harmattan / flood shots must be deterministic) */
+      forceWeather: (w: string) => {
+        const s = useGameStore.getState()
+        if (s.world) useGameStore.setState({ world: { ...s.world, weather: w as import('@/game/types').Weather } })
+      },
     }
     return () => {
       delete (window as unknown as { __lkl?: unknown }).__lkl

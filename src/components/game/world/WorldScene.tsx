@@ -14,8 +14,9 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import type { AvatarConfig, TimeOfDay, Weather } from '@/game/types'
-import { makeRng } from '@/game/world3d/layout'
+import { ANCHOR_BY_ID, makeRng } from '@/game/world3d/layout'
 import { atmoLive, getAtmosphere, sunVec } from './atmosphere'
+import { isNightMarketOpen } from '@/game/systems/seasons'
 import { WorldTerrain } from './WorldTerrain'
 import { CityMesh } from './CityMesh'
 import { SchoolMesh } from './SchoolMesh'
@@ -300,7 +301,64 @@ function AtmosphereController({
   )
 }
 
-/* --------------------------------- the scene ----------------------------------- */
+/* --------------------------- M6 — night market glow --------------------------- */
+
+/**
+ * The Food Strip turns after dark: two strings of warm bulbs strung
+ * across the stalls and two glowing stall signs. Presentation only —
+ * every bulb is an unlit emissive sphere, no real lights added (the
+ * night sky already carries sodium pools). Hidden outside evening/night
+ * by the SAME law the menu reads — isNightMarketOpen.
+ */
+function NightMarketGlow({ timeOfDay }: { timeOfDay: TimeOfDay }) {
+  const open = isNightMarketOpen(timeOfDay)
+  const anchor = ANCHOR_BY_ID['food-area']
+  const bulbs = useMemo(() => {
+    const out: Array<{ x: number; y: number; z: number }> = []
+    // two sagging bulb strings across the stall row (13 bulbs each)
+    for (let row = 0; row < 2; row++) {
+      const z = anchor.z + (row === 0 ? -6.5 : 6.5)
+      for (let i = 0; i < 13; i++) {
+        const t = i / 12
+        out.push({
+          x: anchor.x - 11 + 22 * t,
+          y: 3.1 - Math.sin(t * Math.PI) * 0.75,
+          z,
+        })
+      }
+    }
+    return out
+  }, [anchor.x, anchor.z])
+
+  if (!open) return null
+  return (
+    <group>
+      {/* the bulb strings */}
+      {bulbs.map((b, i) => (
+        <mesh key={i} position={[b.x, b.y, b.z]}>
+          <sphereGeometry args={[0.16, 6, 5]} />
+          <meshBasicMaterial color="#ffd88a" toneMapped={false} />
+        </mesh>
+      ))}
+      {/* the two strings' wires (thin dark boxes, honest cheap) */}
+      {[-6.5, 6.5].map((dz, i) => (
+        <mesh key={`w${i}`} position={[anchor.x, 3.1, anchor.z + dz]}>
+          <boxGeometry args={[22, 0.05, 0.05]} />
+          <meshBasicMaterial color="#1a1a22" />
+        </mesh>
+      ))}
+      {/* two glow signs marking the stall row */}
+      {[-8, 8].map((dx, i) => (
+        <mesh key={`s${i}`} position={[anchor.x + dx, 2.4, anchor.z + (i === 0 ? -10 : 10)]}>
+          <boxGeometry args={[2.6, 1.1, 0.14]} />
+          <meshBasicMaterial color="#ff9e5e" toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+/* --------------------------------- the scene ---------------------------------- */
 
 export function WorldScene({
   avatar,
@@ -384,6 +442,8 @@ export function WorldScene({
       <Npcs timeOfDay={timeOfDay} onGist={onGist} />
       <Traffic timeOfDay={timeOfDay} />
       <Rain weather={weather} />
+      {/* M6 — the food strip turns after dark: night-market bulbs */}
+      <NightMarketGlow timeOfDay={timeOfDay} />
       {/* INC 4 — the city breathes: birds by day, cooking smoke at the food strip */}
       <Birds timeOfDay={timeOfDay} />
       <SmokeWisps />

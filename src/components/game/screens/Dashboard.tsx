@@ -47,7 +47,7 @@ import { audio } from '@/game/systems/audio'
 import { formatNaira, nextReputationTier, reputationTier, skillCap, xpToNextLevel } from '@/game/systems/progression'
 import { skillXpToNext, SKILL_META } from '@/game/systems/skills'
 import { conditionSummary } from '@/game/systems/needs'
-import { LEVEL_UNLOCKS } from '@/game/data/config'
+import { LEVEL_UNLOCKS, WEATHER_META } from '@/game/data/config'
 import { FOODS } from '@/game/data/foods'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
@@ -145,7 +145,8 @@ function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
           </Chip>
           <Chip className="bg-black/30 text-white backdrop-blur-sm">
             <WeatherIcon name={world.weather} size={13} className="text-[#ffd88a]" />
-            <span>{world.weather === 'night-clear' ? 'Clear' : world.weather === 'rain' ? 'Rain' : world.weather === 'cloudy' ? 'Cloudy' : 'Sunny'}</span>
+            {/* M6 — the one weather dictionary: no hand-rolled label ternaries */}
+            <span>{WEATHER_META[world.weather]?.label ?? world.weather}</span>
           </Chip>
         </div>
       </section>

@@ -12,7 +12,7 @@ import type { GameSave, PlayerState, CivicState, FleetState } from '../types'
 import { freshCivicState } from './civic'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 6
+const SAVE_VERSION = 7
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -76,6 +76,13 @@ function deserialize(raw: string): GameSave | null {
         save.version = 6
         break
       case 6:
+        // v6 → v7 (M6 — LIVING WORLD): the relationship track gains the
+        // gift/hangout cooldowns (lastGiftDay / lastHangoutDay). Optional
+        // fields defaulted below — a v6 player wakes up with no gifts
+        // given and no hangouts owed, everything else untouched.
+        save.version = 7
+        break
+      case 7:
         // current version
         break
       default:
@@ -109,6 +116,13 @@ function deserialize(raw: string): GameSave | null {
     if (!p.vehicles) p.vehicles = []
     if (typeof p.bankBalance !== 'number') p.bankBalance = 0
     if (!p.relationships) p.relationships = {}
+
+    // --- M6 social-depth fields (missing on v6-and-older saves) ---
+    for (const key of Object.keys(p.relationships)) {
+      const r = p.relationships[key]
+      if (typeof r.lastGiftDay !== 'number') r.lastGiftDay = 0
+      if (typeof r.lastHangoutDay !== 'number') r.lastHangoutDay = 0
+    }
 
     // --- M3 businesses (missing on v4-and-older saves; legacy entries upgraded) ---
     if (!p.businesses) p.businesses = []

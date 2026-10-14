@@ -23,6 +23,8 @@ import { ECONOMY, TRAVEL, WORLD3D, FOOD } from '@/game/data/config'
 import { LOCATIONS, LOCATION_BY_ID, type LokojaLocation } from '@/game/data/locations'
 import { bizAtLocation } from '@/game/systems/biz'
 import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
+import { WEATHER_META } from '@/game/data/config'
+import { weatherBlocksLocation, isNightMarketOpen } from '@/game/systems/seasons'
 import { BizBlock } from '../BizBlock'
 import { FleetBlock } from '../FleetBlock'
 import type { TransportId } from '@/game/types'
@@ -40,12 +42,11 @@ import {
   ArrowRightIcon,
 } from '../icons'
 
-const WEATHER_HINT: Record<string, string | null> = {
-  rain: 'Rain is falling — trips take a bit longer.',
-  sunny: null,
-  cloudy: null,
-  'night-clear': 'Night roads are quiet.',
-}
+// M6 — one dictionary for every weather word. Tips come straight from
+// WEATHER_META, so a new sky can never ship with a silent HUD.
+const WEATHER_HINT: Record<string, string | null> = Object.fromEntries(
+  Object.entries(WEATHER_META).map(([k, v]) => [k, v.tip]),
+)
 
 /* ------------------------------- marker -------------------------------- */
 
@@ -270,8 +271,12 @@ export function MapScreen({
   const isSelectedLocked = !!selected && player.level < selected.unlockLevel
 
   // travel options for the selected destination — public modes + YOUR rides (M4)
+  // M6 — a flood day closes the riverfront: the Confluence simply has no
+  // travel rows today, and the sheet says why.
+  const flooded = !!selected && weatherBlocksLocation(world.weather, selected.id)
   const plans = useMemo(() => {
     if (!selected || isSelectedCurrent || isSelectedLocked) return []
+    if (weatherBlocksLocation(world.weather, selected.id)) return []
     return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles)
   }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles])
 
@@ -335,6 +340,11 @@ export function MapScreen({
         <p className="mb-2 flex items-center gap-1.5 px-1 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
           <WeatherIcon name={world.weather} size={13} />
           {WEATHER_HINT[world.weather]}
+        </p>
+      )}
+      {world.weather === 'flood' && (
+        <p className="mb-2 flex items-center gap-1.5 rounded-xl border border-[var(--lko-river)]/30 bg-[var(--lko-river-soft)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--lko-river)]">
+          🌊 Flood watch: the Confluence riverfront is CLOSED today — journeys crawl, food prices climb.
         </p>
       )}
 
@@ -482,6 +492,8 @@ export function MapScreen({
                       </p>
                       <div className="flex flex-col gap-1.5">
                         {FOOD.meals.map((m) => {
+                          // M6 — night dishes wake only at the night market
+                          if (m.night) return null
                           const price = mealPriceAt(m.key, selected.id)
                           const afford = player.cash >= price
                           return (
@@ -507,6 +519,41 @@ export function MapScreen({
                             </button>
                           )
                         })}
+                        {/* M6 — the night market: food strip stalls that wake after dark */}
+                        {selected.id === 'food-area' && isNightMarketOpen(world.timeOfDay) && (
+                          <>
+                            <p className="mt-1.5 flex items-center justify-between rounded-lg bg-[#0a1230] px-2.5 py-1.5 text-[10.5px] font-extrabold text-[#ffd88a]">
+                              <span>🌙 Night market dey open</span>
+                              <span className="font-bold opacity-80">late plates, fair price</span>
+                            </p>
+                            {FOOD.meals.filter((m) => m.night).map((m) => {
+                              const price = mealPriceAt(m.key, selected.id)
+                              const afford = player.cash >= price
+                              return (
+                                <button
+                                  key={m.key}
+                                  disabled={!afford || isTravelling}
+                                  onClick={() => {
+                                    audio.play('click')
+                                    eatMeal(m.key, selected.id)
+                                  }}
+                                  className={`lko-press flex min-h-[48px] items-center gap-2.5 rounded-lg border border-[#0a1230]/15 bg-[#0a1230]/[0.04] px-2.5 py-1.5 text-left ${
+                                    afford ? '' : 'cursor-not-allowed opacity-55'
+                                  }`}
+                                >
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-[12.5px] font-extrabold leading-tight">🌙 {m.label}</span>
+                                    <span className="block truncate text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">{m.detail}</span>
+                                  </span>
+                                  <span className="flex shrink-0 flex-col items-end">
+                                    <span className="lko-num text-[12px] font-extrabold text-[var(--lko-green)]">{formatNaira(price)}</span>
+                                    <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">+{m.hunger} hunger</span>
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
@@ -567,29 +614,35 @@ export function MapScreen({
                   <h4 className="lko-num mb-1.5 mt-3 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[var(--lko-ink-soft)]">
                     Travel to {selected.name}? ({plans[0]?.plan.distanceKm.toFixed(1)} km from {origin.shortName})
                   </h4>
-                  <div className="flex flex-col gap-2">
-                    {plans.map((option) => {
-                      const tooPoor = player.cash < option.plan.cost
-                      const tooTired = player.needs.energy < option.plan.energyCost
-                      return (
-                        <TravelOptionRow
-                          key={option.transport}
-                          plan={option.plan}
-                          label={option.label}
-                          transport={option.transport}
-                          personal={option.personal}
-                          emoji={option.emoji}
-                          disabled={tooPoor || tooTired}
-                          disabledReason={
-                            tooPoor
-                              ? `You need ${formatNaira(option.plan.cost)} for this ${option.personal ? 'fuel' : 'fare'}`
-                              : 'You are too tired for this trip'
-                          }
-                          onConfirm={() => confirmTravel(option.transport)}
-                        />
-                      )
-                    })}
-                  </div>
+                  {flooded ? (
+                    <p className="mt-1 flex items-center gap-1.5 rounded-xl border border-[var(--lko-river)]/30 bg-[var(--lko-river-soft)] px-3 py-2.5 text-[12px] font-bold text-[var(--lko-river)]">
+                      🌊 Flood don block the road — the riverfront is closed today. Come back when the water drop.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {plans.map((option) => {
+                        const tooPoor = player.cash < option.plan.cost
+                        const tooTired = player.needs.energy < option.plan.energyCost
+                        return (
+                          <TravelOptionRow
+                            key={option.transport}
+                            plan={option.plan}
+                            label={option.label}
+                            transport={option.transport}
+                            personal={option.personal}
+                            emoji={option.emoji}
+                            disabled={tooPoor || tooTired}
+                            disabledReason={
+                              tooPoor
+                                ? `You need ${formatNaira(option.plan.cost)} for this ${option.personal ? 'fuel' : 'fare'}`
+                                : 'You are too tired for this trip'
+                            }
+                            onConfirm={() => confirmTravel(option.transport)}
+                          />
+                        )
+                      })}
+                    </div>
+                  )}
                 </>
               )}
 

@@ -229,6 +229,10 @@ export interface RelationshipState {
   familiarity: number
   /** absolute day of the last chat (cooldown gate) */
   lastChatDay: number
+  /** M6 — absolute day of the last gift given to this NPC (cooldown gate) */
+  lastGiftDay?: number
+  /** M6 — absolute day of the last hangout with this NPC (cooldown gate) */
+  lastHangoutDay?: number
 }
 
 /** Result of one chat exchange (Stage 5) — everything the phone/talk UI needs. */
@@ -241,13 +245,28 @@ export interface ChatOutcome {
   reply: string
   /** true when this was the first-ever chat with this NPC */
   firstMeeting: boolean
+  /** M6 — a paddy's favour: an un-accepted hustle instance the chat dropped.
+   *  NOT persisted — accept it through acceptFavorOffer or it goes cold. */
+  favorOffer?: ActiveOpportunity
 }
 
 /* ---------------------------------- World ---------------------------------- */
 
 export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night'
 
-export type Weather = 'sunny' | 'cloudy' | 'rain' | 'night-clear'
+/**
+ * M6 — LIVING WORLD: the sky beyond rain. Harmattan dust, confluence
+ * thunderstorms and Niger/Benue flood days are REAL Lokoja weather —
+ * they travel the same pipelines (travel minutes, market stress, mood)
+ * the M2 rain already uses.
+ */
+/**
+ * M6 — LIVING WORLD: the sky beyond rain. Harmattan dust, confluence
+ * thunderstorms and Niger/Benue flood days are REAL Lokoja weather —
+ * they travel the same pipelines (travel minutes, market stress, mood)
+ * the M2 rain already uses.
+ */
+export type Weather = 'sunny' | 'cloudy' | 'rain' | 'night-clear' | 'harmattan' | 'storm' | 'flood'
 
 /** Player-usable transport modes. M4: `own-*` = your garage rides (fuel, no fare). */
 export type TransportId = 'walk' | 'keke' | 'taxi' | 'own-okada' | 'own-keke' | 'own-taxi' | 'own-danfo'

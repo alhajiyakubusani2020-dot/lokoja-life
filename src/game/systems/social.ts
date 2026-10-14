@@ -1,5 +1,5 @@
 /**
- * LOKOJA LIFE — Social System (Stage 5)
+ * LOKOJA LIFE — Social System (Stage 5 + M6 depth)
  * ---------------------------------------
  * Pure functions for the familiarity/relationship track. No UI, no
  * side effects — the store applies results, components only read.
@@ -7,8 +7,14 @@
  * Model: every NPC has familiarity 0–100. Talking once per in-game day
  * moves it up. Tiers unlock warmer chat lines (data/npcChat.ts) and a
  * documented hustle-offer perk hook for the opportunities system.
+ *
+ * M6 — LIVING WORLD, social depth: gifts that really cost naira, a
+ * night-only hangout that spends a clock slot, and paddies who pay you
+ * back with real gist (favour hustles). All laws below are pure — the
+ * store applies them and the save remembers the cooldowns.
  */
 
+import { SOCIAL } from '../data/config'
 import type { RelationshipState } from '../types'
 import type { FamiliarityTier } from '../data/npcChat'
 
@@ -80,4 +86,58 @@ export function dayRoll(npcId: string, day: number): number {
     h = Math.imul(h, 16777619)
   }
   return ((h >>> 0) % 1000) / 1000
+}
+
+/* ------------------------------ M6 — social depth ----------------------------- */
+
+/* ---- gifts ---- */
+
+export type GiftDef = (typeof SOCIAL.gifts)[number]
+
+export function giftById(id: string): GiftDef | null {
+  return SOCIAL.gifts.find((g) => g.id === id) ?? null
+}
+
+/** One gift per NPC per day — the same day you chatted is fine, twice no. */
+export function canGift(state: RelationshipState | undefined, today: number): boolean {
+  if (!state?.lastGiftDay) return true
+  return today > state.lastGiftDay
+}
+
+/** The relationship after one gift — pure, NEW object. */
+export function afterGift(state: RelationshipState, gift: GiftDef, today: number): RelationshipState {
+  return {
+    ...state,
+    familiarity: Math.min(100, state.familiarity + gift.familiarity),
+    lastGiftDay: today,
+  }
+}
+
+/* ---- hangout ---- */
+
+/** One hangout per NPC per SOCIAL.hangout.cooldownDays. */
+export function canHangout(state: RelationshipState | undefined, today: number): boolean {
+  if (!state?.lastHangoutDay) return true
+  return today - state.lastHangoutDay >= SOCIAL.hangout.cooldownDays
+}
+
+/** The relationship after one hangout — pure, NEW object. */
+export function afterHangout(state: RelationshipState, today: number): RelationshipState {
+  return {
+    ...state,
+    familiarity: Math.min(100, state.familiarity + SOCIAL.hangout.familiarity),
+    lastHangoutDay: today,
+  }
+}
+
+/* ---- favours ---- */
+
+/**
+ * Does a paddy drop real gist today? Deterministic per (npc, day) —
+ * same day, same answer, reload-proof. Only familiarity ≥
+ * SOCIAL.favorTierMin (a real paddy) can roll a favour at all.
+ */
+export function favorRollsToday(familiarity: number, npcId: string, day: number): boolean {
+  if (familiarity < SOCIAL.favorTierMin) return false
+  return dayRoll(`favor:${npcId}`, day) < SOCIAL.favorChance
 }

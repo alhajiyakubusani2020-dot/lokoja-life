@@ -702,13 +702,18 @@ export function SkillIcon({ name, ...p }: { name: SkillIconKey } & IconProps) {
 
 /* ----------------------------- weather icons ---------------------------- */
 
-export type WeatherIconKey = 'sunny' | 'cloudy' | 'rain' | 'night-clear'
+export type WeatherIconKey = 'sunny' | 'cloudy' | 'rain' | 'night-clear' | 'harmattan' | 'storm' | 'flood'
 
 const WEATHER_ICONS: Record<WeatherIconKey, (p: IconProps) => ReactNode> = {
   sunny: SunIcon,
   cloudy: CloudIcon,
   rain: RainIcon,
   'night-clear': MoonIcon,
+  // M6 — the living sky: harmattan reads as a hazy sun, a thunderstorm as
+  // heavy rain, a flood day as the water that owns the riverfront
+  harmattan: SunIcon,
+  storm: RainIcon,
+  flood: ConfluenceIcon,
 }
 
 export function WeatherIcon({ name, ...p }: { name: WeatherIconKey } & IconProps) {

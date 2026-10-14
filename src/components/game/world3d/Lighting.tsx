@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { useWorldAssets, worldMood } from './assets'
+import { isRainSky, isHeavySky } from '@/game/systems/seasons'
 import type { TimeOfDay, Weather } from '@/game/types'
 
 interface SkyMood {
@@ -74,7 +75,8 @@ const MOODS: Record<TimeOfDay, SkyMood> = {
   },
 }
 
-/** Weather overlays tone the time-of-day mood down / grey it. */
+/** Weather overlays tone the time-of-day mood down / grey it.
+ *  M6 — the living sky: harmattan dust, confluence storms, flood days. */
 function weatherify(mood: SkyMood, weather: Weather): SkyMood {
   if (weather === 'sunny' || weather === 'night-clear') return mood
   const out = {
@@ -97,6 +99,34 @@ function weatherify(mood: SkyMood, weather: Weather): SkyMood {
     out.ambientIntensity = mood.ambientIntensity * 0.92
     out.fogNear = mood.fogNear * 0.55
     out.fogFar = mood.fogFar * 0.55
+  }
+  if (weather === 'harmattan') {
+    // the Sahara's dust: pale ochre air, a dim coppery sun, hard haze
+    out.sunIntensity = mood.sunIntensity * 0.6
+    out.sunColor.lerp(new THREE.Color('#e8a45e'), 0.7)
+    out.zenith.lerp(new THREE.Color('#b7a37e'), 0.66)
+    out.horizon.lerp(new THREE.Color('#e3cda4'), 0.72)
+    out.ambient.lerp(new THREE.Color('#e8d5ae'), 0.4)
+    out.fogNear = mood.fogNear * 0.42
+    out.fogFar = mood.fogFar * 0.42
+  }
+  if (weather === 'storm') {
+    // a confluence thunderstorm: rain turned to eleven
+    out.sunIntensity = mood.sunIntensity * 0.24
+    out.zenith.lerp(new THREE.Color('#3c4a4a'), 0.78)
+    out.horizon.lerp(new THREE.Color('#77857c'), 0.78)
+    out.ambientIntensity = mood.ambientIntensity * 0.8
+    out.fogNear = mood.fogNear * 0.4
+    out.fogFar = mood.fogFar * 0.4
+  }
+  if (weather === 'flood') {
+    // the rivers own the day: heavy grey-green veil
+    out.sunIntensity = mood.sunIntensity * 0.32
+    out.zenith.lerp(new THREE.Color('#44524e'), 0.74)
+    out.horizon.lerp(new THREE.Color('#8a9488'), 0.74)
+    out.ambientIntensity = mood.ambientIntensity * 0.84
+    out.fogNear = mood.fogNear * 0.45
+    out.fogFar = mood.fogFar * 0.45
   }
   return out
 }
@@ -185,7 +215,7 @@ function Stars() {
 
 /* ---------------------------------- rain ----------------------------------- */
 
-function Rain({ active }: { active: boolean }) {
+function Rain({ active, heavy = false }: { active: boolean; heavy?: boolean }) {
   const ref = useRef<THREE.Points>(null!)
   const COUNT = 420
   const AREA = 130
@@ -209,8 +239,9 @@ function Rain({ active }: { active: boolean }) {
     if (!group.current.visible) return
     const attr = ref.current.geometry.getAttribute('position') as THREE.BufferAttribute
     const arr = attr.array as Float32Array
+    const fall = (heavy ? 38 : 34) * dt
     for (let i = 0; i < COUNT; i++) {
-      arr[i * 3 + 1] -= dt * 34
+      arr[i * 3 + 1] -= fall
       if (arr[i * 3 + 1] < 0) arr[i * 3 + 1] = 44 + Math.random() * 4
     }
     attr.needsUpdate = true
@@ -221,7 +252,7 @@ function Rain({ active }: { active: boolean }) {
   return (
     <group ref={group}>
       <points ref={ref} geometry={geo}>
-        <pointsMaterial color="#bcd8e8" size={0.32} transparent opacity={0.55} sizeAttenuation />
+        <pointsMaterial color="#bcd8e8" size={heavy ? 0.4 : 0.32} transparent opacity={heavy ? 0.68 : 0.55} sizeAttenuation />
       </points>
     </group>
   )
@@ -307,9 +338,9 @@ export function Lighting({ timeOfDay, weather }: { timeOfDay: TimeOfDay; weather
     fog.far = THREE.MathUtils.lerp(fog.far, t.fogFar, k)
 
     // shared mood factors (windows, bulbs, rain visibility read these)
-    const nightTarget = timeOfDay === 'night' ? (weather === 'rain' ? 0.85 : 1) : 0
+    const nightTarget = timeOfDay === 'night' ? (isRainSky(weather) ? 0.85 : 1) : 0
     worldMood.night = THREE.MathUtils.lerp(worldMood.night, nightTarget, k)
-    worldMood.rain = THREE.MathUtils.lerp(worldMood.rain, weather === 'rain' ? 1 : 0, k)
+    worldMood.rain = THREE.MathUtils.lerp(worldMood.rain, isRainSky(weather) ? 1 : 0, k)
   })
 
   return (
@@ -321,7 +352,7 @@ export function Lighting({ timeOfDay, weather }: { timeOfDay: TimeOfDay; weather
       <directionalLight ref={sun} position={[70, 150, 40]} intensity={1.2} />
       <Stars />
       <Clouds />
-      <Rain active={weather === 'rain'} />
+      <Rain active={isRainSky(weather)} heavy={isHeavySky(weather)} />
     </>
   )
 }

@@ -17,11 +17,13 @@
 
 export type SceneTime = 'morning' | 'afternoon' | 'evening' | 'night'
 
+import { isRainSky } from '@/game/systems/seasons'
+
 interface LivingSceneProps {
   /** comes straight from the world clock — defaults to golden afternoon */
   timeOfDay?: SceneTime
   /** comes straight from the world weather */
-  weather?: 'sunny' | 'cloudy' | 'rain' | 'night-clear'
+  weather?: 'sunny' | 'cloudy' | 'rain' | 'night-clear' | 'harmattan' | 'storm' | 'flood'
   className?: string
 }
 
@@ -114,8 +116,10 @@ export function LivingScene({
 }: LivingSceneProps) {
   const m = MOODS[timeOfDay]
   const isNight = timeOfDay === 'night'
-  const isRain = weather === 'rain'
-  const overcast = weather === 'cloudy' || isRain
+  // M6 — the wet-sky family shows the rain streaks; a storm/flood day is
+  // just rain drawn heavier by the overcast wash below.
+  const isRain = isRainSky(weather)
+  const overcast = weather === 'cloudy' || isRain || weather === 'harmattan'
   // sun/moon position + size per time of day
   const orb =
     timeOfDay === 'morning'

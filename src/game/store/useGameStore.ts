@@ -32,7 +32,7 @@ import type {
   FleetState,
   ShopUpgradeId,
 } from '../types'
-import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY } from '../data/config'
+import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY, TIME, WEATHER_META, SOCIAL } from '../data/config'
 import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
 import { DEFAULT_AVATAR } from '../data/avatar'
 import { VEHICLE_BY_MODEL, generatePlate } from '../data/vehicles'
@@ -45,12 +45,21 @@ import { addXp as processXp, formatNaira } from '../systems/progression'
 import { recordTransaction, pushTransaction, canAfford, rewardCash, describeReward } from '../systems/economy'
 import { addSkillXp as applySkillXp, SKILL_META } from '../systems/skills'
 import { checkRequirements, cooldownRemaining, resolveJob } from '../systems/work'
-import { canChat, relationshipFor, tierFor, pickLine, afterChat } from '../systems/social'
+import { canChat, relationshipFor, tierFor, pickLine, afterChat, canGift, canHangout, afterGift, afterHangout, favorRollsToday, giftById, TIER_META } from '../systems/social'
+import {
+  weatherBlocksLocation,
+  isNightMarketOpen,
+  nightMealPrice,
+  mealAvailableAt,
+  NIGHT_MARKET_LOCATION_ID,
+} from '../systems/seasons'
 import {
   generateHustleOffers,
   hustleDefFor,
   pruneExpiredOpportunities,
   resolveOpportunity,
+  makeOpportunityInstance,
+  isEligible,
 } from '../systems/opportunities'
 import { SaveSystem } from '../systems/save'
 import { audio, syncAudioWithSettings } from '../systems/audio'
@@ -86,6 +95,7 @@ import {
   staffCapFor,
 } from '../systems/biz'
 import { gigBoard, gigLabel } from '../systems/fleet'
+import { HUSTLE_BY_ID } from '../data/hustles'
 import { BIZ, CIVIC, FLEET } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
@@ -172,6 +182,12 @@ interface GameStore {
   bankWithdraw: (amount: number) => boolean
   /** Talk with an NPC — familiarity + one warm line. Null = cooldown / guard. */
   chatNpc: (npcId: string) => ChatOutcome | null
+  /** M6 — hand a paddy a gift (cash → familiarity, once per NPC per day). */
+  giveGift: (npcId: string, giftId: string) => boolean
+  /** M6 — pull a paddy out for the evening (cash + mood + familiarity, night only). */
+  hangout: (npcId: string) => boolean
+  /** M6 — accept a favour a paddy dropped in chat (goes through acceptOffer's guards). */
+  acceptFavorOffer: (offer: ActiveOpportunity) => void
   /** Stage 3D — settle the (small) energy cost of driving your own vehicle. */
   settleDrive: (meters: number) => void
 
@@ -237,12 +253,13 @@ interface CivicAgg {
   tipReward: number
 }
 
-/** Pure: roll the civic mesh forward day by day (assessments land on exact days). */
-function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: number, newDay: number, bizCount = 0, solarCount = 0): { civic: CivicState; agg: CivicAgg } {
+/** Pure: roll the civic mesh forward day by day (assessments land on exact days).
+ *  M6 — the NEW day's weather rides in so the market roll folds weather stress. */
+function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: number, newDay: number, bizCount = 0, solarCount = 0, weather?: import('../types').Weather): { civic: CivicState; agg: CivicAgg } {
   let cur = civic
   const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0 }
   for (let d = prevDay + 1; d <= newDay; d++) {
-    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount)
+    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather)
     cur = r.next
     agg.nepaPosted += r.nepaPosted
     agg.nepaShed = agg.nepaShed || r.nepaShed
@@ -267,7 +284,10 @@ function commitCivicDays(
   const bizCount = player.businesses.length
   // M5 — solar shops draw from the sun: their share of the meter load drops
   const solarCount = player.businesses.filter((b) => b.upgrades.includes('solar')).length
-  const { civic: rolled, agg } = civicRollForDays(civic, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount)
+  // M6 — the NEW day's weather (already set by the clock before this call)
+  // folds its market stress into the day's prices
+  const newWeather = get().world?.weather
+  const { civic: rolled, agg } = civicRollForDays(civic, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather)
   set({ civic: rolled })
 
   // M3 — the shops earn while the city turns: accrue into each till (market
@@ -455,6 +475,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('notify')
+
+    // M6 — LIVING WORLD: the day the sky turns, the city tells you. A
+    // harmattan haze, a confluence thunderstorm or a flood day announces
+    // itself, and the weather's mood lands on the same sleep (the config's
+    // weatherEffects table finally does its honest work).
+    if (kind === 'sleep') {
+      const meta = WEATHER_META[newWorld.weather]
+      const moodHit = TIME.weatherEffects[newWorld.weather]?.mood ?? 0
+      const p0 = get().player
+      if (p0 && moodHit !== 0) {
+        set({ player: { ...p0, needs: applyNeedsDelta(p0.needs, { mood: moodHit }) } })
+      }
+      if (meta?.dayNote) {
+        get().notify({ icon: meta.icon === 'flood' ? '🌊' : meta.icon === 'storm' ? '⛈️' : '🌫️', text: meta.dayNote, tone: 'neutral' })
+      }
+    }
+
     // M2 — the civic mesh rolls as the day (or days) turn
     commitCivicDays(get, set, world.day, newWorld.day)
     scheduleAutosave(get)
@@ -618,12 +655,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   /** Today's honest market price of a meal at a spot — the ONE source the
-   *  menu rows and eatMeal both read, so display can never drift from charge. */
+   *  menu rows and eatMeal both read, so display can never drift from charge.
+   *  M6 — night dishes price by the night-market law: the seeded per-day
+   *  discount at the food strip after dark, and NOWHERE else. */
   mealPriceAt: (mealKey, locationId) => {
     const { world, civic } = get()
     const meal = MEAL_BY_KEY[mealKey]
     if (!meal || !world) return meal?.price ?? 0
-    const c = marketForDay(civic ?? freshCivicState(), world.day)
+    if (meal.night) {
+      return mealAvailableAt(true, locationId, world.timeOfDay)
+        ? nightMealPrice(meal.price, world.day)
+        : meal.price
+    }
+    const c = marketForDay(civic ?? freshCivicState(), world.day, world.weather)
     return marketMealPrice(meal.price, mealKey, locationId, c, world.day)
   },
 
@@ -1082,10 +1126,127 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ? pool.stranger[0]
         : pickLine(pool[tier], rel.familiarity, today)
       : npc.bio
+
+    // M6 — a paddy pays back: on a lucky (deterministic) day, a real paddy
+    // drops REAL gist — an eligible hustle from THEIR OWN offers, through
+    // the SAME opportunity pipeline. Transient: accept now or it goes cold.
+    let favorOffer: ActiveOpportunity | undefined
+    if (favorRollsToday(next.familiarity, npcId, today)) {
+      const slot = absoluteSlot(today, world.timeOfDay)
+      const def = Object.values(HUSTLE_BY_ID).find(
+        (d) => d.npcId === npcId && isEligible(d, player, slot, player.activeOpportunities),
+      )
+      if (def) favorOffer = { ...makeOpportunityInstance(def, slot), source: 'gist' }
+    }
+
     set({ player: { ...player, relationships: { ...player.relationships, [npcId]: next } } })
     get().addSkillXp('social', 2)
+    if (favorOffer) {
+      get().notify({ icon: '🤝', text: `${npc.name} get small work for you — check the chat.`, tone: 'good' })
+    }
     scheduleAutosave(get)
-    return { npcId, tier, familiarity: next.familiarity, reply, firstMeeting }
+    return { npcId, tier, familiarity: next.familiarity, reply, firstMeeting, favorOffer }
+  },
+
+  /* --------------------- M6 — social depth (gifts / hangout) --------------------- */
+
+  giveGift: (npcId, giftId) => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const npc = NPC_BY_ID[npcId]
+    const gift = giftById(giftId)
+    if (!npc || !gift) return false
+    const rel = relationshipFor(player.relationships, npcId)
+    if (!canGift(rel, world.day)) {
+      get().notify({ icon: '🎁', text: `You don give ${npc.name} gift today — no overdo am.`, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(gift.cost, { label: `Gift — ${gift.label} for ${npc.name}`, category: 'other' })) {
+      get().notify({ icon: '🎁', text: `${gift.label} costs ${formatNaira(gift.cost)} — you no carry am.`, tone: 'bad' })
+      return false
+    }
+    const paid = get().player!
+    const next = afterGift(rel, gift, world.day)
+    const beforeTier = tierFor(rel.familiarity)
+    const afterTier = tierFor(next.familiarity)
+    set({
+      player: {
+        ...paid,
+        needs: applyNeedsDelta(paid.needs, { mood: SOCIAL.giftMood }),
+        relationships: { ...paid.relationships, [npcId]: next },
+      },
+    })
+    get().notify({
+      icon: gift.emoji,
+      text: `${npc.name} collect the ${gift.label} — familiarity +${gift.familiarity}.${afterTier !== beforeTier ? ` You two na ${TIER_META[afterTier].label} now!` : ''}`,
+      tone: 'good',
+    })
+    audio.play(afterTier !== beforeTier ? 'levelup' : 'chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  hangout: (npcId) => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const npc = NPC_BY_ID[npcId]
+    if (!npc) return false
+    const rel = relationshipFor(player.relationships, npcId)
+    if (!(SOCIAL.hangout.slots as readonly string[]).includes(world.timeOfDay)) {
+      get().notify({ icon: '🌙', text: 'Hangout na after-work something — evening or night.', tone: 'neutral' })
+      return false
+    }
+    if (!canHangout(rel, world.day)) {
+      get().notify({ icon: '🍻', text: `You and ${npc.name} just hang out — give am small space (every ${SOCIAL.hangout.cooldownDays} days).`, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(SOCIAL.hangout.cost, { label: `Night out with ${npc.name}`, category: 'fun' })) {
+      get().notify({ icon: '🍻', text: `Pulling ${npc.name} out costs ${formatNaira(SOCIAL.hangout.cost)} — you no reach.`, tone: 'bad' })
+      return false
+    }
+    const paid = get().player!
+    const next = afterHangout(rel, world.day)
+    set({
+      player: {
+        ...paid,
+        needs: applyNeedsDelta(applySlotDecay(paid.needs, 1), { mood: SOCIAL.hangout.mood }),
+        relationships: { ...paid.relationships, [npcId]: next },
+      },
+      world: { ...world, ...advanceWorldClock(world.timeOfDay, world.day, world.weather, 1) },
+    })
+    get().notify({
+      icon: '🍻',
+      text: `You and ${npc.name} catch evening together — mood +${SOCIAL.hangout.mood}, familiarity +${SOCIAL.hangout.familiarity}.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Accept a paddy's favour — the acceptOffer guards (hands-full, duplicate)
+   *  apply exactly; only the transport differs (chat hands the instance over). */
+  acceptFavorOffer: (offer) => {
+    const { player } = get()
+    if (!player) return
+    if (player.activeOpportunities.length >= HUSTLE.maxActive) {
+      audio.play('notify')
+      get().notify({
+        icon: '🎒',
+        text: `Your hands are full — finish or drop something first (max ${HUSTLE.maxActive}).`,
+        tone: 'bad',
+      })
+      return
+    }
+    if (player.activeOpportunities.some((o) => o.defId === offer.defId)) {
+      audio.play('notify')
+      get().notify({ icon: '🤔', text: 'You already took this one.', tone: 'bad' })
+      return
+    }
+    set({ player: { ...player, activeOpportunities: [...player.activeOpportunities, offer] } })
+    audio.play('click')
+    get().notify({ icon: '🤝', text: 'Favour accepted — it goes cold if you wait too long!', tone: 'good' })
+    scheduleAutosave(get)
   },
 
   settleDrive: (meters) => {
@@ -1100,21 +1261,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   /** Stage 4 — the eating loop. A meal costs REAL cash (ledger entry), fills
    *  hunger, lifts mood, tops a little energy, and the clock moves one slot
-   *  (eating takes time). Same authority pattern as rest/travel. */
+   *  (eating takes time). Same authority pattern as rest/travel.
+   *  M6 — night dishes are the night market's alone: right stall, after dark,
+   *  priced by the seeded night discount — refused honestly otherwise. */
   eatMeal: (mealKey, atLocationId) => {
     const { player, world } = get()
     if (!player || !world) return false
     const meal = MEAL_BY_KEY[mealKey]
     if (!meal) return false
-    // M2 — markets breathe: today's honest price at this spot (base outside markets)
     const spot = atLocationId ?? world.currentLocation
+    if (meal.night && !mealAvailableAt(true, spot, world.timeOfDay)) {
+      get().notify({
+        icon: '🌙',
+        text: isNightMarketOpen(world.timeOfDay)
+          ? `${meal.label} na night-market food — e dey the Food Strip.`
+          : `${meal.label} dey wake after dark — the night market no open yet.`,
+        tone: 'neutral',
+      })
+      return false
+    }
+    // M2 — markets breathe: today's honest price at this spot (base outside markets)
     let civic = get().civic ?? freshCivicState()
-    const rolled = marketForDay(civic, world.day)
+    const rolled = marketForDay(civic, world.day, world.weather)
     if (rolled !== civic) {
       civic = rolled
       set({ civic })
     }
-    const price = marketMealPrice(meal.price, mealKey, spot, civic, world.day)
+    const price = meal.night
+      ? nightMealPrice(meal.price, world.day)
+      : marketMealPrice(meal.price, mealKey, spot, civic, world.day)
     if (!canAfford(player.cash, price)) {
       get().notify({
         icon: '🍲',
@@ -1171,6 +1346,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().notify({
         icon: '🔒',
         text: `${destination.name} unlocks at Level ${destination.unlockLevel}.`,
+        tone: 'bad',
+      })
+      return
+    }
+    // M6 — THE FLOOD LAW: a flood day closes the riverfront. Nobody wades
+    // into the Confluence while the Niger owns it.
+    if (weatherBlocksLocation(world.weather, destinationId)) {
+      audio.play('notify')
+      get().notify({
+        icon: '🌊',
+        text: `Flood don close ${destination.name} — the water don take the riverfront. Try tomorrow.`,
         tone: 'bad',
       })
       return

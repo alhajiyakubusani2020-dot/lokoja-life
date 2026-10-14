@@ -18,11 +18,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { audio } from '@/game/systems/audio'
-import { canChat, relationshipFor, tierFor, TIER_META } from '@/game/systems/social'
+import { canChat, canGift, canHangout, relationshipFor, tierFor, TIER_META } from '@/game/systems/social'
+import { SOCIAL } from '@/game/data/config'
 import { NPC_BY_ID } from '@/game/data/npcs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
 import type { FamiliarityTier } from '@/game/data/npcChat'
+import type { ActiveOpportunity } from '@/game/types'
 import { ArrowLeftIcon, CheckIcon, SparkleIcon } from '../../icons'
 
 /* ------------------------------- tier chips ------------------------------- */
@@ -48,6 +50,53 @@ interface ChatMsg {
 
 const OPENER = 'Abeg how body?'
 const TYPING_MS = 700
+
+/* --------------------- M6 — the paddy's favour bubble ---------------------- */
+
+function FavorBubble({ offer }: { offer: ActiveOpportunity }) {
+  const acceptFavorOffer = useGameStore((s) => s.acceptFavorOffer)
+  const active = useGameStore((s) => s.player?.activeOpportunities ?? [])
+  const taken = active.some((o) => o.defId === offer.defId)
+  const [dismissed, setDismissed] = useState(false)
+  if (dismissed || taken) {
+    return (
+      <div className="flex items-center gap-2 self-start rounded-2xl border border-[var(--lko-green)]/30 bg-[var(--lko-green-soft)] px-3.5 py-2.5">
+        <CheckIcon size={15} className="text-[var(--lko-green)]" />
+        <p className="text-[12px] font-extrabold text-[var(--lko-green-deep)]">Favour accepted — e dey your Work tab.</p>
+      </div>
+    )
+  }
+  return (
+    <div className="self-start rounded-2xl border border-[var(--lko-gold)]/50 bg-[var(--lko-gold-soft)] px-3.5 py-2.5">
+      <p className="flex items-center gap-1.5 text-[12.5px] font-extrabold text-[var(--lko-gold-deep)]">
+        <span aria-hidden>🤝</span> Favour: {offer.defId.replace(/-/g, ' ')}
+      </p>
+      <p className="mt-0.5 text-[11px] font-semibold text-[var(--lko-gold-deep)]/80">
+        Real gist from a real paddy — e go cold if you wait.
+      </p>
+      <div className="mt-2 flex gap-1.5">
+        <button
+          onClick={() => {
+            audio.play('click')
+            acceptFavorOffer(offer)
+          }}
+          className="lko-press rounded-full bg-[var(--lko-green)] px-3 py-1.5 text-[11px] font-extrabold text-white"
+        >
+          Accept
+        </button>
+        <button
+          onClick={() => {
+            audio.play('click')
+            setDismissed(true)
+          }}
+          className="lko-press rounded-full bg-black/[0.06] px-3 py-1.5 text-[11px] font-extrabold text-[var(--lko-ink-soft)]"
+        >
+          Later
+        </button>
+      </div>
+    </div>
+  )
+}
 
 /* ------------------------------ typing bubble ----------------------------- */
 
@@ -83,16 +132,22 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const chatNpc = useGameStore((s) => s.chatNpc)
+  const giveGift = useGameStore((s) => s.giveGift)
+  const hangout = useGameStore((s) => s.hangout)
 
   const npc = NPC_BY_ID[npcId]
   const rel = relationshipFor(player.relationships, npcId)
   const tier = tierFor(rel.familiarity)
   const meta = TIER_META[tier]
   const chattedToday = !canChat(rel, world.day)
+  const giftableToday = canGift(rel, world.day)
+  const hangoutable = canHangout(rel, world.day) && (SOCIAL.hangout.slots as readonly string[]).includes(world.timeOfDay)
 
   const [msgs, setMsgs] = useState<ChatMsg[]>([])
   const [typing, setTyping] = useState(false)
   const [tierUp, setTierUp] = useState<FamiliarityTier | null>(null)
+  const [showGifts, setShowGifts] = useState(false)
+  const [favor, setFavor] = useState<ActiveOpportunity | null>(null)
   const chatTimer = useRef<number | null>(null)
   const bannerTimer = useRef<number | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -137,6 +192,10 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
         audio.play('notify')
       }
       tierBefore.current = outcome.tier
+      if (outcome.favorOffer) {
+        setFavor(outcome.favorOffer)
+        audio.play('chime')
+      }
       setMsgs((m) => [
         ...m,
         { from: 'npc', text: outcome.reply },
@@ -145,6 +204,15 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
           : []),
       ])
     }, TYPING_MS)
+  }
+
+  const sendGift = (giftId: string, label: string) => {
+    if (!giftableToday) return
+    audio.play('click')
+    if (giveGift(npcId, giftId)) {
+      setMsgs((m) => [...m, { from: 'sys', text: `You send ${label} — na real paddy move be that.` }])
+      setShowGifts(false)
+    }
   }
 
   return (
@@ -213,7 +281,7 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
           </div>
         )}
 
-        {msgs.length === 0 && !typing ? (
+        {msgs.length === 0 && !typing && !favor ? (
           /* warm empty states */
           <div className="my-auto flex flex-col items-center px-4 pb-4 text-center">
             <span
@@ -272,11 +340,71 @@ export function ChatThread({ npcId, onBack }: { npcId: string; onBack: () => voi
             {typing && <TypingBubble emoji={npc.emoji} />}
           </div>
         )}
+        {favor && (
+          <div className="mt-2">
+            <FavorBubble offer={favor} />
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
       {/* composer — one canned opener per day, store enforces the gate */}
       <div className="border-t border-black/[0.06] bg-white/70 px-3 py-2.5 backdrop-blur">
+        {/* M6 — social depth: gift / hangout strip */}
+        <div className="mb-2 flex gap-1.5">
+          <button
+            onClick={() => {
+              audio.play('click')
+              setShowGifts((v) => !v)
+            }}
+            className={`lko-press flex-1 rounded-full px-2 py-1.5 text-[11px] font-extrabold ${
+              giftableToday ? 'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]' : 'bg-black/[0.05] text-[var(--lko-ink-soft)]'
+            }`}
+          >
+            🎁 {giftableToday ? 'Send gift' : 'Gifted today'}
+          </button>
+          <button
+            onClick={() => {
+              audio.play('click')
+              if (hangout(npcId)) {
+                setMsgs((m) => [...m, { from: 'sys', text: `You and ${npc.name} catch evening — mood +${SOCIAL.hangout.mood}.` }])
+              }
+            }}
+            disabled={!hangoutable}
+            className={`lko-press flex-1 rounded-full px-2 py-1.5 text-[11px] font-extrabold disabled:cursor-not-allowed disabled:bg-black/[0.05] disabled:text-[var(--lko-ink-soft)] ${
+              hangoutable ? 'bg-[var(--lko-terra)]/15 text-[var(--lko-terra)]' : ''
+            }`}
+          >
+            🍻 {hangoutable ? `Hang out · ₦${SOCIAL.hangout.cost.toLocaleString()}` : 'Hang out later'}
+          </button>
+        </div>
+        {showGifts && (
+          <div className="mb-2 flex flex-col gap-1.5 rounded-2xl border border-[var(--lko-gold)]/30 bg-[var(--lko-gold-soft)]/50 p-2">
+            {SOCIAL.gifts.map((g) => {
+              const afford = player.cash >= g.cost
+              return (
+                <button
+                  key={g.id}
+                  disabled={!afford || !giftableToday}
+                  onClick={() => sendGift(g.id, g.label)}
+                  className={`lko-press flex items-center gap-2 rounded-xl bg-white px-2.5 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-55 ${
+                    afford ? '' : 'opacity-55'
+                  }`}
+                >
+                  <span className="text-lg" aria-hidden>{g.emoji}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12px] font-extrabold">{g.label}</span>
+                    <span className="block truncate text-[10px] font-semibold text-[var(--lko-ink-soft)]">{g.note}</span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="lko-num block text-[11.5px] font-extrabold text-[var(--lko-gold-deep)]">₦{g.cost.toLocaleString()}</span>
+                    <span className="block text-[9.5px] font-bold text-[var(--lko-green-deep)]">+{g.familiarity} fam</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
         {chattedToday ? (
           <div className="flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-black/[0.05] px-4 text-[13px] font-bold text-[var(--lko-ink-soft)]">
             <CheckIcon size={15} className="text-[var(--lko-green)]" aria-hidden />

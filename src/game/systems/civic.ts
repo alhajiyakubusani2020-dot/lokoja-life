@@ -15,8 +15,9 @@
  *  - Every naira constant lives in config.CIVIC — nothing is hard-coded.
  */
 
-import type { CivicState, EfccTip, MarketEvent } from '../types'
+import type { CivicState, EfccTip, MarketEvent, Weather } from '../types'
 import { BIZ, CIVIC } from '../data/config'
+import { weatherMarketMult } from './seasons'
 
 /* ------------------------------ tiny hash core ------------------------------ */
 
@@ -274,13 +275,21 @@ export function marketEventFor(day: number): MarketEvent | null {
 /**
  * The daily market roll — per-market multipliers, the market-day flag and
  * the flavour event, all locked to the day number (reload-proof).
+ * M6 — the day's weather stress folds into the rolled prices: dust, storms
+ * and floods ride the SAME numbers the meals, market shops and board read,
+ * so no surface can disagree. The day's weather is constant once rolled
+ * (it only changes when the day changes), so the fold stays deterministic.
  */
-export function marketDayRoll(civic: CivicState, day: number): { next: CivicState; rolled: boolean } {
+export function marketDayRoll(civic: CivicState, day: number, weather?: Weather): { next: CivicState; rolled: boolean } {
   if (civic.market.rolledDay === day) return { next: civic, rolled: false }
+  const stress = weather ? weatherMarketMult(weather) : 1
   const prices: Record<string, number> = {}
   for (const m of CIVIC.market.markets) {
     const u = unit('mkt', m, day)
-    prices[m] = CIVIC.market.minMult + u * (CIVIC.market.maxMult - CIVIC.market.minMult)
+    prices[m] = Math.min(
+      2,
+      Math.round((CIVIC.market.minMult + u * (CIVIC.market.maxMult - CIVIC.market.minMult)) * stress * 100) / 100,
+    )
   }
   return {
     next: {
@@ -297,8 +306,8 @@ export function marketDayRoll(civic: CivicState, day: number): { next: CivicStat
 }
 
 /** Ensure the market slice is rolled for `day` (lazy — UI calls before reading). */
-export function marketForDay(civic: CivicState, day: number): CivicState {
-  const { next } = marketDayRoll(civic, day)
+export function marketForDay(civic: CivicState, day: number, weather?: Weather): CivicState {
+  const { next } = marketDayRoll(civic, day, weather)
   return next
 }
 
@@ -342,12 +351,14 @@ export interface CivicDayResult {
  * The ONE civic day-roll the store calls whenever the in-game day
  * advances (sleep). Idempotent per (state, day): every sub-roll is
  * guarded by its own "already done" marker.
+ * M6 — the new day's weather rides in so the market roll can fold the
+ * weather stress into today's prices.
  */
-export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0, solarCount = 0): CivicDayResult {
+export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0, solarCount = 0, weather?: Weather): CivicDayResult {
   const nepa = nepaDayRoll(civic, day, bizCount, solarCount)
   const kgirs = kgirsDayRoll(nepa.next, totalEarned, day)
   const efcc = efccDayRoll(kgirs.next, day)
-  const market = marketDayRoll(efcc.next, day)
+  const market = marketDayRoll(efcc.next, day, weather)
   return {
     next: market.next,
     nepaPosted: nepa.posted,

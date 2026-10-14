@@ -191,20 +191,44 @@ export const TIME = {
   /** Order of the day. */
   slots: ['morning', 'afternoon', 'evening', 'night'] as const,
 
-  /** Weighted weather for a new day. Night-clear only appears at night. */
+  /** Weighted weather for a new day. Night-clear only appears at night.
+   *  M6 — harmattan dust, confluence thunderstorms and Niger/Benue flood
+   *  days are rare, dramatic days: the whole city feels them. */
   weatherWeights: {
     sunny: 55,
     cloudy: 25,
-    rain: 20,
+    rain: 14,
+    harmattan: 3.5,
+    storm: 1.8,
+    flood: 0.7,
   },
 
-  /** Effects on the player per weather (travel modifiers live in TRAVEL below). */
+  /** Effects on the player per weather (travel modifiers live in TRAVEL below).
+   *  M6 — actually APPLIED at the sleep day-roll: the sky sets the day's mood. */
   weatherEffects: {
     sunny: { mood: 0 },
     cloudy: { mood: 0 },
     rain: { mood: -3 },
+    harmattan: { mood: -2 },
+    storm: { mood: -6 },
+    flood: { mood: -8 },
   },
 } as const
+
+/**
+ * M6 — THE one weather dictionary: label, icon key, HUD tip and the
+ * day-roll notification line. UI reads this; the store narrates from it;
+ * no component hard-codes a weather word again.
+ */
+export const WEATHER_META = {
+  sunny: { icon: 'sunny', label: 'Sunny', tip: 'Clear skies — the city moves easy.', dayNote: null },
+  cloudy: { icon: 'cloudy', label: 'Cloudy', tip: 'Cloud cover, cool air.', dayNote: null },
+  rain: { icon: 'rain', label: 'Rain', tip: 'Rain is falling — trips take a bit longer.', dayNote: 'Rain fall this morning — carry body cover, journeys go slow small.' },
+  'night-clear': { icon: 'night-clear', label: 'Clear night', tip: 'Quiet, starry night.', dayNote: null },
+  harmattan: { icon: 'harmattan', label: 'Harmattan', tip: 'Dust haze everywhere — visibility low, throat dry.', dayNote: 'Harmattan dust don blow in — the whole town dey haze. Journeys slow small, price dey climb.' },
+  storm: { icon: 'storm', label: 'Thunderstorm', tip: 'Heavy storm — okada dey suffer, roads don messy.', dayNote: 'Thunderstorm don land for the confluence — no waka comot unless e necessary.' },
+  flood: { icon: 'flood', label: 'Flood watch', tip: 'Niger don overflow — the riverfront is closed, food prices climb.', dayNote: 'Flood alert! Niger/Benue don overflow — riverfront closed, food prices don climb.' },
+} as Record<string, { icon: string; label: string; tip: string; dayNote: string | null }>
 
 /* ----------------------------------- Work ----------------------------------- */
 
@@ -275,12 +299,17 @@ export const TRAVEL = {
   kmPerMapUnit: 0.16,
   /** Every completed trip advances this many time slots on the EXISTING clock. */
   slotsPerTrip: 1,
-  /** Minutes multiplier per transport in each weather (kept gentle by design). */
+  /** Minutes multiplier per transport in each weather (kept gentle by design).
+   *  M6 rows: harmattan dust slows everyone a little; a confluence storm is
+   *  rain turned to eleven; flood is the slowest day of the year. */
   weatherMinutesMultiplier: {
     sunny: { walk: 1, keke: 1, taxi: 1, 'own-okada': 1, 'own-keke': 1, 'own-taxi': 1, 'own-danfo': 1 },
     cloudy: { walk: 1, keke: 1, taxi: 1, 'own-okada': 1, 'own-keke': 1, 'own-taxi': 1, 'own-danfo': 1 },
     rain: { walk: 1.4, keke: 1.15, taxi: 1.08, 'own-okada': 1.35, 'own-keke': 1.14, 'own-taxi': 1.06, 'own-danfo': 1.1 },
     'night-clear': { walk: 1, keke: 1, taxi: 1, 'own-okada': 1, 'own-keke': 1, 'own-taxi': 1, 'own-danfo': 1 },
+    harmattan: { walk: 1.15, keke: 1.12, taxi: 1.08, 'own-okada': 1.18, 'own-keke': 1.12, 'own-taxi': 1.08, 'own-danfo': 1.1 },
+    storm: { walk: 1.75, keke: 1.35, taxi: 1.15, 'own-okada': 1.65, 'own-keke': 1.32, 'own-taxi': 1.14, 'own-danfo': 1.22 },
+    flood: { walk: 1.9, keke: 1.5, taxi: 1.25, 'own-okada': 1.8, 'own-keke': 1.45, 'own-taxi': 1.24, 'own-danfo': 1.35 },
   },
   /** Chance (0–1) that a travel event rolls on a completed trip. */
   eventChance: 0.3,
@@ -348,6 +377,8 @@ export interface MealDef {
   hunger: number
   mood: number
   energy: number
+  /** M6 — night-market-only dish: served at the food strip after dark only */
+  night?: boolean
 }
 
 export const FOOD: { meals: MealDef[] } = {
@@ -357,6 +388,10 @@ export const FOOD: { meals: MealDef[] } = {
     { key: 'suya', label: 'Suya wrap', detail: 'Hot off the grill, extra yaji pepper', price: 300, hunger: 18, mood: 8, energy: 2 },
     { key: 'bread-akara', label: 'Bread + akara', detail: 'The classic roadside combo that never fails', price: 250, hunger: 20, mood: 4, energy: 3 },
     { key: 'groceries', label: 'Fresh foodstuff basket', detail: 'Tomatoes, peppers, rice, groundnut oil — for the pot at home', price: 350, hunger: 26, mood: 3, energy: 2 },
+    /* ---- M6 — the night market menu: food strip stalls that only wake after dark ---- */
+    { key: 'night-suya', label: 'Night suya platter', detail: 'The grill that runs till the coals die — extra yaji, double onion', price: 400, hunger: 26, mood: 12, energy: 2, night: true },
+    { key: 'boli-ekpa', label: 'Boli + groundnut', detail: 'Roasted plantain off the night coals, groundnut on the side', price: 220, hunger: 18, mood: 7, energy: 3, night: true },
+    { key: 'peppersoup', label: 'Catfish pepper soup', detail: 'Steaming bowl at the corner table — night taste better', price: 650, hunger: 30, mood: 11, energy: 4, night: true },
   ],
 }
 
@@ -433,6 +468,21 @@ export const CIVIC = {
     ] as { icon: string; label: string; note: string; mealBias?: string; biasMult?: number; weight: number }[],
     /** chance (0–1) a day rolls a flavour event at all */
     eventChance: 0.55,
+  },
+  /**
+   * M6 — THE NIGHT MARKET. Every evening the Food Strip turns: the day
+   * bukas wind down and the night stalls wake — suya coals, boli, pepper
+   * soup. Night dishes price BELOW the day rate (night markets feed the
+   * late hustler), the multiplier seeded per day so prices still breathe.
+   */
+  nightMarket: {
+    /** where the night stalls line up */
+    locationId: 'food-area',
+    /** the slots the night market is open */
+    opensAt: ['evening', 'night'] as const,
+    /** seeded per-day discount band on night dishes */
+    minMult: 0.78,
+    maxMult: 0.95,
   },
 }
 
@@ -545,8 +595,53 @@ export const FLEET = {
   payoutMult: 1.18,
   /** rain premium per model — okada rain runs are misery, and misery pays */
   rainPayout: { okada: 1.4, keke: 1.22, taxi: 1.12, danfo: 1.12 } as Record<string, number>,
+  /**
+   * M6 — rough-sky bonus on top of the rain premium. A confluence
+   * thunderstorm is rain turned to eleven; a flood day is the hardest
+   * driving of the year. Stacks multiplicatively with rainPayout — the
+   * M4 margin law (payout − fuel > 0) only gets wider as the sky darkens.
+   */
+  roughSkyBonus: { storm: 1.3, flood: 1.6 } as Record<string, number>,
   /** player XP per completed run */
   gigXp: 8,
   /** hustle-skill XP per completed run */
   gigHustleXp: 6,
+} as const
+
+/* ------------------------------- M6 — social depth --------------------------- */
+
+/**
+ * M6 — LIVING WORLD, social depth. The familiarity track (Stage 5) grows
+ * teeth: gifts that really cost naira and really move the needle, a
+ * night-only hangout that spends a clock slot, and paddies who pay you
+ * back with real gist (favour hustles through the SAME opportunity
+ * pipeline). Every naira and point lives here — systems/social.ts holds
+ * the pure laws, the store applies them.
+ */
+export const SOCIAL = {
+  /** buyable gifts — familiarity jumps scale with the price tag */
+  gifts: [
+    { id: 'recharge-card', label: 'Recharge card', emoji: '📞', cost: 500, familiarity: 8, note: '₦500 airtime — small but always welcome.' },
+    { id: 'suya-night', label: 'Suya wrap', emoji: '🍢', cost: 1500, familiarity: 16, note: 'Evening suya from the night grill — paddies first.' },
+    { id: 'ankara', label: 'Ankara fabric', emoji: '🧵', cost: 4000, familiarity: 28, note: 'Six yards of good Ankara — na real gift be that.' },
+  ] as { id: string; label: string; emoji: string; cost: number; familiarity: number; note: string }[],
+  /** mood the PLAYER feels after giving (generosity warms the giver too) */
+  giftMood: 4,
+  /** hangout — pull a paddy out for the evening */
+  hangout: {
+    /** what a night out with a paddy costs you (on top of your own fun) */
+    cost: 1000,
+    /** mood hit for the pair of you */
+    mood: 8,
+    /** familiarity the evening earns */
+    familiarity: 6,
+    /** days before you can hang out with the SAME npc again */
+    cooldownDays: 3,
+    /** hangouts happen after work hours only */
+    slots: ['evening', 'night'] as const,
+  },
+  /** chance (0–1) a paddy (familiarity ≥ favourTier) drops real gist on a chat */
+  favorChance: 0.3,
+  /** minimum familiarity before favours start passing your way */
+  favorTierMin: 40,
 } as const
