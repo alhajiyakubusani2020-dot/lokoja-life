@@ -641,3 +641,18 @@ Stage Summary:
 - Key correction: master-plan M9 (Silk/any-device) is ~50%, not ~35% — device law + 3 quality tiers + dynres + context-loss recovery + device E2E already shipped in cf6a294
 - Hard zeros confirmed: multiplayer/Live Nation, City Forge automation, Planet Scale, PWA, signed saves/HMAC (Fortress), elections/courts/prison/JAPA, education ladder loop, marriage/family, festivals, teleport links, parent PIN/age tiers
 - Numbering collision documented: project-internal m1-m7 ≠ master-plan M1-M11; future work must reference master-plan names
+
+---
+Task ID: PLAN-2
+Agent: Main Agent (Super Z)
+Task: Ratify MASTER ROADMAP v2 (M8→M20) — integrate Lagos-Life counter-doctrine (awareness/casual/familiarity) + all new viral ideas (NEPA Chaos, POS scarcity, Sandbag flood, Regatta calendar, JAPA, Ajo, MOPOL)
+
+Work Log:
+- Wrote /home/z/my-project/ROADMAP.md — the single source of truth for all future milestones
+- M8 CHAOS ENGINE → M9 CASUAL SHELL → M10 LIVING CALENDAR → M11 RIVERS AWAKE → M12 THE LADDER → M13 FAMILY SHIELD → M14 FORTRESS → M15 TELEPORT & PULSE → M16 PWA/SILK FINISH → M17 LIVE NATION → M18 CITY FORGE → M19 NEXT-GEN POLISH → M20 PLANET SCALE
+- Each milestone maps to master-plan parts, lists what it rides on, and its Lagos-Life kill shot
+- Continuous laws preserved: tests green → silk gates → E2E mobile+desktop → worklog → commit
+
+Stage Summary:
+- Roadmap v2 ratified; numbering collision resolved (internal M8+ continues; master-plan names mapped)
+- Next build target per doctrine: M8 THE CHAOS ENGINE (rides civic/biz/weather infra — cheapest viral fire, IS the launch event)
