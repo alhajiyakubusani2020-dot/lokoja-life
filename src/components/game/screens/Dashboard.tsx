@@ -21,6 +21,7 @@ import { ChaosBanner } from '../ChaosBanner'
 import { FestivalBanner } from '../FestivalBanner'
 import { RiversBanner } from '../RiversBanner'
 import { LadderBanner } from '../LadderBanner'
+import { PulseBanner } from '../PulseBanner'
 import { GoalsCard, OnboardingCard } from '../CasualShell'
 import { GuestGate } from '../GuestGate'
 import { MoneyPop, Shockwave } from '../Juice'
@@ -51,6 +52,7 @@ import {
   WorldIcon,
 } from '../icons'
 import { audio } from '@/game/systems/audio'
+import { verifyChain } from '@/game/systems/fortress'
 import { GraphicsPicker } from './GraphicsPicker'
 import { formatNaira, nextReputationTier, reputationTier, skillCap, xpToNextLevel } from '@/game/systems/progression'
 import { skillXpToNext, SKILL_META } from '@/game/systems/skills'
@@ -84,7 +86,7 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
 
 /* --------------------------------- home tab -------------------------------- */
 
-function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
+function HomeTab({ onExploreWorld, onOpenPhone }: { onExploreWorld: () => void; onOpenPhone: () => void }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const isTravelling = useGameStore((s) => s.isTravelling)
@@ -107,6 +109,9 @@ function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
 
       {/* ---- M12 — the ladder: education, housing, JAPA, one glance ---- */}
       <LadderBanner />
+
+      {/* ---- M15 — the city pulse: the newspaper, one glance ---- */}
+      <PulseBanner onOpenPhone={onOpenPhone} />
 
       {/* ---- M9 — the casual shell: learn the streets, then today's goals ---- */}
       <OnboardingCard />
@@ -367,10 +372,13 @@ function ProfileTab() {
   const player = useGameStore((s) => s.player)!
   const settings = useGameStore((s) => s.settings)
   const account = useGameStore((s) => s.account)
+  const fortress = useGameStore((s) => s.fortress)
   const toggleSound = useGameStore((s) => s.toggleSound)
   const setChill = useGameStore((s) => s.setChill)
   const saveNow = useGameStore((s) => s.saveNow)
   const returnToMenu = useGameStore((s) => s.returnToMenu)
+  // M14 — the fortress honesty row: the ledger's chain walks the live entries
+  const chainOk = verifyChain(player.transactions).ok
 
   const tier = reputationTier(player.reputation)
   const nextTier = nextReputationTier(player.reputation)
@@ -429,6 +437,24 @@ function ProfileTab() {
             style={{ left: settings.chill ? 30 : 4 }}
           />
         </button>
+      </section>
+
+      {/* M14 — THE FORTRESS: the honest status row */}
+      <section className="lko-card mt-3 flex items-center justify-between gap-3 p-4" aria-label="Fortress status">
+        <div className="min-w-0">
+          <h3 className="text-[12px] font-extrabold">🛡️ Fortress</h3>
+          <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+            Save signed · ledger chained · income guarded. Anomalies: {fortress.anomalies}.
+          </p>
+        </div>
+        <span
+          data-testid="fortress-status"
+          className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+            chainOk ? 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]' : 'bg-[#fdecea] text-[#8a2a20]'
+          }`}
+        >
+          {chainOk ? '🔒 SECURE' : '⚠️ CHAIN'}
+        </span>
       </section>
 
       {/* reputation ladder */}
@@ -661,7 +687,7 @@ export function Dashboard() {
             aria-label={tab}
           >
             <div key={tabTick} className="lko-fade">
-              {tab === 'home' && <HomeTab onExploreWorld={() => switchTab('world')} />}
+              {tab === 'home' && <HomeTab onExploreWorld={() => switchTab('world')} onOpenPhone={() => switchTab('phone')} />}
               {tab === 'map' && (
                 <MapTab
                   focusLocationId={focusLoc}

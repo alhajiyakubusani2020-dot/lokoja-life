@@ -209,6 +209,8 @@ console.log('\nGUEST LAWS — play first, login to continue, lose nothing')
     housing: freshHousingState(),
     japa: freshJapaState(),
     shield: freshShieldState(),
+    fortress: { anomalies: 0, dayEarnedDay: 0, dayEarned: 0, slotTxCount: 0, slotTxSlot: 0, chainTail: 'lko-chain-seed', fingerprint: null },
+    cityPulse: { readDay: 0, seen: [], arrivals: [], stats: { shares: 0, arrivalsIn: 0 } },
     createdAt: 1,
     updatedAt: 2,
     player: {
@@ -336,10 +338,11 @@ console.log('\nREAL STORE PASS — goals, onboarding, the gate, through the live
   // the save carries the casual shell
   useGameStore.getState().saveNow()
   const raw = memStore.get('lokoja-life:save')
-  const parsed = raw ? JSON.parse(raw) : null
+  const e0 = raw ? JSON.parse(raw) : null
+  const parsed = e0 && e0.fmt === 2 ? e0.data : e0
   check(
     'the save carries goals + onboarding + account',
-    parsed?.version === 14 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
+    parsed?.version === 16 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
     `v${parsed?.version} ids:${JSON.stringify(parsed?.goals?.ids)} rewarded:${parsed?.onboarding?.rewarded} linked:${parsed?.account?.linked}`,
   )
 }

@@ -1,14 +1,26 @@
 /**
- * LOKOJA LIFE — Save System
- * --------------------------
- * Versioned localStorage persistence with a migration hook.
+ * LOKOJA LIFE — Save System (M14 FORTRESS transport)
+ * ---------------------------------------------------
+ * Versioned persistence with a migration hook, a SIGNED envelope, and
+ * ATOMIC DOUBLE-BUFFER writes.
  *
- * The schema (GameSave) maps 1:1 to a future Supabase table —
- * switching to cloud saves later means swapping the transport
- * functions below for async Supabase calls, nothing else.
+ * The envelope: the primary key carries `{"fmt":2,"data":<save>,"sig":<hmac>}`.
+ * The signature is HMAC-SHA256 over the EXACT serialized save string,
+ * keyed by a device-local key stored OUTSIDE the save (FORT_KEY_STORAGE).
+ * The shadow key (`save-b`) holds the PREVIOUS primary payload before
+ * every overwrite — a torn write falls back to it, then the M9 backup
+ * slot, then fresh. Nobody ever loses a save to a crashed tab.
+ *
+ * Honest scope: client-side signing is a BARRIER, not a vault. It stops
+ * casual cheats, memory editors and shared save hacks, and makes any
+ * tampering LOUD (the load narrates every descent).
+ *
+ * Legacy law: a bare (pre-Fortress) payload loads as legacy and gets the
+ * envelope on its next write; a signed payload whose key went missing
+ * re-keys as legacy — the device lost its key, not the player's honesty.
  */
 
-import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState, RiversState, EducationState, HousingState, JapaState, ShieldState } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState, RiversState, EducationState, HousingState, JapaState, ShieldState, FortressState } from '../types'
 import { freshCivicState } from './civic'
 import { freshChaosState } from './chaos'
 import { freshGoalState } from './goals'
@@ -19,9 +31,30 @@ import { freshEducationState } from './education'
 import { freshHousingState } from './housing'
 import { freshJapaState } from './japa'
 import { freshShieldState } from './shield'
+import { freshPulseState } from './pulse'
+import { freshFortressState, CHAIN_SEED, signPayload, verifyPayload, sha256, FORT_KEY_STORAGE, FORTRESS_KEYS } from './fortress'
 
-const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 14
+const SAVE_KEY = FORTRESS_KEYS.primary
+const SHADOW_KEY = FORTRESS_KEYS.shadow
+const SAVE_VERSION = 16
+
+/** M15 — THE DELTA LAW: the state fingerprint of the last payload that hit disk.
+ *  Lives OUTSIDE the save (the fortress rule: the books live beside, not inside). */
+const DELTA_HASH_KEY = 'lokoja-life:save-hash'
+/** M15 — the fingerprint of the last payload the cloud vault accepted (the zero-byte push). */
+export const PUSHED_HASH_KEY = 'lokoja-life:pushed-hash'
+
+/**
+ * THE STATE FINGERPRINT — sha256 over the save with the timestamps
+ * zeroed. Two saves whose ONLY difference is `updatedAt` are the SAME
+ * life: the debounced autosave re-fires on an idle city every few
+ * seconds, and the timestamps alone must never grind the disk (or the
+ * cloud). The disk keeps the LAST REAL write's timestamp — an honest
+ * "when your life last changed" line.
+ */
+function stateFingerprint(save: GameSave): string {
+  return sha256(JSON.stringify({ ...save, createdAt: 0, updatedAt: 0 }))
+}
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -35,9 +68,94 @@ function storageAvailable(): boolean {
   }
 }
 
+/* ------------------------------ the device key ------------------------------ */
+
+let cachedKey: string | null = null
+
+/** Read (or create) the device-local fortress key. Test hook: setFortKey. */
+function fortKey(): string | null {
+  if (cachedKey) return cachedKey
+  try {
+    const existing = window.localStorage.getItem(FORT_KEY_STORAGE)
+    if (existing && existing.length >= 32) {
+      cachedKey = existing
+      return cachedKey
+    }
+    // fresh device key — random bytes via crypto, Math.random as the honest fallback
+    let hex = ''
+    if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
+      const bytes = new Uint8Array(24)
+      crypto.getRandomValues(bytes)
+      hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
+    } else {
+      for (let i = 0; i < 24; i++) hex += Math.floor(Math.random() * 256).toString(16).padStart(2, '0')
+    }
+    window.localStorage.setItem(FORT_KEY_STORAGE, hex)
+    cachedKey = hex
+    return cachedKey
+  } catch {
+    return null
+  }
+}
+
+/**
+ * TEST HOOK — pin the device key deterministically (the suite signs and
+ * tampers against a FIXED key so the vectors stay stable).
+ */
+function setFortKey(key: string): void {
+  cachedKey = key
+  try {
+    window.localStorage.setItem(FORT_KEY_STORAGE, key)
+  } catch {
+    /* the caller owns storage in tests */
+  }
+}
+
+/* --------------------------- serialize + envelope --------------------------- */
+
 /** Serialize the save into the storage-safe JSON string. */
 function serialize(save: GameSave): string {
   return JSON.stringify({ ...save, version: SAVE_VERSION })
+}
+
+interface Envelope {
+  fmt: 2
+  data: GameSave
+  sig: string
+}
+
+function wrapEnvelope(dataStr: string): string {
+  const key = fortKey()
+  const sig = key ? signPayload(dataStr, key) : ''
+  return JSON.stringify({ fmt: 2, data: JSON.parse(dataStr), sig })
+}
+
+/**
+ * Parse + verify an envelope or a legacy bare save. Returns the save
+ * (healed) plus the transport verdict the boot toast narrates.
+ */
+function unwrapEnvelope(raw: string): { save: GameSave | null; verdict: 'ok' | 'legacy' | 'missing-key' | 'tampered' | 'malformed' } {
+  try {
+    const parsed = JSON.parse(raw) as Partial<Envelope> & GameSave
+    if (parsed && typeof parsed === 'object' && parsed.fmt === 2 && typeof parsed.sig === 'string') {
+      // signed envelope — re-serialize the data slice EXACTLY as stored
+      const dataStr = JSON.stringify(parsed.data)
+      const key = fortKey()
+      const v = verifyPayload(dataStr, parsed.sig, key)
+      if (v.ok) {
+        return parsed.data ? { save: parsed.data, verdict: 'ok' } : { save: null, verdict: 'malformed' }
+      }
+      if (v.why === 'missing-key') {
+        return parsed.data ? { save: parsed.data, verdict: 'missing-key' } : { save: null, verdict: 'malformed' }
+      }
+      if (v.why === 'tampered') return { save: null, verdict: 'tampered' }
+      return { save: null, verdict: 'malformed' }
+    }
+    // legacy bare save (pre-M14) — loads as legacy, re-signed on next write
+    return { save: (parsed as GameSave) ?? null, verdict: 'legacy' }
+  } catch {
+    return { save: null, verdict: 'malformed' }
+  }
 }
 
 /**
@@ -46,293 +164,345 @@ function serialize(save: GameSave): string {
  * add their own `case N` — never break existing players.
  */
 function deserialize(raw: string): GameSave | null {
-  try {
-    const parsed = JSON.parse(raw) as GameSave
+  const { save: parsed, verdict } = unwrapEnvelope(raw)
+  if (verdict === 'tampered' || verdict === 'malformed') return null
+  if (!parsed || typeof parsed !== 'object' || !parsed.player) return null
 
-    if (!parsed || typeof parsed !== 'object' || !parsed.player) return null
-
-    let save = parsed
-    switch (save.version) {
-      case 1:
-        // v1 → v2 (Stage 3): economy/work fields added to the player.
-        // All are defaulted below — nothing a v1 player had is lost.
-        save.version = 2
-        break
-      case 2:
-        // v2 → v3 (Stage 5): vehicles, bank balance, NPC relationships.
-        // Defaults applied below — a v2 player wakes up with an empty
-        // garage, an empty bank account, and strangers for friends.
-        save.version = 3
-        break
-      case 3:
-        // v3 → v4 (M2): the civic mesh — NEPA/KGIRS/police/EFCC/market.
-        // freshCivicState() below gives a v3 player a clean civic slate:
-        // no bills owed, no warrant, a rolled market for their current day.
-        save.version = 4
-        break
-      case 4:
-        // v4 → v5 (M3 — OWN THE CITY): businesses gain the accrual fields
-        // (accrued till, lastAccrualDay, openedDay). Any biz entry a v4 save
-        // somehow carries is defaulted below; normal v4 saves carry an
-        // empty array, which is already the correct v5 shape.
-        save.version = 5
-        break
-      case 5:
-        // v5 → v6 (M5 — WORK & FLEET): businesses gain staff + installed
-        // upgrades, and the save carries the fleet's done-gig ledger. Both
-        // default below — a v5 player wakes up with no attendants hired,
-        // no generator/solar fitted, and a clean Motor Park board.
-        save.version = 6
-        break
-      case 6:
-        // v6 → v7 (M6 — LIVING WORLD): the relationship track gains the
-        // gift/hangout cooldowns (lastGiftDay / lastHangoutDay). Optional
-        // fields defaulted below — a v6 player wakes up with no gifts
-        // given and no hangouts owed, everything else untouched.
-        save.version = 7
-        break
-      case 7:
-        // v7 → v8 (M7 — RUN ON ANY DEVICE): settings gains the graphics
-        // pick ('auto' | 'low' | 'mid' | 'high'). Defaulted below — a v7
-        // player wakes up on Auto and the device law decides for them.
-        save.version = 8
-        break
-      case 8:
-        // v8 → v9 (M8 — THE CHAOS ENGINE): the chaos slice joins the save —
-        // transformer outages, the community fix pool, scarcity bookkeeping.
-        // Defaulted below — a v8 player wakes up on a quiet grid.
-        save.version = 9
-        break
-      case 9:
-        // v9 → v10 (M9 — THE CASUAL SHELL): daily goals, the onboarding
-        // arc, the Guest Loop account line, and settings.chill join the
-        // schema. All defaulted below — a v9 player wakes up as a guest
-        // with today's goals waiting and the city at normal pressure.
-        save.version = 10
-        break
-      case 10:
-        // v10 → v11 (M10 — THE LIVING CALENDAR): the calendar slice joins
-        // the save — festival participation, ram meat, regatta stakes,
-        // aso-ebi, the paving projects. Defaulted below — a v10 player
-        // wakes up with the year's celebrations waiting, nothing owed.
-        save.version = 11
-        break
-      case 11:
-        // v11 → v12 (M11 — THE RIVERS AWAKE): the rivers slice joins the
-        // save — sandbags, walkways, tolls, the canoe, the rescue bowl.
-        // Defaulted below — a v11 player wakes up on a dry-season river.
-        save.version = 12
-        break
-      case 12:
-        // v12 → v13 (M12 — THE LADDER): the education, housing and japa
-        // slices join the save — the FUL semester clock, the rent book,
-        // and the JAPA document chain. Defaulted below — a v12 player
-        // wakes up with the ladder waiting at the bottom rung.
-        save.version = 13
-        break
-      case 13:
-        // v13 → v14 (M13 — THE FAMILY SHIELD): the character gains a life
-        // stage, the settings gain elder mode, and the shield slice joins
-        // the save — the scammer game's book and the local parent gate.
-        // Defaulted below — a v13 player wakes up as an adult (the honest
-        // default for existing hustlers) with the literacy game waiting.
-        save.version = 14
-        break
-      case 14:
-        // current version
-        break
-      default:
-        // Unknown / newer save from a newer app version — keep it, best effort.
-        break
-    }
-
-    // --- defensive defaults (never break a loadable save) ---
-    if (!save.world) {
-      save.world = {
-        day: 1,
-        timeOfDay: 'morning',
-        weather: 'sunny',
-        currentLocation: 'home',
-      }
-    }
-    if (!save.world.currentLocation) save.world.currentLocation = 'home'
-    if (!save.settings) save.settings = { sound: true, graphics: 'auto', chill: false, elder: false }
-    if (typeof save.settings.sound !== 'boolean') save.settings.sound = true
-    if (!['auto', 'low', 'mid', 'high'].includes(save.settings.graphics)) save.settings.graphics = 'auto'
-    if (typeof save.settings.chill !== 'boolean') save.settings.chill = false
-    if (typeof save.settings.elder !== 'boolean') save.settings.elder = false
-
-    // --- Stage 3 player fields (missing on v1 saves / corrupt data) ---
-    const p = save.player as PlayerState
-    if (!p.skillXp) p.skillXp = { hustle: 0, smart: 0, social: 0 }
-    if (!p.activeOpportunities) p.activeOpportunities = []
-    if (!p.cooldowns) p.cooldowns = {}
-    if (!p.transactions) p.transactions = []
-    if (!p.stats) {
-      p.stats = { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }
-    }
-    // --- M13 family shield (missing on v13-and-older saves) ---
-    if (p.ageBand !== 'kid' && p.ageBand !== 'teen' && p.ageBand !== 'adult') p.ageBand = 'adult'
-
-    // --- Stage 5 player fields (missing on v2-and-older saves) ---
-    if (!p.vehicles) p.vehicles = []
-    if (typeof p.bankBalance !== 'number') p.bankBalance = 0
-    if (!p.relationships) p.relationships = {}
-
-    // --- M6 social-depth fields (missing on v6-and-older saves) ---
-    for (const key of Object.keys(p.relationships)) {
-      const r = p.relationships[key]
-      if (typeof r.lastGiftDay !== 'number') r.lastGiftDay = 0
-      if (typeof r.lastHangoutDay !== 'number') r.lastHangoutDay = 0
-    }
-
-    // --- M3 businesses (missing on v4-and-older saves; legacy entries upgraded) ---
-    if (!p.businesses) p.businesses = []
-    p.businesses = p.businesses.map((b) => ({
-      ...b,
-      accrued: typeof b.accrued === 'number' ? b.accrued : 0,
-      lastAccrualDay: typeof b.lastAccrualDay === 'number' ? b.lastAccrualDay : save.world?.day ?? 1,
-      openedDay: typeof b.openedDay === 'number' ? b.openedDay : save.world?.day ?? 1,
-      // M5 — staff & power (missing on v5-and-older saves)
-      staff: typeof b.staff === 'number' && b.staff > 0 ? b.staff : 0,
-      upgrades: Array.isArray(b.upgrades) ? b.upgrades : [],
-    }))
-
-    // --- M5 fleet ledger (missing on v5-and-older saves) ---
-    const fleet: FleetState = save.fleet && Array.isArray(save.fleet.done)
-      ? save.fleet
-      : { day: save.world?.day ?? 1, done: [] }
-    if (typeof fleet.day !== 'number') fleet.day = save.world?.day ?? 1
-    save.fleet = fleet
-
-    // --- M8 chaos engine (missing on v8-and-older saves; partial data healed) ---
-    const fresh = freshChaosState()
-    const chaos: ChaosState = save.chaos ?? fresh
-    if (typeof chaos.day !== 'number') chaos.day = fresh.day
-    if (!Array.isArray(chaos.recent)) chaos.recent = fresh.recent
-    if (!chaos.active || typeof chaos.active.zoneId !== 'string') chaos.active = null
-    if (typeof chaos.atmDrawnDay !== 'number') chaos.atmDrawnDay = fresh.atmDrawnDay
-    if (typeof chaos.atmDrawn !== 'number') chaos.atmDrawn = fresh.atmDrawn
-    if (!chaos.stats) chaos.stats = fresh.stats
-    save.chaos = chaos
-
-    // --- M9 casual shell (missing on v9-and-older saves; partial data healed) ---
-    if (!save.goals || !Array.isArray(save.goals.ids) || save.goals.ids.length !== 3) save.goals = freshGoalState()
-    if (!Array.isArray((save.goals as GoalState).done)) (save.goals as GoalState).done = [false, false, false]
-    if (!save.onboarding || !Array.isArray(save.onboarding.done)) save.onboarding = freshOnboardingState()
-    if (typeof save.onboarding.rewarded !== 'boolean') save.onboarding.rewarded = false
-    if (!save.account) save.account = freshAccountState()
-    if (typeof save.account.linked !== 'boolean') save.account.linked = false
-    if (typeof save.account.gateGraceDay !== 'number') save.account.gateGraceDay = 0
-
-    // --- M10 living calendar (missing on v10-and-older saves; partial data healed) ---
-    const freshCal = freshCalendarState()
-    const cal: CalendarState = save.calendar ?? freshCal
-    if (typeof cal.day !== 'number') cal.day = freshCal.day
-    if (typeof cal.meatPacks !== 'number') cal.meatPacks = 0
-    if (!Array.isArray(cal.meatShares)) cal.meatShares = []
-    if (!Array.isArray(cal.sponsored)) cal.sponsored = []
-    if (!Array.isArray(cal.bets)) cal.bets = []
-    if (!Array.isArray(cal.asoEbi)) cal.asoEbi = []
-    if (!Array.isArray(cal.attended)) cal.attended = []
-    if (!Array.isArray(cal.paved)) cal.paved = []
-    if (!cal.paving || typeof cal.paving.zoneId !== 'string') cal.paving = null
-    if (!cal.stats) cal.stats = freshCal.stats
-    cal.paved = cal.paved.filter((r) => typeof r.zoneId === 'string' && typeof r.untilDay === 'number')
-    save.calendar = cal
-
-    // --- M11 rivers (missing on v11-and-older saves; partial data healed) ---
-    const freshRiv = freshRiversState()
-    const rivers: RiversState = save.rivers ?? freshRiv
-    if (typeof rivers.day !== 'number') rivers.day = freshRiv.day
-    if (typeof rivers.sandbags !== 'number') rivers.sandbags = 0
-    if (typeof rivers.canoe !== 'boolean') rivers.canoe = false
-    if (!rivers.walkways || typeof rivers.walkways !== 'object') rivers.walkways = {}
-    for (const [zoneId, w] of Object.entries(rivers.walkways)) {
-      if (typeof w.laid !== 'number' || w.laid < 0) w.laid = 0
-      if (typeof w.tollTier !== 'number') w.tollTier = 0
-      if (typeof w.pot !== 'number') w.pot = 0
-      if (typeof w.tollDay !== 'number') w.tollDay = 0
-      rivers.walkways[zoneId] = w
-    }
-    if (!rivers.rescue || typeof rivers.rescue.zoneId !== 'string' || typeof rivers.rescue.year !== 'number') rivers.rescue = null
-    if (typeof rivers.rescuedYear !== 'number') rivers.rescuedYear = 0
-    if (typeof rivers.ferryDay !== 'number') rivers.ferryDay = 0
-    if (!Array.isArray(rivers.ferryDone)) rivers.ferryDone = []
-    if (!rivers.stats) rivers.stats = freshRiv.stats
-    save.rivers = rivers
-
-    // --- M12 ladder (missing on v12-and-older saves; partial data healed) ---
-    const freshEd = freshEducationState()
-    const ed: EducationState = save.education ?? freshEd
-    if (typeof ed.enrolled !== 'boolean') ed.enrolled = false
-    if (typeof ed.semester !== 'number' || ed.semester < 1) ed.semester = freshEd.semester
-    if (typeof ed.semesterStartDay !== 'number') ed.semesterStartDay = 0
-    if (typeof ed.lecturesDone !== 'number') ed.lecturesDone = 0
-    if (typeof ed.lastLectureDay !== 'number') ed.lastLectureDay = 0
-    if (typeof ed.lastGrantSemester !== 'number') ed.lastGrantSemester = 0
-    if (typeof ed.examsPassed !== 'number') ed.examsPassed = 0
-    if (typeof ed.failedExams !== 'number') ed.failedExams = 0
-    if (typeof ed.graduated !== 'boolean') ed.graduated = false
-    if (typeof ed.convocationDay !== 'number') ed.convocationDay = null
-    if (typeof ed.convocationAttended !== 'boolean') ed.convocationAttended = false
-    if (!ed.stats) ed.stats = freshEd.stats
-    save.education = ed
-
-    const freshHou = freshHousingState()
-    const hou: HousingState = save.housing ?? freshHou
-    if (hou.owned !== null && typeof hou.owned !== 'string') hou.owned = null
-    if (!hou.furnishing || typeof hou.furnishing !== 'object') hou.furnishing = {}
-    if (typeof hou.rentPaidThrough !== 'number') hou.rentPaidThrough = 0
-    if (typeof hou.lastPostedDay !== 'number') hou.lastPostedDay = 0
-    if (typeof hou.rentOwed !== 'number' || hou.rentOwed < 0) hou.rentOwed = 0
-    if (!hou.wahala || typeof hou.wahala.kind !== 'string') hou.wahala = null
-    if (!hou.stats) hou.stats = freshHou.stats
-    save.housing = hou
-
-    const freshJap = freshJapaState()
-    const jap: JapaState = save.japa ?? freshJap
-    for (const k of ['nimcReadyDay', 'nimcDay', 'passportReadyDay', 'passportDay', 'agentTries', 'agentScams', 'clearanceDay', 'policeDay', 'flownDay', 'remitDay', 'policeShifts', 'sirenUntilDay', 'lastEscortDay'] as const) {
-      if (typeof jap[k] !== 'number') jap[k] = 0
-    }
-    if (!jap.stats) jap.stats = freshJap.stats
-    save.japa = jap
-
-    // --- M13 shield (missing on v13-and-older saves; partial data healed) ---
-    const freshSh = freshShieldState()
-    const sh: ShieldState = save.shield ?? freshSh
-    if (typeof sh.scammerDay !== 'number') sh.scammerDay = freshSh.scammerDay
-    if (typeof sh.scammerCorrect !== 'number') sh.scammerCorrect = freshSh.scammerCorrect
-    if (typeof sh.scammerWrong !== 'number') sh.scammerWrong = freshSh.scammerWrong
-    if (typeof sh.scammerStreak !== 'number') sh.scammerStreak = freshSh.scammerStreak
-    if (typeof sh.parentPinHash !== 'string' && sh.parentPinHash !== null) sh.parentPinHash = null
-    save.shield = sh
-
-    // --- M2 civic mesh (missing on v3-and-older saves) ---
-    if (!save.civic) {
-      save.civic = freshCivicState()
-    } else {
-      // defensive merge — a partially-written civic slice still loads
-      const fresh = freshCivicState()
-      save.civic = {
-        nepa: { ...fresh.nepa, ...save.civic.nepa },
-        kgirs: { ...fresh.kgirs, ...save.civic.kgirs },
-        police: { ...fresh.police, ...save.civic.police },
-        efcc: { ...fresh.efcc, ...save.civic.efcc, pending: save.civic.efcc?.pending ?? [] },
-        market: { ...fresh.market, ...save.civic.market },
-      }
-    }
-
-    save.version = SAVE_VERSION
-    return save
-  } catch {
-    return null
+  let save = parsed
+  switch (save.version) {
+    case 1:
+      // v1 → v2 (Stage 3): economy/work fields added to the player.
+      // All are defaulted below — nothing a v1 player had is lost.
+      save.version = 2
+      break
+    case 2:
+      // v2 → v3 (Stage 5): vehicles, bank balance, NPC relationships.
+      // Defaults applied below — a v2 player wakes up with an empty
+      // garage, an empty bank account, and strangers for friends.
+      save.version = 3
+      break
+    case 3:
+      // v3 → v4 (M2): the civic mesh — NEPA/KGIRS/police/EFCC/market.
+      // freshCivicState() below gives a v3 player a clean civic slate:
+      // no bills owed, no warrant, a rolled market for their current day.
+      save.version = 4
+      break
+    case 4:
+      // v4 → v5 (M3 — OWN THE CITY): businesses gain the accrual fields
+      // (accrued till, lastAccrualDay, openedDay). Any biz entry a v4 save
+      // somehow carries is defaulted below; normal v4 saves carry an
+      // empty array, which is already the correct v5 shape.
+      save.version = 5
+      break
+    case 5:
+      // v5 → v6 (M5 — WORK & FLEET): businesses gain staff + installed
+      // upgrades, and the save carries the fleet's done-gig ledger. Both
+      // default below — a v5 player wakes up with no attendants hired,
+      // no generator/solar fitted, and a clean Motor Park board.
+      save.version = 6
+      break
+    case 6:
+      // v6 → v7 (M6 — LIVING WORLD): the relationship track gains the
+      // gift/hangout cooldowns (lastGiftDay / lastHangoutDay). Optional
+      // fields defaulted below — a v6 player wakes up with no gifts
+      // given and no hangouts owed, everything else untouched.
+      save.version = 7
+      break
+    case 7:
+      // v7 → v8 (M7 — RUN ON ANY DEVICE): settings gains the graphics
+      // pick ('auto' | 'low' | 'mid' | 'high'). Defaulted below — a v7
+      // player wakes up on Auto and the device law decides for them.
+      save.version = 8
+      break
+    case 8:
+      // v8 → v9 (M8 — THE CHAOS ENGINE): the chaos slice joins the save —
+      // transformer outages, the community fix pool, scarcity bookkeeping.
+      // Defaulted below — a v8 player wakes up on a quiet grid.
+      save.version = 9
+      break
+    case 9:
+      // v9 → v10 (M9 — THE CASUAL SHELL): daily goals, the onboarding
+      // arc, the Guest Loop account line, and settings.chill join the
+      // schema. All defaulted below — a v9 player wakes up as a guest
+      // with today's goals waiting and the city at normal pressure.
+      save.version = 10
+      break
+    case 10:
+      // v10 → v11 (M10 — THE LIVING CALENDAR): the calendar slice joins
+      // the save — festival participation, ram meat, regatta stakes,
+      // aso-ebi, the paving projects. Defaulted below — a v10 player
+      // wakes up with the year's celebrations waiting, nothing owed.
+      save.version = 11
+      break
+    case 11:
+      // v11 → v12 (M11 — THE RIVERS AWAKE): the rivers slice joins the
+      // save — sandbags, walkways, tolls, the canoe, the rescue bowl.
+      // Defaulted below — a v11 player wakes up on a dry-season river.
+      save.version = 12
+      break
+    case 12:
+      // v12 → v13 (M12 — THE LADDER): the education, housing and japa
+      // slices join the save — the FUL semester clock, the rent book,
+      // and the JAPA document chain. Defaulted below — a v12 player
+      // wakes up with the ladder waiting at the bottom rung.
+      save.version = 13
+      break
+    case 13:
+      // v13 → v14 (M13 — THE FAMILY SHIELD): the character gains a life
+      // stage, the settings gain elder mode, and the shield slice joins
+      // the save — the scammer game's book and the local parent gate.
+      // Defaulted below — a v13 player wakes up as an adult (the honest
+      // default for existing hustlers) with the literacy game waiting.
+      save.version = 14
+      break
+    case 14:
+      // v14 → v15 (M14 — THE FORTRESS): the fortress slice joins the
+      // save — the anomaly counter, the income ledgers, the kobo-chain
+      // tail. Defaulted below — a v14 player wakes up guarded, with a
+      // clean ledger and their first entry chaining from the seed.
+      save.version = 15
+      break
+    case 15:
+      // v15 → v16 (M15 — TELEPORT & PULSE): the pulse slice joins the
+      // save — the read book for the city paper, the arrival book for
+      // teleport postcards, the share ledger. Defaulted below — a v15
+      // player wakes up with the paper waiting and an empty mailbox.
+      save.version = 16
+      break
+    case 16:
+      // current version
+      break
+    default:
+      // Unknown / newer save from a newer app version — keep it, best effort.
+      break
   }
+
+  // --- defensive defaults (never break a loadable save) ---
+  if (!save.world) {
+    save.world = {
+      day: 1,
+      timeOfDay: 'morning',
+      weather: 'sunny',
+      currentLocation: 'home',
+    }
+  }
+  if (!save.world.currentLocation) save.world.currentLocation = 'home'
+  if (!save.settings) save.settings = { sound: true, graphics: 'auto', chill: false, elder: false }
+  if (typeof save.settings.sound !== 'boolean') save.settings.sound = true
+  if (!['auto', 'low', 'mid', 'high'].includes(save.settings.graphics)) save.settings.graphics = 'auto'
+  if (typeof save.settings.chill !== 'boolean') save.settings.chill = false
+  if (typeof save.settings.elder !== 'boolean') save.settings.elder = false
+
+  // --- Stage 3 player fields (missing on v1 saves / corrupt data) ---
+  const p = save.player as PlayerState
+  if (!p.skillXp) p.skillXp = { hustle: 0, smart: 0, social: 0 }
+  if (!p.activeOpportunities) p.activeOpportunities = []
+  if (!p.cooldowns) p.cooldowns = {}
+  if (!p.transactions) p.transactions = []
+  if (!p.stats) {
+    p.stats = { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }
+  }
+  // --- M13 family shield (missing on v13-and-older saves) ---
+  if (p.ageBand !== 'kid' && p.ageBand !== 'teen' && p.ageBand !== 'adult') p.ageBand = 'adult'
+
+  // --- Stage 5 player fields (missing on v2-and-older saves) ---
+  if (!p.vehicles) p.vehicles = []
+  if (typeof p.bankBalance !== 'number') p.bankBalance = 0
+  if (!p.relationships) p.relationships = {}
+
+  // --- M6 social-depth fields (missing on v6-and-older saves) ---
+  for (const key of Object.keys(p.relationships)) {
+    const r = p.relationships[key]
+    if (typeof r.lastGiftDay !== 'number') r.lastGiftDay = 0
+    if (typeof r.lastHangoutDay !== 'number') r.lastHangoutDay = 0
+  }
+
+  // --- M3 businesses (missing on v4-and-older saves; legacy entries upgraded) ---
+  if (!p.businesses) p.businesses = []
+  p.businesses = p.businesses.map((b) => ({
+    ...b,
+    accrued: typeof b.accrued === 'number' ? b.accrued : 0,
+    lastAccrualDay: typeof b.lastAccrualDay === 'number' ? b.lastAccrualDay : save.world?.day ?? 1,
+    openedDay: typeof b.openedDay === 'number' ? b.openedDay : save.world?.day ?? 1,
+    // M5 — staff & power (missing on v5-and-older saves)
+    staff: typeof b.staff === 'number' && b.staff > 0 ? b.staff : 0,
+    upgrades: Array.isArray(b.upgrades) ? b.upgrades : [],
+  }))
+
+  // --- M5 fleet ledger (missing on v5-and-older saves) ---
+  const fleet: FleetState = save.fleet && Array.isArray(save.fleet.done)
+    ? save.fleet
+    : { day: save.world?.day ?? 1, done: [] }
+  if (typeof fleet.day !== 'number') fleet.day = save.world?.day ?? 1
+  save.fleet = fleet
+
+  // --- M8 chaos engine (missing on v8-and-older saves; partial data healed) ---
+  const fresh = freshChaosState()
+  const chaos: ChaosState = save.chaos ?? fresh
+  if (typeof chaos.day !== 'number') chaos.day = fresh.day
+  if (!Array.isArray(chaos.recent)) chaos.recent = fresh.recent
+  if (!chaos.active || typeof chaos.active.zoneId !== 'string') chaos.active = null
+  if (typeof chaos.atmDrawnDay !== 'number') chaos.atmDrawnDay = fresh.atmDrawnDay
+  if (typeof chaos.atmDrawn !== 'number') chaos.atmDrawn = fresh.atmDrawn
+  if (!chaos.stats) chaos.stats = fresh.stats
+  save.chaos = chaos
+
+  // --- M9 casual shell (missing on v9-and-older saves; partial data healed) ---
+  if (!save.goals || !Array.isArray(save.goals.ids) || save.goals.ids.length !== 3) save.goals = freshGoalState()
+  if (!Array.isArray((save.goals as GoalState).done)) (save.goals as GoalState).done = [false, false, false]
+  if (!save.onboarding || !Array.isArray(save.onboarding.done)) save.onboarding = freshOnboardingState()
+  if (typeof save.onboarding.rewarded !== 'boolean') save.onboarding.rewarded = false
+  if (!save.account) save.account = freshAccountState()
+  if (typeof save.account.linked !== 'boolean') save.account.linked = false
+  if (typeof save.account.gateGraceDay !== 'number') save.account.gateGraceDay = 0
+
+  // --- M10 living calendar (missing on v10-and-older saves; partial data healed) ---
+  const freshCal = freshCalendarState()
+  const cal: CalendarState = save.calendar ?? freshCal
+  if (typeof cal.day !== 'number') cal.day = freshCal.day
+  if (typeof cal.meatPacks !== 'number') cal.meatPacks = 0
+  if (!Array.isArray(cal.meatShares)) cal.meatShares = []
+  if (!Array.isArray(cal.sponsored)) cal.sponsored = []
+  if (!Array.isArray(cal.bets)) cal.bets = []
+  if (!Array.isArray(cal.asoEbi)) cal.asoEbi = []
+  if (!Array.isArray(cal.attended)) cal.attended = []
+  if (!Array.isArray(cal.paved)) cal.paved = []
+  if (!cal.paving || typeof cal.paving.zoneId !== 'string') cal.paving = null
+  if (!cal.stats) cal.stats = freshCal.stats
+  cal.paved = cal.paved.filter((r) => typeof r.zoneId === 'string' && typeof r.untilDay === 'number')
+  save.calendar = cal
+
+  // --- M11 rivers (missing on v11-and-older saves; partial data healed) ---
+  const freshRiv = freshRiversState()
+  const rivers: RiversState = save.rivers ?? freshRiv
+  if (typeof rivers.day !== 'number') rivers.day = freshRiv.day
+  if (typeof rivers.sandbags !== 'number') rivers.sandbags = 0
+  if (typeof rivers.canoe !== 'boolean') rivers.canoe = false
+  if (!rivers.walkways || typeof rivers.walkways !== 'object') rivers.walkways = {}
+  for (const [zoneId, w] of Object.entries(rivers.walkways)) {
+    if (typeof w.laid !== 'number' || w.laid < 0) w.laid = 0
+    if (typeof w.tollTier !== 'number') w.tollTier = 0
+    if (typeof w.pot !== 'number') w.pot = 0
+    if (typeof w.tollDay !== 'number') w.tollDay = 0
+    rivers.walkways[zoneId] = w
+  }
+  if (!rivers.rescue || typeof rivers.rescue.zoneId !== 'string' || typeof rivers.rescue.year !== 'number') rivers.rescue = null
+  if (typeof rivers.rescuedYear !== 'number') rivers.rescuedYear = 0
+  if (typeof rivers.ferryDay !== 'number') rivers.ferryDay = 0
+  if (!Array.isArray(rivers.ferryDone)) rivers.ferryDone = []
+  if (!rivers.stats) rivers.stats = freshRiv.stats
+  save.rivers = rivers
+
+  // --- M12 ladder (missing on v12-and-older saves; partial data healed) ---
+  const freshEd = freshEducationState()
+  const ed: EducationState = save.education ?? freshEd
+  if (typeof ed.enrolled !== 'boolean') ed.enrolled = false
+  if (typeof ed.semester !== 'number' || ed.semester < 1) ed.semester = freshEd.semester
+  if (typeof ed.semesterStartDay !== 'number') ed.semesterStartDay = 0
+  if (typeof ed.lecturesDone !== 'number') ed.lecturesDone = 0
+  if (typeof ed.lastLectureDay !== 'number') ed.lastLectureDay = 0
+  if (typeof ed.lastGrantSemester !== 'number') ed.lastGrantSemester = 0
+  if (typeof ed.examsPassed !== 'number') ed.examsPassed = 0
+  if (typeof ed.failedExams !== 'number') ed.failedExams = 0
+  if (typeof ed.graduated !== 'boolean') ed.graduated = false
+  if (typeof ed.convocationDay !== 'number') ed.convocationDay = null
+  if (typeof ed.convocationAttended !== 'boolean') ed.convocationAttended = false
+  if (!ed.stats) ed.stats = freshEd.stats
+  save.education = ed
+
+  const freshHou = freshHousingState()
+  const hou: HousingState = save.housing ?? freshHou
+  if (hou.owned !== null && typeof hou.owned !== 'string') hou.owned = null
+  if (!hou.furnishing || typeof hou.furnishing !== 'object') hou.furnishing = {}
+  if (typeof hou.rentPaidThrough !== 'number') hou.rentPaidThrough = 0
+  if (typeof hou.lastPostedDay !== 'number') hou.lastPostedDay = 0
+  if (typeof hou.rentOwed !== 'number' || hou.rentOwed < 0) hou.rentOwed = 0
+  if (!hou.wahala || typeof hou.wahala.kind !== 'string') hou.wahala = null
+  if (!hou.stats) hou.stats = freshHou.stats
+  save.housing = hou
+
+  const freshJap = freshJapaState()
+  const jap: JapaState = save.japa ?? freshJap
+  for (const k of ['nimcReadyDay', 'nimcDay', 'passportReadyDay', 'passportDay', 'agentTries', 'agentScams', 'clearanceDay', 'policeDay', 'flownDay', 'remitDay', 'policeShifts', 'sirenUntilDay', 'lastEscortDay'] as const) {
+    if (typeof jap[k] !== 'number') jap[k] = 0
+  }
+  if (!jap.stats) jap.stats = freshJap.stats
+  save.japa = jap
+
+  // --- M13 shield (missing on v13-and-older saves; partial data healed) ---
+  const freshSh = freshShieldState()
+  const sh: ShieldState = save.shield ?? freshSh
+  if (typeof sh.scammerDay !== 'number') sh.scammerDay = freshSh.scammerDay
+  if (typeof sh.scammerCorrect !== 'number') sh.scammerCorrect = freshSh.scammerCorrect
+  if (typeof sh.scammerWrong !== 'number') sh.scammerWrong = freshSh.scammerWrong
+  if (typeof sh.scammerStreak !== 'number') sh.scammerStreak = freshSh.scammerStreak
+  if (typeof sh.parentPinHash !== 'string' && sh.parentPinHash !== null) sh.parentPinHash = null
+  save.shield = sh
+
+  // --- M14 fortress (missing on v14-and-older saves; partial data healed) ---
+  const freshFt = freshFortressState()
+  const ft: FortressState = save.fortress ?? freshFt
+  if (typeof ft.anomalies !== 'number' || ft.anomalies < 0) ft.anomalies = freshFt.anomalies
+  if (typeof ft.dayEarnedDay !== 'number') ft.dayEarnedDay = freshFt.dayEarnedDay
+  if (typeof ft.dayEarned !== 'number' || ft.dayEarned < 0) ft.dayEarned = freshFt.dayEarned
+  if (typeof ft.slotTxCount !== 'number' || ft.slotTxCount < 0) ft.slotTxCount = freshFt.slotTxCount
+  if (typeof ft.slotTxSlot !== 'number') ft.slotTxSlot = freshFt.slotTxSlot
+  if (typeof ft.chainTail !== 'string') ft.chainTail = CHAIN_SEED
+  if (typeof ft.fingerprint !== 'string' && ft.fingerprint !== null) ft.fingerprint = null
+  save.fortress = ft
+
+  // --- M15 city pulse (missing on v15-and-older saves; partial data healed) ---
+  const freshPl = freshPulseState()
+  const pl = save.cityPulse ?? freshPl
+  if (typeof pl.readDay !== 'number' || pl.readDay < 0) pl.readDay = freshPl.readDay
+  if (!Array.isArray(pl.seen)) pl.seen = []
+  if (!Array.isArray(pl.arrivals)) pl.arrivals = []
+  pl.arrivals = pl.arrivals.filter((c) => typeof c === 'string' && c.startsWith('lkt1.')).slice(-20)
+  pl.seen = pl.seen.filter((s) => typeof s === 'string').slice(-64)
+  if (!pl.stats || typeof pl.stats !== 'object') pl.stats = freshPl.stats
+  if (typeof pl.stats.shares !== 'number' || pl.stats.shares < 0) pl.stats.shares = 0
+  if (typeof pl.stats.arrivalsIn !== 'number' || pl.stats.arrivalsIn < 0) pl.stats.arrivalsIn = 0
+  save.cityPulse = pl
+
+  // --- M2 civic mesh (missing on v3-and-older saves) ---
+  if (!save.civic) {
+    save.civic = freshCivicState()
+  } else {
+    // defensive merge — a partially-written civic slice still loads
+    const fresh = freshCivicState()
+    save.civic = {
+      nepa: { ...fresh.nepa, ...save.civic.nepa },
+      kgirs: { ...fresh.kgirs, ...save.civic.kgirs },
+      police: { ...fresh.police, ...save.civic.police },
+      efcc: { ...fresh.efcc, ...save.civic.efcc, pending: save.civic.efcc?.pending ?? [] },
+      market: { ...fresh.market, ...save.civic.market },
+    }
+  }
+
+  save.version = SAVE_VERSION
+  return save
 }
+
+/** The last transport verdict (boot narrates a descent honestly). */
+export let lastTransportVerdict: 'ok' | 'legacy' | 'missing-key' | 'recovered-shadow' | 'recovered-backup' | 'fresh' | 'none' = 'none'
+
+/** The last write verdict (M15 — the delta law narrates its own skips). */
+export let lastWriteVerdict: 'wrote' | 'skip' | 'failed' = 'failed'
 
 export const SaveSystem = {
   SAVE_KEY,
   SAVE_VERSION,
+  SHADOW_KEY,
+
+  /** TEST HOOK — pin the device key (deterministic signing in the suite). */
+  setFortKey(key: string): void {
+    setFortKey(key)
+  },
+
+  /** The device fortress key (tests + the UI honesty row may read it). */
+  fortKey(): string | null {
+    return fortKey()
+  },
 
   /** Does a local save exist? */
   hasSave(): boolean {
@@ -340,29 +510,168 @@ export const SaveSystem = {
     return window.localStorage.getItem(SAVE_KEY) !== null
   },
 
-  /** Load and validate the save, or null if none / corrupt. */
+  /**
+   * THE LOAD PLAN — primary → shadow → backup → fresh. The primary wins
+   * when it parses AND verifies; a tampered/torn primary falls to the
+   * shadow, then the M9 backup slot, then fresh. The last verdict lands
+   * in lastTransportVerdict for the boot toast.
+   */
   load(): GameSave | null {
     if (!storageAvailable()) return null
-    const raw = window.localStorage.getItem(SAVE_KEY)
-    if (!raw) return null
-    return deserialize(raw)
+    // 1) the primary
+    const primaryRaw = window.localStorage.getItem(SAVE_KEY)
+    if (primaryRaw) {
+      const { save, verdict } = unwrapEnvelope(primaryRaw)
+      if (save) {
+        const healed = deserialize(primaryRaw)
+        if (healed) {
+          lastTransportVerdict = verdict === 'legacy' ? 'legacy' : verdict === 'missing-key' ? 'missing-key' : 'ok'
+          return healed
+        }
+      }
+    }
+    // 2) the shadow (the previous primary — a torn/tampered write's twin)
+    const shadowRaw = window.localStorage.getItem(SHADOW_KEY)
+    if (shadowRaw) {
+      const { save: shadowSave } = unwrapEnvelope(shadowRaw)
+      if (shadowSave) {
+        const healed = deserialize(shadowRaw)
+        if (healed) {
+          lastTransportVerdict = 'recovered-shadow'
+          // heal forward: drop the broken primary FIRST (never demote tampered
+          // bytes into the shadow slot), then re-seal the honest save
+          window.localStorage.removeItem(SAVE_KEY)
+          this.write(healed, { force: true })
+          return healed
+        }
+      }
+    }
+    // 3) the M9 backup slot (the guest loop's never-lose-progress copy)
+    try {
+      const backupRaw = window.localStorage.getItem('lokoja-life:backup')
+      if (backupRaw) {
+        const parsed = JSON.parse(backupRaw) as GameSave & { savedAs?: string }
+        if (parsed && parsed.player) {
+          const healed = deserialize(JSON.stringify(parsed))
+          if (healed) {
+            lastTransportVerdict = 'recovered-backup'
+            window.localStorage.removeItem(SAVE_KEY)
+            window.localStorage.removeItem(SHADOW_KEY)
+            this.write(healed, { force: true })
+            return healed
+          }
+        }
+      }
+    } catch {
+      /* the backup slot is corrupt — the descent continues */
+    }
+    lastTransportVerdict = 'fresh'
+    return null
   },
 
-  /** Persist the save. Returns false if storage is unavailable. */
-  write(save: GameSave): boolean {
-    if (!storageAvailable()) return false
-    try {
-      window.localStorage.setItem(SAVE_KEY, serialize(save))
-      return true
-    } catch {
+  /**
+   * THE WRITE PLAN — the shadow receives the CURRENT primary BEFORE the
+   * primary is overwritten (double-buffer), then the new payload lands
+   * signed. Torn writes leave the shadow holding the last good save.
+   *
+   * M15 — THE DELTA LAW: if the serialized payload is byte-identical to
+   * the last write AND the primary on disk is intact, the write SKIPS —
+   * no re-sign, no shadow churn, zero bytes. A debounced autosave that
+   * fires on an idle city no longer grinds the disk. Recovery writes
+   * (the load descent) pass { force: true } — a broken primary must be
+   * overwritten even when the honest payload hashes the same as the
+   * last write (the broken bytes never wrote the hash themselves).
+   */
+  write(save: GameSave, opts?: { force?: boolean }): boolean {
+    if (!storageAvailable()) {
+      lastWriteVerdict = 'failed'
       return false
     }
+    try {
+      const dataStr = serialize(save)
+      const fingerprint = stateFingerprint(save)
+      const primaryRaw = window.localStorage.getItem(SAVE_KEY)
+      // THE SKIP LAW is strict: the skip is only safe when the recovery
+      // ladder keeps ALL its rungs — the primary intact, the fingerprint
+      // matching, AND the shadow already holding a twin. A first write
+      // (no shadow yet) always lands for real, so the descent always
+      // has somewhere honest to fall.
+      if (
+        !opts?.force && primaryRaw !== null &&
+        window.localStorage.getItem(SHADOW_KEY) !== null &&
+        window.localStorage.getItem(DELTA_HASH_KEY) === fingerprint
+      ) {
+        // the bytes on disk ARE this payload — verify the envelope still
+        // stands (a tampered primary must never ride a delta skip)
+        const { save: intact } = unwrapEnvelope(primaryRaw)
+        if (intact) {
+          lastWriteVerdict = 'skip'
+          return true
+        }
+      }
+      // 1) double-buffer: copy the current primary into the shadow
+      if (primaryRaw !== null) {
+        window.localStorage.setItem(SHADOW_KEY, primaryRaw)
+      }
+      // 2) serialize + sign + write the primary
+      window.localStorage.setItem(SAVE_KEY, wrapEnvelope(dataStr))
+      window.localStorage.setItem(DELTA_HASH_KEY, fingerprint)
+      lastWriteVerdict = 'wrote'
+      return true
+    } catch {
+      lastWriteVerdict = 'failed'
+      return false
+    }
+  },
+
+  /** The last write verdict ('wrote' | 'skip' | 'failed') — the delta law's honesty line. */
+  writeVerdict(): typeof lastWriteVerdict {
+    return lastWriteVerdict
+  },
+
+  /** M15 — the hash of the last payload that hit disk (the delta book). */
+  lastWriteHash(): string | null {
+    if (!storageAvailable()) return null
+    return window.localStorage.getItem(DELTA_HASH_KEY)
+  },
+
+  /** M15 — the hash of the last payload the cloud accepted (zero-byte push law). */
+  lastPushedHash(): string | null {
+    if (!storageAvailable()) return null
+    return window.localStorage.getItem(PUSHED_HASH_KEY)
+  },
+
+  /** M15 — record the pushed fingerprint after a successful vault write. */
+  markPushed(save: GameSave): void {
+    if (!storageAvailable()) return
+    try {
+      window.localStorage.setItem(PUSHED_HASH_KEY, stateFingerprint(save))
+    } catch { /* storage full — the next push just sends the payload again */ }
+  },
+
+  /** M15 — the state fingerprint of a save (the delta book's own law). */
+  fingerprintOf(save: GameSave): string {
+    return stateFingerprint(save)
   },
 
   /** Remove the save (used by "Start Over"). */
   clear(): void {
     if (!storageAvailable()) return
     window.localStorage.removeItem(SAVE_KEY)
+    window.localStorage.removeItem(SHADOW_KEY)
+    window.localStorage.removeItem(DELTA_HASH_KEY)
+    window.localStorage.removeItem(PUSHED_HASH_KEY)
+  },
+
+  /** The raw signed envelope of the primary (the cloud push carries it whole). */
+  readEnvelope(): string | null {
+    if (!storageAvailable()) return null
+    return window.localStorage.getItem(SAVE_KEY)
+  },
+
+  /** The last transport verdict (the boot toast + the honesty row). */
+  transportVerdict(): typeof lastTransportVerdict {
+    return lastTransportVerdict
   },
 
   /**

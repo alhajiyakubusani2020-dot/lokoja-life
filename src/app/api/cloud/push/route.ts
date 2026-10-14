@@ -15,17 +15,19 @@ export async function POST(req: Request) {
     const account = await db.account.findFirst({ where: { token } })
     if (!account) return NextResponse.json({ ok: false, why: 'bad token' }, { status: 401 })
 
-    const body = (await req.json()) as { schema_version?: number; data?: unknown }
+    const body = (await req.json()) as { schema_version?: number; data?: unknown; sig?: string }
     if (!body?.data || typeof body.data !== 'object') {
       return NextResponse.json({ ok: false, why: 'bad payload' }, { status: 400 })
     }
 
     const data = JSON.stringify(body.data)
     const version = typeof body.schema_version === 'number' ? body.schema_version : 10
+    // M14 — the client's HMAC rides beside the save (tamper-evidence for the pull)
+    const sig = typeof body.sig === 'string' && body.sig.length > 0 ? body.sig : null
     await db.cloudSave.upsert({
       where: { accountId: account.id },
-      create: { accountId: account.id, data, version },
-      update: { data, version },
+      create: { accountId: account.id, data, version, sig },
+      update: { data, version, sig },
     })
     return NextResponse.json({ ok: true })
   } catch {

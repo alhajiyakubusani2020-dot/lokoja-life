@@ -38,6 +38,9 @@ model CloudSave {
   accountId String   @id
   data      String
   version   Int      @default(10)
+  /// M14 — the client HMAC over the save payload (the vault stores it
+  /// beside the save; the pull returns it so the client verifies before merge)
+  sig       String?
   updatedAt DateTime @updatedAt
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }

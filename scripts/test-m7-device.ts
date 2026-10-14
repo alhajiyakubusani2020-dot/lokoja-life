@@ -219,7 +219,7 @@ console.log('\nSAVE v8 — the graphics pick joins the schema')
     player: basePlayer, world: baseWorld, settings: { sound: true },
   }))
   const v8 = SaveSystem.load()
-  check('v7 save loads and reaches v14 (M8+…+M13 join)', v8?.version === 14)
+  check('v7 save loads and reaches v16 (M8+…+M15 join)', v8?.version === 16)
   check('v7 player wakes up on Auto', v8?.settings.graphics === 'auto')
   check('v7 sound setting survived the ladder', v8?.settings.sound === true)
 
@@ -265,12 +265,14 @@ console.log('\nREAL STORE — setGraphics through the live bun store')
   check('setGraphics(low) lands in the live store', state().settings.graphics === 'low')
   await sleep(50) // autosave debounce (1.2s) — force it instead:
   state().saveNow()
-  const saved = JSON.parse(mem.get('lokoja-life:save') ?? '{}') as { settings?: { graphics?: string } }
+  const eA = JSON.parse(mem.get('lokoja-life:save') ?? '{}') as { fmt?: number; data?: { settings?: { graphics?: string } } }
+  const saved = (eA.fmt === 2 ? eA.data : eA) as { settings?: { graphics?: string } }
   check('the pick persists into the save', saved.settings?.graphics === 'low')
 
   state().setGraphics('high')
   state().saveNow()
-  const saved2 = JSON.parse(mem.get('lokoja-life:save') ?? '{}') as { settings?: { graphics?: string } }
+  const eB = JSON.parse(mem.get('lokoja-life:save') ?? '{}') as { fmt?: number; data?: { settings?: { graphics?: string } } }
+  const saved2 = (eB.fmt === 2 ? eB.data : eB) as { settings?: { graphics?: string } }
   check('re-picking High updates the persisted save', saved2.settings?.graphics === 'high')
   check('sound untouched by the graphics pick', state().settings.sound === true)
 
@@ -278,11 +280,13 @@ console.log('\nREAL STORE — setGraphics through the live bun store')
   useGameStore.setState({ player: null, world: null, civic: null }) // back to the menu, honestly
   mem.set('lokoja-life:save', JSON.stringify({ version: 8, createdAt: 1, updatedAt: 2, player: {}, world: { day: 1 }, settings: { sound: true, graphics: 'auto' } }))
   state().setGraphics('mid')
-  const menuSaved = JSON.parse(mem.get('lokoja-life:save') ?? '{}') as { settings?: { graphics?: string } }
+  const eC = JSON.parse(mem.get('lokoja-life:save') ?? '{}') as { fmt?: number; data?: { settings?: { graphics?: string } } }
+  const menuSaved = (eC.fmt === 2 ? eC.data : eC) as { settings?: { graphics?: string } }
   check('a menu-stage pick persists without a live game', menuSaved.settings?.graphics === 'mid')
   check('the menu pick landed in the store too', state().settings.graphics === 'mid')
   state().toggleSound()
-  const menuSound = JSON.parse(mem.get('lokoja-life:save') ?? '{}') as { settings?: { sound?: boolean } }
+  const eD = JSON.parse(mem.get('lokoja-life:save') ?? '{}') as { fmt?: number; data?: { settings?: { sound?: boolean } } }
+  const menuSound = (eD.fmt === 2 ? eD.data : eD) as { settings?: { sound?: boolean } }
   check('menu sound toggle persists the same way', menuSound.settings?.sound === false)
 }
 

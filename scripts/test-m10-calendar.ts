@@ -71,7 +71,7 @@ import { SaveSystem } from '../src/game/systems/save'
 import type { CalendarState } from '../src/game/types'
 
 const A = FESTIVALS.anchors
-const SAVE_V = 14
+const SAVE_V = 16
 
 let passed = 0
 let failed = 0
@@ -456,7 +456,7 @@ section('the save v10 → v11 migration')
   }
   mem.set(SaveSystem.SAVE_KEY, JSON.stringify(v10))
   const loaded = SaveSystem.load()
-  check('v10 save migrates to v14', loaded?.version === SAVE_V)
+  check('v10 save migrates to v16', loaded?.version === SAVE_V)
   check('the calendar slice arrives fresh and harmless', !!loaded?.calendar && loaded.calendar.day === 0 && loaded.calendar.meatPacks === 0 && Array.isArray(loaded.calendar.paved))
   check('nothing else moved (chaos/goals/account intact)', loaded?.chaos.stats.blowouts === 1 && loaded?.goals.streak === 2 && loaded?.account.linked === true)
   mem.set(SaveSystem.SAVE_KEY, '{broken json')
@@ -625,11 +625,11 @@ section('the REAL store pass — sleep into the Regatta, stake the year')
   const raw = localStorage.getItem(SaveSystem.SAVE_KEY)
   let parsed: { version: number; calendar?: { meatPacks: number } } | null = null
   try {
-    parsed = raw ? (JSON.parse(raw) as { version: number; calendar?: { meatPacks: number } }) : null
+    parsed = raw ? (JSON.parse(JSON.parse(raw).fmt === 2 ? JSON.stringify(JSON.parse(raw).data) : raw) as { version: number; calendar?: { meatPacks: number } }) : null
   } catch {
     parsed = null
   }
-  check('the calendar slice persists into the v14 save', parsed?.version === SAVE_V && typeof parsed?.calendar?.meatPacks === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
+  check('the calendar slice persists into the v16 save', parsed?.version === SAVE_V && typeof parsed?.calendar?.meatPacks === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
 }
 
 console.log(`\n========================================`)

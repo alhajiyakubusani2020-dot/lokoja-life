@@ -92,7 +92,7 @@ import { LADDER } from '../src/game/data/config'
 import { SaveSystem } from '../src/game/systems/save'
 import { freshCivicState } from '../src/game/systems/civic'
 
-const SAVE_V = 14
+const SAVE_V = 16
 const E = LADDER.education
 const H = LADDER.housing
 const J = LADDER.japa
@@ -423,7 +423,7 @@ section('the save v12 → v13 migration')
   }
   mem.set(SaveSystem.SAVE_KEY, JSON.stringify(v12))
   const loaded = SaveSystem.load()
-  check('v12 save migrates to v14', loaded?.version === SAVE_V)
+  check('v12 save migrates to v16', loaded?.version === SAVE_V)
   check('the education slice arrives fresh and harmless', !!loaded?.education && loaded.education.enrolled === false && loaded.education.semester === 1 && loaded.education.graduated === false)
   check('the housing slice arrives fresh (renting, clean book)', !!loaded?.housing && loaded.housing.owned === null && loaded.housing.rentOwed === 0 && loaded.housing.wahala === null)
   check('the japa slice arrives fresh (empty file)', !!loaded?.japa && loaded.japa.nimcDay === 0 && loaded.japa.flownDay === 0 && loaded.japa.policeShifts === 0)
@@ -589,11 +589,11 @@ section('the REAL store pass — enroll, climb, own, japa')
   const raw = localStorage.getItem(SaveSystem.SAVE_KEY)
   let parsed: { version: number; education?: { graduated: boolean }; housing?: { owned: string | null }; japa?: { flownDay: number } } | null = null
   try {
-    parsed = raw ? (JSON.parse(raw) as { version: number; education?: { graduated: boolean }; housing?: { owned: string | null }; japa?: { flownDay: number } }) : null
+    parsed = raw ? (JSON.parse(JSON.parse(raw).fmt === 2 ? JSON.stringify(JSON.parse(raw).data) : raw) as { version: number; education?: { graduated: boolean }; housing?: { owned: string | null }; japa?: { flownDay: number } }) : null
   } catch {
     parsed = null
   }
-  check('the ladder persists into the v14 save', parsed?.version === SAVE_V && parsed?.education?.graduated === true && parsed?.housing?.owned === 'family-room' && typeof parsed?.japa?.flownDay === 'number' && (parsed?.japa?.flownDay ?? 0) > 0)
+  check('the ladder persists into the v16 save', parsed?.version === SAVE_V && parsed?.education?.graduated === true && parsed?.housing?.owned === 'family-room' && typeof parsed?.japa?.flownDay === 'number' && (parsed?.japa?.flownDay ?? 0) > 0)
 }
 
 console.log(`\n========================================`)

@@ -630,6 +630,23 @@ export const ELDER = {
 } as const
 
 /**
+ * M14 — THE FORTRESS. The income ceilings sit far above every LEGIT
+ * Lokoja flow (the ₦150k JAPA send-off is the biggest single honest
+ * payout; a high-level biz collect rides a few hundred thousand) so
+ * honest players never feel them — but a cheat that mints millions gets
+ * clamped at the line and COUNTED. The velocity cap stops micro-event
+ * floods per clock slot.
+ */
+export const FORTRESS = {
+  /** the biggest single income event the city can honestly pay */
+  singleCeiling: 1_500_000,
+  /** the most naira one in-game day may honestly earn */
+  dayCeiling: 3_000_000,
+  /** transactions per clock slot before the flood gate shuts */
+  velocityCap: 24,
+} as const
+
+/**
  * M10 — THE LIVING CALENDAR. Lokoja's year runs on 72 game days so a real
  * player actually MEETS the city's celebrations: the Confluence Regatta,
  * the two Eids (drifting a little every year), the Ramadan fast and the
@@ -1090,4 +1107,14 @@ export const LADDER = {
     sirenMinutesMult: 0.8,
     sirenDays: 2,
   },
+} as const
+
+/** M15 — THE AWARENESS WAR: the postcard and the city paper's laws. */
+export const PULSE = {
+  /** street credit (rep) a real share pays — once per in-game day */
+  shareStreetCredit: 2,
+  /** the cooldown key on player.cooldowns (value = the in-game day it last paid) */
+  shareCooldownKey: 'pulse-share',
+  /** the arrival book's cap (oldest postcards fall off) */
+  arrivalCap: 20,
 } as const

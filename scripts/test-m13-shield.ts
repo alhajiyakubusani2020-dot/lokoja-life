@@ -17,7 +17,7 @@
  * parent PIN moves the ladder. REAL HTTP pass: the register refuses a
  * minor without the parent PIN, collects NOTHING for minors (no
  * contact conflict on a second minor claim), and /api/auth/tier moves
- * the band only with the parent's yes. Save v13→v14 migration included.
+ * the band only with the parent's yes. Save v13→v14→v15 migration included.
  * Run: bun scripts/test-m13-shield.ts
  */
 
@@ -178,7 +178,7 @@ check('canBet still greets the adult', canBet(freshCalendarState(), 37, 'conflue
 
 /* ------------------------------ save v14 ----------------------------------- */
 
-section('the save v13→v14 migration — the shield joins the save')
+section('the save v13→v15 migration — the shield joins the save')
 {
   const { freshCalendarState: fcal, freshRiversState: friv, freshEducationState: fed, freshHousingState: fhou, freshJapaState: fjp, freshChaosState: fch, freshCivicState: fciv, freshGoalState: fgo, freshOnboardingState: fo } = await import('../src/game/systems/calendar').then(async (cal) => ({
     freshCalendarState: cal.freshCalendarState,
@@ -211,7 +211,7 @@ section('the save v13→v14 migration — the shield joins the save')
   }
   mem['lokoja-life:save'] = JSON.stringify(legacy)
   const loaded = SaveSystem.load()
-  check('a v13 save loads at v14', loaded?.version === 14)
+  check('a v13 save loads at v16', loaded?.version === 16)
   check('the character wakes as an ADULT (the honest default for existing hustlers)', loaded?.player.ageBand === 'adult')
   check('the shield slice arrives (game book empty, no parent gate)',
     !!loaded?.shield && loaded.shield.scammerDay === 0 && loaded.shield.scammerCorrect === 0 && loaded.shield.parentPinHash === null)
@@ -291,8 +291,12 @@ section('the REAL store pass — a kid walks the shielded city')
 
   // — the hustle board filters to kidSafe at Kpata —
   store.setState({ world: { ...store.getState().world!, currentLocation: 'kpata-market' }, player: { ...kidState(), ageBand: 'kid' } })
-  store.getState().searchHustles()
-  await sleep(30)
+  // the street has a dry-chance — hunt until the board speaks (bounded, honest)
+  for (let i = 0; i < 8 && store.getState().offers.length === 0; i++) {
+    store.setState({ player: { ...store.getState().player!, cooldowns: {} } })
+    store.getState().searchHustles()
+    await sleep(30)
+  }
   const offers = store.getState().offers
   check('the kid board only carries kidSafe chores', offers.every((o) => HUSTLE_BY_ID[o.defId]?.kidSafe === true))
   check('the kid board is not empty (Kpata is kid country)', offers.length > 0)
@@ -372,7 +376,7 @@ section('the REAL store pass — a kid walks the shielded city')
   store.getState().saveNow()
   const saved = SaveSystem.load()
   check('the save carries the M13 slice (band + shield + elder)',
-    saved?.version === 14 && saved?.player.ageBand === 'adult' && saved?.shield.scammerCorrect >= 2 && saved?.settings.elder === true)
+    saved?.version === 16 && saved?.player.ageBand === 'adult' && saved?.shield.scammerCorrect >= 2 && saved?.settings.elder === true)
 
   // — teen study boost (level 8 so the skill cap never banks the delta) —
   store.setState({ player: { ...kidState(), ageBand: 'teen', level: 8, skills: { hustle: 5, smart: 0, social: 5 }, skillXp: { hustle: 0, smart: 0, social: 0 } } })

@@ -119,6 +119,8 @@ export interface Transaction {
   category: TransactionCategory
   /** positive = earned, negative = spent */
   amount: number
+  /** M14 — the kobo-chain link (undefined = legacy pre-Fortress entry) */
+  sig?: string
 }
 
 /** A bundle of gains produced by any activity (job, hustle, event, gift). */
@@ -681,6 +683,32 @@ export interface ShieldState {
   parentPinHash: string | null
 }
 
+/* ------------------------------ M14 — fortress ------------------------------ */
+
+/**
+ * M14 — THE FORTRESS slice. The save's guard book: the anomaly counter,
+ * the day's earned total (the income-guard ledger), the chain tail hash
+ * (the kobo-chain anchor for the next entry), and the config fingerprint
+ * this save was written by. Pure data — the laws live in
+ * systems/fortress.ts.
+ */
+export interface FortressState {
+  /** honest counter: how many income clamps have landed (narrated, never hidden) */
+  anomalies: number
+  /** the day the day-earnings ledger belongs to */
+  dayEarnedDay: number
+  /** naira earned TODAY (the day-ceiling ledger) */
+  dayEarned: number
+  /** transactions recorded in the current clock slot (the velocity ledger) */
+  slotTxCount: number
+  /** the clock slot the velocity ledger belongs to */
+  slotTxSlot: number
+  /** the kobo-chain tail (the hash the NEXT ledger entry chains from) */
+  chainTail: string
+  /** the config fingerprint of the build that wrote this save (null = legacy) */
+  fingerprint: string | null
+}
+
 /* -------------------------------- M11 — rivers ------------------------------ */
 
 /**
@@ -740,6 +768,29 @@ export interface RiversState {
   }
 }
 
+/* ------------------------------- M15 — pulse -------------------------------- */
+
+/**
+ * M15 — THE CITY PULSE slice. The read book for the city's newspaper,
+ * the arrival book for teleport postcards, and the share ledger. The
+ * NEWS itself derives from the day — only participation persists.
+ * Pure data — the laws live in systems/pulse.ts and systems/teleport.ts.
+ */
+export interface PulseState {
+  /** the last day the feed was marked read (0 = never opened) */
+  readDay: number
+  /** read item ids (`${day}:${kind}[:${zone}]`) — pruned to the last 64 */
+  seen: string[]
+  /** teleport codes that landed here (capped — the arrival book) */
+  arrivals: string[]
+  stats: {
+    /** postcards shared (the street-credit book rides the cooldown) */
+    shares: number
+    /** postcards that landed YOU here */
+    arrivalsIn: number
+  }
+}
+
 /* ---------------------------------- Save ----------------------------------- */
 
 /**
@@ -751,7 +802,8 @@ export interface GameSave {
    *  v9 (M8): the chaos slice joins the schema
    *  v10 (M9): goals, onboarding, account + settings.chill join the schema
    *  v11 (M10): the living calendar joins the schema
-   *  v12 (M11): the rivers slice joins the schema */
+   *  v12 (M11): the rivers slice joins the schema
+   *  v16 (M15): the pulse slice joins the schema */
   version: number
   createdAt: number
   updatedAt: number
@@ -778,6 +830,10 @@ export interface GameSave {
   japa: JapaState
   /** M13 — the family shield: the scammer game's book + the local parent gate */
   shield: ShieldState
+  /** M14 — the fortress: anomalies, the income ledgers, the chain tail */
+  fortress: FortressState
+  /** M15 — the pulse: the read book, the arrival book, the share ledger */
+  cityPulse: PulseState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

@@ -35,6 +35,7 @@ import { NPCS } from '@/game/data/npcs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
 import { ChatThread, tierChipClass } from './phone/ChatThread'
+import { PulseApp } from './phone/PulseApp'
 import { GraphicsPicker } from './GraphicsPicker'
 import {
   ArrowLeftIcon,
@@ -52,7 +53,13 @@ import {
   TargetIcon,
 } from '../icons'
 
-type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield'
+type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse'
+
+/** M15 — a banner can deep-link the handset straight into an app (one-shot). */
+let phoneDeepLink: PhoneApp | null = null
+export function openPhoneApp(app: PhoneApp): void {
+  phoneDeepLink = app
+}
 
 const APP_VERSION = 'Lokoja Life • Stage 5'
 
@@ -772,7 +779,11 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
   const isTravelling = useGameStore((s) => s.isTravelling)
   const isWorking = useGameStore((s) => s.isWorking)
 
-  const [app, setApp] = useState<PhoneApp>('grid')
+  const [app, setApp] = useState<PhoneApp>(() => {
+    const deep = phoneDeepLink
+    phoneDeepLink = null
+    return deep ?? 'grid'
+  })
   const [openNpc, setOpenNpc] = useState<string | null>(null)
 
   const busy = isTravelling || isWorking
@@ -797,6 +808,13 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
       sub: `${paddyCount} paddy dem`,
       tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green)]',
       icon: SocialIcon,
+    },
+    {
+      key: 'pulse',
+      label: 'City Pulse',
+      sub: 'The city talk wetin e see',
+      tint: 'bg-[var(--lko-river-soft)] text-[var(--lko-river)]',
+      icon: TargetIcon,
     },
     {
       key: 'shield',
@@ -850,6 +868,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     biz: 'My Biz',
     settings: 'Settings',
     shield: 'Family Shield',
+    pulse: 'City Pulse',
   }
 
   return (
@@ -909,6 +928,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
                   {app === 'civic' && <CivicApp />}
                   {app === 'biz' && <BizApp />}
                   {app === 'shield' && <ShieldApp />}
+                  {app === 'pulse' && <PulseApp />}
                   {app === 'settings' && <SettingsApp />}
                 </div>
               </>

@@ -26,7 +26,9 @@ export async function POST(req: Request) {
     await db.account.update({ where: { id: account.id }, data: { token } })
 
     const save = account.cloudSave ? (JSON.parse(account.cloudSave.data) as unknown) : null
-    return NextResponse.json({ ok: true, token, save })
+    // M14 — the vault row's client signature rides back (the merge verifies)
+    const sig = account.cloudSave?.sig ?? null
+    return NextResponse.json({ ok: true, token, save, sig })
   } catch {
     return NextResponse.json({ ok: false, why: 'The register no gree — try again.' }, { status: 500 })
   }

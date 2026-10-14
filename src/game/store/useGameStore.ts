@@ -40,6 +40,8 @@ import type {
   HousingState,
   JapaState,
   ShieldState,
+  FortressState,
+  PulseState,
   FestivalDay,
   WeddingDay,
   ShopUpgradeId,
@@ -123,6 +125,8 @@ import {
   type ChaosDayResult,
 } from '../systems/chaos'
 import { bumpGoal, freshGoalState } from '../systems/goals'
+import { freshPulseState, pulseForDay, markPulseRead, type PulseItem } from '../systems/pulse'
+import { encodeTeleport, decodeTeleport, postcardFor, type TeleportMoment } from '../systems/teleport'
 import {
   freshCalendarState,
   calendarDayRoll,
@@ -231,6 +235,15 @@ import {
 } from '../systems/japa'
 import { gigBoard, gigLabel } from '../systems/fleet'
 import {
+  freshFortressState,
+  incomeGuard,
+  velocityGuard,
+  chainNext,
+  configFingerprint,
+  CHAIN_SEED,
+} from '../systems/fortress'
+import { FORTRESS } from '../data/config'
+import {
   freshShieldState,
   crimeAllowed,
   canHustle as shieldCanHustle,
@@ -246,7 +259,7 @@ import {
   type CrimeContentId,
 } from '../systems/shield'
 import { HUSTLE_BY_ID } from '../data/hustles'
-import { BIZ, CIVIC, FLEET, CHAOS, FESTIVALS, RIVERS, LADDER, SHIELD, ELDER } from '../data/config'
+import { BIZ, CIVIC, FLEET, CHAOS, FESTIVALS, RIVERS, LADDER, SHIELD, ELDER, PULSE } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
 
@@ -276,6 +289,14 @@ interface GameStore {
   japa: JapaState
   /** M13 — the family shield: the scammer game's book + the local parent gate */
   shield: ShieldState
+  /** M14 — the fortress: anomalies, the income ledgers, the chain tail */
+  fortress: FortressState
+  /** M15 — the city pulse: the read book, the arrival book, the share ledger */
+  cityPulse: PulseState | null
+  /** M15 — a postcard waiting to land (URL arrival / the gate's hold). Session-only. */
+  pendingArrival: { code: string; moment: TeleportMoment } | null
+  /** M16 — a cloud push failed offline; the queue flushes when the network returns */
+  cloudPending: boolean
   /** M9 — the casual shell: today's goals, the onboarding arc, the account */
   goals: GoalState
   onboarding: OnboardingState
@@ -478,6 +499,16 @@ interface GameStore {
   closeGate: () => void
   /** M9 — push the current save to the cloud (linked accounts) */
   pushCloud: () => Promise<{ ok: boolean; why?: string }>
+  /** M15 — open the city paper: marks today's feed read */
+  openCityPulse: () => void
+  /** M15 — share THIS MOMENT as a signed teleport postcard (street credit once/day) */
+  shareTeleport: () => Promise<{ ok: boolean; why?: string; url?: string }>
+  /** M15 — share a City Pulse headline (same street-credit cooldown) */
+  sharePulseCard: (item: PulseItem) => Promise<{ ok: boolean; why?: string }>
+  /** M15 — arrive by postcard: verify, land free, book the ghost */
+  arriveByTeleport: (code: string) => { ok: boolean; why?: string }
+  /** M16 — the offline law: flush the queued push when the network returns */
+  flushCloudQueue: () => Promise<void>
   saveNow: () => void
   resetGame: () => void
 
@@ -489,6 +520,115 @@ interface GameStore {
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let notificationId = 0
 let pulseId = 0
+/** M16 — the online listener wires itself exactly once. */
+let cloudQueueWired = false
+
+/**
+ * M15 — THE ARRIVAL LAW: a verified postcard lands the walker on the
+ * sender's street, free, no fare, no clock cost. The code joins the
+ * arrival book (the ghost card reads it back), the URL cleans itself,
+ * and the street credit is NEVER paid to the arrival — credit buys
+ * shares, not landings.
+ */
+function applyArrival(
+  set: (partial: Partial<GameStore>) => void,
+  get: () => GameStore,
+  code: string,
+  m: TeleportMoment,
+  opts?: { silent?: boolean },
+): void {
+  const world = get().world
+  if (!world) return
+  const pl = get().cityPulse ?? freshPulseState()
+  set({
+    world: { ...world, currentLocation: m.locId },
+    pendingArrival: null,
+    cityPulse: {
+      ...pl,
+      arrivals: [...pl.arrivals, code].slice(-PULSE.arrivalCap),
+      stats: { ...pl.stats, arrivalsIn: pl.stats.arrivalsIn + 1 },
+    },
+  })
+  try {
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  } catch { /* the URL is cosmetic — the arrival already landed */ }
+  if (!opts?.silent) {
+    const place = LOCATION_BY_ID[m.locId]?.name ?? m.locId
+    get().notify({ icon: '📍', text: `You land for ${place} — ${m.name}'s postcard, Day ${m.day}. No fare.`, tone: 'good' })
+    audio.play('notify')
+  }
+  scheduleAutosave(get)
+}
+
+/**
+ * M15 — THE DAY TALLY: the ghost card's honest numbers, read off the
+ * ledger (the deterministic kernel's own record of the day).
+ */
+function dayTally(transactions: Transaction[], day: number): { earned: number; moves: number; trail: number[] } {
+  const today = transactions.filter((t) => t.day === day)
+  const earned = today.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0)
+  const cats = new Set<string>()
+  const ordered: string[] = []
+  for (const t of today) {
+    if (!cats.has(t.category)) {
+      cats.add(t.category)
+      ordered.push(t.category)
+    }
+  }
+  const CATS = ['job', 'hustle', 'transport', 'shop', 'tip', 'other', 'bank', 'fun']
+  const trail = ordered.slice(-3).map((c) => Math.max(0, CATS.indexOf(c)))
+  while (trail.length < 3) trail.push(0)
+  return { earned, moves: today.length, trail }
+}
+
+/**
+ * M15 — THE SHARE LAW: the Web Share sheet first (WhatsApp sits right
+ * there), the clipboard catches the fall. A share only counts when a
+ * channel actually accepted it — and the street credit pays once per
+ * in-game day, whatever was shared.
+ */
+async function shareText(get: () => GameStore, title: string, body: string, url: string): Promise<{ ok: boolean; why?: string }> {
+  const text = `${title}\n${body}\n${url}`
+  let shared = false
+  try {
+    if (typeof navigator !== 'undefined' && 'share' in navigator) {
+      await navigator.share({ title: 'Lokoja Life', text, url })
+      shared = true
+    }
+  } catch { /* the user closed the sheet — not a share */ }
+  if (!shared) {
+    try {
+      await navigator.clipboard.writeText(text)
+      shared = true
+      get().notify({ icon: '📋', text: 'Copied — paste am for WhatsApp.', tone: 'good' })
+    } catch {
+      return { ok: false, why: 'share-refused' }
+    }
+  }
+  return { ok: shared }
+}
+
+/**
+ * M15 — THE STREET CREDIT: a real share pays +2 rep once per in-game
+ * day, through the reward engine (the kobo-chain records it, the
+ * income guard watches it). The second share of the day is free
+ * labour — the city respects the first one.
+ */
+function payStreetCredit(get: () => GameStore, set: (partial: Partial<GameStore>) => void): void {
+  const p = get().player
+  const world = get().world
+  if (!p || !world) return
+  // the share book counts every real share — the credit only pays once a day
+  const pl0 = get().cityPulse ?? freshPulseState()
+  set({ cityPulse: { ...pl0, stats: { ...pl0.stats, shares: pl0.stats.shares + 1 } } })
+  const key = PULSE.shareCooldownKey
+  if (p.cooldowns[key] === world.day) return
+  get().giveReward({ reputation: PULSE.shareStreetCredit }, { label: 'Street credit — shared the city', category: 'other' })
+  set({ player: { ...get().player!, cooldowns: { ...get().player!.cooldowns, [key]: world.day } } })
+  get().notify({ icon: '🌆', text: `Street credit +${PULSE.shareStreetCredit} — the city hears you.`, tone: 'good' })
+}
 
 /** Ledger cap — newest entries survive, old ones fall off. */
 const LEDGER_CAP = 50
@@ -865,6 +1005,8 @@ function scheduleAutosave(get: () => GameStore) {
       onboarding: get().onboarding,
       account: get().account,
       shield: get().shield,
+      fortress: get().fortress,
+      cityPulse: get().cityPulse ?? freshPulseState(),
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -890,8 +1032,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   onboarding: freshOnboardingState(),
   account: freshAccountState(),
   shield: freshShieldState(),
+  fortress: freshFortressState(),
   gateOpen: false,
   pulse: null,
+  cityPulse: null,
+  pendingArrival: null,
+  cloudPending: false,
   shockwave: 0,
   settings: { sound: true, graphics: 'auto' as const, chill: false, elder: false },
 
@@ -907,6 +1053,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const bootSettings = save?.settings ?? { sound: true, graphics: 'auto', chill: false, elder: false }
     syncAudioWithSettings(bootSettings)
     set({ booted: true, hasSave: SaveSystem.hasSave(), settings: bootSettings })
+    // M15 — a postcard in the URL: decode it now, land when the city opens
+    try {
+      const t = new URLSearchParams(window.location.search).get('t')
+      if (t) {
+        const dec = decodeTeleport(t)
+        if (dec.ok) set({ pendingArrival: { code: t.trim(), moment: dec.moment } })
+        else set({ pendingArrival: null })
+      }
+    } catch { /* no window (tests) — the boot continues without a postcard */ }
+    // M16 — the offline law: a queued push rides again when the network returns
+    try {
+      const queued = window.localStorage.getItem('lokoja-life:cloud-queue') === '1'
+      if (queued) set({ cloudPending: true })
+      if (!cloudQueueWired) {
+        cloudQueueWired = true
+        window.addEventListener('online', () => { void useGameStore.getState().flushCloudQueue() })
+      }
+      if (queued && navigator.onLine) void get().flushCloudQueue()
+    } catch { /* no window — the queue law sleeps */ }
   },
 
   setScreen: (screen) => set({ screen }),
@@ -961,11 +1126,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       onboarding: freshOnboardingState(),
       account: freshAccountState(),
       shield: freshShieldState(),
+      fortress: freshFortressState(),
+      cityPulse: freshPulseState(),
+      pendingArrival: get().pendingArrival,
       gateOpen: false,
       fleet: { day: 1, done: [] },
       screen: 'game',
       offers: [],
     })
+    // M15 — a postcard was waiting for a fresh life: land at that street
+    const pending = get().pendingArrival
+    if (pending) {
+      applyArrival(set, get, pending.code, pending.moment, { silent: true })
+    }
     scheduleAutosave(get)
   },
 
@@ -990,10 +1163,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       onboarding: save.onboarding ?? freshOnboardingState(),
       account: save.account ?? freshAccountState(),
       shield: save.shield ?? freshShieldState(),
+      fortress: save.fortress ?? freshFortressState(),
+      cityPulse: save.cityPulse ?? freshPulseState(),
       fleet: save.fleet,
       settings,
       screen: 'game',
     })
+    // M15 — a postcard came with the boot URL: land the moment the city opens
+    const pendingBoot = get().pendingArrival
+    if (pendingBoot) {
+      const verdict = gateVerdict(get().account, pendingBoot.moment.locId, save.world.day)
+      if (!verdict.blocked) applyArrival(set, get, pendingBoot.code, pendingBoot.moment)
+      else set({ gateOpen: true })
+    }
     return true
   },
 
@@ -3110,19 +3292,45 @@ export const useGameStore = create<GameStore>((set, get) => ({
   /* ------------------------ work & opportunities ------------------------ */
 
   addMoney: (amount, meta) => {
-    const { player, world } = get()
+    const { player, world, fortress } = get()
     if (!player || !world || amount <= 0) return
     const slot = absoluteSlot(world.day, world.timeOfDay)
-    const tx = recordTransaction(meta.label, meta.category, amount, world.day, slot)
+
+    // M14 — THE VELOCITY GUARD: no flood of micro-events in one clock slot
+    const inSlot = fortress.slotTxSlot === slot ? fortress.slotTxCount : 0
+    const vel = velocityGuard(inSlot, FORTRESS.velocityCap)
+    if (!vel.allow) {
+      set({ fortress: { ...fortress, anomalies: fortress.anomalies + 1, slotTxSlot: slot, slotTxCount: inSlot } })
+      get().notify({ icon: '🛡️', text: 'The fortress shut the flood gate — too many money events in one slot.', tone: 'bad' })
+      audio.play('notify')
+      return
+    }
+
+    // M14 — THE INCOME GUARD: ceilings, not crashes; the overflow is clamped + counted
+    const dayEarned = fortress.dayEarnedDay === world.day ? fortress.dayEarned : 0
+    const guard = incomeGuard(amount, dayEarned, FORTRESS)
+    const paid = guard.allowed
+    if (guard.clamped) {
+      set({ fortress: { ...get().fortress, anomalies: get().fortress.anomalies + 1 } })
+      get().notify({ icon: '🛡️', text: `The fortress clamped an impossible income to ${formatNaira(paid)} (${guard.law === 'single' ? 'single-event' : 'day'} ceiling).`, tone: 'bad' })
+      audio.play('notify')
+      if (paid <= 0) return
+    }
+
+    // M14 — THE KOBO-CHAIN: the entry signs onto the ledger's chain
+    const sig = chainNext(get().fortress.chainTail, { day: world.day, slot, amount: paid, category: meta.category, label: meta.label })
+    const tx = { ...recordTransaction(meta.label, meta.category, paid, world.day, slot), sig }
     set({
       player: {
         ...player,
-        cash: player.cash + amount,
+        cash: player.cash + paid,
         transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
-        stats: { ...player.stats, totalEarned: player.stats.totalEarned + amount },
+        stats: { ...player.stats, totalEarned: player.stats.totalEarned + paid },
       },
+      // the fortress ledgers ride along (day earnings + the slot flood counter + the chain tail)
+      fortress: { ...get().fortress, dayEarnedDay: world.day, dayEarned: (fortress.dayEarnedDay === world.day ? fortress.dayEarned : 0) + paid, slotTxSlot: slot, slotTxCount: inSlot + 1, chainTail: sig },
       // M9 — juice: every honest naira pops (transform/opacity only)
-      pulse: { id: ++pulseId, amount },
+      pulse: { id: ++pulseId, amount: paid },
     })
     // M9 — the first ₦500 earned completes the onboarding 'earn' step
     if (get().player!.stats.totalEarned >= 500) bumpOnboarding(get, set, 'earn')
@@ -3131,14 +3339,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   removeMoney: (amount, meta) => {
-    const { player, world } = get()
+    const { player, world, fortress } = get()
     if (!player || !world || amount <= 0) return false
     if (!canAfford(player.cash, amount)) {
       get().notify({ icon: '💸', text: 'You no get that kind money.', tone: 'bad' })
       return false
     }
     const slot = absoluteSlot(world.day, world.timeOfDay)
-    const tx = recordTransaction(meta.label, meta.category, -amount, world.day, slot)
+    // M14 — the velocity guard rides spending too (the flood gate is symmetric)
+    const inSlot = fortress.slotTxSlot === slot ? fortress.slotTxCount : 0
+    if (!velocityGuard(inSlot, FORTRESS.velocityCap).allow) {
+      set({ fortress: { ...fortress, anomalies: fortress.anomalies + 1, slotTxSlot: slot, slotTxCount: inSlot } })
+      get().notify({ icon: '🛡️', text: 'The fortress shut the flood gate — too many money events in one slot.', tone: 'bad' })
+      return false
+    }
+    // M14 — the kobo-chain signs the spend too (a full ledger, not a half one)
+    const sig = chainNext(fortress.chainTail, { day: world.day, slot, amount: -amount, category: meta.category, label: meta.label })
+    const tx = { ...recordTransaction(meta.label, meta.category, -amount, world.day, slot), sig }
     set({
       player: {
         ...player,
@@ -3146,6 +3363,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
         stats: { ...player.stats, totalSpent: player.stats.totalSpent + amount },
       },
+      fortress: { ...fortress, slotTxSlot: slot, slotTxCount: inSlot + 1, chainTail: sig },
     })
     audio.play('notify')
     scheduleAutosave(get)
@@ -3158,25 +3376,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
    * Jobs, hustles, events and future systems all pay through here.
    */
   giveReward: (reward, meta) => {
-    const { player, world } = get()
+    const { player, world, fortress } = get()
     if (!player || !world) return
 
-    // 1) cash + ledger entry
+    // 1) cash + ledger entry — M14: the SAME income guard + kobo-chain every payout rides
     const cash = rewardCash(reward)
     if (cash > 0) {
       const slot = absoluteSlot(world.day, world.timeOfDay)
-      const tx = recordTransaction(meta.label, meta.category, cash, world.day, slot)
-      set({
-        player: {
-          ...player,
-          cash: player.cash + cash,
-          transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
-          stats: { ...player.stats, totalEarned: player.stats.totalEarned + cash },
-        },
-        pulse: { id: ++pulseId, amount: cash },
-      })
-      audio.play('chime')
-      if (get().player!.stats.totalEarned >= 500) bumpOnboarding(get, set, 'earn')
+      const dayEarned = fortress.dayEarnedDay === world.day ? fortress.dayEarned : 0
+      const guard = incomeGuard(cash, dayEarned, FORTRESS)
+      const paid = guard.allowed
+      if (guard.clamped) {
+        set({ fortress: { ...fortress, anomalies: fortress.anomalies + 1 } })
+        get().notify({ icon: '🛡️', text: `The fortress clamped an impossible income to ${formatNaira(paid)} (${guard.law === 'single' ? 'single-event' : 'day'} ceiling).`, tone: 'bad' })
+      }
+      if (paid > 0) {
+        const sig = chainNext(fortress.chainTail, { day: world.day, slot, amount: paid, category: meta.category, label: meta.label })
+        const tx = { ...recordTransaction(meta.label, meta.category, paid, world.day, slot), sig }
+        set({
+          player: {
+            ...player,
+            cash: player.cash + paid,
+            transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
+            stats: { ...player.stats, totalEarned: player.stats.totalEarned + paid },
+          },
+          fortress: { ...fortress, dayEarnedDay: world.day, dayEarned: dayEarned + paid, slotTxSlot: slot, slotTxCount: (fortress.slotTxSlot === slot ? fortress.slotTxCount : 0) + 1, chainTail: sig },
+          pulse: { id: ++pulseId, amount: paid },
+        })
+        audio.play('chime')
+        if (get().player!.stats.totalEarned >= 500) bumpOnboarding(get, set, 'earn')
+      }
     }
 
     // 2) player XP (level-ups handled by the existing engine action)
@@ -3692,6 +3921,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       audio.play('levelup')
       scheduleAutosave(get)
       void get().pushCloud()
+      // M15 — the postcard the gate held lands behind the claimed name
+      const pendingReg = get().pendingArrival
+      const worldReg = get().world
+      if (pendingReg && worldReg) applyArrival(set, get, pendingReg.code, pendingReg.moment)
       return { ok: true }
     } catch {
       return { ok: false, why: 'Network no gree — check connection and try again.' }
@@ -3749,6 +3982,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       audio.play('chime')
       scheduleAutosave(get)
       void get().pushCloud()
+      // M15 — the postcard the gate held lands behind the claimed name
+      const pendingLog = get().pendingArrival
+      const worldLog = get().world
+      if (pendingLog && worldLog) applyArrival(set, get, pendingLog.code, pendingLog.moment)
       return { ok: true }
     } catch {
       return { ok: false, why: 'Network no gree — check connection and try again.' }
@@ -3761,27 +3998,150 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ account: applyGrace(get().account, day), gateOpen: false })
     get().notify({ icon: '🤝', text: 'Today na free ride — tomorrow, come claim your name.', tone: 'neutral' })
     audio.play('notify')
+    // M15 — a postcard the gate was holding lands the moment the grace lands
+    const pending = get().pendingArrival
+    const world = get().world
+    if (pending && world) applyArrival(set, get, pending.code, pending.moment)
   },
 
   closeGate: () => set({ gateOpen: false }),
 
-  /** M9 — push the current save to the cloud (linked accounts only). */
+  /* --------------------------- M15 — the city pulse --------------------------- */
+
+  /** Opening the paper marks today's feed read — the unread dot dies honestly. */
+  openCityPulse: () => {
+    const { player, world, civic, chaos, rivers, calendar, cityPulse } = get()
+    if (!player || !world || !civic) return
+    const items = pulseForDay({ day: world.day, weather: world.weather, chaos, civic, rivers, calendar })
+    set({ cityPulse: markPulseRead(cityPulse ?? freshPulseState(), world.day, items) })
+    scheduleAutosave(get)
+  },
+
+  /** THE POSTCARD: this moment, signed, ~100 bytes, WhatsApp-ready. */
+  shareTeleport: async () => {
+    const { player, world } = get()
+    if (!player || !world) return { ok: false, why: 'no game' }
+    const tally = dayTally(player.transactions, world.day)
+    const moment: TeleportMoment = {
+      v: 1,
+      day: world.day,
+      locId: world.currentLocation,
+      name: player.name,
+      level: player.level,
+      rep: player.reputation,
+      earned: tally.earned,
+      moves: tally.moves,
+      trail: tally.trail,
+    }
+    const enc = encodeTeleport(moment)
+    if (!enc.ok) return { ok: false, why: enc.why }
+    const card = postcardFor(moment)
+    const share = await shareText(get, card.title, card.body, enc.url)
+    if (!share.ok) return { ok: false, why: share.why }
+    payStreetCredit(get, set)
+    scheduleAutosave(get)
+    return { ok: true, url: enc.url }
+  },
+
+  /** THE HEADLINE: a City Pulse item rides the same share law. */
+  sharePulseCard: async (item) => {
+    const { world } = get()
+    if (!world) return { ok: false, why: 'no game' }
+    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : ''
+    const share = await shareText(get, `${item.icon} ${item.headline}`, item.body, origin || 'Lokoja Life')
+    if (!share.ok) return { ok: false, why: share.why }
+    payStreetCredit(get, set)
+    scheduleAutosave(get)
+    return { ok: true }
+  },
+
+  /** THE ARRIVAL: a verified postcard lands you on the sender's street — free. */
+  arriveByTeleport: (code) => {
+    const dec = decodeTeleport(code)
+    if (!dec.ok) {
+      get().notify({
+        icon: '📩',
+        text: dec.why === 'tampered'
+          ? 'This postcard don break — somebody don edit am. E no go load.'
+          : 'This postcard no readable — the code cut off for road.',
+        tone: 'bad',
+      })
+      audio.play('notify')
+      return { ok: false, why: dec.why }
+    }
+    const m = dec.moment
+    const { player, world, account } = get()
+    if (!player || !world) {
+      // a fresh arrival — the postcard waits for the creation flow
+      set({ pendingArrival: { code: code.trim(), moment: m } })
+      return { ok: true }
+    }
+    // THE GUEST LAW: the gate stands before a forward leap, even by postcard
+    const verdict = gateVerdict(account, m.locId, world.day)
+    if (verdict.blocked) {
+      set({ gateOpen: true, pendingArrival: { code: code.trim(), moment: m } })
+      return { ok: false, why: 'gate' }
+    }
+    applyArrival(set, get, code.trim(), m)
+    return { ok: true }
+  },
+
+  /** THE OFFLINE LAW: the queued push rides again the moment the network returns. */
+  flushCloudQueue: async () => {
+    const { cloudPending, account } = get()
+    if (!cloudPending || !account.linked) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    const res = await get().pushCloud()
+    if (res.ok) {
+      set({ cloudPending: false })
+      try { window.localStorage.removeItem('lokoja-life:cloud-queue') } catch { /* the flag is cosmetic now */ }
+      get().notify({ icon: '☁️', text: 'Network don come back — your save don reach the cloud.', tone: 'good' })
+    }
+  },
+
+  /** M9 — push the current save to the cloud (linked accounts only). M14: the
+   *  envelope's signature rides along. M15: THE ZERO-BYTE PUSH — an unchanged
+   *  life costs the network nothing; M16: an offline push QUEUES, it never dies. */
   pushCloud: async () => {
     const { player, world, civic, account } = get()
     if (!player || !world || !civic) return { ok: false, why: 'no game' }
     if (!account.linked || !account.token) return { ok: false, why: 'not linked' }
+    // M16 — THE OFFLINE LAW: the queue flag lights NOW (the flush rides the
+    // 'online' event), and the honest toast says the network, not the player.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      set({ cloudPending: true })
+      try { window.localStorage.setItem('lokoja-life:cloud-queue', '1') } catch { /* the flag rides the session */ }
+      return { ok: false, why: 'offline' }
+    }
     get().saveNow()
     const save = SaveSystem.load()
     if (!save) return { ok: false, why: 'no save' }
+    // M15 — THE ZERO-BYTE PUSH: the vault already holds this exact life
+    const pushed = SaveSystem.lastPushedHash()
+    if (pushed && pushed === SaveSystem.fingerprintOf(save)) {
+      return { ok: true, why: 'delta-skip' }
+    }
+    // M14 — the signed envelope's sig: the vault stores it beside the save
+    let sig = ''
+    try {
+      const env = JSON.parse(SaveSystem.readEnvelope() ?? '{}') as { sig?: string }
+      sig = typeof env.sig === 'string' ? env.sig : ''
+    } catch { /* unsigned legacy — the pull treats it as legacy-ok */ }
     try {
       const res = await fetch('/api/cloud/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
-        body: JSON.stringify(SaveSystem.toCloudPayload(save)),
+        body: JSON.stringify({ ...SaveSystem.toCloudPayload(save), sig }),
       })
       if (!res.ok) return { ok: false, why: 'cloud refused' }
+      SaveSystem.markPushed(save)
+      set({ cloudPending: false })
+      try { window.localStorage.removeItem('lokoja-life:cloud-queue') } catch { /* done */ }
       return { ok: true }
     } catch {
+      // M16 — a network failure queues the push; it never dies silently
+      set({ cloudPending: true })
+      try { window.localStorage.setItem('lokoja-life:cloud-queue', '1') } catch { /* the flag rides the session */ }
       return { ok: false, why: 'network' }
     }
   },
@@ -3808,6 +4168,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       onboarding,
       account,
       shield: get().shield,
+      fortress: { ...get().fortress, fingerprint: configFingerprint({ STARTING, WORK, BIZ, CHAOS, LADDER, FORTRESS, PULSE }) },
+      cityPulse: get().cityPulse ?? freshPulseState(),
       settings,
     })
     set({ hasSave: true })
@@ -3830,6 +4192,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       onboarding: freshOnboardingState(),
       account: freshAccountState(),
       shield: freshShieldState(),
+      fortress: freshFortressState(),
+      cityPulse: freshPulseState(),
+      pendingArrival: null,
+      cloudPending: false,
       gateOpen: false,
       screen: 'menu',
       hasSave: false,
