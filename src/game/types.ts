@@ -580,6 +580,65 @@ export interface GameSettings {
   chill: boolean
 }
 
+/* -------------------------------- M11 — rivers ------------------------------ */
+
+/**
+ * M11 — THE RIVERS AWAKE. The Niger's surge is DERIVED from the day
+ * (the river has a year of its own); only the player's fight against the
+ * water persists — sandbags, walkways, tolls, the canoe, the cold-room
+ * rescue bowl. Pure data — every law lives in systems/rivers.ts.
+ */
+/** One zone's sandbag walkway: segments laid + the crossing toll book. */
+export interface WalkwayState {
+  /** segments laid so far (opens at RIVERS.segments[zoneId]) */
+  laid: number
+  /** the toll tier a crossing pays (index into RIVERS.tollTiers; 0 = first) */
+  tollTier: number
+  /** naira sitting in the toll bowl, waiting for the owner to collect */
+  pot: number
+  /** last day the pot accrued (idempotence) */
+  tollDay: number
+}
+
+/** The cold-room rescue bowl — one per surge-year, at the deep-water zone. */
+export interface RescueState {
+  /** the zone whose cold rooms the trucks are saving */
+  zoneId: string
+  /** the year the rescue belongs to (one rescue per surge-year) */
+  year: number
+  /** naira gathered (NPC flow + player tiers) */
+  pool: number
+  /** absolute days the player already contributed (one gift per day) */
+  contribDays: number[]
+}
+
+/** The persisted M11 slice — participation and bookkeeping only. */
+export interface RiversState {
+  /** last rolled day (idempotence marker) */
+  day: number
+  /** sacks of Crusher sand in your compound */
+  sandbags: number
+  /** the fisherman's canoe you bought — the ferry GIGS need your own boat */
+  canoe: boolean
+  /** one walkway per low-lying zone */
+  walkways: Record<string, WalkwayState>
+  /** the live rescue bowl (null outside the deep surge) */
+  rescue: RescueState | null
+  /** the surge-year whose cold rooms were saved (protection law) */
+  rescuedYear: number
+  /** M5-style done-ledger: which of today's ferry gigs already ran */
+  ferryDay: number
+  ferryDone: string[]
+  stats: {
+    sandBought: number
+    segmentsLaid: number
+    tollsCollected: number
+    ferryRuns: number
+    ferryEarned: number
+    rescues: number
+  }
+}
+
 /* ---------------------------------- Save ----------------------------------- */
 
 /**
@@ -590,7 +649,8 @@ export interface GameSave {
   /** v8 (M7): settings.graphics joins the schema
    *  v9 (M8): the chaos slice joins the schema
    *  v10 (M9): goals, onboarding, account + settings.chill join the schema
-   *  v11 (M10): the living calendar joins the schema */
+   *  v11 (M10): the living calendar joins the schema
+   *  v12 (M11): the rivers slice joins the schema */
   version: number
   createdAt: number
   updatedAt: number
@@ -609,6 +669,8 @@ export interface GameSave {
   account: AccountState
   /** M10 — the living calendar: festivals, weddings, paving, participation */
   calendar: CalendarState
+  /** M11 — the rivers: sandbags, walkways, tolls, the canoe, the rescue bowl */
+  rivers: RiversState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

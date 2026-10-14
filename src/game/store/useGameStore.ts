@@ -35,6 +35,7 @@ import type {
   OnboardingState,
   AccountState,
   CalendarState,
+  RiversState,
   FestivalDay,
   WeddingDay,
   ShopUpgradeId,
@@ -145,9 +146,29 @@ import {
   type RegattaResult,
 } from '../systems/calendar'
 import { gateVerdict, applyGrace, freshAccountState, freshOnboardingState, validateHandle, validatePin, validateContact, ageBandForYear, mergeVerdict, backupPayload, BACKUP_KEY } from '../systems/guest'
+import {
+  freshRiversState,
+  riversDayRoll,
+  zoneCut,
+  walkwayOpen,
+  segmentsLeft,
+  canLaySegment,
+  laySegmentApply,
+  setTollTierApply,
+  canContributeRescue,
+  contributeRescueApply,
+  floodBizFactor,
+  riverMarketMult,
+  availableFerryGigs,
+  ferryFareBetween,
+  runFerryApply,
+  setDebugRiverLevel,
+  cutZonesFor,
+  JETTY_ID,
+} from '../systems/rivers'
 import { gigBoard, gigLabel } from '../systems/fleet'
 import { HUSTLE_BY_ID } from '../data/hustles'
-import { BIZ, CIVIC, FLEET, CHAOS, FESTIVALS } from '../data/config'
+import { BIZ, CIVIC, FLEET, CHAOS, FESTIVALS, RIVERS } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
 
@@ -169,6 +190,8 @@ interface GameStore {
   chaos: ChaosState
   /** M10 — the living calendar: festivals, weddings, paving, participation */
   calendar: CalendarState
+  /** M11 — the rivers: sandbags, walkways, tolls, the canoe, the rescue bowl */
+  rivers: RiversState
   /** M9 — the casual shell: today's goals, the onboarding arc, the account */
   goals: GoalState
   onboarding: OnboardingState
@@ -264,6 +287,23 @@ interface GameStore {
   attendWedding: (giftTier: number) => boolean
   /** Give to the town union's paving pool while standing in the zone. */
   contributePaving: (tier: number) => boolean
+  /* M11 — THE RIVERS AWAKE */
+  /** Buy Crusher sand (sacks for the walkways) on the Patti road. */
+  buySand: (sacks: number) => boolean
+  /** Lay one walkway segment in the cut zone you stand in. */
+  laySegment: () => boolean
+  /** Set the crossing toll tier on the walkway you stand on. */
+  setTollTier: (tierIndex: number) => boolean
+  /** Collect the toll bowl of the walkway you stand on. */
+  collectTolls: () => boolean
+  /** Buy the fishermen's canoe at the jetty (unlocks the ferry gigs). */
+  buyCanoe: () => boolean
+  /** Ride the canoe ferry across the water (jetty ↔ a cut zone). */
+  takeFerry: (toId: string) => void
+  /** Run a ferry gig with your own canoe (passengers pay the surge fare). */
+  runFerryGig: (gigId: string) => boolean
+  /** Give to the cold-room rescue bowl while standing at the zone. */
+  contributeRescue: (tier: number) => boolean
   /** M9 — one life event lands on today's goals (rewards flow the engines) */
   bumpGoal: (kind: string) => void
   /** Talk with an NPC — familiarity + one warm line. Null = cooldown / guard. */
@@ -385,18 +425,29 @@ interface CivicAgg {
   pavingDone: { zoneId: string } | null
   pavingStalled: { zoneId: string } | null
   regattaResult: RegattaResult | null
+  /** M11 — river narration flags */
+  floodedZone: string | null
+  drainedZone: string | null
+  rescueWake: string | null
+  rescueDone: string | null
+  riverDamp: boolean
+  riverRelief: boolean
 }
 
-/** Pure: roll the civic mesh + the chaos engine + the calendar forward day
- *  by day (assessments land on exact days). M6 — the NEW day's weather rides
- *  in so the market roll folds weather stress. M8 — the chaos roll runs in
- *  the SAME loop and its liquidity fold (crunch / payout) rides into the
- *  SAME prices. M10 — the calendar's festival folds ride the SAME channel
- *  too, and the year's parties narrate themselves at the day crossings. */
+/** Pure: roll the civic mesh + the chaos engine + the calendar + the rivers
+ *  forward day by day (assessments land on exact days). M6 — the NEW day's
+ *  weather rides in so the market roll folds weather stress. M8 — the chaos
+ *  roll runs in the SAME loop and its liquidity fold (crunch / payout) rides
+ *  into the SAME prices. M10 — the calendar's festival folds ride the SAME
+ *  channel too, and the year's parties narrate themselves at the day
+ *  crossings. M11 — the river rolls in the SAME loop: the surge lifts every
+ *  price through the SAME channel, the bowls take yesterday's crossings and
+ *  the deep water wakes the cold-room rescue. */
 function civicRollForDays(
   civic: CivicState,
   chaos: ChaosState,
   calendar: CalendarState,
+  rivers: RiversState,
   totalEarned: number,
   prevDay: number,
   newDay: number,
@@ -405,11 +456,12 @@ function civicRollForDays(
   weather?: import('../types').Weather,
   liquidityMultOverride?: number,
   chill = false,
-): { civic: CivicState; chaos: ChaosState; calendar: CalendarState; agg: CivicAgg } {
+): { civic: CivicState; chaos: ChaosState; calendar: CalendarState; rivers: RiversState; agg: CivicAgg } {
   let cur = civic
   let curChaos = chaos
   let curCal = calendar
-  const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0, blowoutZone: null, outageFixed: null, scarcityDay: false, payoutDay: false, festivalMorning: null, weddingToday: null, pavingDone: null, pavingStalled: null, regattaResult: null }
+  let curRiv = rivers
+  const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0, blowoutZone: null, outageFixed: null, scarcityDay: false, payoutDay: false, festivalMorning: null, weddingToday: null, pavingDone: null, pavingStalled: null, regattaResult: null, floodedZone: null, drainedZone: null, rescueWake: null, rescueDone: null, riverDamp: false, riverRelief: false }
   for (let d = prevDay + 1; d <= newDay; d++) {
     // chaos first: today's grid + naira mood decide the market's liquidity
     const c = chaosDayRoll(curChaos, d, weather ?? 'sunny')
@@ -428,7 +480,17 @@ function civicRollForDays(
     if (todayFestival) agg.festivalMorning = todayFestival
     const wedding = weddingForCycle(d)
     if (wedding.isToday) agg.weddingToday = wedding
-    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather, liquidityMultOverride ?? liquidityMultFor(d) * calendarMarketMult(d), chill)
+    // M11 — the river turns: bowls, rescue, the flood narrations
+    const riv = riversDayRoll(curRiv, d)
+    curRiv = riv.next
+    if (riv.flooded) agg.floodedZone = riv.flooded.zoneId
+    if (riv.drained) agg.drainedZone = riv.drained.zoneId
+    if (riv.rescueWake) agg.rescueWake = riv.rescueWake.zoneId
+    if (riv.rescueDone) agg.rescueDone = riv.rescueDone.zoneId
+    agg.riverDamp = agg.riverDamp || riv.damp
+    agg.riverRelief = agg.riverRelief || riv.relief
+    // the water lifts the SAME roll the weather, chaos and calendar ride
+    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather, liquidityMultOverride ?? liquidityMultFor(d) * calendarMarketMult(d) * riverMarketMult(d), chill)
     cur = r.next
     agg.nepaPosted += r.nepaPosted
     agg.nepaShed = agg.nepaShed || r.nepaShed
@@ -437,7 +499,7 @@ function civicRollForDays(
     agg.tipsResolved = [...agg.tipsResolved, ...r.tipsResolved]
     agg.tipReward += r.tipReward
   }
-  return { civic: cur, chaos: curChaos, calendar: curCal, agg }
+  return { civic: cur, chaos: curChaos, calendar: curCal, rivers: curRiv, agg }
 }
 
 /** Execute a civic day crossing: set the slice, pay whistleblower rewards,
@@ -448,7 +510,7 @@ function commitCivicDays(
   prevDay: number,
   newDay: number,
 ): void {
-  const { civic, chaos, calendar, player, world } = get()
+  const { civic, chaos, calendar, rivers, player, world } = get()
   if (!civic || !player || !world || newDay <= prevDay) return
   const bizCount = player.businesses.length
   // M5 — solar shops draw from the sun: their share of the meter load drops
@@ -458,15 +520,17 @@ function commitCivicDays(
   const newWeather = get().world?.weather
   // M9 — Chill Mode runs the whole civic roll kinder (2× disco grace, 3× warrant)
   const chill = get().settings.chill
-  const { civic: rolled, chaos: rolledChaos, calendar: rolledCal, agg } = civicRollForDays(civic, chaos, calendar, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather, undefined, chill)
-  set({ civic: rolled, chaos: rolledChaos, calendar: rolledCal })
+  const { civic: rolled, chaos: rolledChaos, calendar: rolledCal, rivers: rolledRiv, agg } = civicRollForDays(civic, chaos, calendar, rivers, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather, undefined, chill)
+  set({ civic: rolled, chaos: rolledChaos, calendar: rolledCal, rivers: rolledRiv })
 
   // M3 — the shops earn while the city turns: accrue into each till (market
   // multipliers read the ALREADY-ROLLED civic slice; M8 — the chaos thread
   // prices the dark days and the scarcity harvest). Tax only sees this
   // money when it is collected (addMoney → ledger → totalEarned).
   if (player.businesses.length > 0) {
-    const bizRes = bizDayRoll(player.businesses, prevDay, newDay, rolled, player.reputation, rolledChaos)
+    // M11 — the flood crush folds with the grid laws: the worse water wins,
+    // the rescue trucks soften the saved zones for the rest of the surge-year
+    const bizRes = bizDayRoll(player.businesses, prevDay, newDay, rolled, player.reputation, rolledChaos, (zoneId, day) => floodBizFactor(rolledRiv, zoneId, day))
     if (bizRes.total > 0) {
       const p0 = get().player!
       set({ player: { ...p0, businesses: bizRes.next } })
@@ -571,6 +635,41 @@ function commitCivicDays(
     }
   }
 
+  // M11 — the river narrates itself: the water, the bowls, the damp
+  if (agg.floodedZone) {
+    const zoneName = LOCATION_BY_ID[agg.floodedZone]?.name ?? agg.floodedZone
+    const p = get().player
+    if (p) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood: -2 }) } })
+    get().notify({
+      icon: '🌊',
+      text: `The Niger don rise — ${zoneName} road don go under water. Canoe ferry dey run from the Motor Park.`,
+      tone: 'bad',
+    })
+  }
+  if (agg.drainedZone) {
+    const zoneName = LOCATION_BY_ID[agg.drainedZone]?.name ?? agg.drainedZone
+    get().notify({ icon: '💧', text: `The water don leave ${zoneName} — the road dey open again.`, tone: 'good' })
+  }
+  if (agg.rescueWake) {
+    get().notify({ icon: '🧊', text: `Deep water don reach the cold rooms — the street don pass the rescue bowl for ${LOCATION_BY_ID[agg.rescueWake]?.name ?? agg.rescueWake}.`, tone: 'neutral' })
+  }
+  if (agg.rescueDone) {
+    const zoneName = LOCATION_BY_ID[agg.rescueDone]?.name ?? agg.rescueDone
+    const p = get().player
+    if (p) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood: RIVERS.rescue.moodReward }) } })
+    get().addReputation(RIVERS.rescue.repReward)
+    get().notify({ icon: '🛻', text: `COLD-ROOM RESCUE COMPLETE! The trucks don move the stock to the Patti road high ground — ${zoneName} go hear am for the season.`, tone: 'good' })
+    audio.play('levelup')
+  }
+  if (agg.riverRelief) {
+    const p = get().player
+    if (p) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood: RIVERS.reliefMood }) } })
+    get().notify({ icon: '☀️', text: 'The river don enter back inside him banks — the whole city dey breathe.', tone: 'good' })
+  } else if (agg.riverDamp) {
+    const p = get().player
+    if (p) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood: -RIVERS.dampMoodHit }) } })
+  }
+
   if (agg.nepaPosted > 0) {
     get().notify({ icon: '🧾', text: `NEPA bill posted — ${formatNaira(agg.nepaPosted)} due.`, tone: 'neutral' })
   }
@@ -605,6 +704,7 @@ function scheduleAutosave(get: () => GameStore) {
       fleet: get().fleet,
       chaos: get().chaos,
       calendar: get().calendar,
+      rivers: get().rivers,
       goals: get().goals,
       onboarding: get().onboarding,
       account: get().account,
@@ -625,6 +725,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   fleet: { day: 1, done: [] },
   chaos: freshChaosState(),
   calendar: freshCalendarState(),
+  rivers: freshRiversState(),
   goals: freshGoalState(),
   onboarding: freshOnboardingState(),
   account: freshAccountState(),
@@ -689,6 +790,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       civic: freshCivicState(),
       chaos: freshChaosState(),
       calendar: freshCalendarState(),
+      rivers: freshRiversState(),
       goals: freshGoalState(),
       onboarding: freshOnboardingState(),
       account: freshAccountState(),
@@ -713,6 +815,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       civic: save.civic,
       chaos: save.chaos ?? freshChaosState(),
       calendar: save.calendar ?? freshCalendarState(),
+      rivers: save.rivers ?? freshRiversState(),
       goals: save.goals ?? freshGoalState(),
       onboarding: save.onboarding ?? freshOnboardingState(),
       account: save.account ?? freshAccountState(),
@@ -1722,6 +1825,266 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return true
   },
 
+  /* --------------------- M11 — THE RIVERS AWAKE --------------------- */
+
+  /** The Crusher sells sand on the Patti road — sacks for the walkways. */
+  buySand: (sacks) => {
+    const { player, world } = get()
+    if (!player || !world) return false
+    const count = Math.max(1, Math.min(10, Math.floor(sacks)))
+    if (world.currentLocation !== RIVERS.sandVendorZone) {
+      get().notify({ icon: '⛰️', text: 'The Crusher dey sell sand for the Patti road — go there in person.', tone: 'bad' })
+      return false
+    }
+    const cost = count * RIVERS.sackPrice
+    if (!get().removeMoney(cost, { label: `Crusher sand ×${count}`, category: 'shop' })) {
+      get().notify({ icon: '💸', text: `${count} sack${count > 1 ? 's' : ''} na ${formatNaira(cost)} — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    const riv = get().rivers
+    set({
+      rivers: {
+        ...riv,
+        sandbags: riv.sandbags + count,
+        stats: { ...riv.stats, sandBought: riv.stats.sandBought + count },
+      },
+    })
+    get().notify({ icon: '🧱', text: `${count} sack${count > 1 ? 's' : ''} of Crusher sand don land for your compound — the walkway dey wait.`, tone: 'good' })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Lay one walkway segment in the cut zone you stand in. */
+  laySegment: () => {
+    const { player, world, rivers } = get()
+    if (!player || !world) return false
+    const zoneId = world.currentLocation
+    const gate = canLaySegment(rivers, world.day, zoneId, world.currentLocation, rivers.sandbags)
+    if (!gate.ok) {
+      get().notify({ icon: '🌊', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    if (player.needs.energy < RIVERS.layEnergy) {
+      get().notify({ icon: '🥵', text: 'Wading with sand on your head dey chop energy — rest small first.', tone: 'bad' })
+      return false
+    }
+    const p0 = get().player!
+    set({ player: { ...p0, needs: applyNeedsDelta(p0.needs, { energy: -RIVERS.layEnergy }) } })
+    const after = laySegmentApply(get().rivers, zoneId)
+    set({ rivers: after })
+    const zoneName = LOCATION_BY_ID[zoneId]?.name ?? zoneId
+    if (segmentsLeft(after, zoneId) === 0) {
+      get().notify({ icon: '🛤️', text: `THE WALKWAY DEY OPEN! ${zoneName} crossing don complete — set your toll and collect.`, tone: 'good' })
+      audio.play('levelup')
+    } else {
+      get().notify({ icon: '🧱', text: `One more segment stand — ${segmentsLeft(after, zoneId)} left for ${zoneName}.`, tone: 'neutral' })
+    }
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Set the crossing toll tier on the walkway you stand on. */
+  setTollTier: (tierIndex) => {
+    const { world, rivers } = get()
+    if (!world) return false
+    const zoneId = world.currentLocation
+    if (!walkwayOpen(rivers, zoneId)) {
+      get().notify({ icon: '🛤️', text: 'Finish the walkway first — then the toll bowl dey open.', tone: 'bad' })
+      return false
+    }
+    set({ rivers: setTollTierApply(rivers, zoneId, tierIndex) })
+    const tier = RIVERS.tollTiers[Math.min(RIVERS.tollTiers.length - 1, Math.max(0, tierIndex))]
+    get().notify({ icon: '🎫', text: `Crossing toll na ${formatNaira(tier)} now — the walkers go pay into your bowl.`, tone: 'good' })
+    audio.play('click')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Collect the toll bowl of the walkway you stand on. */
+  collectTolls: () => {
+    const { world, rivers } = get()
+    if (!world) return false
+    const zoneId = world.currentLocation
+    const w = rivers.walkways[zoneId]
+    if (!w || w.pot <= 0) {
+      get().notify({ icon: '🎫', text: 'The toll bowl dey empty — the crossings go fill am.', tone: 'neutral' })
+      return false
+    }
+    const amount = Math.round(w.pot)
+    set({
+      rivers: { ...rivers, walkways: { ...rivers.walkways, [zoneId]: { ...w, pot: 0 } }, stats: { ...rivers.stats, tollsCollected: rivers.stats.tollsCollected + amount } },
+    })
+    get().addMoney(amount, { label: `Crossing tolls — ${LOCATION_BY_ID[zoneId]?.name ?? zoneId} walkway`, category: 'hustle' })
+    get().notify({ icon: '💰', text: `You collect ${formatNaira(amount)} from the toll bowl — the walkers dey pay.`, tone: 'good' })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Buy the fishermen's canoe at the jetty (unlocks the ferry gigs). */
+  buyCanoe: () => {
+    const { player, world, rivers } = get()
+    if (!player || !world) return false
+    if (world.currentLocation !== JETTY_ID) {
+      get().notify({ icon: '🛶', text: 'The fishermen dey sell canoes at the Motor Park jetty.', tone: 'bad' })
+      return false
+    }
+    if (rivers.canoe) {
+      get().notify({ icon: '🛶', text: 'You already get canoe — one boat, one hustler.', tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(RIVERS.canoeCost, { label: 'Fisherman’s canoe', category: 'shop' })) {
+      get().notify({ icon: '💸', text: `The canoe na ${formatNaira(RIVERS.canoeCost)} — the fishermen no dey take credit.`, tone: 'bad' })
+      return false
+    }
+    set({ rivers: { ...rivers, canoe: true } })
+    get().notify({ icon: '🛶', text: 'The canoe don land! When the river rise, the ferry board go pay you like a landlord.', tone: 'good' })
+    audio.play('levelup')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** Ride the canoe ferry across the water (jetty ↔ a cut zone). */
+  takeFerry: (toId) => {
+    const { player, world } = get()
+    if (!player || !world) return
+    const from = world.currentLocation
+    const destination = LOCATION_BY_ID[toId]
+    if (!destination || from === toId) return
+
+    // the water's route law: jetty → a cut zone, or a cut zone → the return jetty
+    const goingIn = from === JETTY_ID && zoneCut(world.day, toId)
+    const goingOut = zoneCut(world.day, from) && toId === RIVERS.cutReturnId
+    if (!goingIn && !goingOut) {
+      get().notify({ icon: '🛶', text: zoneCut(world.day, toId) ? 'The canoes dey wait at the Motor Park jetty.' : 'The canoe no dey go there — that road dey dry, waka or ride.', tone: 'neutral' })
+      return
+    }
+
+    const fare = ferryFareBetween(from, toId, world.day)
+    const energyCost = Math.ceil(RIVERS.ferryEnergy / 2)
+    if (player.cash < fare) {
+      audio.play('notify')
+      get().notify({ icon: '💸', text: `The fishermen want ${formatNaira(fare)} for the crossing — water no dey take credit.`, tone: 'bad' })
+      return
+    }
+    if (player.needs.energy < energyCost) {
+      get().notify({ icon: '🥵', text: 'You are too tired for the crossing. Rest small.', tone: 'bad' })
+      return
+    }
+
+    set({ isTravelling: true })
+    const applyArrival = () => {
+      const { player: p, world: w } = get()
+      if (!p || !w) return
+      const needs = applySlotDecay(applyNeedsDelta(p.needs, { energy: -energyCost }), 1, get().settings.chill ? CHILL.decayMult : 1)
+      const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, 1)
+      const slot = absoluteSlot(clock.day, clock.timeOfDay)
+      const tx = recordTransaction(`Canoe ferry — ${LOCATION_BY_ID[from]?.shortName ?? from} → ${destination.shortName}`, 'transport', -fare, clock.day, slot)
+      set({
+        player: {
+          ...p,
+          cash: Math.max(0, p.cash - fare),
+          needs,
+          transactions: [tx, ...p.transactions].slice(0, LEDGER_CAP),
+          stats: { ...p.stats, totalSpent: p.stats.totalSpent + fare },
+        },
+        world: { ...w, currentLocation: toId, ...clock },
+        isTravelling: false,
+        offers: [],
+      })
+      // a crossing can cross midnight — the whole mesh follows the day
+      commitCivicDays(get, set, w.day, clock.day)
+      get().notify({ icon: '🛶', text: `The canoe land you for ${destination.name} — the water still dey, hold the rail.`, tone: 'neutral' })
+      audio.play('notify')
+      scheduleAutosave(get)
+    }
+    setTimeout(applyArrival, TRAVEL.transitionMs)
+  },
+
+  /** Run a ferry gig with your own canoe (passengers pay the surge fare). */
+  runFerryGig: (gigId) => {
+    const { player, world, rivers, isWorking, isTravelling } = get()
+    if (!player || !world || isWorking || isTravelling) return false
+    if (!rivers.canoe) {
+      get().notify({ icon: '🛶', text: 'You need your own canoe — the fishermen dey sell at the jetty.', tone: 'bad' })
+      return false
+    }
+    const cut = availableFerryGigs(rivers, world.day, cutZonesFor(world.day))
+    const gig = cut.find((g) => g.id === gigId)
+    if (!gig) return false
+    if (world.currentLocation !== JETTY_ID) {
+      get().notify({ icon: '📍', text: 'The passengers dey wait at the Motor Park jetty — the bus go stop there.', tone: 'bad' })
+      return false
+    }
+    if (player.needs.energy < gig.energyCost) {
+      get().notify({ icon: '🥵', text: 'You are too tired to paddle a loaded canoe. Rest small first.', tone: 'bad' })
+      return false
+    }
+
+    const destName = LOCATION_BY_ID[gig.toId]?.name ?? gig.toId
+    set({ isWorking: true, workingLabel: `Ferry — crossing to ${destName}` })
+
+    const applyDone = () => {
+      const { player: p, world: w } = get()
+      if (!p || !w) return
+      get().addMoney(gig.payout, { label: `Ferry run — boatload to ${destName}`, category: 'hustle' })
+      const paid = get().player!
+      const needs = applySlotDecay(applyNeedsDelta(paid.needs, { energy: -gig.energyCost }), 1, get().settings.chill ? CHILL.decayMult : 1)
+      const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, 1)
+      set({
+        player: { ...paid, needs, stats: { ...paid.stats, jobsCompleted: paid.stats.jobsCompleted + 1 } },
+        world: { ...w, currentLocation: gig.toId, ...clock },
+        rivers: runFerryApply(get().rivers, w.day, gig.id),
+        isWorking: false,
+        workingLabel: null,
+        offers: [],
+      })
+      const riv = get().rivers
+      set({ rivers: { ...riv, stats: { ...riv.stats, ferryEarned: riv.stats.ferryEarned + gig.payout } } })
+      get().addXp(FLEET.gigXp)
+      get().addSkillXp('hustle', FLEET.gigHustleXp)
+      get().notify({ icon: '🛶', text: `Boatload done — the passengers pay ${formatNaira(gig.payout)} at ${destName}. The water dey pay today.`, tone: 'good' })
+      get().bumpGoal('gig')
+      bumpOnboarding(get, set, 'work')
+      commitCivicDays(get, set, w.day, clock.day)
+      audio.play('chime')
+      scheduleAutosave(get)
+    }
+    setTimeout(applyDone, WORK.transitionMs)
+    return true
+  },
+
+  /** Give to the cold-room rescue bowl while standing at the zone. */
+  contributeRescue: (tier) => {
+    const { player, world, rivers } = get()
+    if (!player || !world) return false
+    if (!(RIVERS.rescue.tiers as readonly number[]).includes(tier)) return false
+    const gate = canContributeRescue(rivers, world.day, world.currentLocation)
+    if (!gate.ok) {
+      get().notify({ icon: '🧊', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    if (!get().removeMoney(tier, { label: 'Cold-room rescue bowl', category: 'other' })) {
+      get().notify({ icon: '💸', text: `The bowl dey take ${formatNaira(tier)} tiers — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    const after = contributeRescueApply(rivers, world.day, tier)
+    set({ rivers: after })
+    const need = Math.max(0, RIVERS.rescue.poolTarget - after.rescue!.pool)
+    get().notify({
+      icon: '🧊',
+      text: need <= 0
+        ? 'Bowl don full! The rescue trucks go roll tomorrow morning.'
+        : `You drop ${formatNaira(tier)} — ${formatNaira(need)} more and the trucks go roll.`,
+      tone: 'good',
+    })
+    audio.play('chime')
+    scheduleAutosave(get)
+    return true
+  },
+
   chatNpc: (npcId) => {
     const { player, world } = get()
     if (!player || !world) return null
@@ -1987,6 +2350,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
       })
       return
     }
+    // M11 — THE RIVER LAW: the water owns the low ground. Land transport
+    // refuses a cut zone in EITHER direction; a finished sandbag walkway
+    // carries pedestrians only (slow, careful steps), and the canoe ferry
+    // is its own action — the water never quotes the land sheets' fares.
+    if (zoneCut(world.day, destinationId) && !(transportId === 'walk' && walkwayOpen(get().rivers, destinationId))) {
+      audio.play('notify')
+      get().notify({
+        icon: '🌊',
+        text: `The river don take ${destination.name} — the road dey under water. Canoe ferry dey run from the Motor Park.`,
+        tone: 'bad',
+      })
+      return
+    }
+    if (zoneCut(world.day, origin.id) && !(transportId === 'walk' && walkwayOpen(get().rivers, origin.id))) {
+      audio.play('notify')
+      get().notify({
+        icon: '🌊',
+        text: `The water don lock ${origin.name} in — you go need the canoe ferry or the sandbag walkway.`,
+        tone: 'bad',
+      })
+      return
+    }
     // M4 — personal transport: the ride must be IN the garage first
     const ownModel = personalModelOf(transportId)
     if (ownModel && !player.vehicles.some((v) => v.model === ownModel)) {
@@ -2015,7 +2400,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // pure calculation — same inputs always give the same plan
     // M8 — the pump surges on scarcity days (personal rides pay black-market)
     // M10 — a paved destination rides the union's smooth road (minutes ×0.85)
-    const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay, fuelMultFor(world.day), pavedMinutesMult(get().calendar, world.day, destinationId))
+    // M11 — a walkway crossing rides slow and careful (minutes ×1.35, walk only)
+    const plan = calculateTravel(
+      origin,
+      destination,
+      transportId,
+      world.weather,
+      world.timeOfDay,
+      fuelMultFor(world.day),
+      pavedMinutesMult(get().calendar, world.day, destinationId) *
+        (transportId === 'walk' && zoneCut(world.day, destinationId) && walkwayOpen(get().rivers, destinationId) ? RIVERS.walkwayMinutesMult : 1),
+    )
     const event = rollTravelEvent(transportId, world.weather)
 
     if (player.cash < plan.cost) {
@@ -2644,6 +3039,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           world: winner.world,
           civic: winner.civic,
           chaos: winner.chaos ?? freshChaosState(),
+          calendar: winner.calendar ?? freshCalendarState(),
+          rivers: winner.rivers ?? freshRiversState(),
+          fleet: winner.fleet ?? { day: winner.world.day, done: [] },
           goals: winner.goals ?? freshGoalState(),
           onboarding: winner.onboarding ?? freshOnboardingState(),
           gateOpen: false,
@@ -2697,7 +3095,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   saveNow: () => {
-    const { player, world, civic, fleet, chaos, calendar, goals, onboarding, account, settings } = get()
+    const { player, world, civic, fleet, chaos, calendar, rivers, goals, onboarding, account, settings } = get()
     if (!player || !world || !civic) return
     const existing = SaveSystem.load()
     SaveSystem.write({
@@ -2710,6 +3108,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       fleet,
       chaos,
       calendar,
+      rivers,
       goals,
       onboarding,
       account,
@@ -2726,6 +3125,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       civic: null,
       fleet: { day: 1, done: [] },
       chaos: freshChaosState(),
+      calendar: freshCalendarState(),
+      rivers: freshRiversState(),
       goals: freshGoalState(),
       onboarding: freshOnboardingState(),
       account: freshAccountState(),

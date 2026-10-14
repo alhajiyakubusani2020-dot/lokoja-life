@@ -135,7 +135,7 @@ export function bizIncomeFor(
   day: number,
   civic: CivicState,
   reputation: number,
-  opts?: { staff?: number; upgrades?: ShopUpgradeId[]; chaos?: ChaosState },
+  opts?: { staff?: number; upgrades?: ShopUpgradeId[]; chaos?: ChaosState; floodFactor?: number },
 ): number {
   const def = bizDef(typeId)
   if (!def) return 0
@@ -146,11 +146,14 @@ export function bizIncomeFor(
   const blackedOut = chaos ? blackoutAt(chaos, def.locationId, day) : false
   const posBoost = chaos && def.pos === true && isScarcityDay(day) ? CHAOS.posBoostMult : 1
   const staffMult = 1 + staff * BIZ.staffIncomeBoost
+  // M11 — the flood crush folds with the grid laws: the WORSE water wins
+  // (a generator keeps the lights on but cannot keep the river out)
   const powerMult = blackedOut && !hasPowerBackup(upgrades)
     ? CHAOS.blackoutIncomeFactor
     : dark
       ? BIZ.sheddingIncomeFactor
       : 1
+  const waterMult = Math.min(powerMult === 1 ? 1 : powerMult, opts?.floodFactor ?? 1)
   return Math.max(
     0,
     Math.round(
@@ -159,7 +162,7 @@ export function bizIncomeFor(
         bizDayMult(typeId, day, civic) *
         (1 + bizRepBonus(reputation)) *
         staffMult *
-        powerMult *
+        waterMult *
         posBoost,
     ),
   )
@@ -218,6 +221,7 @@ export function bizDayRoll(
   civic: CivicState,
   reputation: number,
   chaos?: ChaosState,
+  floodFactorFor?: (locationId: string, day: number) => number,
 ): BizDayResult {
   const earned: Record<string, number> = {}
   let total = 0
@@ -232,6 +236,7 @@ export function bizDayRoll(
         staff: biz.staff,
         upgrades: biz.upgrades,
         chaos,
+        floodFactor: floodFactorFor ? floodFactorFor(bizDef(biz.typeId)?.locationId ?? '', day) : 1,
       })
       const genFuel = bizGeneratorFuelFor(biz.typeId, day, biz.upgrades, chaos ?? null)
       sum += Math.max(0, gross - wages - genFuel)

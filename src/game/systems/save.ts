@@ -8,15 +8,16 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState, CalendarState, RiversState } from '../types'
 import { freshCivicState } from './civic'
 import { freshChaosState } from './chaos'
 import { freshGoalState } from './goals'
 import { freshOnboardingState, freshAccountState } from './guest'
 import { freshCalendarState } from './calendar'
+import { freshRiversState } from './rivers'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 11
+const SAVE_VERSION = 12
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -113,6 +114,12 @@ function deserialize(raw: string): GameSave | null {
         save.version = 11
         break
       case 11:
+        // v11 → v12 (M11 — THE RIVERS AWAKE): the rivers slice joins the
+        // save — sandbags, walkways, tolls, the canoe, the rescue bowl.
+        // Defaulted below — a v11 player wakes up on a dry-season river.
+        save.version = 12
+        break
+      case 12:
         // current version
         break
       default:
@@ -211,6 +218,27 @@ function deserialize(raw: string): GameSave | null {
     if (!cal.stats) cal.stats = freshCal.stats
     cal.paved = cal.paved.filter((r) => typeof r.zoneId === 'string' && typeof r.untilDay === 'number')
     save.calendar = cal
+
+    // --- M11 rivers (missing on v11-and-older saves; partial data healed) ---
+    const freshRiv = freshRiversState()
+    const rivers: RiversState = save.rivers ?? freshRiv
+    if (typeof rivers.day !== 'number') rivers.day = freshRiv.day
+    if (typeof rivers.sandbags !== 'number') rivers.sandbags = 0
+    if (typeof rivers.canoe !== 'boolean') rivers.canoe = false
+    if (!rivers.walkways || typeof rivers.walkways !== 'object') rivers.walkways = {}
+    for (const [zoneId, w] of Object.entries(rivers.walkways)) {
+      if (typeof w.laid !== 'number' || w.laid < 0) w.laid = 0
+      if (typeof w.tollTier !== 'number') w.tollTier = 0
+      if (typeof w.pot !== 'number') w.pot = 0
+      if (typeof w.tollDay !== 'number') w.tollDay = 0
+      rivers.walkways[zoneId] = w
+    }
+    if (!rivers.rescue || typeof rivers.rescue.zoneId !== 'string' || typeof rivers.rescue.year !== 'number') rivers.rescue = null
+    if (typeof rivers.rescuedYear !== 'number') rivers.rescuedYear = 0
+    if (typeof rivers.ferryDay !== 'number') rivers.ferryDay = 0
+    if (!Array.isArray(rivers.ferryDone)) rivers.ferryDone = []
+    if (!rivers.stats) rivers.stats = freshRiv.stats
+    save.rivers = rivers
 
     // --- M2 civic mesh (missing on v3-and-older saves) ---
     if (!save.civic) {

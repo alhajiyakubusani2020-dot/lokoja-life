@@ -28,6 +28,7 @@ import { sampleFor } from '@/game/systems/perfProbe'
 import { getDeviceProfile } from '@/game/systems/device'
 import { setDebugScarcity } from '@/game/systems/chaos'
 import { setDebugYearDay, festivalForDay, weddingForCycle } from '@/game/systems/calendar'
+import { setDebugRiverLevel, riverLevelFor, cutZonesFor } from '@/game/systems/rivers'
 import { ALL_DOORS } from '@/game/world3d/schools'
 import { BRIDGES } from '@/game/world3d/layout'
 import { WorldScene } from './WorldScene'
@@ -239,7 +240,9 @@ export function WorldTab({
       forceScarcity: (v: boolean) => setDebugScarcity(v),
       /** M10 E2E — force the calendar's year-day reading (1–72; null = the real year) */
       forceYearDay: (n: number | null) => setDebugYearDay(n),
-      /** M10 E2E — the live calendar slice + today's derived laws */
+      /** M11 E2E — force the river's level reading (0–1; null = the real season) */
+      forceRiver: (v: number | null) => setDebugRiverLevel(v),
+      /** M10/M11 E2E — the live calendar + river slices and today's derived laws */
       calendar: () => {
         const s = useGameStore.getState()
         return {
@@ -247,6 +250,14 @@ export function WorldTab({
           today: s.world ? festivalForDay(s.world.day) : null,
           wedding: s.world ? weddingForCycle(s.world.day) : null,
           yearDay: s.world ? ((s.world.day - 1) % 72) + 1 : 0,
+        }
+      },
+      rivers: () => {
+        const s = useGameStore.getState()
+        return {
+          slice: s.rivers,
+          level: s.world ? riverLevelFor(s.world.day) : 0,
+          cut: s.world ? cutZonesFor(s.world.day) : [],
         }
       },
     }

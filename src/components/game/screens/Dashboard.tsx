@@ -19,6 +19,7 @@ import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
 import { LivingScene } from '../LivingScene'
 import { ChaosBanner } from '../ChaosBanner'
 import { FestivalBanner } from '../FestivalBanner'
+import { RiversBanner } from '../RiversBanner'
 import { GoalsCard, OnboardingCard } from '../CasualShell'
 import { GuestGate } from '../GuestGate'
 import { MoneyPop, Shockwave } from '../Juice'
@@ -99,6 +100,9 @@ function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
 
       {/* ---- M10 — the living calendar: the city's year, one glance ---- */}
       <FestivalBanner />
+
+      {/* ---- M11 — the rivers awake: the Niger's surge, one glance ---- */}
+      <RiversBanner />
 
       {/* ---- M9 — the casual shell: learn the streets, then today's goals ---- */}
       <OnboardingCard />

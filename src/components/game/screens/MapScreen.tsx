@@ -27,9 +27,11 @@ import { WEATHER_META } from '@/game/data/config'
 import { weatherBlocksLocation, isNightMarketOpen } from '@/game/systems/seasons'
 import { fuelMultFor } from '@/game/systems/chaos'
 import { pavedMinutesMult, festivalForDay, weddingForCycle, ramMarketDayIndex } from '@/game/systems/calendar'
+import { zoneCut } from '@/game/systems/rivers'
 import { BizBlock } from '../BizBlock'
 import { FleetBlock } from '../FleetBlock'
 import { FestivalPanel } from '../FestivalPanel'
+import { RiversPanel } from '../RiversPanel'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 import {
@@ -62,6 +64,7 @@ function Marker({
   garageDot,
   darkZone,
   festivalDot,
+  riverDot,
   onSelect,
 }: {
   location: LokojaLocation
@@ -77,6 +80,8 @@ function Marker({
   darkZone?: boolean
   /** M10 — the calendar is live here today (festival / wedding / ram market / paving) */
   festivalDot?: boolean
+  /** M11 — the river holds this zone (the road is under water) */
+  riverDot?: boolean
   onSelect: () => void
 }) {
   return (
@@ -141,6 +146,16 @@ function Marker({
             aria-hidden
           >
             🎉
+          </span>
+        )}
+        {riverDot && !isLocked && !darkZone && (
+          <span
+            data-testid="map-river-dot"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 animate-pulse rounded-full border-2 border-white bg-[#0369a1] px-1 text-[8px]"
+            style={{ height: 18, minWidth: 18 }}
+            aria-hidden
+          >
+            🌊
           </span>
         )}
       </span>
@@ -402,6 +417,8 @@ export function MapScreen({
               (wedding.isToday && wedding.venueId === l.id) ||
               (ramMarketDayIndex(world.day) > 0 && l.id === 'kpata-market') ||
               (!!calendar.paving && calendar.paving.zoneId === l.id)
+            // M11 — the water wears the 🌊 badge on the map
+            const riverDot = zoneCut(world.day, l.id)
             return (
               <Marker
                 key={l.id}
@@ -413,6 +430,7 @@ export function MapScreen({
                 garageDot={l.id === 'transport-area'}
                 darkZone={darkZone}
                 festivalDot={festivalDot}
+                riverDot={riverDot}
                 onSelect={() => openLocation(l.id)}
               />
             )
@@ -651,6 +669,9 @@ export function MapScreen({
 
                   {/* M10 — the living calendar: this venue's festival actions */}
                   {!isSelectedLocked && <FestivalPanel location={selected} />}
+
+                  {/* M11 — the rivers awake: sand, walkways, tolls, canoes, the rescue */}
+                  {!isSelectedLocked && <RiversPanel location={selected} />}
                 </>
               )}
 

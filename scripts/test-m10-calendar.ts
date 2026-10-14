@@ -61,6 +61,7 @@ import {
   PAVING_ZONE_IDS,
 } from '../src/game/systems/calendar'
 import { marketDayRoll, freshCivicState, marketMealPrice } from '../src/game/systems/civic'
+import { setDebugRiverLevel } from '../src/game/systems/rivers'
 import { gigPayout } from '../src/game/systems/fleet'
 import { calculateTravel } from '../src/game/systems/travel'
 import { FESTIVALS, MEAL_BY_KEY, TRAVEL } from '../src/game/data/config'
@@ -70,7 +71,7 @@ import { SaveSystem } from '../src/game/systems/save'
 import type { CalendarState } from '../src/game/types'
 
 const A = FESTIVALS.anchors
-const SAVE_V = 11
+const SAVE_V = 12
 
 let passed = 0
 let failed = 0
@@ -455,7 +456,7 @@ section('the save v10 → v11 migration')
   }
   mem.set(SaveSystem.SAVE_KEY, JSON.stringify(v10))
   const loaded = SaveSystem.load()
-  check('v10 save migrates to v11', loaded?.version === SAVE_V)
+  check('v10 save migrates to v12', loaded?.version === SAVE_V)
   check('the calendar slice arrives fresh and harmless', !!loaded?.calendar && loaded.calendar.day === 0 && loaded.calendar.meatPacks === 0 && Array.isArray(loaded.calendar.paved))
   check('nothing else moved (chaos/goals/account intact)', loaded?.chaos.stats.blowouts === 1 && loaded?.goals.streak === 2 && loaded?.account.linked === true)
   mem.set(SaveSystem.SAVE_KEY, '{broken json')
@@ -549,7 +550,9 @@ section('the REAL store pass — sleep into the Regatta, stake the year')
   check('the second pack to the same paddy is refused', !store.getState().shareMeat('musa'))
   check('the pack count fell by one', store.getState().calendar.meatPacks === FESTIVALS.meatPacksPerRam - 1)
 
-  // — the wedding: aso-ebi, then the canopy
+  // — the wedding: aso-ebi, then the canopy (the river rides dry — the
+  // surge window would legally lock Kpata in, and this suite tests the calendar)
+  setDebugRiverLevel(0)
   const wed = weddingForCycle(store.getState().world!.day)
   while (store.getState().world!.day < wed.day) await sleepDay()
   const wedToday = weddingForCycle(store.getState().world!.day)
@@ -570,6 +573,8 @@ section('the REAL store pass — sleep into the Regatta, stake the year')
   check('the aso-ebi wedding pays the double respect', wedOk && store.getState().player!.reputation === repBeforeWed + FESTIVALS.weddingRepAsoEbi && store.getState().calendar.stats.weddings === 1, `ok=${wedOk} gate=${JSON.stringify(wedGate)} asoEbi=${JSON.stringify(store.getState().calendar.asoEbi)} want=w${wedToday.id} day=${store.getState().world!.day}/${wedToday.day}`)
   check('one attendance per wedding', !store.getState().attendWedding(1000))
 
+  // (the river stays dry through the paving phase too — its zone can sit
+  // inside the surge window, and this suite tests the calendar's laws)
   // — the paving: stand at the ground-breaking of a fresh season's project
   const dayNow = store.getState().world!.day
   const nextStart = (pavingCycleOf(dayNow) + 1) * FESTIVALS.pavingEvery + 1
@@ -598,6 +603,7 @@ section('the REAL store pass — sleep into the Regatta, stake the year')
   const plain = calculateTravel(home, LOCATION_BY_ID[pavedZone], 'keke', 'sunny', 'morning')
   check('the finished street rides 15% faster', smooth.minutes < plain.minutes, `${plain.minutes} → ${smooth.minutes}`)
 
+  setDebugRiverLevel(null)
   // — the iftar blessing: an evening meal inside the fast lands softer
   setDebugYearDay(5) // inside year 1's drifted fast window (drift −4 → the fast wraps 72, 1..8)
   // march the clock to the iftar hour (wherever the paving afternoon left us)
@@ -623,7 +629,7 @@ section('the REAL store pass — sleep into the Regatta, stake the year')
   } catch {
     parsed = null
   }
-  check('the calendar slice persists into the v11 save', parsed?.version === SAVE_V && typeof parsed?.calendar?.meatPacks === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
+  check('the calendar slice persists into the v12 save', parsed?.version === SAVE_V && typeof parsed?.calendar?.meatPacks === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
 }
 
 console.log(`\n========================================`)

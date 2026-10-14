@@ -38,6 +38,7 @@ import { applySlotDecay } from '../src/game/systems/needs'
 import { civicDayRoll, freshCivicState } from '../src/game/systems/civic'
 import { GOALS, CHILL, NEEDS } from '../src/game/data/config'
 import { freshCalendarState } from '../src/game/systems/calendar'
+import { freshRiversState } from '../src/game/systems/rivers'
 import type { AccountState, GameSave, GoalState, Needs } from '../src/game/types'
 import { DEFAULT_AVATAR } from '../src/game/data/avatar'
 
@@ -199,6 +200,7 @@ console.log('\nGUEST LAWS — play first, login to continue, lose nothing')
   const mk = (day: number, earned: number): GameSave => ({
     version: 10,
     calendar: freshCalendarState(),
+    rivers: freshRiversState(),
     createdAt: 1,
     updatedAt: 2,
     player: {
@@ -327,8 +329,8 @@ console.log('\nREAL STORE PASS — goals, onboarding, the gate, through the live
   const raw = memStore.get('lokoja-life:save')
   const parsed = raw ? JSON.parse(raw) : null
   check(
-    'the save (v11) carries goals + onboarding + account',
-    parsed?.version === 11 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
+    'the save (v12) carries goals + onboarding + account',
+    parsed?.version === 12 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
     `v${parsed?.version} ids:${JSON.stringify(parsed?.goals?.ids)} rewarded:${parsed?.onboarding?.rewarded} linked:${parsed?.account?.linked}`,
   )
 }

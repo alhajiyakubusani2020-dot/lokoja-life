@@ -23,6 +23,7 @@ import { LOCATION_BY_ID } from '@/game/data/locations'
 import { BizBlock } from './BizBlock'
 import { FleetBlock } from './FleetBlock'
 import { FestivalPanel } from './FestivalPanel'
+import { RiversPanel } from './RiversPanel'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 
@@ -214,6 +215,9 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
 
       {/* M10 — the living calendar: this venue's festival actions */}
       {!isSelectedLocked && <FestivalPanel location={selected} />}
+
+      {/* M11 — the rivers awake: sand, walkways, tolls, canoes, the rescue */}
+      {!isSelectedLocked && <RiversPanel location={selected} />}
 
       {/* travel confirmation */}
       {!isSelectedCurrent && !isSelectedLocked && (

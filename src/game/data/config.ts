@@ -868,3 +868,92 @@ export const SOCIAL = {
   /** minimum familiarity before favours start passing your way */
   favorTierMin: 40,
 } as const
+
+/* ------------------------------- M11 — rivers ------------------------------- */
+
+/**
+ * M11 — THE RIVERS AWAKE. The Niger has a year of its own: the green
+ * season rains fill the river through the middle of the Lokoja year, it
+ * peaks late, and the low-lying city pays for it — the Confluence
+ * riverfront, the Ganaja road and (in the worst surges) the Kpata market
+ * all go under water. The city answers like the real one: canoes become
+ * public transport, sandbag walkways rise off the Patti Crusher's sand,
+ * cold-room owners pass the bowl for the rescue trucks, and a deep
+ * crossing earns an honest toll. systems/rivers.ts holds the pure laws.
+ */
+export const RIVERS = {
+  /** the river's year, on the SAME 72-day clock as the festivals */
+  season: {
+    /** year-day the rise begins (dry season before it) */
+    riseStart: 41,
+    /** rise ends → the water sits at its peak (Lokoja's Sept–Oct) */
+    peakStart: 55,
+    /** the recede begins */
+    recedeStart: 63,
+    /** year-day the river is fully back in its banks */
+    dryBy: 71,
+  },
+  /** per-day seeded wobble on the level (the river breathes) */
+  wobble: 0.05,
+  /** the level a low-lying zone goes under water (deeper city = higher bar) */
+  cutAt: { confluence: 0.35, 'ganaja-junction': 0.55, 'kpata-market': 0.75 } as Record<string, number>,
+  /** the Crusher sells sand on the Patti road — a sack costs this much */
+  sackPrice: 600,
+  /** sacks of sand + patience per walkway segment */
+  sacksPerSegment: 2,
+  /** energy to lay one segment (wading with sand on your head) */
+  layEnergy: 8,
+  /** walkway segments needed before a zone's crossing opens */
+  segments: { confluence: 4, 'ganaja-junction': 5, 'kpata-market': 6 } as Record<string, number>,
+  /** where the Crusher's sand is sold (the Patti road quarry trailhead) */
+  sandVendorZone: 'mount-patti',
+  /** a finished walkway rides SLOW (careful steps on wet bags) — minutes ×this */
+  walkwayMinutesMult: 1.35,
+  /** crossing tolls: what one pedestrian pays (the player picks the tier) */
+  tollTiers: [30, 60, 120] as const,
+  /** seeded NPC crossings/day band at full surge (scales with the level) */
+  tollCrossingsMin: 8,
+  tollCrossingsMax: 26,
+  /** the fishermen's price for a canoe of your own */
+  canoeCost: 18000,
+  /** the ferry fare: counter fare × (fareMult + levelPremium × level) */
+  ferryFareMult: 2.2,
+  ferryLevelPremium: 0.8,
+  /** running a ferry gig costs this energy + one clock slot */
+  ferryEnergy: 10,
+  /** ferry gigs a day (only while some zone is cut) */
+  ferryGigsPerDay: 2,
+  /** the ferry jetty — where the canoes wait (the buses stop here) */
+  jettyId: 'transport-area',
+  /** the return jetty inside a cut zone rows you back here */
+  cutReturnId: 'transport-area',
+  /** the cold-room rescue: the deep surge's co-op quest */
+  rescue: {
+    /** the level that wakes the rescue (the ice fish sellers start praying) */
+    triggerLevel: 0.7,
+    /** the zone whose cold rooms need saving (Kpata's frozen stock) */
+    zoneId: 'kpata-market',
+    /** pool target before the trucks roll */
+    poolTarget: 8000,
+    npcMin: 600,
+    npcMax: 1400,
+    /** player contribution tiers (once/day, in person) */
+    tiers: [500, 1000, 2000] as const,
+    /** a saved zone earns this share of normal income through the surge */
+    savedIncomeFactor: 0.9,
+    /** a drowning zone earns this share (stock spoiling in the damp) */
+    floodIncomeFactor: 0.5,
+    /** the street's thanks when the stock reaches high ground */
+    repReward: 4,
+    moodReward: 3,
+  },
+  /** market fold: the water lifts prices (supply cut) — ×(1 + perLevel × level) */
+  marketMultPerLevel: 0.25,
+  marketMultCap: 1.25,
+  /** living in the damp: daily mood cost when the river holds above this */
+  dampLevel: 0.55,
+  dampMoodHit: 2,
+  /** the day the river walks back into its banks, the city breathes */
+  reliefBelow: 0.35,
+  reliefMood: 3,
+} as const
