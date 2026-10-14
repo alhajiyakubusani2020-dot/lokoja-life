@@ -621,3 +621,23 @@ Work Log:
 Stage Summary:
 - M7 shipped: the game now grades every device (low/mid/high), fights lag live via dynamic resolution, survives GPU context death with a visible recovery chip, offers a real Map-Mode fallback for WebGL-less devices, and gives the player a persisted Auto/Low/Mid/High switch in three surfaces — all laws deterministic and tested without a browser
 - Milestone ledger: M1-M7 done; no pre-committed M8+ — queue open for user direction
+
+---
+Task ID: AUDIT-1
+Agent: Main Agent (Super Z)
+Task: Sincere reality-check audit — verify the pasted "Reality Check" milestone scorecard against actual repo evidence (git log, source tree, test suites, save system, PWA assets)
+
+Work Log:
+- Read full git log (1bb4a29..cf6a294): mapped project-internal milestones m1 roads → m2 civic → m3 biz → m4 garage+FPS → m5 fleet → m6 living world → m7 RUN-ON-ANY-DEVICE (cf6a294, COMMITTED)
+- Verified source tree: systems/device.ts (355 lines, tier law + dynres governor), seasons.ts, civic.ts (371), fleet.ts, biz.ts, social.ts, audio.ts (SFX synth only — no music engine)
+- Verified save.ts: SAVE_VERSION=8 with full v1→v8 migration ladder (never-lose-progress = partially true)
+- Verified public/: NO manifest.json, NO service worker → PWA/offline = 0% confirmed
+- Verified locations.ts: 10 base districts; bank = stage5 interior panel, health = FUL clinic building only (no gameplay)
+- Verified test suites on disk: test-m2-civic 67, m3-biz 50, m4-garage 82, m5-fleet 95, m6-living 100, m7-device 53, world3d 707, schools 232, stage5 47, stage3, travel
+- Cross-checked pasted Reality Check vs git: found it OUTDATED on device-compat (m7 cf6a294 shipped after that doc was written) + 2 number wobbles (roads: commit says 2,655 ways ~930km, doc claims 2,800+/~730km)
+
+Stage Summary:
+- VERDICT: pasted Reality Check ~85% sincere; corrected whole-dream completion ≈ 30-38%
+- Key correction: master-plan M9 (Silk/any-device) is ~50%, not ~35% — device law + 3 quality tiers + dynres + context-loss recovery + device E2E already shipped in cf6a294
+- Hard zeros confirmed: multiplayer/Live Nation, City Forge automation, Planet Scale, PWA, signed saves/HMAC (Fortress), elections/courts/prison/JAPA, education ladder loop, marriage/family, festivals, teleport links, parent PIN/age tiers
+- Numbering collision documented: project-internal m1-m7 ≠ master-plan M1-M11; future work must reference master-plan names
