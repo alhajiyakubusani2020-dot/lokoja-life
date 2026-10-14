@@ -7,6 +7,8 @@
  * is a transport change, not a redesign.
  */
 
+import type { QualitySetting } from './systems/device'
+
 /* ---------------------------------- Avatar --------------------------------- */
 
 export type Gender = 'male' | 'female'
@@ -396,6 +398,8 @@ export interface FleetState {
 export interface GameSettings {
   /** master toggle for the (synthesised) audio engine */
   sound: boolean
+  /** M7 — graphics pick: 'auto' trusts the device law, explicit tiers override it */
+  graphics: QualitySetting
 }
 
 /* ---------------------------------- Save ----------------------------------- */
@@ -405,6 +409,7 @@ export interface GameSettings {
  * run `migrateSave()` against old local saves (and later cloud rows).
  */
 export interface GameSave {
+  /** v8 (M7): settings.graphics joins the schema */
   version: number
   createdAt: number
   updatedAt: number

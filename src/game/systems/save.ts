@@ -8,11 +8,11 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState, CivicState, FleetState } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState, GameSettings } from '../types'
 import { freshCivicState } from './civic'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 7
+const SAVE_VERSION = 8
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -83,6 +83,12 @@ function deserialize(raw: string): GameSave | null {
         save.version = 7
         break
       case 7:
+        // v7 → v8 (M7 — RUN ON ANY DEVICE): settings gains the graphics
+        // pick ('auto' | 'low' | 'mid' | 'high'). Defaulted below — a v7
+        // player wakes up on Auto and the device law decides for them.
+        save.version = 8
+        break
+      case 8:
         // current version
         break
       default:
@@ -100,7 +106,9 @@ function deserialize(raw: string): GameSave | null {
       }
     }
     if (!save.world.currentLocation) save.world.currentLocation = 'home'
-    if (!save.settings) save.settings = { sound: true }
+    if (!save.settings) save.settings = { sound: true, graphics: 'auto' }
+    if (typeof save.settings.sound !== 'boolean') save.settings.sound = true
+    if (!['auto', 'low', 'mid', 'high'].includes(save.settings.graphics)) save.settings.graphics = 'auto'
 
     // --- Stage 3 player fields (missing on v1 saves / corrupt data) ---
     const p = save.player as PlayerState
@@ -198,6 +206,19 @@ export const SaveSystem = {
   clear(): void {
     if (!storageAvailable()) return
     window.localStorage.removeItem(SAVE_KEY)
+  },
+
+  /**
+   * M7 — patch ONLY the settings slice of an existing save (or seed it if
+   * a save exists but the game isn't live). This is how a graphics pick
+   * made on the MAIN MENU (before any game runs, so the debounced
+   * autosave is dormant) still reaches disk. No save = nothing to patch.
+   */
+  patchSettings(settings: GameSettings): boolean {
+    if (!storageAvailable()) return false
+    const save = this.load()
+    if (!save) return false
+    return this.write({ ...save, settings })
   },
 
   /**

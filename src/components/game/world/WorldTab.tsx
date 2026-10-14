@@ -25,6 +25,7 @@ import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
 import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen } from './controls'
 import { sampleFor } from '@/game/systems/perfProbe'
+import { getDeviceProfile } from '@/game/systems/device'
 import { ALL_DOORS } from '@/game/world3d/schools'
 import { BRIDGES } from '@/game/world3d/layout'
 import { WorldScene } from './WorldScene'
@@ -110,6 +111,8 @@ export function WorldTab({
   )
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
+  /** M7 — the GPU context was evicted (phone memory pressure); the scene rebuilds itself */
+  const [glLost, setGlLost] = useState(false)
   const [nearest, setNearest] = useState<string | null>(null)
   const [district, setDistrict] = useState<string | null>(null)
   const [gistNpc, setGistNpc] = useState<string | null>(null)
@@ -126,6 +129,8 @@ export function WorldTab({
   const handleDistrict = useCallback((id: string | null) => setDistrict(id), [])
   const handleGist = useCallback((id: string | null) => setGistNpc(id), [])
   const handleHotspot = useCallback((id: string | null) => setHotspot(id), [])
+  const handleGlLost = useCallback(() => setGlLost(true), [])
+  const handleGlBack = useCallback(() => setGlLost(false), [])
 
   // fade out → swap scene → fade back in
   const swapTo = useCallback((id: string | null) => {
@@ -186,6 +191,17 @@ export function WorldTab({
       timeOfDay: () => useGameStore.getState().world?.timeOfDay ?? 'morning',
       /** M4 E2E — real-device fps capture: sample fresh frames, return the report */
       fpsReport: (ms?: number) => sampleFor(ms ?? 3000, 'e2e capture'),
+      /** M7 E2E — the device law's verdict for THIS device (tier + preset + reasons) */
+      deviceProfile: () => {
+        const p = getDeviceProfile(useGameStore.getState().settings.graphics)
+        return { tier: p.tier, effective: p.effective, setting: p.setting, preset: p.preset, reasons: p.reasons, gl: p.gl }
+      },
+      /** M7 E2E — context-loss status ('ok' | 'lost' | 'restored') */
+      glStatus: () => (window as unknown as Record<string, unknown>).__lklGlStatus ?? 'ok',
+      /** M7 E2E — dynamic-resolution governor state */
+      dynRes: () => (window as unknown as Record<string, unknown>).__lklDynRes ?? null,
+      /** M7 E2E — the tier the 3D scene actually mounted with */
+      tier: () => (window as unknown as Record<string, unknown>).__lklTier ?? null,
       /** M6 E2E — force today's sky (storm / harmattan / flood shots must be deterministic) */
       forceWeather: (w: string) => {
         const s = useGameStore.getState()
@@ -257,11 +273,13 @@ export function WorldTab({
         onNearestAnchor={handleAnchor}
         onDistrict={handleDistrict}
         onGist={handleGist}
+        onContextLost={handleGlLost}
+        onContextRestored={handleGlBack}
       />
     )
   }, [
     canWebGL, failed, interiorDef, player.avatar, world.currentLocation, world.timeOfDay, world.weather,
-    handleReady, handleAnchor, handleDistrict, handleGist, handleHotspot,
+    handleReady, handleAnchor, handleDistrict, handleGist, handleHotspot, handleGlLost, handleGlBack,
   ])
 
   return (
@@ -295,6 +313,16 @@ export function WorldTab({
             }`}
             aria-hidden
           />
+
+          {/* M7 — the GPU blinked: calm, honest, temporary */}
+          {glLost && ready && (
+            <div className="pointer-events-none absolute left-1/2 top-[calc(env(safe-area-inset-top)+14px)] z-30 -translate-x-1/2">
+              <div className="flex items-center gap-2 rounded-full bg-black/62 px-4 py-2 text-[12px] font-bold text-white backdrop-blur-sm">
+                <span aria-hidden className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />
+                Screen rebuild — recovering…
+              </div>
+            </div>
+          )}
 
           {/* the HUD */}
           {ready && !failed && (

@@ -22,18 +22,11 @@ import { CityMesh } from './CityMesh'
 import { SchoolMesh } from './SchoolMesh'
 import { Birds, Npcs, PlayerController, Rain, SmokeWisps, Traffic } from './Actors'
 import { DriveSystem } from './DriveSystem'
-import { setPerfRenderer } from '@/game/systems/perfProbe'
+import { setPerfRenderer, readFrameStats } from '@/game/systems/perfProbe'
+import { getDeviceProfile, nextDynRes, QUALITY_PRESETS, type DeviceProfile, type DynResState } from '@/game/systems/device'
+import { useGameStore } from '@/game/store/useGameStore'
 
-/* --------------------------------- device tier -------------------------------- */
-
-function detectQuality(): 'high' | 'low' {
-  if (typeof window === 'undefined') return 'high'
-  const coarse = window.matchMedia('(pointer: coarse)').matches
-  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8
-  return coarse || mem <= 4 ? 'low' : 'high'
-}
-
-/* ------------------------------ perf governors (M3) ---------------------------- */
+/* ------------------------------ perf governors (M3+M7) ------------------------- */
 
 /** the governed renderer, captured once at canvas creation (module scratch —
  *  keeps the frame loop free of hook-returned objects it must mutate) */
@@ -85,15 +78,55 @@ function ShadowGovernor() {
 /**
  * Low tier only: paces the render loop at ~30Hz in demand mode — same visual
  * pacing on weak phones, half the GPU energy, and thermal headroom that keeps
- * the GPU from throttling into stutter.
+ * the GPU from throttling into stutter. M7: a hidden tab never invalidates —
+ * background phones keep their battery.
  */
 function FramePacer({ hz }: { hz: number }) {
   const invalidate = useThree((s) => s.invalidate)
   useEffect(() => {
     if (!hz) return
-    const t = setInterval(() => invalidate(), 1000 / hz)
+    const t = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      invalidate()
+    }, 1000 / hz)
     return () => clearInterval(t)
   }, [hz, invalidate])
+  return null
+}
+
+/* ------------------------- M7 — dynamic resolution governor --------------------- */
+
+/** live dyn-res state (module scratch — read by the E2E hook + settings UI) */
+const dynResLive: DynResState = { cap: 1, dir: 'steady', sinceMs: 0, changes: 0 }
+
+/**
+ * RUN ON ANY DEVICE, part 1: the governor that fights lag while you play.
+ * Every ~2s it reads the perf probe's frame ring; sustained frame stress
+ * (p95 over 40ms) walks the render resolution DOWN a step — the game gets
+ * lighter without moving a single gameplay law. Sustained headroom walks
+ * it back UP. Hysteresis lives in the pure law (systems/device.ts).
+ */
+function DynamicResGovernor({ profile }: { profile: DeviceProfile }) {
+  const gl = useThree((s) => s.gl)
+  useEffect(() => {
+    const floor = profile.preset.dprFloor
+    const initialCap = Math.min(profile.preset.dprCap, window.devicePixelRatio || 1)
+    dynResLive.cap = initialCap
+    const id = setInterval(() => {
+      if (document.hidden) return // a background tab is not rendering truth
+      const stats = readFrameStats()
+      if (!stats) return
+      const { state, action } = nextDynRes(dynResLive, { p95ms: stats.p95ms, nowMs: performance.now() }, {
+        floor,
+        initialCap,
+      })
+      Object.assign(dynResLive, state)
+      if (action !== 'hold') {
+        gl.setPixelRatio(Math.min(dynResLive.cap, window.devicePixelRatio || 1))
+      }
+    }, 2000)
+    return () => clearInterval(id)
+  }, [gl, profile])
   return null
 }
 
@@ -231,6 +264,8 @@ function AtmosphereController({
   followRef: React.MutableRefObject<THREE.Vector3>
 }) {
   const target = useMemo(() => getAtmosphere(timeOfDay, weather), [timeOfDay, weather])
+  // M7 — low tier leans the fog in a touch: cheaper overdraw, same sky law
+  const fogMult = useMemo(() => 1 + (getDeviceProfile().preset.fogPush ?? 0), [])
   const sun = useRef<THREE.DirectionalLight>(null)
   const hemi = useRef<THREE.HemisphereLight>(null)
   const moon = useRef<THREE.Mesh>(null)
@@ -241,7 +276,7 @@ function AtmosphereController({
     const f = fog.current
     if (f) {
       f.color.lerp(scratch.set(target.fogColor), k)
-      f.density += (target.fogDensity - f.density) * k
+      f.density += (target.fogDensity * fogMult - f.density) * k
     }
     skyTargets.top.lerp(scratch.set(target.skyTop), k)
     skyTargets.horizon.lerp(scratch.set(target.skyHorizon), k)
@@ -369,6 +404,8 @@ export function WorldScene({
   onNearestAnchor,
   onDistrict,
   onGist,
+  onContextLost,
+  onContextRestored,
 }: {
   avatar: AvatarConfig
   currentLocationId: string
@@ -378,27 +415,44 @@ export function WorldScene({
   onNearestAnchor?: (anchorId: string | null) => void
   onDistrict?: (districtId: string | null) => void
   onGist?: (npcId: string | null) => void
+  /** M7 — the GPU context died (background memory pressure on phones); the HUD shows a recover chip */
+  onContextLost?: () => void
+  onContextRestored?: () => void
 }) {
-  const quality = useMemo(() => detectQuality(), [])
+  /**
+   * M7 — the device law, read once per session. The player's saved pick
+   * (settings.graphics) is threaded through getDeviceProfile; the E2E
+   * hook __lklForceQuality overrides the EFFECTIVE tier for device-matrix
+   * screenshots without touching any gameplay law.
+   */
+  const profile = useMemo(() => {
+    const setting = useGameStore.getState().settings.graphics
+    const p = getDeviceProfile(setting)
+    const forced = (window as unknown as { __lklForceQuality?: string }).__lklForceQuality
+    if (forced === 'low' || forced === 'mid' || forced === 'high') {
+      return { ...p, effective: forced, preset: QUALITY_PRESETS[forced] } satisfies DeviceProfile
+    }
+    return p
+  }, [])
   const sunRef = useRef(new THREE.Vector3(0.3, 0.8, 0.2))
   const camTarget = useRef(new THREE.Vector3())
 
   return (
     <Canvas
-      shadows={quality === 'high'}
-      dpr={quality === 'high' ? [1, 1.75] : [0.65, 1.05]}
-      frameloop={quality === 'high' ? 'always' : 'demand'}
+      shadows={profile.preset.shadows}
+      dpr={Math.min(profile.preset.dprCap, window.devicePixelRatio || 1)}
+      frameloop={profile.preset.frameHz ? 'demand' : 'always'}
       gl={{
-        antialias: quality === 'high',
+        antialias: profile.preset.antialias,
         powerPreference: 'high-performance',
         stencil: false,
       }}
-      camera={{ fov: 55, near: 0.5, far: quality === 'high' ? 900 : 720, position: [8, 8, 8] }}
+      camera={{ fov: 55, near: 0.5, far: profile.preset.far, position: [8, 8, 8] }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping
         // gentle lift: warm Nigerian light without blowing the plaster out
         gl.toneMappingExposure = 1.12
-        if (quality === 'high') {
+        if (profile.preset.shadows) {
           // cheaper shadow filter — visually indistinguishable here at 1024², measurably faster
           gl.shadowMap.type = THREE.PCFShadowMap
           // M3: shadows render on demand via <ShadowGovernor/>, not every frame
@@ -410,18 +464,43 @@ export function WorldScene({
             ;(window as unknown as Record<string, unknown>).__lklRenderer = gl
           }
         }
-        // M4: the perf probe reads renderer.info on BOTH tiers — real-device
+        // M4: the perf probe reads renderer.info on EVERY tier — real-device
         // diagnostics must work in production and on weak phones too
         setPerfRenderer(gl)
+        dynResLive.cap = Math.min(profile.preset.dprCap, window.devicePixelRatio || 1)
+
+        /* --- M7: context-loss recovery — the black-screen killer -------------
+         * Mobile OSes silently evict WebGL contexts under memory pressure
+         * (a phone call is enough). Without these two listeners the player
+         * is stuck on a dead canvas; with them the game rebuilds itself. */
+        const canvas = gl.domElement
+        canvas.addEventListener('webglcontextlost', (e) => {
+          e.preventDefault() // tells three.js we intend to restore
+          ;(window as unknown as Record<string, unknown>).__lklGlStatus = 'lost'
+          onContextLost?.()
+        })
+        canvas.addEventListener('webglcontextrestored', () => {
+          ;(window as unknown as Record<string, unknown>).__lklGlStatus = 'restored'
+          if (profile.preset.shadows) gl.shadowMap.needsUpdate = true
+          onContextRestored?.()
+        })
+
+        // M7 E2E: the device matrix needs the tier + dyn-res state + the canvas
+        if (window.location.search.includes('e2e=1')) {
+          ;(window as unknown as Record<string, unknown>).__lklGlCanvas = canvas
+          ;(window as unknown as Record<string, unknown>).__lklDynRes = dynResLive
+          ;(window as unknown as Record<string, unknown>).__lklTier = profile.effective
+        }
         onReady?.()
       }}
       style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
     >
-      {quality === 'high' ? (
+      {profile.preset.shadows ? (
         <ShadowGovernor />
-      ) : (
-        <FramePacer hz={30} />
-      )}
+      ) : profile.preset.frameHz ? (
+        <FramePacer hz={profile.preset.frameHz} />
+      ) : null}
+      <DynamicResGovernor profile={profile} />
       <FollowCopier followRef={camTarget} />
       <AtmosphereController timeOfDay={timeOfDay} weather={weather} sunRef={sunRef} followRef={camTarget} />
       <SkyDome sunRef={sunRef} />

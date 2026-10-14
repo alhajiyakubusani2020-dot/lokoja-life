@@ -44,6 +44,7 @@ import {
   WorldIcon,
 } from '../icons'
 import { audio } from '@/game/systems/audio'
+import { GraphicsPicker } from './GraphicsPicker'
 import { formatNaira, nextReputationTier, reputationTier, skillCap, xpToNextLevel } from '@/game/systems/progression'
 import { skillXpToNext, SKILL_META } from '@/game/systems/skills'
 import { conditionSummary } from '@/game/systems/needs'
@@ -477,6 +478,8 @@ function ProfileTab() {
               />
             </button>
           </div>
+          {/* M7 — RUN ON ANY DEVICE: the visible half of the device law */}
+          <GraphicsPicker />
           <button
             onClick={() => {
               audio.play('chime')

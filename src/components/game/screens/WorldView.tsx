@@ -25,6 +25,7 @@ import { Joystick, SprintButton } from '../world3d/Joystick'
 import { inputLock, resetInputs } from '../world3d/controls'
 import { Icon, weatherIcon } from '../ui/icons'
 import { GlassChip, IconBtn, SheetShell, Btn } from '../ui/kit'
+import { probeWebGL } from '@/game/systems/device'
 import type { TravelAnim } from '../world3d/Life'
 import type { TransportId } from '@/game/types'
 
@@ -56,6 +57,9 @@ export function WorldView({ onOpenTab }: { onOpenTab?: (tab: 'map' | 'work' | 'b
   const [nearId, setNearId] = useState<string | null>(null)
   /** captured the moment a journey starts — drives the 3D journey */
   const [travelAnim, setTravelAnim] = useState<TravelAnim | null>(null)
+  /** M7 — can this device do 3D at all? One throwaway probe context at mount */
+  const [gl] = useState(() => probeWebGL())
+  const webglCapable = gl.webgl1 || gl.webgl2
 
   const condition = conditionSummary(player.needs)
   const location = LOCATION_BY_ID[world.currentLocation] ?? LOCATION_BY_ID['home']
@@ -121,24 +125,48 @@ export function WorldView({ onOpenTab }: { onOpenTab?: (tab: 'map' | 'work' | 'b
 
   return (
     <div className="relative h-[calc(100dvh-57px-env(safe-area-inset-bottom))] min-h-[360px] w-full overflow-hidden">
-      {/* the 3D world */}
-      <WorldScene
-        timeOfDay={world.timeOfDay}
-        weather={world.weather}
-        currentLocationId={world.currentLocation}
-        playerLevel={player.level}
-        travel={travelAnim}
-        avatar={{
-          skinTone: player.avatar.skinTone,
-          hairColor: player.avatar.hairColor,
-          clothingColor: player.avatar.clothingColor,
-        }}
-        cameraMode={cameraMode}
-        onSelectLocation={handleSelect}
-        onSettle={handleSettle}
-        onNearChange={setNearId}
-        onWalkDrain={handleWalkDrain}
-      />
+      {!webglCapable ? (
+        /* -------- M7 — NO-WEBGL FALLBACK: the game never dead-ends. The
+           2D map is the same city (travel, sheets, phone all work), so a
+           device without WebGL plays Lokoja in Map Mode instead of
+           staring at a black canvas. -------- */
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#cfe3d2] p-6 text-center">
+          <div className="lko-float text-[var(--lko-green-deep)]" aria-hidden>
+            <Icon name="map" size={44} strokeWidth={1.4} />
+          </div>
+          <p className="lko-display text-lg text-[var(--lko-green-deep)]">Map Mode</p>
+          <p className="max-w-[300px] text-[13px] font-semibold leading-relaxed text-[#3c5a44]">
+            This device can’t open the 3D world — so Lokoja runs on the living map instead.
+            Travel, work, markets and your phone all work exactly the same.
+          </p>
+          <Btn
+            onClick={() => {
+              audio.play('click')
+              onOpenTab?.('map')
+            }}
+          >
+            Open the map
+          </Btn>
+        </div>
+      ) : (
+        <WorldScene
+          timeOfDay={world.timeOfDay}
+          weather={world.weather}
+          currentLocationId={world.currentLocation}
+          playerLevel={player.level}
+          travel={travelAnim}
+          avatar={{
+            skinTone: player.avatar.skinTone,
+            hairColor: player.avatar.hairColor,
+            clothingColor: player.avatar.clothingColor,
+          }}
+          cameraMode={cameraMode}
+          onSelectLocation={handleSelect}
+          onSettle={handleSettle}
+          onNearChange={setNearId}
+          onWalkDrain={handleWalkDrain}
+        />
+      )}
 
       {/* ------------------------------ HUD overlay ------------------------------ */}
       <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3">
@@ -231,7 +259,7 @@ export function WorldView({ onOpenTab }: { onOpenTab?: (tab: 'map' | 'work' | 'b
                 }}
               />
             </div>
-            <SprintButton disabled={isTravelling} />
+            <SprintButton disabled={isTravelling || !webglCapable} />
             <p className="pointer-events-none rounded-full bg-black/32 px-2.5 py-1 text-[10px] font-bold text-white/90 backdrop-blur-[2px]">
               {cameraMode === 'follow' ? 'drag orbit • pinch zoom' : 'drag pan • pinch zoom'}
             </p>
@@ -240,7 +268,7 @@ export function WorldView({ onOpenTab }: { onOpenTab?: (tab: 'map' | 'work' | 'b
       </div>
 
       {/* the joystick mounts ABOVE the overlay (its own pointer space) */}
-      <Joystick disabled={isTravelling} />
+      <Joystick disabled={isTravelling || !webglCapable} />
 
       {/* ------------------------------- sheets -------------------------------- */}
 

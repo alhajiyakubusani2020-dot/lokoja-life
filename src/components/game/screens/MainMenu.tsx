@@ -27,6 +27,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
+import { GraphicsPicker } from './GraphicsPicker'
 
 function PlayMark({ className }: { className?: string }) {
   return (
@@ -168,6 +169,9 @@ export function MainMenu() {
                   </div>
                   <Switch checked={settings.sound} onCheckedChange={toggleSound} aria-label="Toggle sound" />
                 </div>
+
+                {/* M7 — RUN ON ANY DEVICE: pick a tier before the world even opens */}
+                <GraphicsPicker />
 
                 <div className="rounded-xl border border-black/[0.06] px-4 py-3 text-xs leading-relaxed text-[var(--lko-ink-soft)]">
                   <p className="mb-1 font-bold text-[var(--lko-ink)]">Lokoja Life {GAME_META.version}</p>

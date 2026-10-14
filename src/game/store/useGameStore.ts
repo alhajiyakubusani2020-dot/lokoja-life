@@ -62,6 +62,7 @@ import {
   isEligible,
 } from '../systems/opportunities'
 import { SaveSystem } from '../systems/save'
+import { refreshDeviceProfile } from '../systems/device'
 import { audio, syncAudioWithSettings } from '../systems/audio'
 import {
   nextSlot,
@@ -227,6 +228,8 @@ interface GameStore {
 
   /* settings & save */
   toggleSound: () => void
+  /** M7 — pick the graphics tier ('auto' = trust the device law); persists in the save */
+  setGraphics: (q: GameSettings['graphics']) => void
   saveNow: () => void
   resetGame: () => void
 
@@ -368,7 +371,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   world: null,
   civic: null,
   fleet: { day: 1, done: [] },
-  settings: { sound: true },
+  settings: { sound: true, graphics: 'auto' as const },
 
   isTravelling: false,
   isWorking: false,
@@ -379,8 +382,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   boot: () => {
     const save = SaveSystem.load()
-    syncAudioWithSettings(save?.settings ?? { sound: true })
-    set({ booted: true, hasSave: SaveSystem.hasSave(), settings: save?.settings ?? { sound: true } })
+    syncAudioWithSettings(save?.settings ?? { sound: true, graphics: 'auto' })
+    set({ booted: true, hasSave: SaveSystem.hasSave(), settings: save?.settings ?? { sound: true, graphics: 'auto' } })
   },
 
   setScreen: (screen) => set({ screen }),
@@ -427,8 +430,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   continueGame: () => {
     const save = SaveSystem.load()
     if (!save) return false
-    syncAudioWithSettings(save.settings)
-    set({ player: save.player, world: save.world, civic: save.civic, fleet: save.fleet, settings: save.settings, screen: 'game' })
+    // M7: defensive graphics default (saves restored from older backups)
+    const settings = { ...save.settings, graphics: save.settings.graphics ?? 'auto' }
+    syncAudioWithSettings(settings)
+    refreshDeviceProfile(settings.graphics)
+    set({ player: save.player, world: save.world, civic: save.civic, fleet: save.fleet, settings, screen: 'game' })
     return true
   },
 
@@ -1883,7 +1889,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const settings = { ...get().settings, sound: !get().settings.sound }
     syncAudioWithSettings(settings)
     set({ settings })
-    scheduleAutosave(get)
+    // the debounced autosave only runs inside a live game — on the menu, patch the save directly
+    if (get().player) scheduleAutosave(get)
+    else SaveSystem.patchSettings(settings)
+  },
+
+  setGraphics: (q) => {
+    const settings = { ...get().settings, graphics: q }
+    refreshDeviceProfile(q) // the session profile re-resolves against the pick
+    set({ settings })
+    // M7: a pick made on the MAIN MENU must survive — autosave is dormant there
+    if (get().player) scheduleAutosave(get)
+    else SaveSystem.patchSettings(settings)
   },
 
   saveNow: () => {

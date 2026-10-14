@@ -34,6 +34,7 @@ import { NPCS } from '@/game/data/npcs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
 import { ChatThread, tierChipClass } from './phone/ChatThread'
+import { GraphicsPicker } from './GraphicsPicker'
 import {
   ArrowLeftIcon,
   BankIcon,
@@ -403,6 +404,9 @@ function SettingsApp() {
           />
         </button>
       </div>
+
+      {/* M7 — RUN ON ANY DEVICE: the phone carries the device law too */}
+      <GraphicsPicker />
 
       <div className="flex items-start gap-2.5 rounded-2xl border border-black/[0.05] bg-white px-4 py-3">
         <SaveIcon size={16} className="mt-0.5 shrink-0 text-[var(--lko-ink-soft)]" aria-hidden />

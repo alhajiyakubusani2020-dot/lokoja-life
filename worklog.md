@@ -601,3 +601,23 @@ Work Log:
 Stage Summary:
 - M6 LIVING WORLD IS LIVE AND LAW-VERIFIED: the sky is weather now — harmattan hazes the town, storms pay the riders extra, the flood closes the riverfront and stresses every market price through the ONE roll; the Food Strip turns after dark with three honest night plates under real bulb strings; and paddies pay you back — gifts move the needle, hangouts cost a real evening, and a paddy's favour arrives as real gist through the same pipeline as every hustle.
 - Commits: m6 (this). Remaining: M7 — SHIP (production hardening, PWA/offline, onboarding polish) — the final milestone on the ledger.
+
+---
+Task ID: M7
+Agent: Main Agent (Super Z)
+Task: M7 — RUN ON ANY DEVICE (user directive: "make the game to be able to run on any device")
+
+Work Log:
+- systems/device.ts NEW pure law module: DeviceSignals (cores/memoryGB/gpu/coarsePointer/mobileUA/webgl1/webgl2, every read guarded), detectTier() ordered explainable verdicts (flagship 8/8→high, 4GB phone→mid, ≤2 cores/≤2GB→low, SwiftShader/llvmpipe→low, iPhone-specs-hidden→mid safe-middle, no-WebGL→low+Map-Mode reason), QUALITY_PRESETS 3-tier ladder (shadows/AA/dprCap/dprFloor/far/frameHz/fogPush — only high shadows, only low paces 30Hz + leans fog), resolveQuality() player-pick-beats-auto law, nextDynRes() hysteresis state machine (hot p95>40ms dwells 4s then drops cap −0.15 to floor; cool p95<22ms dwells 8s then climbs +0.1 to initial cap; 22-40ms band = steady, resets drift; deterministic + never flaps), probeWebGL() injectable factory (throwaway context → GPU name → loseContext to reclaim; every failure honest), session-cached DeviceProfile (buildProfile/getDeviceProfile/refreshDeviceProfile/deviceLine)
+- SAVE v8: settings.graphics ('auto'|'low'|'mid'|'high', default 'auto') + v7→v8 migration + defensive junk-value fallback; SaveSystem.patchSettings() NEW — menu-stage picks persist while the debounced autosave is dormant; store setGraphics() + toggleSound() patch the save directly when no game is live (real bug the E2E caught: a menu GraphicsPicker pick used to evaporate on reload)
+- WorldScene: binary detectQuality() replaced by the device law (3 tiers), Canvas driven by preset (shadows/AA/dpr/far/demand-vs-always), DynamicResGovernor (2s cadence reads perfProbe ring → nextDynRes → gl.setPixelRatio; document.hidden guarded), FramePacer hidden-tab battery guard, webglcontextlost (preventDefault + status + HUD callback) / webglcontextrestored (shadow refresh + status) listeners, __lklForceQuality E2E override, e2e=1 gates __lklGlCanvas/__lklDynRes/__lklTier
+- WorldTab: glLost state + amber "Screen rebuild — recovering…" chip (HUD stays interactive through GPU death); __lkl.deviceProfile/glStatus/dynRes/tier hooks; perf report gains the tier line
+- GraphicsPicker NEW shared component (Dashboard settings + Phone settings app + MainMenu dialog): Auto/Low/Mid/High segmented control + the device verdict line (tier · WebGL version · GPU · reasons) + dyn-res explainer
+- WorldView (legacy path): probeWebGL guard + Map-Mode fallback panel (kept consistent; live path is WorldTab's existing fallback contract)
+- TESTS m7-device 53 checks: tier matrix, quality law, dynres hysteresis (single hot frame NEVER acts; floor/ceiling hold; patient recovery; determinism), gl probe (null/webgl-only/gpu-name/throwing), save v8 (v7→auto default, junk→auto, explicit pick survives), REAL bun store pass (setGraphics→save→persist + the MENU LAW: no-game picks reach disk); stage5 46→47 (v2/v5/v6 ladder expectations 7→8, old-fixture settings honest again), m3 48→50 (v4→v8 ladder)
+- E2E m7-device-shots 6 PNGs, 0 console errors: desktop picker + persistence (saved:high), iPhone 13 emulation picker, --disable-webgl fallback card + map continues, forced-low world (193 draw calls · 425k tris), context-loss chip (status lost→chip true→restored). Jam diagnosis: world build blocks SwiftShader main thread ~30s (veil lifts late, m6 lesson holds) — settle() polls alive+canvas+!veil; restore needs the lose_context ext handle captured BEFORE the loss (spec: unreachable after)
+- Regression: world3d ALL ✓, schools 232 ✓, stage3 ✓, travel ✓, m2 67 ✓, m3 50 ✓, m4 82 ✓, m5 95 ✓, m6 100 ✓, stage5 47 ✓, m7 53 ✓; tsc exactly the 9 pre-existing; eslint clean; dev server health 200
+
+Stage Summary:
+- M7 shipped: the game now grades every device (low/mid/high), fights lag live via dynamic resolution, survives GPU context death with a visible recovery chip, offers a real Map-Mode fallback for WebGL-less devices, and gives the player a persisted Auto/Low/Mid/High switch in three surfaces — all laws deterministic and tested without a browser
+- Milestone ledger: M1-M7 done; no pre-committed M8+ — queue open for user direction
