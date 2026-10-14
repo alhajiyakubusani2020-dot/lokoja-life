@@ -151,7 +151,19 @@ console.log('\nREAL STORE — buy → fuel trip → ledger → sell (bun, live a
   const state = () => useGameStore.getState()
 
   // fresh game at home (avatar = the catalog defaults)
-  state().startNewGame('tester', 'female', { ...DEFAULT_AVATAR })
+  state().startNewGame('tester', 'female', {...DEFAULT_AVATAR })
+  // M9-era neutralizer: this suite predates the casual shell — pre-complete
+  // today's goals and the onboarding arc so its exact-cash assertions still
+  // measure ONE action at a time (no goal rewards stacking in).
+  {
+    const st0 = useGameStore.getState()
+    const d0 = st0.world!.day
+    useGameStore.setState({
+      goals: { day: d0, ids: ['gig-run', 'eat-well', 'waka'], progress: { 'gig-run': 99, 'eat-well': 99, waka: 99 }, done: [true, true, true], streak: 0, lastDoneDay: d0 },
+      onboarding: { done: ['travel', 'work', 'meal', 'earn'], rewarded: true },
+      account: { linked: true, handle: 'legacy_test', token: 'test-token', ageBand: 'adult', gateGraceDay: d0 },
+    })
+  }
   const p0 = state().player!
   check('fresh spawn: empty garage, ₦5,000', p0.vehicles.length === 0 && p0.cash === 5000)
 

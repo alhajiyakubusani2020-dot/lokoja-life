@@ -18,6 +18,9 @@ import { NeedsBar } from '../NeedsBar'
 import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
 import { LivingScene } from '../LivingScene'
 import { ChaosBanner } from '../ChaosBanner'
+import { GoalsCard, OnboardingCard } from '../CasualShell'
+import { GuestGate } from '../GuestGate'
+import { MoneyPop, Shockwave } from '../Juice'
 import { MapScreen } from './MapScreen'
 import { WorkScreen } from './WorkScreen'
 import { PhoneScreen } from './PhoneScreen'
@@ -92,6 +95,10 @@ function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
     <div className="px-4 pt-3 sm:px-6">
       {/* ---- M8 — the grid and the naira's mood, one glance ---- */}
       <ChaosBanner />
+
+      {/* ---- M9 — the casual shell: learn the streets, then today's goals ---- */}
+      <OnboardingCard />
+      <GoalsCard />
 
       {/* ---- the living world hero ---- */}
       <section
@@ -347,7 +354,9 @@ function BagTab() {
 function ProfileTab() {
   const player = useGameStore((s) => s.player)!
   const settings = useGameStore((s) => s.settings)
+  const account = useGameStore((s) => s.account)
   const toggleSound = useGameStore((s) => s.toggleSound)
+  const setChill = useGameStore((s) => s.setChill)
   const saveNow = useGameStore((s) => s.saveNow)
   const returnToMenu = useGameStore((s) => s.returnToMenu)
 
@@ -372,7 +381,42 @@ function ProfileTab() {
           <p className="mt-1 text-[11px] italic leading-snug text-[var(--lko-ink-soft)]">
             “{tier.title}”
           </p>
+          {account.linked ? (
+            <p data-testid="account-line" className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[var(--lko-green-soft)] px-2 py-0.5 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
+              🪪 {account.handle} — cloud on
+            </p>
+          ) : (
+            <button
+              data-testid="claim-open"
+              onClick={() => { audio.play('click'); useGameStore.setState({ gateOpen: true }) }}
+              className="lko-press mt-1.5 rounded-full bg-[var(--lko-gold)] px-2.5 py-1 text-[10px] font-extrabold text-[#33230a]"
+            >
+              🪪 Guest mode — claim your name
+            </button>
+          )}
         </div>
+      </section>
+
+      {/* M9 — Chill Mode: the gentler city switch */}
+      <section className="lko-card mt-3 flex items-center justify-between gap-3 p-4" aria-label="Chill mode">
+        <div className="min-w-0">
+          <h3 className="text-[12px] font-extrabold">🍃 Chill Mode</h3>
+          <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+            A gentler Lokoja: half the drain, kinder taxman, softer disco. Every law still runs.
+          </p>
+        </div>
+        <button
+          data-testid="chill-toggle"
+          onClick={() => { audio.play('click'); setChill(!settings.chill) }}
+          className={`lko-press relative h-8 w-14 shrink-0 rounded-full transition-colors ${settings.chill ? 'bg-[var(--lko-green)]' : 'bg-black/[0.12]'}`}
+          aria-pressed={settings.chill}
+          aria-label="Toggle Chill Mode"
+        >
+          <span
+            className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform"
+            style={{ left: settings.chill ? 30 : 4 }}
+          />
+        </button>
       </section>
 
       {/* reputation ladder */}
@@ -630,6 +674,11 @@ export function Dashboard() {
           <BottomNav active={tab} onChange={switchTab} badge={{ work: hasActiveOpportunities }} />
         </>
       )}
+
+      {/* M9 — the juice layer + the Guest Loop gate live above everything */}
+      <MoneyPop />
+      <Shockwave />
+      <GuestGate />
     </div>
   )
 }

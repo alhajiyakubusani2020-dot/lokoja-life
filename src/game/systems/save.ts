@@ -8,12 +8,14 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState, GoalState, OnboardingState, AccountState } from '../types'
 import { freshCivicState } from './civic'
 import { freshChaosState } from './chaos'
+import { freshGoalState } from './goals'
+import { freshOnboardingState, freshAccountState } from './guest'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 9
+const SAVE_VERSION = 10
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -96,6 +98,13 @@ function deserialize(raw: string): GameSave | null {
         save.version = 9
         break
       case 9:
+        // v9 → v10 (M9 — THE CASUAL SHELL): daily goals, the onboarding
+        // arc, the Guest Loop account line, and settings.chill join the
+        // schema. All defaulted below — a v9 player wakes up as a guest
+        // with today's goals waiting and the city at normal pressure.
+        save.version = 10
+        break
+      case 10:
         // current version
         break
       default:
@@ -113,9 +122,10 @@ function deserialize(raw: string): GameSave | null {
       }
     }
     if (!save.world.currentLocation) save.world.currentLocation = 'home'
-    if (!save.settings) save.settings = { sound: true, graphics: 'auto' }
+    if (!save.settings) save.settings = { sound: true, graphics: 'auto', chill: false }
     if (typeof save.settings.sound !== 'boolean') save.settings.sound = true
     if (!['auto', 'low', 'mid', 'high'].includes(save.settings.graphics)) save.settings.graphics = 'auto'
+    if (typeof save.settings.chill !== 'boolean') save.settings.chill = false
 
     // --- Stage 3 player fields (missing on v1 saves / corrupt data) ---
     const p = save.player as PlayerState
@@ -168,6 +178,15 @@ function deserialize(raw: string): GameSave | null {
     if (typeof chaos.atmDrawn !== 'number') chaos.atmDrawn = fresh.atmDrawn
     if (!chaos.stats) chaos.stats = fresh.stats
     save.chaos = chaos
+
+    // --- M9 casual shell (missing on v9-and-older saves; partial data healed) ---
+    if (!save.goals || !Array.isArray(save.goals.ids) || save.goals.ids.length !== 3) save.goals = freshGoalState()
+    if (!Array.isArray((save.goals as GoalState).done)) (save.goals as GoalState).done = [false, false, false]
+    if (!save.onboarding || !Array.isArray(save.onboarding.done)) save.onboarding = freshOnboardingState()
+    if (typeof save.onboarding.rewarded !== 'boolean') save.onboarding.rewarded = false
+    if (!save.account) save.account = freshAccountState()
+    if (typeof save.account.linked !== 'boolean') save.account.linked = false
+    if (typeof save.account.gateGraceDay !== 'number') save.account.gateGraceDay = 0
 
     // --- M2 civic mesh (missing on v3-and-older saves) ---
     if (!save.civic) {

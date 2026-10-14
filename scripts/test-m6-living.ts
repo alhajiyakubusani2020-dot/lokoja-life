@@ -254,13 +254,26 @@ console.log('\nREAL STORE — flood day, night plate, gift, hangout, favour (bun
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
   const state = () => useGameStore.getState()
 
-  state().startNewGame('tester', 'male', { ...DEFAULT_AVATAR })
+  state().startNewGame('tester', 'male', {...DEFAULT_AVATAR })
+  // M9-era neutralizer: this suite predates the casual shell — pre-complete
+  // today's goals and the onboarding arc so its exact-cash assertions still
+  // measure ONE action at a time (no goal rewards stacking in).
+  const neutralizeM9 = () => {
+    const d0 = state().world!.day
+    useGameStore.setState({
+      goals: { day: d0, ids: ['gig-run', 'eat-well', 'waka'], progress: { 'gig-run': 99, 'eat-well': 99, waka: 99 }, done: [true, true, true], streak: 0, lastDoneDay: d0 },
+      onboarding: { done: ['travel', 'work', 'meal', 'earn'], rewarded: true },
+      account: { linked: true, handle: 'legacy_test', token: 'test-token', ageBand: 'adult', gateGraceDay: d0 },
+    })
+  }
+  neutralizeM9()
   state().addMoney(300_000, { label: 'test funding', category: 'other' })
   check('funded game running', state().player!.cash >= 300_000)
 
   // ----- the day the water came: sleep rolls a FLOOD day -----
   const moodBefore = state().player!.needs.mood
   state().rest('sleep')
+  neutralizeM9() // the day crossed — pin the casual shell again for exact-cash laws
   await sleep(80)
   const flooded = state()
   check('the pinned sky rolled a flood day', flooded.world!.weather === 'flood', `got ${flooded.world!.weather}`)

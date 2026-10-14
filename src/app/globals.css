@@ -374,3 +374,17 @@
 .lko-scroll-x::-webkit-scrollbar {
   display: none;
 }
+
+/* M9 — juice: the money pop rises from the money pill; the level-up
+   shockwave expands one ring. transform/opacity ONLY (SILK law). */
+@keyframes lko-pop-rise {
+  0% { transform: translateY(10px) scale(0.85); opacity: 0; }
+  18% { transform: translateY(0) scale(1.04); opacity: 1; }
+  72% { transform: translateY(-14px) scale(1); opacity: 1; }
+  100% { transform: translateY(-34px) scale(0.96); opacity: 0; }
+}
+
+@keyframes lko-shockwave {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
+  100% { transform: translate(-50%, -50%) scale(4.2); opacity: 0; }
+}

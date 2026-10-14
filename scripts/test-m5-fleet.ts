@@ -244,7 +244,19 @@ console.log('\nREAL STORE — buy → park → gig → ledger → done-gig → h
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
   const state = () => useGameStore.getState()
 
-  state().startNewGame('tester', 'male', { ...DEFAULT_AVATAR })
+  state().startNewGame('tester', 'male', {...DEFAULT_AVATAR })
+  // M9-era neutralizer: this suite predates the casual shell — pre-complete
+  // today's goals and the onboarding arc so its exact-cash assertions still
+  // measure ONE action at a time (no goal rewards stacking in).
+  {
+    const st0 = useGameStore.getState()
+    const d0 = st0.world!.day
+    useGameStore.setState({
+      goals: { day: d0, ids: ['gig-run', 'eat-well', 'waka'], progress: { 'gig-run': 99, 'eat-well': 99, waka: 99 }, done: [true, true, true], streak: 0, lastDoneDay: d0 },
+      onboarding: { done: ['travel', 'work', 'meal', 'earn'], rewarded: true },
+      account: { linked: true, handle: 'legacy_test', token: 'test-token', ageBand: 'adult', gateGraceDay: d0 },
+    })
+  }
   state().addMoney(300_000, { label: 'test funding', category: 'other' })
   check('okada purchase succeeds funded', state().buyVehicle('okada'))
 

@@ -31,9 +31,12 @@ import type {
   WorldState,
   FleetState,
   ChaosState,
+  GoalState,
+  OnboardingState,
+  AccountState,
   ShopUpgradeId,
 } from '../types'
-import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY, TIME, WEATHER_META, SOCIAL } from '../data/config'
+import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY, TIME, WEATHER_META, SOCIAL, GOALS, CHILL } from '../data/config'
 import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
 import { DEFAULT_AVATAR } from '../data/avatar'
 import { VEHICLE_BY_MODEL, generatePlate } from '../data/vehicles'
@@ -108,8 +111,11 @@ import {
   canContribute,
   applyContribution,
   blackoutAt,
+  setDebugScarcity,
   type ChaosDayResult,
 } from '../systems/chaos'
+import { bumpGoal, freshGoalState } from '../systems/goals'
+import { gateVerdict, applyGrace, freshAccountState, freshOnboardingState, validateHandle, validatePin, validateContact, ageBandForYear, mergeVerdict, backupPayload, BACKUP_KEY } from '../systems/guest'
 import { gigBoard, gigLabel } from '../systems/fleet'
 import { HUSTLE_BY_ID } from '../data/hustles'
 import { BIZ, CIVIC, FLEET, CHAOS } from '../data/config'
@@ -132,6 +138,15 @@ interface GameStore {
   fleet: FleetState
   /** M8 — the chaos engine: transformer outages, scarcity, the fix pool */
   chaos: ChaosState
+  /** M9 — the casual shell: today's goals, the onboarding arc, the account */
+  goals: GoalState
+  onboarding: OnboardingState
+  account: AccountState
+  /** M9 — the Guest Loop gate modal (UI transient, never persisted) */
+  gateOpen: boolean
+  /** M9 — juice: +₦ money pops (transient) and the level-up shockwave count */
+  pulse: { id: number; amount: number } | null
+  shockwave: number
   settings: GameSettings
 
   /* lifecycle */
@@ -201,6 +216,8 @@ interface GameStore {
   bankWithdraw: (amount: number, channel?: 'atm' | 'pos') => boolean
   /** M8 — give to the community light fund while YOUR zone is dark. */
   contributeToPool: (tier: number) => boolean
+  /** M9 — one life event lands on today's goals (rewards flow the engines) */
+  bumpGoal: (kind: string) => void
   /** Talk with an NPC — familiarity + one warm line. Null = cooldown / guard. */
   chatNpc: (npcId: string) => ChatOutcome | null
   /** M6 — hand a paddy a gift (cash → familiarity, once per NPC per day). */
@@ -250,6 +267,17 @@ interface GameStore {
   toggleSound: () => void
   /** M7 — pick the graphics tier ('auto' = trust the device law); persists in the save */
   setGraphics: (q: GameSettings['graphics']) => void
+  /** M9 — Chill Mode: a gentler Lokoja (half decay, kinder grace windows) */
+  setChill: (chill: boolean) => void
+  /** M9 — the Guest Loop: claim a name (register) or return (login) */
+  registerAccount: (input: { handle: string; contact: string; pin: string; birthYear: number }) => Promise<{ ok: boolean; why?: string }>
+  loginAccount: (input: { handle: string; pin: string }) => Promise<{ ok: boolean; why?: string }>
+  /** M9 — "Maybe later": the gate buys the rest of today, tomorrow it stands */
+  acceptGateGrace: () => void
+  /** M9 — close the gate modal without grace */
+  closeGate: () => void
+  /** M9 — push the current save to the cloud (linked accounts) */
+  pushCloud: () => Promise<{ ok: boolean; why?: string }>
   saveNow: () => void
   resetGame: () => void
 
@@ -260,9 +288,33 @@ interface GameStore {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let notificationId = 0
+let pulseId = 0
 
 /** Ledger cap — newest entries survive, old ones fall off. */
 const LEDGER_CAP = 50
+
+/** M9 — the store-wide decay law: Chill Mode runs the body at half drain. */
+function slotDecay(get: () => GameStore, needs: import('../types').Needs, slots: number) {
+  return applySlotDecay(needs, slots, get().settings.chill ? CHILL.decayMult : 1)
+}
+
+/** M9 — the onboarding bump: steps land once, the ₦1,000 lands once. */
+function bumpOnboarding(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+  step: string,
+): void {
+  const ob = get().onboarding
+  if (ob.done.includes(step)) return
+  const done = [...ob.done, step]
+  set({ onboarding: { ...ob, done } })
+  if (done.length >= GOALS.onboardingSteps.length && !get().onboarding.rewarded) {
+    set({ onboarding: { ...get().onboarding, rewarded: true } })
+    get().addMoney(GOALS.onboardingReward, { label: 'Street Certified — onboarding complete', category: 'tip' })
+    get().notify({ icon: '🏅', text: `STREET CERTIFIED! You don learn the ropes — ${formatNaira(GOALS.onboardingReward)} don land.`, tone: 'good' })
+    audio.play('levelup')
+  }
+}
 
 /* ------------------------- M2 — civic day machinery ------------------------- */
 
@@ -294,6 +346,8 @@ function civicRollForDays(
   bizCount = 0,
   solarCount = 0,
   weather?: import('../types').Weather,
+  liquidityMultOverride?: number,
+  chill = false,
 ): { civic: CivicState; chaos: ChaosState; agg: CivicAgg } {
   let cur = civic
   let curChaos = chaos
@@ -306,7 +360,7 @@ function civicRollForDays(
     if (c.fixed) agg.outageFixed = c.fixed
     agg.scarcityDay = agg.scarcityDay || c.scarcity
     agg.payoutDay = agg.payoutDay || c.payout
-    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather, liquidityMultFor(d))
+    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather, liquidityMultOverride ?? liquidityMultFor(d), chill)
     cur = r.next
     agg.nepaPosted += r.nepaPosted
     agg.nepaShed = agg.nepaShed || r.nepaShed
@@ -334,7 +388,9 @@ function commitCivicDays(
   // M6 — the NEW day's weather (already set by the clock before this call)
   // folds its market stress into the day's prices
   const newWeather = get().world?.weather
-  const { civic: rolled, chaos: rolledChaos, agg } = civicRollForDays(civic, chaos, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather)
+  // M9 — Chill Mode runs the whole civic roll kinder (2× disco grace, 3× warrant)
+  const chill = get().settings.chill
+  const { civic: rolled, chaos: rolledChaos, agg } = civicRollForDays(civic, chaos, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather, undefined, chill)
   set({ civic: rolled, chaos: rolledChaos })
 
   // M3 — the shops earn while the city turns: accrue into each till (market
@@ -437,6 +493,9 @@ function scheduleAutosave(get: () => GameStore) {
       civic,
       fleet: get().fleet,
       chaos: get().chaos,
+      goals: get().goals,
+      onboarding: get().onboarding,
+      account: get().account,
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -453,7 +512,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   civic: null,
   fleet: { day: 1, done: [] },
   chaos: freshChaosState(),
-  settings: { sound: true, graphics: 'auto' as const },
+  goals: freshGoalState(),
+  onboarding: freshOnboardingState(),
+  account: freshAccountState(),
+  gateOpen: false,
+  pulse: null,
+  shockwave: 0,
+  settings: { sound: true, graphics: 'auto' as const, chill: false },
 
   isTravelling: false,
   isWorking: false,
@@ -464,8 +529,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   boot: () => {
     const save = SaveSystem.load()
-    syncAudioWithSettings(save?.settings ?? { sound: true, graphics: 'auto' })
-    set({ booted: true, hasSave: SaveSystem.hasSave(), settings: save?.settings ?? { sound: true, graphics: 'auto' } })
+    syncAudioWithSettings(save?.settings ?? { sound: true, graphics: 'auto', chill: false })
+    set({ booted: true, hasSave: SaveSystem.hasSave(), settings: save?.settings ?? { sound: true, graphics: 'auto', chill: false } })
   },
 
   setScreen: (screen) => set({ screen }),
@@ -505,7 +570,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       weather: 'sunny',
       currentLocation: 'home',
     }
-    set({ player, world, civic: freshCivicState(), chaos: freshChaosState(), fleet: { day: 1, done: [] }, screen: 'game', offers: [] })
+    set({
+      player,
+      world,
+      civic: freshCivicState(),
+      chaos: freshChaosState(),
+      goals: freshGoalState(),
+      onboarding: freshOnboardingState(),
+      account: freshAccountState(),
+      gateOpen: false,
+      fleet: { day: 1, done: [] },
+      screen: 'game',
+      offers: [],
+    })
     scheduleAutosave(get)
   },
 
@@ -516,7 +593,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const settings = { ...save.settings, graphics: save.settings.graphics ?? 'auto' }
     syncAudioWithSettings(settings)
     refreshDeviceProfile(settings.graphics)
-    set({ player: save.player, world: save.world, civic: save.civic, chaos: save.chaos ?? freshChaosState(), fleet: save.fleet, settings, screen: 'game' })
+    set({
+      player: save.player,
+      world: save.world,
+      civic: save.civic,
+      chaos: save.chaos ?? freshChaosState(),
+      goals: save.goals ?? freshGoalState(),
+      onboarding: save.onboarding ?? freshOnboardingState(),
+      account: save.account ?? freshAccountState(),
+      fleet: save.fleet,
+      settings,
+      screen: 'game',
+    })
     return true
   },
 
@@ -570,7 +658,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // weatherEffects table finally does its honest work).
     if (kind === 'sleep') {
       const meta = WEATHER_META[newWorld.weather]
-      const moodHit = TIME.weatherEffects[newWorld.weather]?.mood ?? 0
+      const moodHit = Math.round((TIME.weatherEffects[newWorld.weather]?.mood ?? 0) * (get().settings.chill ? CHILL.weatherMoodMult : 1))
       const p0 = get().player
       if (p0 && moodHit !== 0) {
         set({ player: { ...p0, needs: applyNeedsDelta(p0.needs, { mood: moodHit }) } })
@@ -621,7 +709,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
     const r = INTERIOR.relax[kind]
-    const needs = applyNeedsDelta(applySlotDecay(player.needs, 1), r)
+    const needs = applyNeedsDelta(slotDecay(get, player.needs, 1), r)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...player, needs }, world: { ...world, ...clock } })
     get().notify({
@@ -680,6 +768,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       text: civic?.nepa.shedding ? 'Light don come back! NEPA staff dey smile small.' : 'NEPA bill settled — meter dey smile.',
       tone: 'good',
     })
+    get().bumpGoal('nepa')
     audio.play('chime')
     scheduleAutosave(get)
     return true
@@ -719,6 +808,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       text: warrant ? 'Warrant cleared at the desk — the police sef smile.' : 'Tax settled. Your name clean for KGIRS book.',
       tone: 'good',
     })
+    get().bumpGoal('tax')
     audio.play('chime')
     scheduleAutosave(get)
     return true
@@ -827,6 +917,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       text: fee ? `Collected ${formatNaira(net)} by transfer (₦${fee} fee don go).` : `Collected ${formatNaira(net)} from the till. Solid.`,
       tone: 'good',
     })
+    get().bumpGoal('collect')
     audio.play('chime')
     scheduleAutosave(get)
     return true
@@ -971,7 +1062,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().addMoney(gig.payout, { label: `Gig — ${label}`, category: 'hustle' })
 
       const paid = get().player!
-      const needs = applySlotDecay(applyNeedsDelta(paid.needs, { energy: -gig.energyCost }), 1)
+      const needs = applySlotDecay(applyNeedsDelta(paid.needs, { energy: -gig.energyCost }), 1, get().settings.chill ? CHILL.decayMult : 1)
       const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, 1)
       const nextFleet = { day: w.day, done: [...(get().fleet.day === w.day ? get().fleet.done : []), gig.id] }
 
@@ -1000,6 +1091,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         text: `You drop the passenger at ${LOCATION_BY_ID[gig.toId]?.name ?? 'the drop-off'}.`,
         tone: 'neutral',
       })
+      // M9 — the run lands on the daily goals + the onboarding arc
+      get().bumpGoal('gig')
+      bumpOnboarding(get, set, 'work')
       // a run can cross midnight — the civic mesh follows the day
       commitCivicDays(get, set, w.day, clock.day)
       audio.play('chime')
@@ -1091,10 +1185,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   workout: () => {
     const { player, world } = get()
     if (!player || !world) return
-    const needs = applySlotDecay(applyNeedsDelta(player.needs, INTERIOR.gym), 1)
+    const needs = applySlotDecay(applyNeedsDelta(player.needs, INTERIOR.gym), 1, get().settings.chill ? CHILL.decayMult : 1)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...player, needs }, world: { ...world, ...clock } })
     get().notify({ icon: '💪', text: 'Gym session done. Body dey thank you.', tone: 'good' })
+    get().bumpGoal('workout')
     audio.play('notify')
     scheduleAutosave(get)
   },
@@ -1103,12 +1198,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { player, world } = get()
     if (!player || !world) return
     const cfg = INTERIOR.study
-    const needs = applySlotDecay(applyNeedsDelta(player.needs, cfg), 1)
+    const needs = applySlotDecay(applyNeedsDelta(player.needs, cfg), 1, get().settings.chill ? CHILL.decayMult : 1)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...player, needs }, world: { ...world, ...clock } })
     // the skill gain flows through the SAME authority every other XP uses
     get().addSkillXp('smart', cfg.smartXp)
     get().notify({ icon: '📚', text: `${label ?? 'Lesson'} done. Brain dey sharp.`, tone: 'good' })
+    get().bumpGoal('study')
     audio.play('notify')
     scheduleAutosave(get)
   },
@@ -1136,7 +1232,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ...INTERIOR.lounge,
       mood: INTERIOR.lounge.mood + (isNight ? INTERIOR.NIGHT_OUT.nightMoodBonus : 0),
     }
-    const needs = applySlotDecay(applyNeedsDelta(paid.needs, shift), 1)
+    const needs = applySlotDecay(applyNeedsDelta(paid.needs, shift), 1, get().settings.chill ? CHILL.decayMult : 1)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...paid, needs }, world: { ...world, ...clock } })
     get().notify({
@@ -1168,6 +1264,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       },
     })
     get().notify({ icon: '🏦', text: `${formatNaira(amount)} don enter bank. Money wey dey bank dey safe.`, tone: 'good' })
+    get().bumpGoal('deposit')
     audio.play('chime')
     scheduleAutosave(get)
     return true
@@ -1302,6 +1399,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({ player: { ...player, relationships: { ...player.relationships, [npcId]: next } } })
     get().addSkillXp('social', 2)
+    get().bumpGoal('chat')
     if (favorOffer) {
       get().notify({ icon: '🤝', text: `${npc.name} get small work for you — check the chat.`, tone: 'good' })
     }
@@ -1342,6 +1440,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       text: `${npc.name} collect the ${gift.label} — familiarity +${gift.familiarity}.${afterTier !== beforeTier ? ` You two na ${TIER_META[afterTier].label} now!` : ''}`,
       tone: 'good',
     })
+    get().bumpGoal('gift')
     audio.play(afterTier !== beforeTier ? 'levelup' : 'chime')
     scheduleAutosave(get)
     return true
@@ -1370,7 +1469,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       player: {
         ...paid,
-        needs: applyNeedsDelta(applySlotDecay(paid.needs, 1), { mood: SOCIAL.hangout.mood }),
+        needs: applyNeedsDelta(applySlotDecay(paid.needs, 1, get().settings.chill ? CHILL.decayMult : 1), { mood: SOCIAL.hangout.mood }),
         relationships: { ...paid.relationships, [npcId]: next },
       },
       world: { ...world, ...advanceWorldClock(world.timeOfDay, world.day, world.weather, 1) },
@@ -1478,7 +1577,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       hunger: meal.hunger,
       mood: meal.mood,
       energy: meal.energy,
-    }), 1)
+    }), 1, get().settings.chill ? CHILL.decayMult : 1)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...paid, needs }, world: { ...world, ...clock } })
     get().notify({
@@ -1486,6 +1585,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       text: `${meal.label} — hunger restored. You feel better.`,
       tone: 'good',
     })
+    get().bumpGoal('meal')
+    bumpOnboarding(get, set, 'meal')
     audio.play('chime')
     scheduleAutosave(get)
     return true
@@ -1537,6 +1638,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // access for personal modes (a danfo cannot follow a keke trail)
     if (!transportAllowed(destination, transportId, player.vehicles)) return
 
+    // M9 — THE GUEST LOOP: the gate stands before forward travel. Linked
+    // accounts and the starter trio ride free; anywhere else asks for a name
+    // (with an honest one-day grace when they ask for it).
+    const verdict = gateVerdict(get().account, destinationId, world.day)
+    if (verdict.blocked) {
+      set({ gateOpen: true })
+      audio.play('notify')
+      return
+    }
+
     // pure calculation — same inputs always give the same plan
     // M8 — the pump surges on scarcity days (personal rides pay black-market)
     const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay, fuelMultFor(world.day))
@@ -1573,7 +1684,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const needs = applySlotDecay(applyNeedsDelta(p.needs, {
         energy: -(plan.energyCost + (event?.energyDelta ?? 0)),
         mood: event?.moodDelta ?? 0,
-      }), plan.slots)
+      }), plan.slots, get().settings.chill ? CHILL.decayMult : 1)
       const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, plan.slots)
 
       // Stage 3: record the fare (and any event tip) in the player's ledger
@@ -1618,6 +1729,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // M2 — a trip can cross midnight; the civic mesh follows the day
       commitCivicDays(get, set, w.day, clock.day)
 
+      // M9 — the journey lands on the daily goals + the onboarding arc
+      get().bumpGoal('travel')
+      bumpOnboarding(get, set, 'travel')
+
       // arrival feedback: destination + a compact time/money/energy summary
       get().notify({
         icon: destination.emoji,
@@ -1654,7 +1769,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
         stats: { ...player.stats, totalEarned: player.stats.totalEarned + amount },
       },
+      // M9 — juice: every honest naira pops (transform/opacity only)
+      pulse: { id: ++pulseId, amount },
     })
+    // M9 — the first ₦500 earned completes the onboarding 'earn' step
+    if (get().player!.stats.totalEarned >= 500) bumpOnboarding(get, set, 'earn')
     audio.play('chime')
     scheduleAutosave(get)
   },
@@ -1702,8 +1821,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
           transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
           stats: { ...player.stats, totalEarned: player.stats.totalEarned + cash },
         },
+        pulse: { id: ++pulseId, amount: cash },
       })
       audio.play('chime')
+      if (get().player!.stats.totalEarned >= 500) bumpOnboarding(get, set, 'earn')
     }
 
     // 2) player XP (level-ups handled by the existing engine action)
@@ -1787,7 +1908,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const { player: p, world: w } = get()
       if (!p || !w) return
 
-      const needs = applySlotDecay(applyNeedsDelta(p.needs, { energy: -job.energyCost }), job.timeSlots)
+      const needs = applySlotDecay(applyNeedsDelta(p.needs, { energy: -job.energyCost }), job.timeSlots, get().settings.chill ? CHILL.decayMult : 1)
       const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, job.timeSlots)
       const afterSlot = absoluteSlot(clock.day, clock.timeOfDay)
       const cooldownSlots = job.cooldownSlots ?? WORK.defaultCooldownSlots
@@ -1810,6 +1931,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         tone: 'good',
       })
       get().giveReward(result.reward, { label: job.name, category: 'job' })
+      get().bumpGoal('job')
+      bumpOnboarding(get, set, 'work')
       if (result.outcome === 'great') audio.play('levelup')
       scheduleAutosave(get)
     }
@@ -1938,7 +2061,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const needs = applySlotDecay(applyNeedsDelta(p.needs, {
         energy: -def.energyCost,
         mood: result.outcome === 'fail' ? WORK.fail.moodDelta : 0,
-      }), def.timeSlots)
+      }), def.timeSlots, get().settings.chill ? CHILL.decayMult : 1)
       const clock = advanceWorldClock(w.timeOfDay, w.day, w.weather, def.timeSlots)
       const afterSlot = absoluteSlot(clock.day, clock.timeOfDay)
 
@@ -1961,6 +2084,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         tone: result.outcome === 'fail' ? 'bad' : 'good',
       })
       get().giveReward(result.reward, { label: def.title, category: 'hustle' })
+      get().bumpGoal('hustle')
+      bumpOnboarding(get, set, 'work')
       audio.play(result.outcome === 'fail' ? 'notify' : result.outcome === 'great' ? 'levelup' : 'chime')
       scheduleAutosave(get)
     }
@@ -2022,6 +2147,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = processXp(player.xp, player.level, amount)
     set({ player: { ...player, xp: result.xp, level: result.level } })
     if (result.leveledUp) {
+      set({ shockwave: get().shockwave + 1 })
       audio.play('levelup')
       get().notify({
         icon: '🎉',
@@ -2059,8 +2185,154 @@ export const useGameStore = create<GameStore>((set, get) => ({
     else SaveSystem.patchSettings(settings)
   },
 
+  /** M9 — one life event lands on today's goals; completions pay the engines. */
+  bumpGoal: (kind) => {
+    const { player, world, goals } = get()
+    if (!player || !world) return
+    const res = bumpGoal(goals, kind, world.day)
+    if (res.completed.length === 0) {
+      if (res.next !== goals) set({ goals: res.next })
+      return
+    }
+    set({ goals: res.next })
+    for (const g of res.completed) {
+      get().addMoney(g.cash, { label: `Daily goal — ${g.label}`, category: 'tip' })
+      get().addXp(g.xp)
+      get().notify({ icon: '🎯', text: `Goal complete — ${g.label} (+${formatNaira(g.cash)})`, tone: 'good' })
+    }
+    if (res.perfectDay) {
+      get().notify({ icon: '🔥', text: `PERFECT DAY! Goal streak don reach ${res.next.streak}.`, tone: 'good' })
+      audio.play('levelup')
+    }
+    scheduleAutosave(get)
+  },
+
+  /** M9 — Chill Mode: a gentler Lokoja, persisted like every setting. */
+  setChill: (chill) => {
+    const settings = { ...get().settings, chill }
+    set({ settings })
+    if (get().player) scheduleAutosave(get)
+    else SaveSystem.patchSettings(settings)
+  },
+
+  /** M9 — the Guest Loop: claim a name. The account lives on the city's
+   *  register (SQLite); the guest save merges into it, nothing is lost. */
+  registerAccount: async (input) => {
+    const vHandle = validateHandle(input.handle)
+    if (!vHandle.ok) return { ok: false, why: vHandle.why }
+    const vPin = validatePin(input.pin)
+    if (!vPin.ok) return { ok: false, why: vPin.why }
+    const vContact = validateContact(input.contact)
+    if (!vContact.ok) return { ok: false, why: vContact.why }
+    const year = new Date().getFullYear()
+    const band = ageBandForYear(input.birthYear, year)
+    if (!band) return { ok: false, why: 'Enter the year you were born.' }
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle: input.handle.trim(), contact: input.contact.trim(), pin: input.pin, ageBand: band }),
+      })
+      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string }
+      if (!res.ok || !data.ok || !data.token) return { ok: false, why: data.why ?? 'The register no gree — try again.' }
+      set({
+        account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: band, gateGraceDay: get().world?.day ?? 0 },
+        gateOpen: false,
+      })
+      get().notify({ icon: '🪪', text: `You don claim your name — welcome, ${input.handle.trim()}! Your hustle don dey cloud now.`, tone: 'good' })
+      audio.play('levelup')
+      scheduleAutosave(get)
+      void get().pushCloud()
+      return { ok: true }
+    } catch {
+      return { ok: false, why: 'Network no gree — check connection and try again.' }
+    }
+  },
+
+  /** M9 — return to a claimed name: the merge law decides, nothing is lost. */
+  loginAccount: async (input) => {
+    const vHandle = validateHandle(input.handle)
+    if (!vHandle.ok) return { ok: false, why: vHandle.why }
+    const vPin = validatePin(input.pin)
+    if (!vPin.ok) return { ok: false, why: vPin.why }
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle: input.handle.trim(), pin: input.pin }),
+      })
+      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string; save?: import('../types').GameSave | null }
+      if (!res.ok || !data.ok || !data.token) return { ok: false, why: data.why ?? 'The register no gree — try again.' }
+      const local = SaveSystem.load()
+      const cloud = data.save ?? null
+      if (cloud && local) {
+        const verdict = mergeVerdict(local, cloud)
+        const winner = verdict.winner === 'cloud' ? cloud : local
+        const loser = verdict.backup
+        if (loser) {
+          // never-lose-progress: the loser lands in the backup slot, byte-safe
+          try { localStorage.setItem(BACKUP_KEY, backupPayload(loser)) } catch { /* storage full — the save itself still loads */ }
+        }
+        set({
+          account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: (cloud.player as unknown as { ageBand?: AccountState['ageBand'] }).ageBand ?? null, gateGraceDay: get().world?.day ?? 0 },
+          player: winner.player,
+          world: winner.world,
+          civic: winner.civic,
+          chaos: winner.chaos ?? freshChaosState(),
+          goals: winner.goals ?? freshGoalState(),
+          onboarding: winner.onboarding ?? freshOnboardingState(),
+          gateOpen: false,
+        })
+        get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}! ${verdict.why}`, tone: 'good' })
+      } else {
+        set({
+          account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: null, gateGraceDay: get().world?.day ?? 0 },
+          gateOpen: false,
+        })
+        get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}!`, tone: 'good' })
+      }
+      audio.play('chime')
+      scheduleAutosave(get)
+      void get().pushCloud()
+      return { ok: true }
+    } catch {
+      return { ok: false, why: 'Network no gree — check connection and try again.' }
+    }
+  },
+
+  /** M9 — "Maybe later": today rides free, tomorrow the gate stands again. */
+  acceptGateGrace: () => {
+    const day = get().world?.day ?? 0
+    set({ account: applyGrace(get().account, day), gateOpen: false })
+    get().notify({ icon: '🤝', text: 'Today na free ride — tomorrow, come claim your name.', tone: 'neutral' })
+    audio.play('notify')
+  },
+
+  closeGate: () => set({ gateOpen: false }),
+
+  /** M9 — push the current save to the cloud (linked accounts only). */
+  pushCloud: async () => {
+    const { player, world, civic, account } = get()
+    if (!player || !world || !civic) return { ok: false, why: 'no game' }
+    if (!account.linked || !account.token) return { ok: false, why: 'not linked' }
+    get().saveNow()
+    const save = SaveSystem.load()
+    if (!save) return { ok: false, why: 'no save' }
+    try {
+      const res = await fetch('/api/cloud/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
+        body: JSON.stringify(SaveSystem.toCloudPayload(save)),
+      })
+      if (!res.ok) return { ok: false, why: 'cloud refused' }
+      return { ok: true }
+    } catch {
+      return { ok: false, why: 'network' }
+    }
+  },
+
   saveNow: () => {
-    const { player, world, civic, fleet, chaos, settings } = get()
+    const { player, world, civic, fleet, chaos, goals, onboarding, account, settings } = get()
     if (!player || !world || !civic) return
     const existing = SaveSystem.load()
     SaveSystem.write({
@@ -2072,6 +2344,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       civic,
       fleet,
       chaos,
+      goals,
+      onboarding,
+      account,
       settings,
     })
     set({ hasSave: true })
@@ -2079,7 +2354,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   resetGame: () => {
     SaveSystem.clear()
-    set({ player: null, world: null, civic: null, fleet: { day: 1, done: [] }, chaos: freshChaosState(), screen: 'menu', hasSave: false })
+    set({
+      player: null,
+      world: null,
+      civic: null,
+      fleet: { day: 1, done: [] },
+      chaos: freshChaosState(),
+      goals: freshGoalState(),
+      onboarding: freshOnboardingState(),
+      account: freshAccountState(),
+      gateOpen: false,
+      screen: 'menu',
+      hasSave: false,
+    })
   },
 
   /* ------------------------------ feedback ------------------------------ */

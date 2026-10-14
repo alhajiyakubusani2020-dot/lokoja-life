@@ -443,6 +443,47 @@ export interface ChaosState {
   }
 }
 
+/* ------------------------------- M9 — casual shell --------------------------- */
+
+/**
+ * M9 — THE CASUAL SHELL. Today's three goals + the streak, the onboarding
+ * arc (Street Certified), and the account line the Guest Loop writes.
+ * Pure data — the laws live in systems/goals.ts and systems/guest.ts.
+ */
+export interface GoalState {
+  /** the day the current goals belong to (stale days re-roll lazily) */
+  day: number
+  /** the three goal ids rolled for that day */
+  ids: string[]
+  /** progress per goal id */
+  progress: Record<string, number>
+  /** completion flags, same order as ids */
+  done: boolean[]
+  /** consecutive perfect days */
+  streak: number
+  /** the last day a perfect set landed (the streak continuity law) */
+  lastDoneDay: number
+}
+
+export interface OnboardingState {
+  /** completed step ids ('travel' | 'work' | 'meal' | 'earn') */
+  done: string[]
+  /** the ₦1,000 Street Certified reward has landed */
+  rewarded: boolean
+}
+
+export interface AccountState {
+  /** the Guest Loop's verdict: has this player claimed a name? */
+  linked: boolean
+  handle: string | null
+  /** session token from the auth API (M14 Fortress hardens this) */
+  token: string | null
+  /** 'kid' | 'teen' | 'adult' — the family shield reads this later (M13) */
+  ageBand: 'kid' | 'teen' | 'adult' | null
+  /** the in-game day the gate grace was granted ("Maybe later") */
+  gateGraceDay: number
+}
+
 /* --------------------------------- Settings -------------------------------- */
 
 export interface GameSettings {
@@ -450,6 +491,8 @@ export interface GameSettings {
   sound: boolean
   /** M7 — graphics pick: 'auto' trusts the device law, explicit tiers override it */
   graphics: QualitySetting
+  /** M9 — Chill Mode: a gentler Lokoja (half decay, kinder grace windows) */
+  chill: boolean
 }
 
 /* ---------------------------------- Save ----------------------------------- */
@@ -460,7 +503,8 @@ export interface GameSettings {
  */
 export interface GameSave {
   /** v8 (M7): settings.graphics joins the schema
-   *  v9 (M8): the chaos slice joins the schema */
+   *  v9 (M8): the chaos slice joins the schema
+   *  v10 (M9): goals, onboarding, account + settings.chill join the schema */
   version: number
   createdAt: number
   updatedAt: number
@@ -473,6 +517,10 @@ export interface GameSave {
   fleet: FleetState
   /** M8 — the chaos engine: transformer outages, scarcity, the fix pool */
   chaos: ChaosState
+  /** M9 — the casual shell: today's goals, the onboarding arc, the account */
+  goals: GoalState
+  onboarding: OnboardingState
+  account: AccountState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

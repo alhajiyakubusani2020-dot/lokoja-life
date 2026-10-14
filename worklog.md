@@ -676,3 +676,20 @@ Stage Summary:
 - ROADMAP.md v2.1 ratified with the Guest Loop threaded through M9/M13/M14/M16/M17
 - Loop: TAP → PLAY AS GUEST → see the environment → GATE → LOGIN → keep going, nothing lost
 - Next build target unchanged: M8 THE CHAOS ENGINE
+
+---
+Task ID: M8-M9
+Agent: Main Agent (Super Z)
+Task: Build M8 THE CHAOS ENGINE + M9 THE CASUAL SHELL (two milestones, one swarm run, per user directive)
+
+Work Log:
+- M8: systems/chaos.ts pure laws (blowout/outage lifecycle/blackout/scarcity/pool/ATM/POS/liquidity), CHAOS config, chaos threaded through civic (liquidity fold), biz (blackout 0.25 crush + generator fuel from till + POS harvest ×1.35), travel/garage/fleet (fuel surge ×1.6 personal-only, one-price law across sheets + gig board); store: chaos slice + integrated day-roll narration + contributeToPool + bankWithdraw atm/pos + TV dies in the dark; UI: ChaosBanner (pool bar + tiers + money-weather chips), map ⚡ dark pin, NEPA office grid card, bank two-doors, biz blackout/POS lines; SAVE v9; __lkl chaos/forceChaos/forceScarcity
+- M9: systems/goals.ts (daily 3, streak continuity, lazy re-roll) + systems/guest.ts (gate matrix, grace law, validators, THE MERGE LAW — further save wins, loser → backup slot); chill laws through needs (decay ×0.5) + civic (warrant ×3, disco ×2, weather mood ×0.5); store: goals bumps at 13 action sites, onboarding arc (travel/work/meal/earn → ₦1,000 Street Certified), GUEST GATE in travel, register/login/pushCloud actions (real fetch), pulse/shockwave juice transients; Prisma Account+CloudSave (SQLite, scrypt PIN, rotated bearer tokens) + /api/auth/register /api/auth/login /api/cloud/push /api/cloud/pull; UI: GoalsCard + OnboardingCard + GuestGate modal + ChillToggle + account line + MoneyPop/Shockwave (transform/opacity only); SAVE v10
+- Test-era migration: m4/m5/m6/m8 store passes neutralized (pre-completed goals + linked account) so legacy exact-cash laws still measure one action at a time
+- Discipline: ALL suites green (m2 67, m3 50, m4 82, m5 95, m6 100, m7 53, m8 100, m9 61, stage5 47, world3d, schools 232, stage3, travel); tsc exactly 9 pre-existing; eslint clean; tsc settings/chill literals fixed across save/store/tests
+
+Stage Summary:
+- Commits: a9a4222→amended 0e5092b (M8) + this commit (M9)
+- E2E: m8-chaos-shots (banner/pin/pool 4600→7100/ATM cap refusal toast ₦397,500 held/desktop) + m9-shell-shots (casual shell, THE GATE "Lokoja knows your face", real register claim ada_*, cloud-on line, chill on, goal reward +₦250 in the live ledger) — 0 console errors both
+- THE GUEST LOOP IS LIVE: play first → gate → claim → merge → cloud, nothing lost
+- Next per ROADMAP.md: M10 THE LIVING CALENDAR

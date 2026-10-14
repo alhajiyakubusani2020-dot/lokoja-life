@@ -534,6 +534,58 @@ export const CHAOS = {
 } as const
 
 /**
+ * M9 — THE CASUAL SHELL. The daily goals: three honest tasks rolled from
+ * the life the player leads, each worth real naira + XP, with a streak
+ * that grows on perfect days. systems/goals.ts holds the pure laws.
+ */
+export const GOALS = {
+  /** goals rolled per day */
+  perDay: 3,
+  /** ₦1,000 when all four onboarding steps land (Street Certified) */
+  onboardingReward: 1000,
+  /** the onboarding steps, in display order */
+  onboardingSteps: [
+    { id: 'travel', label: 'Make your first journey', hint: 'Open the Map and ride somewhere.' },
+    { id: 'work', label: 'Run your first hustle', hint: 'A shift, a hustle or a gig — anything that pays.' },
+    { id: 'meal', label: 'Eat a real meal', hint: 'Hunger no dey hustle for anybody.' },
+    { id: 'earn', label: 'Earn your first ₦500', hint: 'Every big name started from something small.' },
+  ] as { id: string; label: string; hint: string }[],
+  pool: [
+    { id: 'gig-run', kind: 'gig', label: 'Run a Motor Park gig', target: 1, cash: 500, xp: 15 },
+    { id: 'eat-well', kind: 'meal', label: 'Eat a proper meal', target: 1, cash: 250, xp: 8 },
+    { id: 'till-run', kind: 'collect', label: 'Collect your shop till', target: 1, cash: 400, xp: 12 },
+    { id: 'waka', kind: 'travel', label: 'Travel anywhere', target: 1, cash: 250, xp: 8 },
+    { id: 'gift-love', kind: 'gift', label: 'Gift a paddy', target: 1, cash: 400, xp: 12 },
+    { id: 'light-bill', kind: 'nepa', label: 'Settle the NEPA bill', target: 1, cash: 350, xp: 10 },
+    { id: 'tax-clean', kind: 'tax', label: 'Clear your KGIRS tax', target: 1, cash: 450, xp: 12 },
+    { id: 'street-smart', kind: 'hustle', label: 'Finish a street hustle', target: 1, cash: 450, xp: 12 },
+    { id: 'shift-go', kind: 'job', label: 'Work a job shift', target: 1, cash: 400, xp: 12 },
+    { id: 'gist-time', kind: 'chat', label: 'Catch gist with an NPC', target: 2, cash: 300, xp: 10 },
+    { id: 'gym-day', kind: 'workout', label: 'Hit the gym', target: 1, cash: 300, xp: 10 },
+    { id: 'book-smart', kind: 'study', label: 'Study for an hour', target: 1, cash: 300, xp: 10 },
+    { id: 'bank-move', kind: 'deposit', label: 'Bank some money', target: 1, cash: 250, xp: 8 },
+    { id: 'double-waka', kind: 'travel', label: 'Make two journeys', target: 2, cash: 500, xp: 15 },
+  ] as { id: string; kind: string; label: string; target: number; cash: number; xp: number }[],
+} as const
+
+/**
+ * M9 — CHILL MODE. A gentler Lokoja for players who want the city without
+ * the pressure: needs decay at half speed, the sky's mood hits halve, the
+ * taxman's warrant takes 3× the grace and the disco's cutter 2×. A settings
+ * toggle, not a separate world — every law still runs, just kinder.
+ */
+export const CHILL = {
+  /** needs decay multiplier while chill is on */
+  decayMult: 0.5,
+  /** weather mood hits multiply by this */
+  weatherMoodMult: 0.5,
+  /** KGIRS warrant grace multiplier */
+  warrantGraceMult: 3,
+  /** NEPA shedding grace multiplier */
+  sheddingGraceMult: 2,
+} as const
+
+/**
  * M3 — OWN THE CITY. The player's businesses. Every shop sits at a REAL
  * Lokoja location, pays into the SAME market engine that moves meal prices
  * (Kpata/Food-Strip income follows that market's daily multiplier), and

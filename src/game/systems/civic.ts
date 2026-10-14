@@ -16,7 +16,7 @@
  */
 
 import type { CivicState, EfccTip, MarketEvent, Weather } from '../types'
-import { BIZ, CIVIC } from '../data/config'
+import { BIZ, CIVIC, CHILL } from '../data/config'
 import { weatherMarketMult } from './seasons'
 /* ------------------------------ tiny hash core ------------------------------ */
 
@@ -91,10 +91,13 @@ export function nepaDayRoll(
   day: number,
   bizCount = 0,
   solarCount = 0,
+  chill = false,
 ): { next: CivicState; posted: number; shed: boolean } {
   let nepa = { ...civic.nepa }
   let posted = 0
   let shed = false
+  // M9 — Chill Mode doubles the disco's patience before the cutter
+  const grace = CIVIC.nepa.graceDays * (chill ? CHILL.sheddingGraceMult : 1)
 
   if (nepaBillDueToday(civic, day)) {
     posted = nepaBillFor(day, bizCount, solarCount)
@@ -103,7 +106,7 @@ export function nepaDayRoll(
     nepa.paidThrough = day + CIVIC.nepa.cycleDays - 1
   }
   // debt past the grace window cuts the light — exactly once
-  if (nepa.owed > 0 && !nepa.shedding && day - nepa.cycleStart >= CIVIC.nepa.graceDays) {
+  if (nepa.owed > 0 && !nepa.shedding && day - nepa.cycleStart >= grace) {
     nepa.shedding = true
     shed = true
   }
@@ -140,10 +143,13 @@ export function kgirsDayRoll(
   civic: CivicState,
   totalEarned: number,
   day: number,
+  chill = false,
 ): { next: CivicState; assessed: number; warrantIssued: boolean } {
   const k = { ...civic.kgirs }
   let assessedNow = 0
   let warrantIssued = false
+  // M9 — Chill Mode gives the taxman 3× the patience before the warrant
+  const grace = CIVIC.kgirs.graceDays * (chill ? CHILL.warrantGraceMult : 1)
 
   // assessment day — every cycleDays from the game start
   if (day > 1 && (day - 1) % CIVIC.kgirs.cycleDays === 0 && k.assessed === 0) {
@@ -154,7 +160,7 @@ export function kgirsDayRoll(
     k.lastSeenEarned = totalEarned
   }
   // warrant — past the grace window with an unpaid assessment
-  if (k.assessed > 0 && !k.warrant && day > k.dueDay + CIVIC.kgirs.graceDays) {
+  if (k.assessed > 0 && !k.warrant && day > k.dueDay + grace) {
     k.warrant = true
     warrantIssued = true
   }
@@ -355,9 +361,9 @@ export interface CivicDayResult {
  * M8 — the day's liquidity (cash crunch / ajo payout) folds into the
  * SAME roll, so every surface that reads prices inherits the chaos.
  */
-export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0, solarCount = 0, weather?: Weather, liquidityMult = 1): CivicDayResult {
-  const nepa = nepaDayRoll(civic, day, bizCount, solarCount)
-  const kgirs = kgirsDayRoll(nepa.next, totalEarned, day)
+export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0, solarCount = 0, weather?: Weather, liquidityMult = 1, chill = false): CivicDayResult {
+  const nepa = nepaDayRoll(civic, day, bizCount, solarCount, chill)
+  const kgirs = kgirsDayRoll(nepa.next, totalEarned, day, chill)
   const efcc = efccDayRoll(kgirs.next, day)
   const market = marketDayRoll(efcc.next, day, weather, liquidityMult)
   return {

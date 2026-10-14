@@ -60,15 +60,17 @@ export function canDoStrenuous(needs: Needs): boolean {
  * that passes outside of rest (travel, work, eating, home downtime), so
  * meals and sleep matter on a schedule. Pure: the store calls this on
  * the same paths that advance the clock — never a second clock.
+ * M9 — `decayMult` scales the drain (Chill Mode runs the city at 0.5×).
  */
-export function applySlotDecay(current: Needs, slots: number): Needs {
+export function applySlotDecay(current: Needs, slots: number, decayMult = 1): Needs {
   const n = Math.max(0, Math.floor(slots))
   if (n === 0) return current
+  const m = Math.max(0, decayMult)
   return applyNeedsDelta(current, {
-    hunger: -NEEDS.decay.hunger * n,
-    energy: -NEEDS.decay.energy * n,
-    mood: -NEEDS.decay.mood * n,
-    health: -(NEEDS.decay.health ?? 0) * n,
+    hunger: -NEEDS.decay.hunger * n * m,
+    energy: -NEEDS.decay.energy * n * m,
+    mood: -NEEDS.decay.mood * n * m,
+    health: -(NEEDS.decay.health ?? 0) * n * m,
   })
 }
 

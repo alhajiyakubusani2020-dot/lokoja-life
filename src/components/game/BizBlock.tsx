@@ -19,6 +19,8 @@ export function BizBlock({ locationId }: { locationId: string }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const civic = useGameStore((s) => s.civic)!
+  // M8 — the chaos state rides into the SAME income law the day roll uses
+  const chaos = useGameStore((s) => s.chaos)
   const buyBiz = useGameStore((s) => s.buyBiz)
   const collectBiz = useGameStore((s) => s.collectBiz)
   const upgradeBiz = useGameStore((s) => s.upgradeBiz)
@@ -30,9 +32,6 @@ export function BizBlock({ locationId }: { locationId: string }) {
   if (!host) return null
   const { typeId, def } = host
   const shop = bizOwned(player.businesses, typeId)
-
-  // M8 — the chaos state rides into the SAME income law the day roll uses
-  const chaos = useGameStore((s) => s.chaos)
 
   // today's honest per-day income at the shop's current shape (staff + power included)
   const todayIncome = bizIncomeFor(

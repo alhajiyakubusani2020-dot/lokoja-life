@@ -381,6 +381,11 @@ console.log('\nREAL STORE PASS — bun runs the live Zustand store through the c
   try {
     const s = useGameStore.getState()
     s.startNewGame('Chaos Tester', 'male', DEFAULT_AVATAR)
+    // the chaos tester rides on a linked account (the guest gate must not block the grid tour)
+    useGameStore.setState({
+      account: { linked: true, handle: 'chaos_tester', token: 'test-token', ageBand: 'adult', gateGraceDay: 0 },
+      onboarding: { done: ['travel', 'work', 'meal', 'earn'], rewarded: true },
+    })
 
     // walk into the flood days until a transformer blows
     let zone: string | null = null
@@ -476,7 +481,7 @@ console.log('\nREAL STORE PASS — bun runs the live Zustand store through the c
     useGameStore.getState().saveNow()
     const raw = memStore.get('lokoja-life:save')
     const parsed = raw ? JSON.parse(raw) : null
-    check('the save (v9) carries the chaos slice', parsed?.version === 9 && typeof parsed?.chaos?.stats?.fixes === 'number')
+    check('the save (v10) carries the chaos slice', parsed?.version === 10 && typeof parsed?.chaos?.stats?.fixes === 'number')
   } finally {
     Math.random = realRandom
     setDebugScarcity(null)
