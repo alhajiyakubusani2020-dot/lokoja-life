@@ -26,6 +26,7 @@ import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import type { TransportId, VehicleModel } from '@/game/types'
 import { calculateTravel } from '@/game/systems/travel'
 import { allTravelOptions } from '@/game/systems/garage'
+import { fuelMultFor } from '@/game/systems/chaos'
 import { formatNaira } from '@/game/systems/progression'
 import { ambience } from '@/game/systems/ambience'
 import { audio } from '@/game/systems/audio'
@@ -1146,7 +1147,8 @@ function TravelSheet({ loc, onConfirm }: { loc: LokojaLocation; onConfirm: (t: T
   const origin = LOCATION_BY_ID[world.currentLocation]
 
   // M4 — public modes + YOUR rides, one shared offer law with the 2D map
-  const options = allTravelOptions(origin, loc, world.weather, world.timeOfDay, player.vehicles)
+  // M8 — the sheet's pump price = the store's pump price (scarcity surge rides)
+  const options = allTravelOptions(origin, loc, world.weather, world.timeOfDay, player.vehicles, fuelMultFor(world.day))
 
   return (
     <div className="flex flex-col gap-2 px-5 pb-4 pt-3">

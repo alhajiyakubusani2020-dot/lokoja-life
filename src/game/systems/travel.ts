@@ -48,6 +48,9 @@ export function mapDistanceKm(a: LokojaLocation, b: LokojaLocation): number {
  * Calculate a complete trip plan.
  * Deterministic for identical inputs — randomness lives ONLY in
  * rollTravelEvent(), which is explicitly configured.
+ * M8 — `fuelMult` scales the pump price for PERSONAL rides only (black
+ * market on cash-scarcity days). Public fares are the city's known
+ * rates and never surge; omitted = 1 (the plain M4 law exactly).
  */
 export function calculateTravel(
   origin: LokojaLocation,
@@ -55,6 +58,7 @@ export function calculateTravel(
   transport: TransportId,
   weather: Weather,
   currentTimeOfDay: TimeOfDay,
+  fuelMult = 1,
 ): TravelPlan {
   const params = ECONOMY.transport[transport]
   const km = mapDistanceKm(origin, destination)
@@ -63,7 +67,8 @@ export function calculateTravel(
     TRAVEL.weatherMinutesMultiplier[weather]?.[transport] ?? 1
 
   // fare = base + distance rate, rounded to the configured naira step
-  const rawFare = params.cost.base + params.cost.perKm * km
+  // (personal rides pay the PUMP: the surge multiplies their cost only)
+  const rawFare = (params.cost.base + params.cost.perKm * km) * (transport.startsWith('own-') ? fuelMult : 1)
   const cost = Math.round(rawFare / TRAVEL.fareRounding) * TRAVEL.fareRounding
 
   // minutes: distance × speed × location × weather

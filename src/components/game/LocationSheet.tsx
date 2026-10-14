@@ -16,6 +16,7 @@ import { audio } from '@/game/systems/audio'
 import { formatNaira } from '@/game/systems/progression'
 import { type TravelPlan } from '@/game/systems/travel'
 import { allTravelOptions } from '@/game/systems/garage'
+import { fuelMultFor } from '@/game/systems/chaos'
 import { BIZ } from '@/game/data/config'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { BizBlock } from './BizBlock'
@@ -108,10 +109,11 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
   const isSelectedLocked = !!selected && player.level < selected.unlockLevel
 
   // travel options for the selected destination — public modes + YOUR rides (M4)
+  // M8 — fuel surge rides through: the sheet shows the black-market pump price
   const plans = useMemo(() => {
     if (!selected || isSelectedCurrent || isSelectedLocked) return []
-    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles)
-  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles])
+    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles, fuelMultFor(world.day))
+  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles, world.day])
 
   if (!selected) return null
 

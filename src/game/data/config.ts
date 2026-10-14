@@ -487,6 +487,53 @@ export const CIVIC = {
 }
 
 /**
+ * M8 — THE CHAOS ENGINE. The grid is alive and the naira has moods.
+ * A heavy sky (storm/flood) can blow a zone transformer: the area goes
+ * dark, shops without power starve, generators burn fuel, and the
+ * community gathers naira for the technician. Independent of the sky,
+ * some days the cash simply dries up: the ATM runs dry, POS agents eat,
+ * black-market fuel doubles, and the ajo payout days soften the market.
+ * Every number here — systems/chaos.ts holds the pure laws.
+ */
+export const CHAOS = {
+  /** chance (0–1) a heavy-sky day blows a transformer (rain alone never does) */
+  blowoutChance: { storm: 0.45, flood: 0.7 } as Record<string, number>,
+  /** outage length band, in days (seeded per blowout) */
+  outageDays: { min: 1, max: 2 },
+  /** a shop caught in a BLACKOUT zone with no power backup earns this share
+   *  (harsher than plain shedding — the whole feeder is down) */
+  blackoutIncomeFactor: 0.25,
+  /** a generator shop burns this much fuel per dark day, drawn from the till
+   *  like a wage (solar shops drink sunlight and pay nothing) */
+  generatorFuelPerDay: 600,
+  /** chance (0–1) any day rolls a cash-scarcity morning (the naira dries up) */
+  scarcityChance: 0.18,
+  /** scarcity law: the ATM pays out at most this per day */
+  atmCap: 5000,
+  /** the POS agent's levy: this share of any instant withdrawal */
+  posFeeRate: 0.02,
+  /** black-market fuel surge on scarcity days (personal-vehicle pump price) */
+  fuelSurgeMult: 1.6,
+  /** POS-agent businesses earn this multiplier on scarcity days (commissions) */
+  posBoostMult: 1.35,
+  /** market liquidity fold: a cash crunch lifts prices, an ajo payout softens them */
+  scarcityMarketMult: 1.12,
+  payoutMarketMult: 0.92,
+  /** every Nth day the ajo/esusu circles pay out (traders flush with cash) */
+  payoutEvery: 9,
+  /** community fix pool: naira target before the technician is called */
+  poolTarget: 12000,
+  /** seeded NPC daily contribution band into the pool */
+  poolNpcMin: 1500,
+  poolNpcMax: 3500,
+  /** what one player contribution costs (pick one per dark day) */
+  poolTiers: [500, 1000, 2500] as const,
+  /** restoring the light pays the spirit and the street */
+  fixMood: 4,
+  fixReputation: 3,
+} as const
+
+/**
  * M3 — OWN THE CITY. The player's businesses. Every shop sits at a REAL
  * Lokoja location, pays into the SAME market engine that moves meal prices
  * (Kpata/Food-Strip income follows that market's daily multiplier), and
@@ -556,6 +603,8 @@ export const BIZ = {
       unlockLevel: 2,
       blurb: 'Glass kiosk at Ganaja Junction — chargers, earpieces, transfer POS.',
       marketId: null,
+      /** M8 — this shop runs a terminal: cash-scarcity days are its harvest */
+      pos: true,
     },
     'okada-stand': {
       name: 'Motor-Park Okada Stand',
@@ -577,7 +626,7 @@ export const BIZ = {
       blurb: 'A buka of your own on the food strip — amala that makes people cross town.',
       marketId: 'food-area' as string | null,
     },
-  } as Record<string, { name: string; locationId: string; emoji: string; buyCost: number; baseIncome: number; unlockLevel: number; blurb: string; marketId: string | null }>,
+  } as Record<string, { name: string; locationId: string; emoji: string; buyCost: number; baseIncome: number; unlockLevel: number; blurb: string; marketId: string | null; pos?: boolean }>,
 } as const
 
 /* ------------------------------- M5 — fleet -------------------------------- */

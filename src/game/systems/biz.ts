@@ -18,9 +18,10 @@
  * taxes) so sleeping, travelling and time-skips all accrue exactly once.
  */
 
-import type { BusinessState, CivicState, ShopUpgradeId } from '../types'
-import { BIZ } from '../data/config'
+import type { BusinessState, ChaosState, CivicState, ShopUpgradeId } from '../types'
+import { BIZ, CHAOS } from '../data/config'
 import { civicHash, marketForDay } from './civic'
+import { blackoutAt, isScarcityDay } from './chaos'
 
 export type BizTypeId = string
 
@@ -33,6 +34,8 @@ export interface BizTypeDef {
   unlockLevel: number
   blurb: string
   marketId: string | null
+  /** M8 — runs a payment terminal: cash-scarcity days lift its take */
+  pos?: boolean
 }
 
 export const BIZ_TYPES: Record<string, BizTypeDef> = BIZ.types
@@ -79,6 +82,11 @@ export function hasPowerBackup(upgrades: ShopUpgradeId[]): boolean {
   return upgrades.includes('generator') || upgrades.includes('solar')
 }
 
+/** Does this shop RUN a generator (burns fuel on dark days — solar does not)? */
+export function hasGenerator(upgrades: ShopUpgradeId[]): boolean {
+  return upgrades.includes('generator')
+}
+
 /* --------------------------------- income law -------------------------------- */
 
 /** Reputation → customer pull: +1% income per `repBonusDivisor` rep above the
@@ -116,21 +124,33 @@ export function bizDayMult(typeId: string, day: number, civic: CivicState): numb
  *  M5 — `opts` carries the shop's staff and power installs: each attendant
  *  lifts income by BIZ.staffIncomeBoost, and a shop caught dark by
  *  load-shedding (no generator/solar) earns BIZ.sheddingIncomeFactor of
- *  the normal take. Omitted opts = the plain M3 law, untouched. */
+ *  the normal take. Omitted opts = the plain M3 law, untouched.
+ *  M8 — `chaos` threads the CHAOS ENGINE through the same law: a BLACKOUT
+ *  zone (transformer down — harsher than shedding) crushes an un-backed
+ *  shop to CHAOS.blackoutIncomeFactor, a cash-scarcity day multiplies a
+ *  POS shop's take by CHAOS.posBoostMult. Omitted chaos = M5 law exactly. */
 export function bizIncomeFor(
   typeId: string,
   level: number,
   day: number,
   civic: CivicState,
   reputation: number,
-  opts?: { staff?: number; upgrades?: ShopUpgradeId[] },
+  opts?: { staff?: number; upgrades?: ShopUpgradeId[]; chaos?: ChaosState },
 ): number {
   const def = bizDef(typeId)
   if (!def) return 0
   const staff = Math.max(0, Math.floor(opts?.staff ?? 0))
-  const dark = civic.nepa.shedding && !hasPowerBackup(opts?.upgrades ?? [])
+  const upgrades = opts?.upgrades ?? []
+  const chaos = opts?.chaos ?? null
+  const dark = civic.nepa.shedding && !hasPowerBackup(upgrades)
+  const blackedOut = chaos ? blackoutAt(chaos, def.locationId, day) : false
+  const posBoost = chaos && def.pos === true && isScarcityDay(day) ? CHAOS.posBoostMult : 1
   const staffMult = 1 + staff * BIZ.staffIncomeBoost
-  const powerMult = dark ? BIZ.sheddingIncomeFactor : 1
+  const powerMult = blackedOut && !hasPowerBackup(upgrades)
+    ? CHAOS.blackoutIncomeFactor
+    : dark
+      ? BIZ.sheddingIncomeFactor
+      : 1
   return Math.max(
     0,
     Math.round(
@@ -139,9 +159,27 @@ export function bizIncomeFor(
         bizDayMult(typeId, day, civic) *
         (1 + bizRepBonus(reputation)) *
         staffMult *
-        powerMult,
+        powerMult *
+        posBoost,
     ),
   )
+}
+
+/**
+ * M8 — the generator's honest appetite: a shop RUNNING A GENERATOR inside a
+ * blackout zone burns this much fuel per dark day (drawn from the till like
+ * a wage). Solar shops drink sunlight and pay nothing.
+ */
+export function bizGeneratorFuelFor(
+  typeId: string,
+  day: number,
+  upgrades: ShopUpgradeId[],
+  chaos: ChaosState | null,
+): number {
+  if (!chaos || !hasGenerator(upgrades)) return 0
+  const def = bizDef(typeId)
+  if (!def) return 0
+  return blackoutAt(chaos, def.locationId, day) ? CHAOS.generatorFuelPerDay : 0
 }
 
 /* ---------------------------------- upgrades --------------------------------- */
@@ -170,6 +208,8 @@ export interface BizDayResult {
  * M5 — each attendant's daily wage (BIZ.staffWagePerDay) is paid out of the
  * day's take BEFORE it lands in the till; a day that nets ≤0 still marks
  * the shop as accrued-through so a re-roll can never double-charge wages.
+ * M8 — a generator inside a blackout zone burns CHAOS.generatorFuelPerDay
+ * of the till per dark day, the same honest way.
  */
 export function bizDayRoll(
   list: BusinessState[],
@@ -177,6 +217,7 @@ export function bizDayRoll(
   newDay: number,
   civic: CivicState,
   reputation: number,
+  chaos?: ChaosState,
 ): BizDayResult {
   const earned: Record<string, number> = {}
   let total = 0
@@ -190,8 +231,10 @@ export function bizDayRoll(
       const gross = bizIncomeFor(biz.typeId, biz.level, day, civic, reputation, {
         staff: biz.staff,
         upgrades: biz.upgrades,
+        chaos,
       })
-      sum += Math.max(0, gross - wages)
+      const genFuel = bizGeneratorFuelFor(biz.typeId, day, biz.upgrades, chaos ?? null)
+      sum += Math.max(0, gross - wages - genFuel)
     }
     // advance the accrual marker even on a wiped-out day (idempotence law)
     const marked: BusinessState = { ...biz, lastAccrualDay: newDay }

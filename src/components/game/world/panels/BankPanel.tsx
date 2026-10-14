@@ -15,6 +15,8 @@
 import { useGameStore } from '@/game/store/useGameStore'
 import { formatNaira } from '@/game/systems/progression'
 import { audio } from '@/game/systems/audio'
+import { CHAOS } from '@/game/data/config'
+import { isScarcityDay, atmRemaining, posFeeFor } from '@/game/systems/chaos'
 import { SheetShell } from '../../ui/kit'
 
 /** the teller's quick amounts — presentation chips, not economy rules */
@@ -51,19 +53,25 @@ export function BankPanel({ onClose }: { onClose: () => void }) {
   const cash = useGameStore((s) => s.player?.cash ?? 0)
   const bankBalance = useGameStore((s) => s.player?.bankBalance ?? 0)
   const transactions = useGameStore((s) => s.player?.transactions ?? [])
+  const world = useGameStore((s) => s.world)!
+  const chaos = useGameStore((s) => s.chaos)
   const bankDeposit = useGameStore((s) => s.bankDeposit)
   const bankWithdraw = useGameStore((s) => s.bankWithdraw)
 
   // last five bank moves, newest first
   const bankTx = transactions.filter((t) => t.category === 'bank').slice(0, 5)
 
+  // M8 — the naira's mood today
+  const scarcity = isScarcityDay(world.day)
+  const atmLeft = atmRemaining(chaos, world.day)
+
   const deposit = (amount: number) => {
     audio.play('click')
     bankDeposit(amount)
   }
-  const withdraw = (amount: number) => {
+  const withdraw = (amount: number, channel: 'atm' | 'pos' = 'atm') => {
     audio.play('click')
-    bankWithdraw(amount)
+    bankWithdraw(amount, channel)
   }
 
   return (
@@ -102,6 +110,17 @@ export function BankPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
+      {/* M8 — cash weather: the scarcity law announced in the teller's own words */}
+      {scarcity && (
+        <div data-testid="bank-scarcity" className="mx-1.5 mt-3 rounded-xl bg-[#fdecea] px-3 py-2.5">
+          <p className="text-[11.5px] font-extrabold text-[#8a2a20]">💸 Cash scarcity — the ATM dey pay small small</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-[#8a2a20]/80">
+            ATM fit still pay {Number.isFinite(atmLeft) ? formatNaira(atmLeft) : formatNaira(CHAOS.atmCap)} today.
+            The POS agent dey instant — {Math.round(CHAOS.posFeeRate * 100)}% levy, no cap.
+          </p>
+        </div>
+      )}
+
       {/* deposit */}
       <div className="mt-3 px-1.5">
         <p className="lko-label mb-1.5">Deposit</p>
@@ -124,9 +143,9 @@ export function BankPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* withdraw */}
+      {/* withdraw — M8: two doors on a scarcity day (the queue or the levy) */}
       <div className="mt-2.5 px-1.5">
-        <p className="lko-label mb-1.5">Withdraw</p>
+        <p className="lko-label mb-1.5">Withdraw {scarcity ? '— choose your door' : ''}</p>
         <div className="grid grid-cols-4 gap-2">
           {QUICK_AMOUNTS.map((a) => (
             <AmountButton
@@ -134,16 +153,44 @@ export function BankPanel({ onClose }: { onClose: () => void }) {
               tone="out"
               label={`₦${a / 1000}k`}
               disabled={bankBalance < a}
-              onClick={() => withdraw(a)}
+              onClick={() => withdraw(a, 'atm')}
             />
           ))}
           <AmountButton
             tone="out"
-            label="All"
+            label="All · ATM"
             disabled={bankBalance <= 0}
-            onClick={() => withdraw(bankBalance)}
+            onClick={() => withdraw(bankBalance, 'atm')}
           />
         </div>
+        {scarcity && (
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {QUICK_AMOUNTS.map((a) => {
+              const fee = posFeeFor(a)
+              return (
+                <button
+                  key={a}
+                  data-testid={`bank-pos-${a}`}
+                  disabled={bankBalance < a}
+                  onClick={() => withdraw(a, 'pos')}
+                  className="lko-press flex min-h-[46px] flex-col items-center justify-center rounded-xl border border-[#1d5c8a]/40 bg-white px-1 text-[11px] font-extrabold text-[#1d5c8a] disabled:opacity-40"
+                >
+                  <span>POS ₦{a / 1000}k</span>
+                  <span className="text-[9.5px] font-bold opacity-70">−{formatNaira(fee)} levy</span>
+                </button>
+              )
+            })}
+            <button
+              data-testid="bank-pos-all"
+              disabled={bankBalance <= 0}
+              onClick={() => withdraw(bankBalance, 'pos')}
+              className="lko-press flex min-h-[46px] flex-col items-center justify-center rounded-xl border border-[#1d5c8a]/40 bg-white px-1 text-[11px] font-extrabold text-[#1d5c8a] disabled:opacity-40"
+            >
+              <span>POS All</span>
+              <span className="text-[9.5px] font-bold opacity-70">instant · levy</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ledger — the last five bank moves */}

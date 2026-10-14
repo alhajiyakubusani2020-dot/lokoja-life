@@ -93,7 +93,7 @@ export function gigPayout(model: VehicleModel, dest: LokojaLocation, weather: We
  * vehicle, destinations picked by hash (distinct within a model), fully
  * priced against the CURRENT weather. Deterministic per (day, garage, level).
  */
-export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, weather: Weather): GigDef[] {
+export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, weather: Weather, fuelMult = 1): GigDef[] {
   const park = LOCATION_BY_ID[GIG_ORIGIN_ID]
   if (!park) return []
   const gigs: GigDef[] = []
@@ -118,7 +118,7 @@ export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, w
       }
       prevToId = dests[idx].id
       const dest = dests[idx]
-      const plan = calculateTravel(park, dest, `own-${model}` as const, weather, 'morning')
+      const plan = calculateTravel(park, dest, `own-${model}` as const, weather, 'morning', fuelMult)
       gigs.push({
         id: `gig-${day}-${model}-${i}`,
         day,
@@ -137,9 +137,9 @@ export function gigBoard(day: number, vehicles: OwnedVehicle[], level: number, w
 }
 
 /** The board MINUS what you already ran today (the store's read for the UI). */
-export function availableGigs(day: number, vehicles: OwnedVehicle[], level: number, weather: Weather, fleet: FleetState): GigDef[] {
+export function availableGigs(day: number, vehicles: OwnedVehicle[], level: number, weather: Weather, fleet: FleetState, fuelMult = 1): GigDef[] {
   const done = fleet.day === day ? fleet.done : []
-  return gigBoard(day, vehicles, level, weather).filter((g) => !done.includes(g.id))
+  return gigBoard(day, vehicles, level, weather, fuelMult).filter((g) => !done.includes(g.id))
 }
 
 /** Human label for a gig — used by toasts and the ledger, one source. */

@@ -17,8 +17,55 @@ import { useGameStore } from '@/game/store/useGameStore'
 import { formatNaira } from '@/game/systems/progression'
 import { audio } from '@/game/systems/audio'
 import { nepaSettleCost, kgirsSettleCost } from '@/game/systems/civic'
-import { CIVIC } from '@/game/data/config'
+import { CIVIC, CHAOS } from '@/game/data/config'
+import { LOCATION_BY_ID } from '@/game/data/locations'
 import { SheetShell } from '../../ui/kit'
+
+/**
+ * M8 — the grid's live status inside the NEPA office: which zone is dark,
+ * how the community fix pool dey grow, and (in person, in the dark zone)
+ * the contribution tiers. The store's contributeToPool carries every naira.
+ */
+function M8OutageCard() {
+  const chaos = useGameStore((s) => s.chaos)
+  const world = useGameStore((s) => s.world)!
+  const contributeToPool = useGameStore((s) => s.contributeToPool)
+  const outage = chaos.active
+  if (!outage) {
+    return <Row label="Grid status" value="HOLDING — every transformer intact" tone="good" />
+  }
+  const zoneName = LOCATION_BY_ID[outage.zoneId]?.name ?? outage.zoneId
+  const inZone = world.currentLocation === outage.zoneId
+  const contributedToday = outage.playerContribDays.includes(world.day)
+  const need = Math.max(0, CHAOS.poolTarget - outage.pool)
+  return (
+    <div data-testid="civic-outage" className="rounded-xl bg-[#2b1a16] px-3 py-2.5 text-white">
+      <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#ffb4a0]">
+        <span className="animate-pulse" aria-hidden>⚡</span> Transformer down — {zoneName}
+      </p>
+      <p className="mt-0.5 text-[11px] font-semibold text-white/70">
+        Light don go since day {outage.startedDay}. Pool: {formatNaira(outage.pool)} / {formatNaira(CHAOS.poolTarget)}
+        {need > 0 ? ` — ${formatNaira(need)} more` : ' — technician dey come tomorrow.'}
+      </p>
+      {inZone && !contributedToday && need > 0 && (
+        <div className="mt-1.5 flex gap-1.5">
+          {CHAOS.poolTiers.map((tier) => (
+            <button
+              key={tier}
+              onClick={() => {
+                audio.play('click')
+                contributeToPool(tier)
+              }}
+              className="lko-press flex-1 rounded-lg bg-[#ffd166] px-2 py-1.5 text-[10.5px] font-extrabold text-[#4a3200]"
+            >
+              Drop {formatNaira(tier)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 type CivicOffice = 'kgirs-office' | 'nepa-office' | 'police-station' | 'efcc-office'
 
@@ -124,6 +171,7 @@ export function CivicPanel({ office, onClose }: { office: CivicOffice; onClose: 
             <Row label="Electricity bill owed" value={formatNaira(civic.nepa.owed)} tone={civic.nepa.owed > 0 ? 'bad' : 'good'} />
             {civic.nepa.shedding && <Row label="Load-shedding" value="LIGHT CUT" tone="bad" />}
             {civic.nepa.shedding && <Row label="Reconnection fee" value={formatNaira(CIVIC.nepa.reconnectFee)} />}
+            <M8OutageCard />
             <Row label="Lifetime paid" value={formatNaira(civic.nepa.totalPaid)} />
             <ActionButton
               label={

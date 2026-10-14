@@ -157,7 +157,7 @@ console.log('\nSAVE — v4 carries into v7, legacy biz fields default')
   mem.set(SaveSystem.SAVE_KEY, raw)
   const loaded = SaveSystem.load()
   check('v4 save loads', !!loaded)
-  check('v4 reaches v8 (M6+M7 ladder)', loaded?.version === 8)
+  check('v4 reaches v9 (M6+M7+M8 ladder)', loaded?.version === 9)
   const biz = loaded?.player.businesses?.[0]
   check('legacy biz gains accrual fields', !!biz && typeof biz.accrued === 'number' && typeof biz.lastAccrualDay === 'number' && typeof biz.openedDay === 'number')
   check('legacy biz gains M5 staff + upgrades', !!biz && biz.staff === 0 && Array.isArray(biz.upgrades))

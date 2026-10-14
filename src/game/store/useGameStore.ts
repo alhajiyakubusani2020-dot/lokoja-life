@@ -30,6 +30,7 @@ import type {
   VehicleModel,
   WorldState,
   FleetState,
+  ChaosState,
   ShopUpgradeId,
 } from '../types'
 import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEAL_BY_KEY, TIME, WEATHER_META, SOCIAL } from '../data/config'
@@ -95,9 +96,23 @@ import {
   freshBusiness,
   staffCapFor,
 } from '../systems/biz'
+import {
+  chaosDayRoll,
+  freshChaosState,
+  liquidityMultFor,
+  fuelMultFor,
+  isScarcityDay,
+  atmRemaining,
+  applyAtmDraw,
+  posFeeFor,
+  canContribute,
+  applyContribution,
+  blackoutAt,
+  type ChaosDayResult,
+} from '../systems/chaos'
 import { gigBoard, gigLabel } from '../systems/fleet'
 import { HUSTLE_BY_ID } from '../data/hustles'
-import { BIZ, CIVIC, FLEET } from '../data/config'
+import { BIZ, CIVIC, FLEET, CHAOS } from '../data/config'
 
 /* ------------------------------- store -------------------------------- */
 
@@ -115,6 +130,8 @@ interface GameStore {
   civic: CivicState | null
   /** M5 — the fleet ledger: which of today's Motor Park gigs already ran */
   fleet: FleetState
+  /** M8 — the chaos engine: transformer outages, scarcity, the fix pool */
+  chaos: ChaosState
   settings: GameSettings
 
   /* lifecycle */
@@ -179,8 +196,11 @@ interface GameStore {
   nightOut: () => void
   /** Bank: pocket cash → bankBalance. */
   bankDeposit: (amount: number) => boolean
-  /** Bank: bankBalance → pocket cash. */
-  bankWithdraw: (amount: number) => boolean
+  /** Bank: bankBalance → pocket cash. M8 — 'atm' honors the scarcity cap;
+   *  'pos' takes the agent's levy but always pays. */
+  bankWithdraw: (amount: number, channel?: 'atm' | 'pos') => boolean
+  /** M8 — give to the community light fund while YOUR zone is dark. */
+  contributeToPool: (tier: number) => boolean
   /** Talk with an NPC — familiarity + one warm line. Null = cooldown / guard. */
   chatNpc: (npcId: string) => ChatOutcome | null
   /** M6 — hand a paddy a gift (cash → familiarity, once per NPC per day). */
@@ -254,15 +274,39 @@ interface CivicAgg {
   warrantIssued: boolean
   tipsResolved: import('../types').EfccTip[]
   tipReward: number
+  /** M8 — chaos narration flags */
+  blowoutZone: string | null
+  outageFixed: { zoneId: string; fixedBy: 'community' | 'disco' } | null
+  scarcityDay: boolean
+  payoutDay: boolean
 }
 
-/** Pure: roll the civic mesh forward day by day (assessments land on exact days).
- *  M6 — the NEW day's weather rides in so the market roll folds weather stress. */
-function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: number, newDay: number, bizCount = 0, solarCount = 0, weather?: import('../types').Weather): { civic: CivicState; agg: CivicAgg } {
+/** Pure: roll the civic mesh + the chaos engine forward day by day (assessments
+ *  land on exact days). M6 — the NEW day's weather rides in so the market roll
+ *  folds weather stress. M8 — the chaos roll runs in the SAME loop and its
+ *  liquidity fold (crunch / payout) rides into the SAME prices. */
+function civicRollForDays(
+  civic: CivicState,
+  chaos: ChaosState,
+  totalEarned: number,
+  prevDay: number,
+  newDay: number,
+  bizCount = 0,
+  solarCount = 0,
+  weather?: import('../types').Weather,
+): { civic: CivicState; chaos: ChaosState; agg: CivicAgg } {
   let cur = civic
-  const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0 }
+  let curChaos = chaos
+  const agg: CivicAgg = { nepaPosted: 0, nepaShed: false, taxAssessed: 0, warrantIssued: false, tipsResolved: [], tipReward: 0, blowoutZone: null, outageFixed: null, scarcityDay: false, payoutDay: false }
   for (let d = prevDay + 1; d <= newDay; d++) {
-    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather)
+    // chaos first: today's grid + naira mood decide the market's liquidity
+    const c = chaosDayRoll(curChaos, d, weather ?? 'sunny')
+    curChaos = c.next
+    if (c.blowout) agg.blowoutZone = c.blowout.zoneId
+    if (c.fixed) agg.outageFixed = c.fixed
+    agg.scarcityDay = agg.scarcityDay || c.scarcity
+    agg.payoutDay = agg.payoutDay || c.payout
+    const r = civicDayRoll(cur, totalEarned, d, bizCount, solarCount, weather, liquidityMultFor(d))
     cur = r.next
     agg.nepaPosted += r.nepaPosted
     agg.nepaShed = agg.nepaShed || r.nepaShed
@@ -271,7 +315,7 @@ function civicRollForDays(civic: CivicState, totalEarned: number, prevDay: numbe
     agg.tipsResolved = [...agg.tipsResolved, ...r.tipsResolved]
     agg.tipReward += r.tipReward
   }
-  return { civic: cur, agg }
+  return { civic: cur, chaos: curChaos, agg }
 }
 
 /** Execute a civic day crossing: set the slice, pay whistleblower rewards,
@@ -282,7 +326,7 @@ function commitCivicDays(
   prevDay: number,
   newDay: number,
 ): void {
-  const { civic, player, world } = get()
+  const { civic, chaos, player, world } = get()
   if (!civic || !player || !world || newDay <= prevDay) return
   const bizCount = player.businesses.length
   // M5 — solar shops draw from the sun: their share of the meter load drops
@@ -290,14 +334,15 @@ function commitCivicDays(
   // M6 — the NEW day's weather (already set by the clock before this call)
   // folds its market stress into the day's prices
   const newWeather = get().world?.weather
-  const { civic: rolled, agg } = civicRollForDays(civic, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather)
-  set({ civic: rolled })
+  const { civic: rolled, chaos: rolledChaos, agg } = civicRollForDays(civic, chaos, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather)
+  set({ civic: rolled, chaos: rolledChaos })
 
   // M3 — the shops earn while the city turns: accrue into each till (market
-  // multipliers read the ALREADY-ROLLED civic slice). Tax only sees this
+  // multipliers read the ALREADY-ROLLED civic slice; M8 — the chaos thread
+  // prices the dark days and the scarcity harvest). Tax only sees this
   // money when it is collected (addMoney → ledger → totalEarned).
   if (player.businesses.length > 0) {
-    const bizRes = bizDayRoll(player.businesses, prevDay, newDay, rolled, player.reputation)
+    const bizRes = bizDayRoll(player.businesses, prevDay, newDay, rolled, player.reputation, rolledChaos)
     if (bizRes.total > 0) {
       const p0 = get().player!
       set({ player: { ...p0, businesses: bizRes.next } })
@@ -322,6 +367,41 @@ function commitCivicDays(
   }  // a warrant makes the state learn your name — the wrong way
   if (agg.warrantIssued) {
     get().addReputation(-CIVIC.kgirs.warrantReputationHit)
+  }
+
+  // M8 — chaos narration: the boom, the light, the dry naira, the payout
+  if (agg.blowoutZone) {
+    const zoneName = LOCATION_BY_ID[agg.blowoutZone]?.name ?? agg.blowoutZone
+    const p = get().player
+    const inZone = world.currentLocation === agg.blowoutZone
+    if (p && inZone) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood: -CHAOS.fixMood }) } })
+    get().notify({
+      icon: '⚡',
+      text: inZone
+        ? `BOOM! Transformer don blow for ${zoneName} — your area don go dark!`
+        : `Transformer don blow for ${zoneName} — the whole area don go dark.`,
+      tone: 'bad',
+    })
+  }
+  if (agg.outageFixed) {
+    const zoneName = LOCATION_BY_ID[agg.outageFixed.zoneId]?.name ?? agg.outageFixed.zoneId
+    const contributed = agg.outageFixed.fixedBy === 'community'
+    const p = get().player
+    if (p) set({ player: { ...p, needs: applyNeedsDelta(p.needs, { mood: CHAOS.fixMood }) } })
+    if (contributed) get().addReputation(CHAOS.fixReputation)
+    get().notify({
+      icon: '💡',
+      text: contributed
+        ? `UP NEPA! Community power don return to ${zoneName} — the street go remember you.`
+        : `UP NEPA! NEPA don repair the ${zoneName} transformer.`,
+      tone: 'good',
+    })
+  }
+  if (agg.scarcityDay) {
+    get().notify({ icon: '💸', text: 'Cash scarcity today — ATM dey dry, POS agents don increase price, fuel na black market.', tone: 'neutral' })
+  }
+  if (agg.payoutDay) {
+    get().notify({ icon: '🐷', text: 'Ajo payout day — market traders carry cash today, prices soft small.', tone: 'neutral' })
   }
 
   if (agg.nepaPosted > 0) {
@@ -356,6 +436,7 @@ function scheduleAutosave(get: () => GameStore) {
       world,
       civic,
       fleet: get().fleet,
+      chaos: get().chaos,
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -371,6 +452,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   world: null,
   civic: null,
   fleet: { day: 1, done: [] },
+  chaos: freshChaosState(),
   settings: { sound: true, graphics: 'auto' as const },
 
   isTravelling: false,
@@ -423,7 +505,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       weather: 'sunny',
       currentLocation: 'home',
     }
-    set({ player, world, civic: freshCivicState(), fleet: { day: 1, done: [] }, screen: 'game', offers: [] })
+    set({ player, world, civic: freshCivicState(), chaos: freshChaosState(), fleet: { day: 1, done: [] }, screen: 'game', offers: [] })
     scheduleAutosave(get)
   },
 
@@ -434,7 +516,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const settings = { ...save.settings, graphics: save.settings.graphics ?? 'auto' }
     syncAudioWithSettings(settings)
     refreshDeviceProfile(settings.graphics)
-    set({ player: save.player, world: save.world, civic: save.civic, fleet: save.fleet, settings, screen: 'game' })
+    set({ player: save.player, world: save.world, civic: save.civic, chaos: save.chaos ?? freshChaosState(), fleet: save.fleet, settings, screen: 'game' })
     return true
   },
 
@@ -522,15 +604,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
   relaxIndoors: (kind) => {
     const { player, world, civic } = get()
     if (!player || !world) return
-    // M2 — load-shedding is real: no light, no TV
-    if (kind === 'tv' && civic?.nepa.shedding) {
-      get().notify({
-        icon: '🔌',
-        text: 'NEPA don take the light — the TV just dey look you. Settle the bill first.',
-        tone: 'bad',
-      })
-      audio.play('notify')
-      return
+    // M2 — load-shedding is real: no light, no TV. M8 — a blown transformer
+    // is darker still: the whole feeder is down, the screen is furniture.
+    if (kind === 'tv') {
+      const darkHome = blackoutAt(get().chaos, 'home', world.day)
+      if (civic?.nepa.shedding || darkHome) {
+        get().notify({
+          icon: '🔌',
+          text: darkHome
+            ? 'Transformer don blow for your area — the TV just dey look you. E no get light to show anything.'
+            : 'NEPA don take the light — the TV just dey look you. Settle the bill first.',
+          tone: 'bad',
+        })
+        audio.play('notify')
+        return
+      }
     }
     const r = INTERIOR.relax[kind]
     const needs = applyNeedsDelta(applySlotDecay(player.needs, 1), r)
@@ -847,7 +935,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { player, world, fleet, isWorking, isTravelling } = get()
     if (!player || !world || isWorking || isTravelling) return false
 
-    const gig = gigBoard(world.day, player.vehicles, player.level, world.weather).find((g) => g.id === gigId)
+    const gig = gigBoard(world.day, player.vehicles, player.level, world.weather, fuelMultFor(world.day)).find((g) => g.id === gigId)
     if (!gig) return false
     if (fleet.day === world.day && fleet.done.includes(gigId)) {
       get().notify({ icon: '🛵', text: 'You don run this one today — tomorrow get their own runs.', tone: 'neutral' })
@@ -1085,25 +1173,92 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return true
   },
 
-  bankWithdraw: (amount) => {
+  bankWithdraw: (amount, channel = 'atm') => {
     const { player, world } = get()
     if (!player || !world || amount <= 0) return false
     if (player.bankBalance < amount) {
       get().notify({ icon: '🏦', text: 'Your bank balance no reach that amount.', tone: 'bad' })
       return false
     }
-    const slot = absoluteSlot(world.day, world.timeOfDay)
-    const tx = recordTransaction('Bank withdrawal', 'bank', amount, world.day, slot)
+    const day = world.day
+    let net = amount
+    let label = 'ATM withdrawal'
+    let fee = 0
+    if (channel === 'pos') {
+      // M8 — the agent's levy: instant, no cap, the kiosk network always has cash
+      fee = posFeeFor(amount)
+      net = Math.max(0, amount - fee)
+      label = `POS withdrawal (agent fee ${formatNaira(fee)})`
+      const c0 = get().chaos
+      set({ chaos: { ...c0, stats: { ...c0.stats, posFees: c0.stats.posFees + fee } } })
+    } else if (isScarcityDay(day)) {
+      // M8 — THE SCARCITY LAW: the ATM pays a capped trickle on dry days
+      const remaining = atmRemaining(get().chaos, day)
+      if (remaining <= 0) {
+        get().notify({ icon: '🏧', text: 'ATM don dry for today — na only POS agent fit help you now.', tone: 'bad' })
+        return false
+      }
+      if (amount > remaining) {
+        get().notify({
+          icon: '🏧',
+          text: `Cash scarcity: the ATM fit pay ${formatNaira(remaining)} more today. Queue for tomorrow or take the POS agent levy.`,
+          tone: 'neutral',
+        })
+        return false
+      }
+      set({ chaos: applyAtmDraw(get().chaos, day, amount) })
+    }
+    const slot = absoluteSlot(day, world.timeOfDay)
+    const tx = recordTransaction(label, 'bank', net, day, slot)
     set({
       player: {
         ...player,
-        cash: player.cash + amount,
+        cash: player.cash + net,
         bankBalance: player.bankBalance - amount,
         transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
       },
     })
-    get().notify({ icon: '🏦', text: `${formatNaira(amount)} don comot from bank.`, tone: 'good' })
+    get().notify({
+      icon: channel === 'pos' ? '🏧' : '🏦',
+      text:
+        channel === 'pos'
+          ? `${formatNaira(net)} enter your hand — the agent don chop ${formatNaira(fee)}.`
+          : `${formatNaira(net)} don comot from bank.`,
+      tone: 'good',
+    })
     audio.play('notify')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /** M8 — drop your own naira into the community light fund. In person,
+   *  once per dark day; when the pool fills, the technician comes overnight. */
+  contributeToPool: (tier) => {
+    const { player, world, chaos } = get()
+    if (!player || !world) return false
+    if (!(CHAOS.poolTiers as readonly number[]).includes(tier)) return false
+    const gate = canContribute(chaos, world.currentLocation, world.day)
+    if (!gate.ok) {
+      get().notify({ icon: '💡', text: gate.why, tone: 'neutral' })
+      return false
+    }
+    const zoneName = LOCATION_BY_ID[chaos.active!.zoneId]?.name ?? chaos.active!.zoneId
+    if (!get().removeMoney(tier, { label: `Community light fund — ${zoneName}`, category: 'other' })) {
+      get().notify({ icon: '⚡', text: `Contribution na ${formatNaira(tier)} — your pocket no carry am.`, tone: 'bad' })
+      return false
+    }
+    const after = applyContribution(get().chaos, world.day, tier)
+    set({ chaos: after })
+    const need = Math.max(0, CHAOS.poolTarget - after.active!.pool)
+    get().notify({
+      icon: '⚡',
+      text:
+        need <= 0
+          ? `Pool don complete! Technician go reach ${zoneName} tomorrow morning.`
+          : `You drop ${formatNaira(tier)} — ${formatNaira(need)} more and the technician go come.`,
+      tone: 'good',
+    })
+    audio.play('chime')
     scheduleAutosave(get)
     return true
   },
@@ -1383,7 +1538,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!transportAllowed(destination, transportId, player.vehicles)) return
 
     // pure calculation — same inputs always give the same plan
-    const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay)
+    // M8 — the pump surges on scarcity days (personal rides pay black-market)
+    const plan = calculateTravel(origin, destination, transportId, world.weather, world.timeOfDay, fuelMultFor(world.day))
     const event = rollTravelEvent(transportId, world.weather)
 
     if (player.cash < plan.cost) {
@@ -1904,7 +2060,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   saveNow: () => {
-    const { player, world, civic, fleet, settings } = get()
+    const { player, world, civic, fleet, chaos, settings } = get()
     if (!player || !world || !civic) return
     const existing = SaveSystem.load()
     SaveSystem.write({
@@ -1915,6 +2071,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       world,
       civic,
       fleet,
+      chaos,
       settings,
     })
     set({ hasSave: true })
@@ -1922,7 +2079,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   resetGame: () => {
     SaveSystem.clear()
-    set({ player: null, world: null, civic: null, fleet: { day: 1, done: [] }, screen: 'menu', hasSave: false })
+    set({ player: null, world: null, civic: null, fleet: { day: 1, done: [] }, chaos: freshChaosState(), screen: 'menu', hasSave: false })
   },
 
   /* ------------------------------ feedback ------------------------------ */

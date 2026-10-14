@@ -11,6 +11,7 @@
 import { useMemo } from 'react'
 import { formatNaira } from '@/game/systems/progression'
 import { availableGigs } from '@/game/systems/fleet'
+import { fuelMultFor } from '@/game/systems/chaos'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import { audio } from '@/game/systems/audio'
@@ -25,7 +26,7 @@ export function FleetBlock() {
   const runGig = useGameStore((s) => s.runGig)
 
   const gigs = useMemo(
-    () => availableGigs(world.day, player.vehicles, player.level, world.weather, fleet),
+    () => availableGigs(world.day, player.vehicles, player.level, world.weather, fleet, fuelMultFor(world.day)),
     [world.day, world.weather, player.vehicles, player.level, fleet],
   )
   const atPark = world.currentLocation === 'transport-area'

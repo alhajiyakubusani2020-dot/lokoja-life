@@ -9,8 +9,9 @@ import { Icon } from './ui/icons'
 import { audio } from '@/game/systems/audio'
 import { formatNaira } from '@/game/systems/progression'
 import { BIZ } from '@/game/data/config'
-import { bizAtLocation, bizOwned, bizUpgradeCost, bizIncomeFor, staffCapFor, hasPowerBackup } from '@/game/systems/biz'
+import { bizAtLocation, bizOwned, bizUpgradeCost, bizIncomeFor, staffCapFor, hasPowerBackup, hasGenerator, bizGeneratorFuelFor } from '@/game/systems/biz'
 import { marketForDay } from '@/game/systems/civic'
+import { isScarcityDay, blackoutAt } from '@/game/systems/chaos'
 import { useGameStore } from '@/game/store/useGameStore'
 import type { ShopUpgradeId } from '@/game/types'
 
@@ -30,6 +31,9 @@ export function BizBlock({ locationId }: { locationId: string }) {
   const { typeId, def } = host
   const shop = bizOwned(player.businesses, typeId)
 
+  // M8 — the chaos state rides into the SAME income law the day roll uses
+  const chaos = useGameStore((s) => s.chaos)
+
   // today's honest per-day income at the shop's current shape (staff + power included)
   const todayIncome = bizIncomeFor(
     typeId,
@@ -37,9 +41,12 @@ export function BizBlock({ locationId }: { locationId: string }) {
     world.day,
     marketForDay(civic, world.day),
     player.reputation,
-    shop ? { staff: shop.staff, upgrades: shop.upgrades } : undefined,
+    shop ? { staff: shop.staff, upgrades: shop.upgrades, chaos } : undefined,
   )
   const darkNow = !!shop && civic.nepa.shedding && !hasPowerBackup(shop.upgrades)
+  const blackoutNow = !!shop && blackoutAt(chaos, def.locationId, world.day)
+  const genFuelToday = !!shop && bizGeneratorFuelFor(typeId, world.day, shop.upgrades, chaos)
+  const scarcityNow = isScarcityDay(world.day) && def.pos === true
 
   const buy = () => {
     audio.play('click')
@@ -84,7 +91,17 @@ export function BizBlock({ locationId }: { locationId: string }) {
             <span>Level {shop.level}/{BIZ.maxLevel} · ~{formatNaira(todayIncome)}/day</span>
             {bizUpgradeCost(typeId, shop.level) === null && <span>MAX LEVEL</span>}
           </div>
-          {darkNow && (
+          {blackoutNow && (
+            <p data-testid="biz-blackout" className="mt-1.5 rounded-lg bg-[#2b1a16] px-2.5 py-1.5 text-[11px] font-bold text-[#ffb4a0]">
+              ⚡ TRANSFORMER DON BLOW — the whole zone dey dark{!hasPowerBackup(shop.upgrades) ? ` (shop dey run blank — −${Math.round((1 - 0.25) * 100)}%)` : ''}. {genFuelToday ? `Generator dey burn ${formatNaira(genFuelToday)}/day from the till.` : hasGenerator(shop.upgrades) ? 'Generator dey carry the light.' : 'Fit a generator below.'}
+            </p>
+          )}
+          {scarcityNow && (
+            <p data-testid="biz-pos-boom" className="mt-1.5 rounded-lg bg-[#e8f5e9] px-2.5 py-1.5 text-[11px] font-bold text-[#1b5e20]">
+              📱 Cash scarcity — your POS terminal dey harvest today (+{Math.round((1.35 - 1) * 100)}% commissions).
+            </p>
+          )}
+          {darkNow && !blackoutNow && (
             <p className="mt-1.5 rounded-lg bg-[#c0392b]/10 px-2.5 py-1.5 text-[11px] font-bold text-[#8a2a20]">
               🔌 NEPA don cut the light — the shop dey run dark today (−{Math.round((1 - BIZ.sheddingIncomeFactor) * 100)}%). Fit a generator or solar below.
             </p>

@@ -26,6 +26,7 @@ import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
 import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen } from './controls'
 import { sampleFor } from '@/game/systems/perfProbe'
 import { getDeviceProfile } from '@/game/systems/device'
+import { setDebugScarcity } from '@/game/systems/chaos'
 import { ALL_DOORS } from '@/game/world3d/schools'
 import { BRIDGES } from '@/game/world3d/layout'
 import { WorldScene } from './WorldScene'
@@ -207,6 +208,34 @@ export function WorldTab({
         const s = useGameStore.getState()
         if (s.world) useGameStore.setState({ world: { ...s.world, weather: w as import('@/game/types').Weather } })
       },
+      /** M8 E2E — the live chaos slice (outage / pool / scarcity bookkeeping) */
+      chaos: () => {
+        const s = useGameStore.getState()
+        return { active: s.chaos.active, day: s.chaos.day, stats: s.chaos.stats }
+      },
+      /** M8 E2E — force a transformer blowout in a zone (or null to clear) */
+      forceChaos: (zoneId?: string) => {
+        const s = useGameStore.getState()
+        if (!s.world) return
+        if (!zoneId) {
+          useGameStore.setState({ chaos: { ...s.chaos, active: null } })
+          return
+        }
+        useGameStore.setState({
+          chaos: {
+            ...s.chaos,
+            active: {
+              zoneId,
+              startedDay: s.world.day,
+              minUntilDay: s.world.day + 2,
+              pool: 0,
+              playerContribDays: [],
+            },
+          },
+        })
+      },
+      /** M8 E2E — force/clear the cash-scarcity day law (deterministic shots) */
+      forceScarcity: (v: boolean) => setDebugScarcity(v),
     }
     return () => {
       delete (window as unknown as { __lkl?: unknown }).__lkl

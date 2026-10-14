@@ -17,6 +17,7 @@ import { Avatar } from '../Avatar'
 import { NeedsBar } from '../NeedsBar'
 import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
 import { LivingScene } from '../LivingScene'
+import { ChaosBanner } from '../ChaosBanner'
 import { MapScreen } from './MapScreen'
 import { WorkScreen } from './WorkScreen'
 import { PhoneScreen } from './PhoneScreen'
@@ -89,6 +90,9 @@ function HomeTab({ onExploreWorld }: { onExploreWorld: () => void }) {
 
   return (
     <div className="px-4 pt-3 sm:px-6">
+      {/* ---- M8 — the grid and the naira's mood, one glance ---- */}
+      <ChaosBanner />
+
       {/* ---- the living world hero ---- */}
       <section
         className="lko-fade relative h-44 overflow-hidden rounded-3xl border border-black/[0.07] shadow-[var(--lko-shadow-md)] sm:h-52"

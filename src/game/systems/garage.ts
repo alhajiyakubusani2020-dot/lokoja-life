@@ -106,6 +106,8 @@ export interface TravelOption {
  * rides this garage can send. Public modes keep their data order;
  * personal modes follow the garage order. Nothing is offered the store
  * would refuse — the same transportAllowed() law gates here.
+ * M8 — `fuelMult` rides through to personal-ride plans so the sheet's
+ * number is the number the pump will charge (black-market days).
  */
 export function allTravelOptions(
   origin: LokojaLocation,
@@ -113,6 +115,7 @@ export function allTravelOptions(
   weather: Weather,
   timeOfDay: TimeOfDay,
   vehicles: OwnedVehicle[],
+  fuelMult = 1,
 ): TravelOption[] {
   const options: TravelOption[] = destination.transport.map((t) => {
     const params = ECONOMY.transport[t]
@@ -130,7 +133,7 @@ export function allTravelOptions(
     const def = VEHICLE_BY_MODEL[model]
     options.push({
       transport: t,
-      plan: calculateTravel(origin, destination, t, weather, timeOfDay),
+      plan: calculateTravel(origin, destination, t, weather, timeOfDay, fuelMult),
       personal: true,
       label: `Your ${def.short}`,
       emoji: def.emoji,

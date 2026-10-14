@@ -393,6 +393,56 @@ export interface FleetState {
   done: string[]
 }
 
+/* -------------------------------- M8 — chaos -------------------------------- */
+
+/**
+ * M8 — THE CHAOS ENGINE. The grid is alive and the naira has moods:
+ * transformers blow on heavy-sky days, whole zones go dark, the community
+ * gathers money for the technician, cash dries up some days and the POS
+ * agents eat. One dark zone at a time; every number lives in config.CHAOS.
+ */
+/** One transformer outage — ACTIVE while `pool` gathers, RECENT after it ends. */
+export interface ChaosOutage {
+  /** the dark zone (a location id — the whole area shares one transformer) */
+  zoneId: string
+  /** the day it blew */
+  startedDay: number
+  /** ACTIVE outage only: earliest day the disco fixes it without the pool */
+  minUntilDay: number
+  /** naira gathered for the technician so far (NPC + player) */
+  pool: number
+  /** days the player already contributed (idempotence: one gift per day) */
+  playerContribDays: number[]
+}
+
+/** A finished outage kept briefly so multi-day sleeps can still price the dark days. */
+export interface ChaosOutageRecord {
+  zoneId: string
+  startedDay: number
+  /** last DARK day (power returned the morning after) */
+  untilDay: number
+  /** who restored the light */
+  fixedBy: 'community' | 'disco'
+}
+
+export interface ChaosState {
+  /** last rolled day (idempotence marker) */
+  day: number
+  /** the live outage — the zone that is dark RIGHT NOW */
+  active: ChaosOutage | null
+  /** recent finished outages (pruned to the last few days at each roll) */
+  recent: ChaosOutageRecord[]
+  /** scarcity law: naira drawn from the ATM today (the cap resets daily) */
+  atmDrawnDay: number
+  atmDrawn: number
+  stats: {
+    blowouts: number
+    fixes: number
+    contributed: number
+    posFees: number
+  }
+}
+
 /* --------------------------------- Settings -------------------------------- */
 
 export interface GameSettings {
@@ -409,7 +459,8 @@ export interface GameSettings {
  * run `migrateSave()` against old local saves (and later cloud rows).
  */
 export interface GameSave {
-  /** v8 (M7): settings.graphics joins the schema */
+  /** v8 (M7): settings.graphics joins the schema
+   *  v9 (M8): the chaos slice joins the schema */
   version: number
   createdAt: number
   updatedAt: number
@@ -420,6 +471,8 @@ export interface GameSave {
   civic: CivicState
   /** M5 — the fleet ledger: which of today's Motor Park gigs already ran */
   fleet: FleetState
+  /** M8 — the chaos engine: transformer outages, scarcity, the fix pool */
+  chaos: ChaosState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

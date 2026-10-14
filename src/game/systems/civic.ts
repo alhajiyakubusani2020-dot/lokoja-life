@@ -18,7 +18,6 @@
 import type { CivicState, EfccTip, MarketEvent, Weather } from '../types'
 import { BIZ, CIVIC } from '../data/config'
 import { weatherMarketMult } from './seasons'
-
 /* ------------------------------ tiny hash core ------------------------------ */
 
 /** FNV-1a-ish 32-bit hash — stable across reloads, no imports needed. */
@@ -280,9 +279,9 @@ export function marketEventFor(day: number): MarketEvent | null {
  * so no surface can disagree. The day's weather is constant once rolled
  * (it only changes when the day changes), so the fold stays deterministic.
  */
-export function marketDayRoll(civic: CivicState, day: number, weather?: Weather): { next: CivicState; rolled: boolean } {
+export function marketDayRoll(civic: CivicState, day: number, weather?: Weather, liquidityMult = 1): { next: CivicState; rolled: boolean } {
   if (civic.market.rolledDay === day) return { next: civic, rolled: false }
-  const stress = weather ? weatherMarketMult(weather) : 1
+  const stress = (weather ? weatherMarketMult(weather) : 1) * liquidityMult
   const prices: Record<string, number> = {}
   for (const m of CIVIC.market.markets) {
     const u = unit('mkt', m, day)
@@ -306,8 +305,8 @@ export function marketDayRoll(civic: CivicState, day: number, weather?: Weather)
 }
 
 /** Ensure the market slice is rolled for `day` (lazy — UI calls before reading). */
-export function marketForDay(civic: CivicState, day: number, weather?: Weather): CivicState {
-  const { next } = marketDayRoll(civic, day, weather)
+export function marketForDay(civic: CivicState, day: number, weather?: Weather, liquidityMult = 1): CivicState {
+  const { next } = marketDayRoll(civic, day, weather, liquidityMult)
   return next
 }
 
@@ -353,12 +352,14 @@ export interface CivicDayResult {
  * guarded by its own "already done" marker.
  * M6 — the new day's weather rides in so the market roll can fold the
  * weather stress into today's prices.
+ * M8 — the day's liquidity (cash crunch / ajo payout) folds into the
+ * SAME roll, so every surface that reads prices inherits the chaos.
  */
-export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0, solarCount = 0, weather?: Weather): CivicDayResult {
+export function civicDayRoll(civic: CivicState, totalEarned: number, day: number, bizCount = 0, solarCount = 0, weather?: Weather, liquidityMult = 1): CivicDayResult {
   const nepa = nepaDayRoll(civic, day, bizCount, solarCount)
   const kgirs = kgirsDayRoll(nepa.next, totalEarned, day)
   const efcc = efccDayRoll(kgirs.next, day)
-  const market = marketDayRoll(efcc.next, day, weather)
+  const market = marketDayRoll(efcc.next, day, weather, liquidityMult)
   return {
     next: market.next,
     nepaPosted: nepa.posted,

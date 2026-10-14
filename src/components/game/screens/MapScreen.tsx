@@ -25,6 +25,7 @@ import { bizAtLocation } from '@/game/systems/biz'
 import { VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import { WEATHER_META } from '@/game/data/config'
 import { weatherBlocksLocation, isNightMarketOpen } from '@/game/systems/seasons'
+import { fuelMultFor } from '@/game/systems/chaos'
 import { BizBlock } from '../BizBlock'
 import { FleetBlock } from '../FleetBlock'
 import type { TransportId } from '@/game/types'
@@ -57,6 +58,7 @@ function Marker({
   bizDot,
   civicAlert,
   garageDot,
+  darkZone,
   onSelect,
 }: {
   location: LokojaLocation
@@ -68,6 +70,8 @@ function Marker({
   civicAlert?: boolean
   /** M4 — the Motor Park garage sells rides here */
   garageDot?: boolean
+  /** M8 — this zone's transformer is down (the whole area is dark) */
+  darkZone?: boolean
   onSelect: () => void
 }) {
   return (
@@ -112,6 +116,16 @@ function Marker({
             aria-hidden
           >
             🔧
+          </span>
+        )}
+        {darkZone && !isLocked && (
+          <span
+            data-testid="map-dark-zone"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 animate-pulse rounded-full border-2 border-white bg-[#2b1a16] px-1 text-[8px]"
+            style={{ height: 18, minWidth: 18 }}
+            aria-hidden
+          >
+            ⚡
           </span>
         )}
       </span>
@@ -220,6 +234,7 @@ export function MapScreen({
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const civic = useGameStore((s) => s.civic)!
+  const chaos = useGameStore((s) => s.chaos)
   const isTravelling = useGameStore((s) => s.isTravelling)
   const travel = useGameStore((s) => s.travel)
   const eatMeal = useGameStore((s) => s.eatMeal)
@@ -277,8 +292,8 @@ export function MapScreen({
   const plans = useMemo(() => {
     if (!selected || isSelectedCurrent || isSelectedLocked) return []
     if (weatherBlocksLocation(world.weather, selected.id)) return []
-    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles)
-  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles])
+    return allTravelOptions(origin, selected, world.weather, world.timeOfDay, player.vehicles, fuelMultFor(world.day))
+  }, [selected, origin, isSelectedCurrent, isSelectedLocked, world.weather, world.timeOfDay, player.vehicles, world.day])
 
   const openLocation = (id: string) => {
     audio.play('click')
@@ -361,6 +376,8 @@ export function MapScreen({
             const civicAlert =
               l.id === 'government-area' && !!civic &&
               (civic.nepa.owed > 0 || civic.kgirs.assessed > 0 || civic.kgirs.warrant)
+            // M8 — the dark zone wears the boom badge on the map
+            const darkZone = !!chaos.active && chaos.active.zoneId === l.id
             return (
               <Marker
                 key={l.id}
@@ -370,6 +387,7 @@ export function MapScreen({
                 bizDot={bizDot}
                 civicAlert={civicAlert}
                 garageDot={l.id === 'transport-area'}
+                darkZone={darkZone}
                 onSelect={() => openLocation(l.id)}
               />
             )

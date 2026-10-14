@@ -8,11 +8,12 @@
  * functions below for async Supabase calls, nothing else.
  */
 
-import type { GameSave, PlayerState, CivicState, FleetState, GameSettings } from '../types'
+import type { GameSave, PlayerState, CivicState, FleetState, GameSettings, ChaosState } from '../types'
 import { freshCivicState } from './civic'
+import { freshChaosState } from './chaos'
 
 const SAVE_KEY = 'lokoja-life:save'
-const SAVE_VERSION = 8
+const SAVE_VERSION = 9
 
 /** Check localStorage availability without throwing (private mode etc). */
 function storageAvailable(): boolean {
@@ -89,6 +90,12 @@ function deserialize(raw: string): GameSave | null {
         save.version = 8
         break
       case 8:
+        // v8 → v9 (M8 — THE CHAOS ENGINE): the chaos slice joins the save —
+        // transformer outages, the community fix pool, scarcity bookkeeping.
+        // Defaulted below — a v8 player wakes up on a quiet grid.
+        save.version = 9
+        break
+      case 9:
         // current version
         break
       default:
@@ -150,6 +157,17 @@ function deserialize(raw: string): GameSave | null {
       : { day: save.world?.day ?? 1, done: [] }
     if (typeof fleet.day !== 'number') fleet.day = save.world?.day ?? 1
     save.fleet = fleet
+
+    // --- M8 chaos engine (missing on v8-and-older saves; partial data healed) ---
+    const fresh = freshChaosState()
+    const chaos: ChaosState = save.chaos ?? fresh
+    if (typeof chaos.day !== 'number') chaos.day = fresh.day
+    if (!Array.isArray(chaos.recent)) chaos.recent = fresh.recent
+    if (!chaos.active || typeof chaos.active.zoneId !== 'string') chaos.active = null
+    if (typeof chaos.atmDrawnDay !== 'number') chaos.atmDrawnDay = fresh.atmDrawnDay
+    if (typeof chaos.atmDrawn !== 'number') chaos.atmDrawn = fresh.atmDrawn
+    if (!chaos.stats) chaos.stats = fresh.stats
+    save.chaos = chaos
 
     // --- M2 civic mesh (missing on v3-and-older saves) ---
     if (!save.civic) {
