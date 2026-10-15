@@ -791,6 +791,32 @@ export interface PulseState {
   }
 }
 
+/* ------------------------------- M17 — live -------------------------------- */
+
+/**
+ * M17 — THE LIVE NATION slice. The player's own book inside the live
+ * relay: the sync cursor, the voice opt-in, the memberships. The
+ * NATION's memory (treasuries, trades, pots, the wire) lives in the
+ * relay — this slice only carries what is HERS. Pure data — the laws
+ * live in systems/live.ts.
+ */
+export interface LiveState {
+  /** the event cursor — the relay hands back everything after this seq */
+  cursor: number
+  /** the voice opt-in (the law: adults only, same street, never minors) */
+  voiceOn: boolean
+  /** the association whose books I co-sign (null = none yet) */
+  assocId: string | null
+  /** the co-signed withdrawals I've put my key to (capped — the key book) */
+  coSigned: string[]
+  /** the ajo circles I stand in (ids, capped at the 12-member law) */
+  circles: string[]
+  /** the nation ledger — my honest participation book */
+  stats: { chats: number; emotes: number; streamsWatched: number; tradesDone: number }
+  /** court fines the Market Union ordered against me (paid through the engines) */
+  finesPaid: number
+}
+
 /* ---------------------------------- Save ----------------------------------- */
 
 /**
@@ -803,7 +829,8 @@ export interface GameSave {
    *  v10 (M9): goals, onboarding, account + settings.chill join the schema
    *  v11 (M10): the living calendar joins the schema
    *  v12 (M11): the rivers slice joins the schema
-   *  v16 (M15): the pulse slice joins the schema */
+   *  v16 (M15): the pulse slice joins the schema
+   *  v17 (M17): the live nation slice joins the schema */
   version: number
   createdAt: number
   updatedAt: number
@@ -834,6 +861,8 @@ export interface GameSave {
   fortress: FortressState
   /** M15 — the pulse: the read book, the arrival book, the share ledger */
   cityPulse: PulseState
+  /** M17 — the live nation: my cursor, my voice, my memberships */
+  live: LiveState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

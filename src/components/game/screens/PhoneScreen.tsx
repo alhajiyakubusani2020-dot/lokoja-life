@@ -36,6 +36,7 @@ import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
 import { ChatThread, tierChipClass } from './phone/ChatThread'
 import { PulseApp } from './phone/PulseApp'
+import { LiveApp } from './phone/LiveApp'
 import { GraphicsPicker } from './GraphicsPicker'
 import {
   ArrowLeftIcon,
@@ -53,7 +54,7 @@ import {
   TargetIcon,
 } from '../icons'
 
-type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse'
+type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse' | 'live'
 
 /** M15 — a banner can deep-link the handset straight into an app (one-shot). */
 let phoneDeepLink: PhoneApp | null = null
@@ -817,6 +818,13 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
       icon: TargetIcon,
     },
     {
+      key: 'live',
+      label: 'Live',
+      sub: 'Roster · Live · Union · Ajo',
+      tint: 'bg-[var(--lko-river-soft)] text-[var(--lko-river)]',
+      icon: SocialIcon,
+    },
+    {
       key: 'shield',
       label: 'Family Shield',
       sub: player.ageBand === 'adult' ? 'Scam drill + elder mode' : `🛡️ ${player.ageBand.toUpperCase()} — scam drill`,
@@ -869,6 +877,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     settings: 'Settings',
     shield: 'Family Shield',
     pulse: 'City Pulse',
+    live: 'Live Nation',
   }
 
   return (
@@ -929,6 +938,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
                   {app === 'biz' && <BizApp />}
                   {app === 'shield' && <ShieldApp />}
                   {app === 'pulse' && <PulseApp />}
+                  {app === 'live' && <LiveApp />}
                   {app === 'settings' && <SettingsApp />}
                 </div>
               </>

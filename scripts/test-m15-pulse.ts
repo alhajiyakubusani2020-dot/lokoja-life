@@ -410,7 +410,7 @@ section('SAVE v16 — the migration + THE DELTA LAW (real transport)')
   }
   mem['lokoja-life:save'] = JSON.stringify(legacy)
   const loaded = SaveSystem.load()
-  check('a bare v15 save loads at v16 as LEGACY', loaded?.version === 16 && SaveSystem.transportVerdict() === 'legacy')
+  check('a bare v15 save loads at v17 as LEGACY', loaded?.version === 17 && SaveSystem.transportVerdict() === 'legacy')
   check('the pulse slice arrives (empty mailbox, clean books)',
     !!loaded?.cityPulse && loaded.cityPulse.readDay === 0 && Array.isArray(loaded.cityPulse.seen) && loaded.cityPulse.arrivals.length === 0)
   mem['lokoja-life:save'] = JSON.stringify({ ...legacy, cityPulse: { readDay: 3, seen: ['3:blast:home', 42 as unknown as string], arrivals: ['lkt1.VALID.a', 'garbage', 'lkt1.OK.a'], stats: { shares: -5, arrivalsIn: 2 } } })

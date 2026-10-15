@@ -28,7 +28,9 @@ export async function POST(req: Request) {
     const save = account.cloudSave ? (JSON.parse(account.cloudSave.data) as unknown) : null
     // M14 — the vault row's client signature rides back (the merge verifies)
     const sig = account.cloudSave?.sig ?? null
-    return NextResponse.json({ ok: true, token, save, sig })
+    // M17 — the ACCOUNT ROW's band is the canonical tier law (the register
+    // stored it; a cloud-less account still answers to its true band)
+    return NextResponse.json({ ok: true, token, save, sig, band: account.ageBand })
   } catch {
     return NextResponse.json({ ok: false, why: 'The register no gree — try again.' }, { status: 500 })
   }

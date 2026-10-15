@@ -71,7 +71,7 @@ import { SaveSystem } from '../src/game/systems/save'
 import type { CalendarState } from '../src/game/types'
 
 const A = FESTIVALS.anchors
-const SAVE_V = 16
+const SAVE_V = 17
 
 let passed = 0
 let failed = 0

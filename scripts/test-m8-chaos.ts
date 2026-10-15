@@ -482,7 +482,7 @@ console.log('\nREAL STORE PASS — bun runs the live Zustand store through the c
     const raw = memStore.get('lokoja-life:save')
     const e0 = raw ? JSON.parse(raw) : null
     const parsed = e0 && e0.fmt === 2 ? e0.data : e0
-    check('the save (v16) carries the chaos slice', parsed?.version === 16 && typeof parsed?.chaos?.stats?.fixes === 'number')
+    check('the save (v17) carries the chaos slice', parsed?.version === 17 && typeof parsed?.chaos?.stats?.fixes === 'number')
   } finally {
     Math.random = realRandom
     setDebugScarcity(null)

@@ -44,3 +44,81 @@ model CloudSave {
   updatedAt DateTime @updatedAt
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
+
+// M17 LIVE NATION — the thin stateless relay's memory. The relay
+// DISTRIBUTES events and keeps only the bookkeeping the nation cannot
+// trust to any single client (treasuries, trade rows, circle pots,
+// stream boards). It never simulates: no dice, no day-clock, no NPC.
+/// A live walker's heartbeat (TTL'd at read time — 90s law).
+model LivePresence {
+  accountId String   @id
+  handle    String
+  band      String
+  street    String
+  status    String
+  updatedAt DateTime @updatedAt
+}
+/// The nation's wire — append-only, cursor-synced (the seq is the cursor).
+model LiveEvent {
+  seq       Int      @id @default(autoincrement())
+  kind      String
+  channel   String
+  actor     String
+  band      String
+  payload   String
+  createdAt DateTime @default(now())
+}
+/// A co-op's sealed books — the treasury chain tail is first-class.
+model AssociationRow {
+  id            String   @id
+  name          String
+  motto         String
+  founder       String
+  treasury      Int      @default(0)
+  chainTail     String
+  ledgerJson    String   @default("[]")
+  membersJson   String   @default("[]")
+  contractsJson String   @default("[]")
+  createdDay    Int      @default(1)
+  updatedAt     DateTime @updatedAt
+}
+/// Player-to-player trades as signed ledger events (the record the court reads).
+model TradeRow {
+  id         String   @id
+  fromHandle String
+  toHandle   String
+  giveCash   Int      @default(0)
+  wantCash   Int      @default(0)
+  terms      String
+  status     String   @default("offered")
+  day        Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+/// Real-player rotating savings — the pot the court guarantees.
+model AjoRow {
+  id             String   @id
+  name           String
+  contribution   Int
+  orderJson      String
+  round          Int      @default(1)
+  roundStartDay  Int      @default(1)
+  pot            Int      @default(0)
+  paidJson       String   @default("{}")
+  paidThisRoundJson String @default("[]")
+  defaultersJson String   @default("[]")
+  status         String   @default("open")
+  createdDay     Int      @default(1)
+  updatedAt      DateTime @updatedAt
+}
+/// The stream board — who is live, who watches (viewers-as-crowd).
+model StreamRow {
+  id          String   @id
+  host        String
+  kind        String
+  title       String
+  viewersJson String   @default("[]")
+  startedDay  Int      @default(1)
+  status      String   @default("live")
+  updatedAt   DateTime @updatedAt
+}

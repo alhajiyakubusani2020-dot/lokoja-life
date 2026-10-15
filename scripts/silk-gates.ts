@@ -56,11 +56,10 @@ const settle = async (page: import('playwright').Page, maxMs: number): Promise<'
   let aliveStreak = 0
   while (Date.now() - t0 < maxMs) {
     const ping = await race(page.evaluate(() => ({
-      alive: true,
       veil: document.body.innerText.includes('Entering Lokoja'),
       canvas: !!document.querySelector('canvas'),
-    })), 4000, 'jammed' as const) as 'jammed' | { alive: boolean; veil: boolean; canvas: boolean } | null
-    if (ping !== 'jammed' && ping !== null && ping.canvas && !ping.veil) {
+    })), 4000, null) as { veil: boolean; canvas: boolean } | null
+    if (ping !== null && ping.canvas && !ping.veil) {
       aliveStreak++
       if (aliveStreak >= 2) return 'settled'
     } else {

@@ -125,6 +125,7 @@ import {
   type ChaosDayResult,
 } from '../systems/chaos'
 import { bumpGoal, freshGoalState } from '../systems/goals'
+import { freshLiveState, sanitizeChat, emoteById } from '../systems/live'
 import { freshPulseState, pulseForDay, markPulseRead, type PulseItem } from '../systems/pulse'
 import { encodeTeleport, decodeTeleport, postcardFor, type TeleportMoment } from '../systems/teleport'
 import {
@@ -295,6 +296,10 @@ interface GameStore {
   cityPulse: PulseState | null
   /** M15 — a postcard waiting to land (URL arrival / the gate's hold). Session-only. */
   pendingArrival: { code: string; moment: TeleportMoment } | null
+  /** M17 — the live nation: my cursor, my voice, my memberships */
+  live: import('../types').LiveState | null
+  /** M17 — the nation's last sync snapshot (session-only — the wire) */
+  liveWire: { roster: { handle: string; band: string; street: string; status: string }[]; events: { seq: number; kind: string; actor: string; payload: Record<string, unknown> }[] } | null
   /** M16 — a cloud push failed offline; the queue flushes when the network returns */
   cloudPending: boolean
   /** M9 — the casual shell: today's goals, the onboarding arc, the account */
@@ -509,6 +514,33 @@ interface GameStore {
   arriveByTeleport: (code: string) => { ok: boolean; why?: string }
   /** M16 — the offline law: flush the queued push when the network returns */
   flushCloudQueue: () => Promise<void>
+
+  /* ---------------------- M17 — the live nation ---------------------- */
+  /** the heartbeat: presence up, new events down (claimed accounts only) */
+  liveSync: () => Promise<{ ok: boolean; why?: string; roster?: { handle: string; band: string; street: string; status: string }[]; events?: { seq: number; kind: string; actor: string; payload: Record<string, unknown> }[] }>
+  /** a raw relay read (streams board / trades inbox / assoc list / circles) */
+  liveAction: (action: string, payload?: Record<string, unknown>) => Promise<{ ok: boolean; why?: string } & Record<string, unknown>>
+  /** speak on the wire (tier laws apply — kid emotes, teen wall, adult links) */
+  liveSendChat: (text: string, channel?: string) => Promise<{ ok: boolean; why?: string; stripped?: boolean }>
+  liveSendEmote: (emoteId: string, channel?: string) => Promise<{ ok: boolean; why?: string }>
+  /** broadcast my street as an M15 postcard invite (the join-teleport law) */
+  liveShareJoin: (code: string) => Promise<{ ok: boolean; why?: string }>
+  liveOpenStream: (kind: 'stall' | 'regatta' | 'wedding', title: string) => Promise<{ ok: boolean; why?: string; streamId?: string }>
+  liveViewStream: (streamId: string) => Promise<{ ok: boolean; why?: string; viewers?: number }>
+  liveCloseStream: (streamId: string) => Promise<{ ok: boolean; why?: string; peakViewers?: number }>
+  liveFoundAssoc: (name: string, motto: string) => Promise<{ ok: boolean; why?: string; assocId?: string }>
+  liveJoinAssoc: (assocId: string) => Promise<{ ok: boolean; why?: string }>
+  livePayDues: (assocId: string, amount: number) => Promise<{ ok: boolean; why?: string }>
+  liveWithdrawAssoc: (assocId: string, amount: number, coSigner: string) => Promise<{ ok: boolean; why?: string }>
+  liveFileContract: (assocId: string, terms: string, stake: number, parties: string[]) => Promise<{ ok: boolean; why?: string }>
+  liveFileDispute: (assocId: string, contractId: string, evidence: string) => Promise<{ ok: boolean; why?: string; verdict?: string }>
+  liveOfferTrade: (to: string, giveCash: number, wantCash: number, terms: string) => Promise<{ ok: boolean; why?: string }>
+  liveAcceptTrade: (tradeId: string) => Promise<{ ok: boolean; why?: string }>
+  liveFoundAjo: (name: string, contribution: number) => Promise<{ ok: boolean; why?: string; ajoId?: string }>
+  liveJoinAjo: (ajoId: string) => Promise<{ ok: boolean; why?: string }>
+  livePayAjo: (ajoId: string) => Promise<{ ok: boolean; why?: string; paidOut?: string; payout?: number }>
+  liveCourtAjo: (ajoId: string) => Promise<{ ok: boolean; why?: string }>
+  liveToggleVoice: () => void
   saveNow: () => void
   resetGame: () => void
 
@@ -1007,6 +1039,7 @@ function scheduleAutosave(get: () => GameStore) {
       shield: get().shield,
       fortress: get().fortress,
       cityPulse: get().cityPulse ?? freshPulseState(),
+      live: get().live ?? freshLiveState(),
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -1036,6 +1069,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gateOpen: false,
   pulse: null,
   cityPulse: null,
+  live: null,
+  liveWire: null,
   pendingArrival: null,
   cloudPending: false,
   shockwave: 0,
@@ -1128,6 +1163,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       shield: freshShieldState(),
       fortress: freshFortressState(),
       cityPulse: freshPulseState(),
+      live: freshLiveState(),
       pendingArrival: get().pendingArrival,
       gateOpen: false,
       fleet: { day: 1, done: [] },
@@ -1165,6 +1201,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       shield: save.shield ?? freshShieldState(),
       fortress: save.fortress ?? freshFortressState(),
       cityPulse: save.cityPulse ?? freshPulseState(),
+      live: save.live ?? freshLiveState(),
       fleet: save.fleet,
       settings,
       screen: 'game',
@@ -3943,10 +3980,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handle: input.handle.trim(), pin: input.pin }),
       })
-      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string; save?: import('../types').GameSave | null }
+      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string; save?: import('../types').GameSave | null; band?: string | null }
       if (!res.ok || !data.ok || !data.token) return { ok: false, why: data.why ?? 'The register no gree — try again.' }
       const local = SaveSystem.load()
       const cloud = data.save ?? null
+      // M17 — the account row's band is the canonical tier law (the
+      // register stored it; the save's player band is the fallback)
+      const bandFromRegister = (['kid', 'teen', 'adult'].includes(String(data.band)) ? data.band : null) as AccountState['ageBand']
       if (cloud && local) {
         const verdict = mergeVerdict(local, cloud)
         const winner = verdict.winner === 'cloud' ? cloud : local
@@ -3956,7 +3996,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           try { localStorage.setItem(BACKUP_KEY, backupPayload(loser)) } catch { /* storage full — the save itself still loads */ }
         }
         set({
-          account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: (cloud.player as unknown as { ageBand?: AccountState['ageBand'] }).ageBand ?? null, gateGraceDay: get().world?.day ?? 0 },
+          account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: bandFromRegister ?? (cloud.player as unknown as { ageBand?: AccountState['ageBand'] }).ageBand ?? null, gateGraceDay: get().world?.day ?? 0 },
           player: winner.player,
           world: winner.world,
           civic: winner.civic,
@@ -3969,12 +4009,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
           fleet: winner.fleet ?? { day: winner.world.day, done: [] },
           goals: winner.goals ?? freshGoalState(),
           onboarding: winner.onboarding ?? freshOnboardingState(),
+          shield: winner.shield ?? freshShieldState(),
+          fortress: winner.fortress ?? freshFortressState(),
+          cityPulse: winner.cityPulse ?? freshPulseState(),
+          live: winner.live ?? freshLiveState(),
           gateOpen: false,
         })
         get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}! ${verdict.why}`, tone: 'good' })
       } else {
         set({
-          account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: null, gateGraceDay: get().world?.day ?? 0 },
+          account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: bandFromRegister, gateGraceDay: get().world?.day ?? 0 },
           gateOpen: false,
         })
         get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}!`, tone: 'good' })
@@ -4099,6 +4143,306 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
+  /* --------------------------- M17 — the live nation --------------------------- */
+
+  /** THE IDENTITY LAW, client side: the mic and the money tables open at
+   *  claim. A guest syncs nothing — spectating happens in the UI. */
+  liveSync: async () => {
+    const { account, world, live } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    try {
+      const res = await fetch('/api/live/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
+        body: JSON.stringify({
+          since: live?.cursor ?? 0,
+          presence: { street: world?.currentLocation ?? 'home', status: 'hustling' },
+        }),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean; why?: string; cursor?: number
+        events?: { seq: number; kind: string; actor: string; payload: Record<string, unknown> }[]
+        roster?: { handle: string; band: string; street: string; status: string }[]
+      }
+      if (!res.ok || !data.ok) return { ok: false, why: data.why ?? 'relay no gree' }
+      const me = account.handle
+      const lv = get().live ?? freshLiveState()
+      const moves: { cash: number; why: string }[] = []
+      for (const ev of data.events ?? []) {
+        // THE TRADE LAW: each side applies the accepted trade through its
+        // OWN honest engines (the kobo-chain + the income guard chain it)
+        if (ev.kind === 'trade' && ev.payload?.accepted) {
+          const t = ev.payload as { from: string; to: string; giveCash: number; wantCash: number }
+          if (t.from === me) moves.push({ cash: (t.wantCash ?? 0) - (t.giveCash ?? 0), why: `trade with ${t.to}` })
+          if (t.to === me) moves.push({ cash: (t.giveCash ?? 0) - (t.wantCash ?? 0), why: `trade with ${t.from}` })
+        }
+        // THE COURT GUARANTEE: a fine against me lands through my engines
+        if (ev.kind === 'court' && ev.payload?.defaulter === me) {
+          const fine = Number(ev.payload.fine ?? 0)
+          if (fine > 0) moves.push({ cash: -fine, why: 'Market Union fine — the round still paid' })
+        }
+      }
+      set({
+        live: { ...lv, cursor: data.cursor ?? lv.cursor },
+        liveWire: { roster: data.roster ?? [], events: data.events ?? [] },
+      })
+      for (const m of moves) {
+        if (m.cash > 0) get().addMoney(m.cash, { label: m.why, category: 'other' })
+        else if (m.cash < 0) {
+          const ok = get().removeMoney(-m.cash, { label: 'Market Union fine — the round still paid', category: 'other' })
+          if (ok) {
+            const cur = get().live ?? freshLiveState()
+            set({ live: { ...cur, finesPaid: cur.finesPaid + -m.cash } })
+            get().notify({ icon: '⚖️', text: `The court collected ₦${(-m.cash).toLocaleString()} — the circle still paid.`, tone: 'bad' })
+          }
+        }
+      }
+      return { ok: true, roster: data.roster ?? [], events: data.events ?? [] }
+    } catch {
+      return { ok: false, why: 'offline — the nation waits' }
+    }
+  },
+
+  /** a raw relay read (boards + inboxes) — thin, tokened, honest */
+  liveAction: async (action, payload = {}) => {
+    const { account } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    try {
+      const res = await fetch('/api/live/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
+        body: JSON.stringify({ action, payload }),
+      })
+      const data = (await res.json()) as { ok?: boolean; why?: string } & Record<string, unknown>
+      return res.ok && data.ok ? { ok: true, ...data } : { ok: false, why: data.why ?? 'relay no gree' }
+    } catch {
+      return { ok: false, why: 'offline' }
+    }
+  },
+
+  /** THE TIERED CHAT LAW, client side first (the relay re-judges). */
+  liveSendChat: async (text, channel = 'global') => {
+    const { account, live, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'guest-mic-dark' }
+    const band = (account.ageBand ?? 'adult') as 'kid' | 'teen' | 'adult'
+    const verdict = sanitizeChat({ handle: account.handle, band }, text)
+    if (!verdict.ok) return { ok: false, why: verdict.why }
+    const res = await get().liveAction('chat', { text: verdict.text, channel })
+    if (!res.ok) return { ok: false, why: res.why }
+    const lv = live ?? freshLiveState()
+    set({ live: { ...lv, stats: { ...lv.stats, chats: lv.stats.chats + 1 } } })
+    if (verdict.stripped) {
+      get().notify({ icon: '🚫', text: 'Link no dey pass for here — the words went, the talk stayed.', tone: 'neutral' })
+    }
+    void world
+    return { ok: true, stripped: verdict.stripped }
+  },
+
+  liveSendEmote: async (emoteId, channel = 'global') => {
+    const { account, live } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'guest-mic-dark' }
+    const emote = emoteById(emoteId)
+    if (!emote) return { ok: false, why: 'no-such-emote' }
+    const res = await get().liveAction('emote', { emoteId, channel })
+    if (!res.ok) return { ok: false, why: res.why }
+    const lv = live ?? freshLiveState()
+    set({ live: { ...lv, stats: { ...lv.stats, emotes: lv.stats.emotes + 1 } } })
+    return { ok: true }
+  },
+
+  /** THE JOIN-TELEPORT LAW: my street travels as an M15 postcard. */
+  liveShareJoin: async (code) => {
+    const { account, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const street = world?.currentLocation ?? 'home'
+    const res = await get().liveAction('join', { code, street })
+    return res.ok ? { ok: true } : { ok: false, why: res.why }
+  },
+
+  liveOpenStream: async (kind, title) => {
+    const { account, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('stream-open', { kind, title, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    get().notify({ icon: '📡', text: `You dey live — ${String((res as { title?: string }).title ?? title)}. Viewers na crowd!`, tone: 'good' })
+    return { ok: true, streamId: (res as { streamId?: string }).streamId }
+  },
+
+  liveViewStream: async (streamId) => {
+    const { live } = get()
+    const res = await get().liveAction('stream-view', { streamId })
+    if (!res.ok) return { ok: false, why: res.why }
+    const lv = live ?? freshLiveState()
+    set({ live: { ...lv, stats: { ...lv.stats, streamsWatched: lv.stats.streamsWatched + 1 } } })
+    return { ok: true, viewers: (res as { viewers?: number }).viewers }
+  },
+
+  liveCloseStream: async (streamId) => {
+    const res = await get().liveAction('stream-close', { streamId })
+    if (!res.ok) return { ok: false, why: res.why }
+    return { ok: true, peakViewers: (res as { peakViewers?: number }).peakViewers }
+  },
+
+  liveFoundAssoc: async (name, motto) => {
+    const { account, world, live } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('assoc-found', { name, motto, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    const assocId = (res as { assocId?: string }).assocId ?? null
+    const lv = live ?? freshLiveState()
+    set({ live: { ...lv, assocId } })
+    get().notify({ icon: '🏛️', text: `${name} don stand — the books dey sealed.`, tone: 'good' })
+    audio.play('chime')
+    return { ok: true, assocId: assocId ?? undefined }
+  },
+
+  liveJoinAssoc: async (assocId) => {
+    const { account, world, live } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('assoc-join', { assocId, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    const lv = live ?? freshLiveState()
+    set({ live: { ...lv, assocId } })
+    return { ok: true }
+  },
+
+  /** THE TREASURY LAW: the wallet pays AFTER the relay books the move. */
+  livePayDues: async (assocId, amount) => {
+    const { account, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    if (!Number.isFinite(amount) || amount <= 0) return { ok: false, why: 'bad-amount' }
+    const res = await get().liveAction('assoc-dues', { assocId, amount, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    const ok = get().removeMoney(amount, { label: 'Union dues — the books dey sealed', category: 'other' })
+    if (ok) get().notify({ icon: '🤝', text: `₦${amount.toLocaleString()} dues land for the union books.`, tone: 'neutral' })
+    return { ok: true }
+  },
+
+  /** THE TWO-KEY LAW: president + one officer, or the books don't move. */
+  liveWithdrawAssoc: async (assocId, amount, coSigner) => {
+    const { account, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('assoc-withdraw', { assocId, amount, coSigner, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    get().addMoney(amount, { label: `union withdrawal (co-signed by ${coSigner})`, category: 'other' })
+    const lv = get().live ?? freshLiveState()
+    set({ live: { ...lv, coSigned: [...lv.coSigned, `${amount}:${coSigner}`].slice(-24) } })
+    get().notify({ icon: '🏛️', text: `₦${amount.toLocaleString()} out of the union books — two keys turned.`, tone: 'good' })
+    return { ok: true }
+  },
+
+  liveFileContract: async (assocId, terms, stake, parties) => {
+    const { account, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('assoc-contract', { assocId, terms, stake, parties, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    return { ok: true }
+  },
+
+  /** THE COURT LAW: file it, the hash judges it. */
+  liveFileDispute: async (assocId, contractId, evidence) => {
+    const { account, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('assoc-dispute', { assocId, contractId, evidence, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    const verdict = (res as { verdict?: string }).verdict
+    get().notify({ icon: '⚖️', text: `The Market Union talk: ${verdict === 'broken' ? 'THE CONTRACT BREAK — the liable party pays the stake.' : 'the contract stands.'}`, tone: verdict === 'broken' ? 'neutral' : 'good' })
+    return { ok: true, verdict }
+  },
+
+  liveOfferTrade: async (to, giveCash, wantCash, terms) => {
+    const { account, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('trade-offer', { to, giveCash, wantCash, terms, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    return { ok: true }
+  },
+
+  /** THE TRADE LAW: the relay books it, MY engines move MY money. */
+  liveAcceptTrade: async (tradeId) => {
+    const { account } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('trade-accept', { tradeId })
+    if (!res.ok) return { ok: false, why: res.why }
+    const t = (res as { trade?: { from: string; to: string; giveCash: number; wantCash: number; terms: string } }).trade
+    if (t && t.to === account.handle) {
+      get().addMoney(t.giveCash, { label: `accepted trade from ${t.from}`, category: 'other' })
+      if (t.wantCash > 0) get().removeMoney(t.wantCash, { label: `paid for trade from ${t.from}`, category: 'other' })
+      const lv = get().live ?? freshLiveState()
+      set({ live: { ...lv, stats: { ...lv.stats, tradesDone: lv.stats.tradesDone + 1 } } })
+      get().notify({ icon: '🤝', text: `Trade sealed with ${t.from} — ₦${t.giveCash.toLocaleString()} don enter.`, tone: 'good' })
+      audio.play('chime')
+    }
+    return { ok: true }
+  },
+
+  liveFoundAjo: async (name, contribution) => {
+    const { account, world, live } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('ajo-found', { name, contribution, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    const ajoId = (res as { ajoId?: string }).ajoId ?? null
+    const lv = live ?? freshLiveState()
+    set({ live: { ...lv, circles: [...lv.circles, ajoId ?? ''].filter(Boolean).slice(-12) } })
+    get().notify({ icon: '♻️', text: `${name} don open — the ladder don set, nobody dey skip.`, tone: 'good' })
+    return { ok: true, ajoId: ajoId ?? undefined }
+  },
+
+  liveJoinAjo: async (ajoId) => {
+    const { account, world, live } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('ajo-join', { ajoId, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    const lv = live ?? freshLiveState()
+    if (!lv.circles.includes(ajoId)) set({ live: { ...lv, circles: [...lv.circles, ajoId].slice(-12) } })
+    return { ok: true }
+  },
+
+  /** THE ROUND LAW: my contribution leaves my pocket through the honest
+   *  engines (the relay counts the pot, MY wallet pays for it); when the
+   *  ladder completes and the pot walks to ME, the payout lands too. */
+  livePayAjo: async (ajoId) => {
+    const { account, world } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const board = await get().liveAction('ajos', {})
+    const circles = (board as { circles?: { id: string; contribution: number; name: string }[] }).circles ?? []
+    const mine = circles.find((c) => c.id === ajoId)
+    if (!mine) return { ok: false, why: 'no-circle' }
+    const res = await get().liveAction('ajo-pay', { ajoId, day: world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    get().removeMoney(mine.contribution, { label: `${mine.name} contribution`, category: 'other' })
+    get().notify({ icon: '♻️', text: `₦${mine.contribution.toLocaleString()} enter the ${mine.name} pot.`, tone: 'neutral' })
+    // the ladder completed and the pot walked to ME (the relay says so)
+    if ((res as { paidOut?: string }).paidOut === account.handle) {
+      const payout = Number((res as { payout?: number }).payout ?? 0)
+      if (payout > 0) {
+        get().addMoney(payout, { label: `${mine.name} round payout`, category: 'other' })
+        get().notify({ icon: '🎉', text: `${mine.name} pays YOU ₦${payout.toLocaleString()} — the ladder reach your turn!`, tone: 'good' })
+        audio.play('chime')
+      }
+    }
+    return { ok: true, paidOut: (res as { paidOut?: string }).paidOut, payout: (res as { payout?: number }).payout }
+  },
+
+  liveCourtAjo: async (ajoId) => {
+    const { account } = get()
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const res = await get().liveAction('ajo-court', { ajoId, day: get().world?.day ?? 1 })
+    if (!res.ok) return { ok: false, why: res.why }
+    return { ok: true }
+  },
+
+  liveToggleVoice: () => {
+    const lv = get().live ?? freshLiveState()
+    const band = get().account.ageBand ?? 'adult'
+    if (band !== 'adult') {
+      get().notify({ icon: '🎙️', text: 'Voice na adult table — the shield holds.', tone: 'bad' })
+      return
+    }
+    set({ live: { ...lv, voiceOn: !lv.voiceOn } })
+    get().notify({ icon: '🎙️', text: !lv.voiceOn ? 'Voice dey ON — same-street proximity only.' : 'Voice don off.', tone: 'neutral' })
+  },
+
   /** M9 — push the current save to the cloud (linked accounts only). M14: the
    *  envelope's signature rides along. M15: THE ZERO-BYTE PUSH — an unchanged
    *  life costs the network nothing; M16: an offline push QUEUES, it never dies. */
@@ -4170,6 +4514,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       shield: get().shield,
       fortress: { ...get().fortress, fingerprint: configFingerprint({ STARTING, WORK, BIZ, CHAOS, LADDER, FORTRESS, PULSE }) },
       cityPulse: get().cityPulse ?? freshPulseState(),
+      live: get().live ?? freshLiveState(),
       settings,
     })
     set({ hasSave: true })
@@ -4194,6 +4539,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       shield: freshShieldState(),
       fortress: freshFortressState(),
       cityPulse: freshPulseState(),
+      live: freshLiveState(),
+      liveWire: null,
       pendingArrival: null,
       cloudPending: false,
       gateOpen: false,

@@ -187,21 +187,21 @@ SaveSystem.setFortKey('m16-silk-key-0123456789abcdef')
 const [
   { freshCivicState }, { freshChaosState }, { freshCalendarState },
   { freshRiversState }, { freshEducationState }, { freshHousingState },
-  { freshJapaState }, { freshGoalState }, { freshPulseState },
+  { freshJapaState }, { freshGoalState }, { freshPulseState }, { freshLiveState },
 ] = await Promise.all([
   import('../src/game/systems/civic'), import('../src/game/systems/chaos'),
   import('../src/game/systems/calendar'), import('../src/game/systems/rivers'),
   import('../src/game/systems/education'), import('../src/game/systems/housing'),
   import('../src/game/systems/japa'), import('../src/game/systems/goals'),
-  import('../src/game/systems/pulse'),
+  import('../src/game/systems/pulse'), import('../src/game/systems/live'),
 ])
 const save16 = {
-  version: 16, createdAt: 1, updatedAt: 2,
+  version: 17, createdAt: 1, updatedAt: 2,
   player: { name: 'Silk', gender: 'female' as const, ageBand: 'adult' as const, avatar: { skinTone: 'a', hairColor: 'a', hairstyle: 'a', clothingStyle: 'a', clothingColor: 'a' }, cash: 5000, needs: { health: 100, energy: 90, hunger: 80, mood: 70 }, skills: { hustle: 2, smart: 2, social: 2 }, skillXp: { hustle: 0, smart: 0, social: 0 }, reputation: 10, level: 2, xp: 0, homeId: 'home', jobId: null, activeOpportunities: [], cooldowns: {}, transactions: [], stats: { jobsCompleted: 0, hustlesCompleted: 0, totalEarned: 0, totalSpent: 0 }, inventory: [], businesses: [], missions: {}, achievements: [], discoveries: [], vehicles: [], bankBalance: 0, relationships: {} },
   world: { day: 1, timeOfDay: 'morning' as const, weather: 'sunny' as const, currentLocation: 'home' },
   civic: freshCivicState(), chaos: freshChaosState(), calendar: freshCalendarState(),
   rivers: freshRiversState(), education: freshEducationState(), housing: freshHousingState(),
-  japa: freshJapaState(), goals: freshGoalState(), cityPulse: freshPulseState(),
+  japa: freshJapaState(), goals: freshGoalState(), cityPulse: freshPulseState(), live: freshLiveState(),
   fleet: { vehicles: [], gigs: [], done: [] },
   settings: { graphics: 'auto', chill: false, elder: false, music: true, sfx: true },
   account: { linked: false, token: null, name: null, pendingName: null, guestGraceLeft: 1 },

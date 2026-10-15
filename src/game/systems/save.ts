@@ -32,11 +32,12 @@ import { freshHousingState } from './housing'
 import { freshJapaState } from './japa'
 import { freshShieldState } from './shield'
 import { freshPulseState } from './pulse'
+import { freshLiveState } from './live'
 import { freshFortressState, CHAIN_SEED, signPayload, verifyPayload, sha256, FORT_KEY_STORAGE, FORTRESS_KEYS } from './fortress'
 
 const SAVE_KEY = FORTRESS_KEYS.primary
 const SHADOW_KEY = FORTRESS_KEYS.shadow
-const SAVE_VERSION = 16
+const SAVE_VERSION = 17
 
 /** M15 — THE DELTA LAW: the state fingerprint of the last payload that hit disk.
  *  Lives OUTSIDE the save (the fortress rule: the books live beside, not inside). */
@@ -270,6 +271,13 @@ function deserialize(raw: string): GameSave | null {
       save.version = 16
       break
     case 16:
+      // v16 → v17 (M17 — THE LIVE NATION): the live slice joins the
+      // save — my event cursor, my voice opt-in, my memberships.
+      // Defaulted below — a v16 player wakes up standing in the nation
+      // with the mic ready and the cursor at zero.
+      save.version = 17
+      break
+    case 17:
       // current version
       break
     default:
@@ -463,6 +471,23 @@ function deserialize(raw: string): GameSave | null {
   if (typeof pl.stats.shares !== 'number' || pl.stats.shares < 0) pl.stats.shares = 0
   if (typeof pl.stats.arrivalsIn !== 'number' || pl.stats.arrivalsIn < 0) pl.stats.arrivalsIn = 0
   save.cityPulse = pl
+
+  // --- M17 live nation (missing on v16-and-older saves; partial data healed) ---
+  const freshLv = freshLiveState()
+  const lv = save.live ?? freshLv
+  if (typeof lv.cursor !== 'number' || lv.cursor < 0) lv.cursor = freshLv.cursor
+  if (typeof lv.voiceOn !== 'boolean') lv.voiceOn = freshLv.voiceOn
+  if (typeof lv.assocId !== 'string' && lv.assocId !== null) lv.assocId = null
+  if (!Array.isArray(lv.coSigned)) lv.coSigned = []
+  lv.coSigned = lv.coSigned.filter((c) => typeof c === 'string').slice(-24)
+  if (!Array.isArray(lv.circles)) lv.circles = []
+  lv.circles = lv.circles.filter((c) => typeof c === 'string').slice(-12)
+  if (!lv.stats || typeof lv.stats !== 'object') lv.stats = freshLv.stats
+  for (const k of ['chats', 'emotes', 'streamsWatched', 'tradesDone'] as const) {
+    if (typeof lv.stats[k] !== 'number' || lv.stats[k] < 0) lv.stats[k] = 0
+  }
+  if (typeof lv.finesPaid !== 'number' || lv.finesPaid < 0) lv.finesPaid = 0
+  save.live = lv
 
   // --- M2 civic mesh (missing on v3-and-older saves) ---
   if (!save.civic) {
