@@ -211,7 +211,7 @@ section('the save v13→v15 migration — the shield joins the save')
   }
   mem['lokoja-life:save'] = JSON.stringify(legacy)
   const loaded = SaveSystem.load()
-  check('a v13 save loads at v17', loaded?.version === 17)
+  check('a v13 save loads at v18', loaded?.version === 18)
   check('the character wakes as an ADULT (the honest default for existing hustlers)', loaded?.player.ageBand === 'adult')
   check('the shield slice arrives (game book empty, no parent gate)',
     !!loaded?.shield && loaded.shield.scammerDay === 0 && loaded.shield.scammerCorrect === 0 && loaded.shield.parentPinHash === null)
@@ -376,7 +376,7 @@ section('the REAL store pass — a kid walks the shielded city')
   store.getState().saveNow()
   const saved = SaveSystem.load()
   check('the save carries the M13 slice (band + shield + elder)',
-    saved?.version === 17 && saved?.player.ageBand === 'adult' && saved?.shield.scammerCorrect >= 2 && saved?.settings.elder === true)
+    saved?.version === 18 && saved?.player.ageBand === 'adult' && saved?.shield.scammerCorrect >= 2 && saved?.settings.elder === true)
 
   // — teen study boost (level 8 so the skill cap never banks the delta) —
   store.setState({ player: { ...kidState(), ageBand: 'teen', level: 8, skills: { hustle: 5, smart: 0, social: 5 }, skillXp: { hustle: 0, smart: 0, social: 0 } } })

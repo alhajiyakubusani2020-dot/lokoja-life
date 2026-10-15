@@ -33,11 +33,12 @@ import { freshJapaState } from './japa'
 import { freshShieldState } from './shield'
 import { freshPulseState } from './pulse'
 import { freshLiveState } from './live'
+import { freshForgeState } from './citypack'
 import { freshFortressState, CHAIN_SEED, signPayload, verifyPayload, sha256, FORT_KEY_STORAGE, FORTRESS_KEYS } from './fortress'
 
 const SAVE_KEY = FORTRESS_KEYS.primary
 const SHADOW_KEY = FORTRESS_KEYS.shadow
-const SAVE_VERSION = 17
+const SAVE_VERSION = 18
 
 /** M15 — THE DELTA LAW: the state fingerprint of the last payload that hit disk.
  *  Lives OUTSIDE the save (the fortress rule: the books live beside, not inside). */
@@ -278,6 +279,12 @@ function deserialize(raw: string): GameSave | null {
       save.version = 17
       break
     case 17:
+      // v17 → v18 (M18 — THE CITY FORGE): the forge slice joins the
+      // save — the vote book and the ledger. Defaulted below — a v17
+      // player wakes up holding a vote card and an empty ledger.
+      save.version = 18
+      break
+    case 18:
       // current version
       break
     default:
@@ -488,6 +495,20 @@ function deserialize(raw: string): GameSave | null {
   }
   if (typeof lv.finesPaid !== 'number' || lv.finesPaid < 0) lv.finesPaid = 0
   save.live = lv
+
+  // --- M18 city forge (missing on v17-and-older saves; partial data healed) ---
+  const freshFg = freshForgeState()
+  const fg = save.forge ?? freshFg
+  if (!fg.votes || typeof fg.votes !== 'object' || !fg.votes.counts || typeof fg.votes.counts !== 'object') fg.votes = freshFg.votes
+  if (!Array.isArray(fg.votes.mine)) fg.votes.mine = []
+  fg.votes.mine = fg.votes.mine.filter((c) => typeof c === 'string').slice(-3)
+  for (const [k, n] of Object.entries(fg.votes.counts)) {
+    if (typeof n !== 'number' || n < 0) delete fg.votes.counts[k]
+  }
+  if (!Array.isArray(fg.ledger)) fg.ledger = []
+  fg.ledger = fg.ledger.filter((e) => e && typeof e.city === 'string').slice(-20)
+  if (typeof fg.ranLokoja !== 'boolean') fg.ranLokoja = false
+  save.forge = fg
 
   // --- M2 civic mesh (missing on v3-and-older saves) ---
   if (!save.civic) {

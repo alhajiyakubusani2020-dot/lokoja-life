@@ -111,6 +111,13 @@ model AjoRow {
   createdDay     Int      @default(1)
   updatedAt      DateTime @updatedAt
 }
+/// M18 — the "YOUR CITY NEXT?" ballot box: one vote per city per account.
+model ForgeVote {
+  id        String   @id @default(cuid())
+  accountId String
+  city      String
+  createdAt DateTime @default(now())
+}
 /// The stream board — who is live, who watches (viewers-as-crowd).
 model StreamRow {
   id          String   @id

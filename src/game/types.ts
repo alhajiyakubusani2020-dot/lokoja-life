@@ -817,6 +817,23 @@ export interface LiveState {
   finesPaid: number
 }
 
+/* ------------------------------- M18 — forge ------------------------------- */
+
+/**
+ * M18 — THE CITY FORGE slice. The vote book ("YOUR CITY NEXT?"), the
+ * forge ledger (every build recorded honestly), and whether the player
+ * has run the forge on the home city. Pure data — the laws live in
+ * systems/citypack.ts.
+ */
+export interface ForgeState {
+  /** the community vote book — counts + my own votes (capped) */
+  votes: { counts: Record<string, number>; mine: string[] }
+  /** the forge ledger — the last 20 builds, shipped or refused */
+  ledger: { city: string; version: string; verdict: 'shipped' | 'refused'; qaScore: number; totalMinutes: number; atDay: number }[]
+  /** has the player run the forge on lokoja-v1 */
+  ranLokoja: boolean
+}
+
 /* ---------------------------------- Save ----------------------------------- */
 
 /**
@@ -830,7 +847,8 @@ export interface GameSave {
    *  v11 (M10): the living calendar joins the schema
    *  v12 (M11): the rivers slice joins the schema
    *  v16 (M15): the pulse slice joins the schema
-   *  v17 (M17): the live nation slice joins the schema */
+   *  v17 (M17): the live nation slice joins the schema
+   *  v18 (M18): the city forge slice joins the schema */
   version: number
   createdAt: number
   updatedAt: number
@@ -863,6 +881,8 @@ export interface GameSave {
   cityPulse: PulseState
   /** M17 — the live nation: my cursor, my voice, my memberships */
   live: LiveState
+  /** M18 — the city forge: the vote book + the ledger */
+  forge: ForgeState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

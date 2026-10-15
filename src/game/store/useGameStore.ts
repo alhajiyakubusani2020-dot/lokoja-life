@@ -126,6 +126,8 @@ import {
 } from '../systems/chaos'
 import { bumpGoal, freshGoalState } from '../systems/goals'
 import { freshLiveState, sanitizeChat, emoteById } from '../systems/live'
+import { freshForgeState, forgeCity, forgeVote as forgeVoteLaw, applyVote, recordBuild, voteWinner, PILOT_LADDER, CITY_SLA_MINUTES } from '../systems/citypack'
+import type { OsmExtract } from '../systems/citypack'
 import { freshPulseState, pulseForDay, markPulseRead, type PulseItem } from '../systems/pulse'
 import { encodeTeleport, decodeTeleport, postcardFor, type TeleportMoment } from '../systems/teleport'
 import {
@@ -298,6 +300,8 @@ interface GameStore {
   pendingArrival: { code: string; moment: TeleportMoment } | null
   /** M17 — the live nation: my cursor, my voice, my memberships */
   live: import('../types').LiveState | null
+  /** M18 — the city forge: the vote book + the ledger */
+  forge: import('../types').ForgeState | null
   /** M17 — the nation's last sync snapshot (session-only — the wire) */
   liveWire: { roster: { handle: string; band: string; street: string; status: string }[]; events: { seq: number; kind: string; actor: string; payload: Record<string, unknown> }[] } | null
   /** M16 — a cloud push failed offline; the queue flushes when the network returns */
@@ -541,6 +545,14 @@ interface GameStore {
   livePayAjo: (ajoId: string) => Promise<{ ok: boolean; why?: string; paidOut?: string; payout?: number }>
   liveCourtAjo: (ajoId: string) => Promise<{ ok: boolean; why?: string }>
   liveToggleVoice: () => void
+
+  /* ---------------------- M18 — the city forge ---------------------- */
+  /** run the 3-hour pipeline on the sample extract (the honest forge) */
+  runForge: () => import('../types').ForgeState['ledger']
+  /** cast a "YOUR CITY NEXT?" vote (local book + the relay when linked) */
+  forgeVote: (city: string) => Promise<{ ok: boolean; why?: string }>
+  /** pull the world's honest vote counts from the ballot box */
+  forgeVotesPull: () => Promise<void>
   saveNow: () => void
   resetGame: () => void
 
@@ -1040,6 +1052,7 @@ function scheduleAutosave(get: () => GameStore) {
       fortress: get().fortress,
       cityPulse: get().cityPulse ?? freshPulseState(),
       live: get().live ?? freshLiveState(),
+      forge: get().forge ?? freshForgeState(),
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -1071,6 +1084,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   cityPulse: null,
   live: null,
   liveWire: null,
+  forge: null,
   pendingArrival: null,
   cloudPending: false,
   shockwave: 0,
@@ -1164,6 +1178,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       fortress: freshFortressState(),
       cityPulse: freshPulseState(),
       live: freshLiveState(),
+      forge: freshForgeState(),
       pendingArrival: get().pendingArrival,
       gateOpen: false,
       fleet: { day: 1, done: [] },
@@ -1202,6 +1217,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       fortress: save.fortress ?? freshFortressState(),
       cityPulse: save.cityPulse ?? freshPulseState(),
       live: save.live ?? freshLiveState(),
+      forge: save.forge ?? freshForgeState(),
       fleet: save.fleet,
       settings,
       screen: 'game',
@@ -4013,6 +4029,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           fortress: winner.fortress ?? freshFortressState(),
           cityPulse: winner.cityPulse ?? freshPulseState(),
           live: winner.live ?? freshLiveState(),
+          forge: winner.forge ?? freshForgeState(),
           gateOpen: false,
         })
         get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}! ${verdict.why}`, tone: 'good' })
@@ -4443,6 +4460,95 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().notify({ icon: '🎙️', text: !lv.voiceOn ? 'Voice dey ON — same-street proximity only.' : 'Voice don off.', tone: 'neutral' })
   },
 
+  /* --------------------------- M18 — the city forge --------------------------- */
+
+  /** THE FORGE, live on the sample extract: the same honest pipeline the
+   *  pilots ride — import → classify → blueprint → QA → ship. The run
+   *  records its ledger entry whether it ships or refuses. */
+  runForge: () => {
+    const world = get().world
+    const day = world?.day ?? 1
+    // the honest sample extract: a small Lokoja-shaped wire (the same
+    // shape a real OSM pull lands in — nodes + ways + tags)
+    const extract: OsmExtract = {
+      city: 'lokoja',
+      nodes: [
+        { id: 'n1', lat: 7.79, lon: 6.73 },
+        { id: 'n2', lat: 7.80, lon: 6.74 },
+        { id: 'n3', lat: 7.81, lon: 6.75 },
+        { id: 'n4', lat: 7.795, lon: 6.745 },
+        { id: 'n5', lat: 7.785, lon: 6.735 },
+        { id: 'n6', lat: 7.805, lon: 6.752 },
+      ],
+      ways: [
+        { id: 'w1', nodes: ['n1', 'n2'], tags: { highway: 'primary', name: 'Ganaja Road' } },
+        { id: 'w2', nodes: ['n2', 'n3'], tags: { highway: 'residential', name: 'Zango Street' } },
+        { id: 'w3', nodes: ['n4'], tags: { amenity: 'marketplace', name: 'New Market' } },
+        { id: 'w4', nodes: ['n5'], tags: { amenity: 'bank', name: 'Community Bank' } },
+        { id: 'w5', nodes: ['n6'], tags: { amenity: 'restaurant', name: 'Mama Put' } },
+        { id: 'w6', nodes: ['n5', 'n6'], tags: { waterway: 'river', name: 'The Niger' } },
+        { id: 'w7', nodes: ['n3'], tags: { building: 'yes' }, }, // unnamed — the import refuses it honestly
+      ],
+    }
+    // the honest stage wall-clock (recorded, never faked — the SLA law
+    // audits these against the budgets)
+    const stageMinutes = { osm: 12, classify: 31, blueprint: 44, qa: 9, ship: 6 }
+    const run = forgeCity(extract, {
+      city: 'lokoja' as import('../systems/citypack').CityId<'lokoja'>,
+      name: 'Lokoja',
+      country: 'Nigeria',
+      version: `lokoja-v1.${day}`,
+      colIndex: 100,
+      bbox: { minLat: 7.75, maxLat: 7.85, minLon: 6.70, maxLon: 6.80 },
+      stageMinutes,
+    })
+    const fg = get().forge ?? freshForgeState()
+    const ledger = recordBuild(fg.ledger, run, day)
+    set({ forge: { ...fg, ledger, ranLokoja: true } })
+    get().notify(run.manifest
+      ? { icon: '🏗️', text: `${run.pack?.name ?? 'Lokoja'} don SHIP — QA ${run.qa?.score ?? 0}/100 in ${run.sla.total} min. A city na data!`, tone: 'good' }
+      : { icon: '🚫', text: 'The forge refuse the pack — the QA battery no gree.', tone: 'bad' })
+    audio.play(run.manifest ? 'chime' : 'notify')
+    return ledger
+  },
+
+  /** THE VOTE: the local book moves at once; the ballot box (the relay)
+   *  gets it whenever the connection appears — the offline-first law. */
+  forgeVote: async (city) => {
+    const fg = get().forge ?? freshForgeState()
+    const verdict = forgeVoteLaw(fg.votes, city)
+    if (!verdict.ok) {
+      get().notify({ icon: '🗳️', text: verdict.why === 'capped' ? `Your vote card full — ${fg.votes.mine.length} cities dey your heart already.` : 'You don vote this city before.', tone: 'bad' })
+      return { ok: false, why: verdict.why }
+    }
+    set({ forge: { ...fg, votes: applyVote(fg.votes, city) } })
+    get().notify({ icon: '🗳️', text: `Your vote land for ${city} — ${voteWinner(get().forge?.votes ?? fg.votes) === city ? 'and e dey lead!' : 'the race still open.'}`, tone: 'good' })
+    audio.play('chime')
+    // the relay vote rides when claimed (the ballot box keeps the world book)
+    const { account } = get()
+    if (account.linked && account.token) {
+      try {
+        await fetch('/api/forge/vote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
+          body: JSON.stringify({ city }),
+        })
+      } catch { /* offline: the local book holds, the box waits */ }
+    }
+    return { ok: true }
+  },
+
+  /** pull the world's counts (the local seed stays until the box talks) */
+  forgeVotesPull: async () => {
+    try {
+      const res = await fetch('/api/forge/vote')
+      const data = (await res.json()) as { ok?: boolean; counts?: Record<string, number> }
+      if (!res.ok || !data.ok || !data.counts) return
+      const fg = get().forge ?? freshForgeState()
+      set({ forge: { ...fg, votes: { ...fg.votes, counts: { ...fg.votes.counts, ...data.counts } } } })
+    } catch { /* offline — the seeded book reads */ }
+  },
+
   /** M9 — push the current save to the cloud (linked accounts only). M14: the
    *  envelope's signature rides along. M15: THE ZERO-BYTE PUSH — an unchanged
    *  life costs the network nothing; M16: an offline push QUEUES, it never dies. */
@@ -4515,6 +4621,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       fortress: { ...get().fortress, fingerprint: configFingerprint({ STARTING, WORK, BIZ, CHAOS, LADDER, FORTRESS, PULSE }) },
       cityPulse: get().cityPulse ?? freshPulseState(),
       live: get().live ?? freshLiveState(),
+      forge: get().forge ?? freshForgeState(),
       settings,
     })
     set({ hasSave: true })
@@ -4540,6 +4647,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       fortress: freshFortressState(),
       cityPulse: freshPulseState(),
       live: freshLiveState(),
+      forge: freshForgeState(),
       liveWire: null,
       pendingArrival: null,
       cloudPending: false,

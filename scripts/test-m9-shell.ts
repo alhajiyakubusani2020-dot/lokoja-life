@@ -212,6 +212,7 @@ console.log('\nGUEST LAWS — play first, login to continue, lose nothing')
     fortress: { anomalies: 0, dayEarnedDay: 0, dayEarned: 0, slotTxCount: 0, slotTxSlot: 0, chainTail: 'lko-chain-seed', fingerprint: null },
     cityPulse: { readDay: 0, seen: [], arrivals: [], stats: { shares: 0, arrivalsIn: 0 } },
     live: { cursor: 0, voiceOn: false, assocId: null, coSigned: [], circles: [], stats: { chats: 0, emotes: 0, streamsWatched: 0, tradesDone: 0 }, finesPaid: 0 },
+    forge: { votes: { counts: {}, mine: [] }, ledger: [], ranLokoja: false },
     createdAt: 1,
     updatedAt: 2,
     player: {
@@ -343,7 +344,7 @@ console.log('\nREAL STORE PASS — goals, onboarding, the gate, through the live
   const parsed = e0 && e0.fmt === 2 ? e0.data : e0
   check(
     'the save carries goals + onboarding + account',
-    parsed?.version === 17 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
+    parsed?.version === 18 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
     `v${parsed?.version} ids:${JSON.stringify(parsed?.goals?.ids)} rewarded:${parsed?.onboarding?.rewarded} linked:${parsed?.account?.linked}`,
   )
 }
