@@ -1,0 +1,57 @@
+{
+  "id": "/",
+  "name": "Lokoja Life — Build your life at the Confluence",
+  "short_name": "Lokoja Life",
+  "description": "An original Nigerian browser life-simulation game set in Lokoja, Kogi State. Start with ₦5,000, hustle smart, and build your life at the meeting point of the Niger and Benue.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5edd8",
+  "theme_color": "#146b3a",
+  "lang": "en-NG",
+  "dir": "ltr",
+  "categories": ["games", "simulation", "entertainment"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Continue your life",
+      "short_name": "Continue",
+      "description": "Jump straight back into your Lokoja life",
+      "url": "/?continue=1",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "The City Pulse",
+      "short_name": "Pulse",
+      "description": "Read the city's newspaper — outages, rivers, festivals",
+      "url": "/?pulse=1",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

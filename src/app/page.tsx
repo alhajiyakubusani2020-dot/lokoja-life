@@ -17,19 +17,15 @@ import { useEffect } from 'react'
 import { MainMenu } from '@/components/game/screens/MainMenu'
 import { useGameStore } from '@/game/store/useGameStore'
 import { preloadDashboard } from '@/components/game/screens/dashboard-chunk'
+import { GameSkeleton } from '@/components/game/GameSkeleton'
 
 const CharacterCreation = dynamic(
   () => import('@/components/game/screens/CharacterCreation').then((m) => m.CharacterCreation),
-  { ssr: false },
+  { ssr: false, loading: () => <GameSkeleton label="Shaping your walker…" /> },
 )
 const Dashboard = dynamic(() => import('@/components/game/screens/Dashboard').then((m) => m.Dashboard), {
   ssr: false,
-  loading: () => (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-[#f5edd8]">
-      <p className="lko-display text-xl text-[var(--lko-green-deep)]">Opening Lokoja…</p>
-      <p className="text-xs font-semibold text-[var(--lko-ink-soft)]">warming the Confluence</p>
-    </div>
-  ),
+  loading: () => <GameSkeleton label="warming the Confluence" />,
 })
 
 export default function Home() {
