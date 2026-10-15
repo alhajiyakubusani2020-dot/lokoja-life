@@ -48,6 +48,40 @@ const gate = (name: string, value: string, limit: string, ok: boolean) => {
 
 const errors: string[] = []
 
+/** the m7 lesson: headless SwiftShader builds the world with the main
+ *  thread jammed ~30s — poll until it answers twice in a row AND the
+ *  canvas is in AND the veil is gone. Never fixed-wait a 3D boot. */
+const settle = async (page: import('playwright').Page, maxMs: number): Promise<'settled' | 'timeout'> => {
+  const t0 = Date.now()
+  let aliveStreak = 0
+  while (Date.now() - t0 < maxMs) {
+    const ping = await race(page.evaluate(() => ({
+      alive: true,
+      veil: document.body.innerText.includes('Entering Lokoja'),
+      canvas: !!document.querySelector('canvas'),
+    })), 4000, 'jammed' as const) as 'jammed' | { alive: boolean; veil: boolean; canvas: boolean } | null
+    if (ping !== 'jammed' && ping !== null && ping.canvas && !ping.veil) {
+      aliveStreak++
+      if (aliveStreak >= 2) return 'settled'
+    } else {
+      aliveStreak = 0
+    }
+    await page.waitForTimeout(700)
+  }
+  return 'timeout'
+}
+
+/** poll a probe until it turns true (the idle register is patient law) */
+const pollTrue = async (page: import('playwright').Page, probe: () => unknown, maxMs: number): Promise<boolean> => {
+  const t0 = Date.now()
+  while (Date.now() - t0 < maxMs) {
+    const v = await race(page.evaluate(probe), 5000, false) as boolean
+    if (v) return true
+    await page.waitForTimeout(600)
+  }
+  return false
+}
+
 const run = async (): Promise<void> => {
   const browser = await chromium.launch({ args: ['--disable-dev-shm-usage'] })
 
@@ -139,13 +173,12 @@ const run = async (): Promise<void> => {
     await page.waitForTimeout(400)
     await race(page.getByLabel('Character name').fill('Silk Musa').catch(() => {}), 8000, null)
     await race(page.getByText('Start Life in Lokoja').first().click({ timeout: 8000 }).catch(() => {}), 10_000, null)
-    // the 3D world settles (the SwiftShader lesson: poll, never assume)
-    await page.waitForTimeout(5000)
-
     // THE HONEST MEMORY GATE: the 3D scene itself — open the World tab
     // so the WebGL renderer, the geometry and the terrain live in the heap
-    await race(page.locator('[aria-label="Game navigation"]').getByText('World').first().click({ timeout: 8000 }).catch(() => {}), 10_000, null)
-    await page.waitForTimeout(8000) // the scene builds + the governor settles
+    await race(page.getByRole('button', { name: 'World', exact: true }).first().click({ timeout: 8000 }).catch(() => {}), 10_000, null)
+    // the scene builds + the governor settles (SwiftShader patience, m7 law)
+    const settled = await settle(page, 120_000)
+    console.log(`  world settle: ${settled}`)
 
     const cdp = await context.newCDPSession(page)
     await cdp.send('Performance.enable')
@@ -171,6 +204,16 @@ const run = async (): Promise<void> => {
     // second visit: the worker controls, the caches fill
     await race(page.reload({ waitUntil: 'load' }), 30_000, null)
     await page.waitForTimeout(2500)
+
+    // the idle register is capped at 4s — poll honestly instead of hoping
+    const registered = await pollTrue(page, async () => {
+      const reg = await navigator.serviceWorker.getRegistration()
+      return !!reg?.active || !!(window as { __lkoSwRegistered?: boolean }).__lkoSwRegistered
+    }, 12_000)
+    console.log(`  worker registered on first visit: ${registered}`)
+    // second visit: the worker controls, the caches fill
+    await race(page.reload({ waitUntil: 'load' }), 30_000, null)
+    await pollTrue(page, () => !!navigator.serviceWorker.controller, 10_000)
 
     const swState = await race(page.evaluate(async () => {
       const reg = await navigator.serviceWorker.getRegistration()

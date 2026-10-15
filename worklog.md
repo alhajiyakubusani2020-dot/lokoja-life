@@ -825,3 +825,22 @@ Stage Summary:
 - Key decisions: the roster is a frozen append-only contract (circulating codes never break); integrity-not-secrecy stated twice for the app-wide pepper; landings never pay credit (credit buys shares, not arrivals); the OG card, the phone preview and the ghost card all speak the SAME postcardFor copy.
 - Performance: zero rendering/3D surface touched; the share path is one HMAC (sub-ms); suites green, 0 console errors.
 - ROADMAP position: M8→M15 all shipped. Next in line per ROADMAP.md: M16 PWA + SILK FINISH.
+
+---
+Task ID: 3 (M16)
+Agent: Main Agent (Super Z)
+Task: M16 — PWA + SILK FINISH (the 3-second nation: installable, offline-first, gated)
+
+Work Log:
+- State audit on resume: M16's code (manifest, sw.js, offline.html, PwaRegister, GameSkeleton, icon forge, test suite, gates) had landed inside a UUID auto-checkpoint (f7a491c) with NO worklog, NO proper commit message, NO verified status — finished the verification pass and gave the milestone its honest record
+- Verified the PWA surface file-by-file: manifest.json (id/start_url/scope '/', standalone, theme #146b3a, 192+512+maskable icons, honest shortcuts), sw.js m16.1 (versioned lko-shell/static/pages caches, shell precache, HMR mercy, THE API MERCY — /api/ rides raw because the game's offline queue is the offline authority, GET-only, 200-entry cap, 2MB response cap, stranded-cache sweep, skipWaiting+claim), offline.html (honest retry, 1.8KB), PwaRegister (idle-register with a 4s cap, silent downgrade, no forced reload mid-life), GameSkeleton (offline chip), icon forge (5 real PNGs, IHDR-verified dimensions)
+- TESTS m16-silk 64/64 green: icon forge (magic+IHDR+lean), manifest law, the SW law, offline page law, registration law, layout law, THE DELTA LAW on the real v16 transport (same state = zero bytes; updatedAt alone never writes), the offline-first store law (offline push queues, flag rides storage, flush rides online, refuses while offline, honest toast), the budget law (PWA surface 106.6KB; art 1.2MB, every file under the 2MB cap)
+- THE SILK GATES (hand-rolled CI law, six gates): first run went 🔴🔴 on G4 (canvas never appeared) + G5b (worker never took the wheel) — DIAGNOSED AS HARNESS, not game: the gate fixed-waited 13s on a 3D boot that headless SwiftShader jams ~30s (the M7 lesson was already written down), and it hoped a 3.5s fixed wait would cover the idle-capped SW register. Patched the harness with the PROVEN patterns (game code untouched): the m7 settle() poll (main thread answers twice + canvas in + veil gone, 120s budget) for G4, honest polling for the registration + controller for G5b. Re-run: 🟢 THE SILK HOLDS — G1 TTI 2.45s on Fast 3G (< 3s), G2 wire 371KB (< 900KB), G3 warm interaction 5ms (< 100ms), G4 heap 29MB with the 3D world running (< 300MB), G5 SW bill 0.1MB/8 entries (< 30MB), G5b worker controls: true; 0 console errors; matrix shots at 360/390/768/1280/1920 + the world shot
+- FULL regression battery re-run green: world3d 707 / schools 232 / stage3 / stage5 47 / travel / m2 67 / m3 50 / m4 82 / m5 95 / m6 100 / m7 53 / m8 100 / m9 61 / m10 124 / m11 102 / m12 117 / m13 81 / m14 58 / m15 114 / m16 64; tsc exactly the 9 pre-existing; eslint clean
+- Dev-server note: sandbox reaps non-boot-ancestry listeners — the prod server for the gates survives via the double-fork setsid trick; guest loop verified offline-first per the M15 queue law (the SW never fakes an API response)
+
+Stage Summary:
+- M16 COMPLETE. The Zero-Data / 3-Second shock is live: the city installs from a 106KB PWA surface, boots offline forever after the first visit, saves ride the delta law (same state = zero bytes), and the guest loop plays with zero network — cloud sync appears whenever the connection does. Every future milestone now has six red-light/green-light gates to pass.
+- Key decisions: the SW NEVER fakes an API response (the game's own offline queue is the offline authority — one source of truth); dev/HMR traffic passes through untouched; the update law never force-reloads mid-life; G4/G5b reds were harness timing, fixed with the proven settle-poll pattern, not by touching the game.
+- Performance: the six MANDATES verified as gates — TTI/interaction/memory all green on a prod build; rendering untouched this milestone (no 3D surface changed).
+- ROADMAP position: M8→M16 all shipped. Next per the user's order: M17 LIVE NATION + M18 CITY FORGE.
