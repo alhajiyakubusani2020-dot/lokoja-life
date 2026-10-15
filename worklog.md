@@ -945,3 +945,21 @@ Work Log:
 
 Stage Summary:
 - M19 NEXT-GEN POLISH SHIPPED: the viral sunset is a law, the Sahara drifts, the streets glint after rain, the flood owns the water, the hill whispers five secrets, Musa walks from the sand bucket to the white coat, the wardrobe sells walks that bend the rig, the soundtrack is a 0-byte highlife band, and the phone buzzes honest patterns. THE IMPOSSIBLE-TO-LAG LAW: every extra degrades tier-by-tier BEFORE dynres touches resolution; low tier structurally cannot receive the heavy layers; the wire grew 18KB against a 900KB budget; heap went DOWN (29→27MB). Performance dimensions: ALL GREEN, nothing skipped.
+
+---
+Task ID: SILK-II-PLAN
+Agent: main agent
+Task: SILK II — deep research + audit + comparison + optimization plan (USER FREEZE: no code this round)
+
+Work Log:
+- State truth-check: git log confirms M8-M19 ALL SHIPPED (m19 = 38bce44, "the viral shot is a law"); carried summary claiming M8-M18 unshipped was stale — only M20 PLANET SCALE + OPS remains per ROADMAP.md v2.1
+- Launched 2 parallel Explore swarms: (a) full 3D rendering pipeline audit, (b) bundle/wire/assets audit — both returned file:line-evidenced reports
+- Read device.ts (384 lines) personally: tier law, presets, dynres hysteresis, extras-first verdict confirmed intact
+- Ran 10-query research battery (web-search skill) -> research/perf-plan/s1-s10.json: draw calls, point-light fragment cost, KTX2/Basis, Draco/quantization, R3F demand loop, spatial hashing, OffscreenCanvas, Android jank/GC, WebGPU baseline status, Next.js splitting
+- Synthesized OPTIMIZATION-PLAN.md (SILK II — THE MADLY FAST DOCTRINE): audit tables (10 GPU killers + 7 wire killers), literature base, best-in-class comparison, six phases P0-P5, shock budget table, honest verdict
+
+Stage Summary:
+- KEY FINDINGS: 98 point lights at doorways (CityMesh.tsx:2171, biggest mobile fragment cost, one-line gate); 686 non-instanced door meshes; ~20-25k unaccelerated river-segment evals/frame; 13 rigs share nothing; geo.ts 432KB ships as decimal text inside a 491KB-gz monolith chunk (cda9); entry carries the whole 213KB store for a 5-value menu; G2 not re-gated on current build (+24KB gz drift)
+- WHAT'S ALREADY ELITE: extras-first governor, on-demand shadows, merged roads/instancing, zero-asset audio, delta saves, honest SILK gates — plan builds on these, rebuilds none
+- DELIVERABLE: OPTIMIZATION-PLAN.md at repo root — six phases (P0 re-baseline -> P1 frame -> P2 loop -> P3 wire -> P4 shock -> P5 proof), target budgets (TTI<1.5s, menu wire<220KB, draws<800, 0 frame-loop allocs), NO CODE WRITTEN per user freeze
+- Remaining work (honest): M20 PLANET SCALE + OPS only; awaiting user green light to execute P0

@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://web.dev/blog/webgpu-supported-major-browsers",
+    "name": "WebGPU is now supported in major browsers | Blog",
+    "snippet": "Nov 25, 2025 — WebGPU —the powerful API for running high-performance 3D graphics and general-purpose GPU computations—is officially supported across Chrome, ... Read more",
+    "host_name": "web.dev",
+    "rank": 0,
+    "date": "Nov 25, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/webgpu/comments/1iqsolu/how_long_till_webgpu_becomes_a_standard",
+    "name": "How long till webgpu becomes a standard",
+    "snippet": "So expect yet another decade for WebGPU , and Chrome doesn't yet support it properly on GNU/Linux, despite Android and ChromeOS. Read more",
+    "host_name": "www.reddit.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API",
+    "name": "WebGPU API - MDN Web Docs - Mozilla",
+    "snippet": "Sep 2, 2026 — This feature is not Baseline because it does not work in some of the most widely-used browsers . Want more browser support for this feature? Read more",
+    "host_name": "developer.mozilla.org",
+    "rank": 2,
+    "date": "Sep 2, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://vr.org/articles/webgpu-baseline-2026-three-js-webxr-default",
+    "name": "WebGPU Just Hit Baseline in Every Major Browser. Three.js Is",
+    "snippet": "May 6, 2026 — The 2025 Web Almanac put WebGPU adoption at 65 percent of new web apps that ship 3D content. That number was around 8 percent two years ago. Read more",
+    "host_name": "vr.org",
+    "rank": 3,
+    "date": "May 6, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://web-platform-dx.github.io/supported-browsers",
+    "name": "Supported browsers | Baseline",
+    "snippet": "Downstream browsers . These browsers are not part of the main Baseline definition, but are based on the engine from one of the core browsers listed above. Read more",
+    "host_name": "web-platform-dx.github.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

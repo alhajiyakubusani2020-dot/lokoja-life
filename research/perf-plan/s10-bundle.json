@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://nextjs.org/docs/app/guides/package-bundling",
+    "name": "Optimizing package bundling",
+    "snippet": "Oct 6, 2026 — Next.js automatically optimizes bundles by code splitting , tree-shaking, and other techniques. This guide will walk you through how to use each ...",
+    "host_name": "nextjs.org",
+    "rank": 0,
+    "date": "Oct 6, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://dev.to/hamzakhan/reducing-javascript-bundle-size-with-code-splitting-in-2025-3927",
+    "name": "Reducing JavaScript Bundle Size with Code Splitting in 2025",
+    "snippet": "May 25, 2025 — In this post, we'll explore code splitting, why it matters, and how to implement it using modern tools like React, Vite, Next.js, and dynamic ...",
+    "host_name": "dev.to",
+    "rank": 1,
+    "date": "May 25, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@ranasingh061177/mastering-code-splitting-in-next-js-your-guide-to-peak-performance-29aa66169fd2",
+    "name": "Mastering Code Splitting in Next.js: Your Guide to Peak",
+    "snippet": "Next.js simplifies code splitting via route-based splitting by default. Every page is automatically split into its own JavaScript bundle.",
+    "host_name": "medium.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/nextjs/comments/mf8hv3/dumb_question_about_code_splitting_and",
+    "name": "Dumb question about \"Code splitting and prefetching\" and",
+    "snippet": "Next . js does code splitting automatically, so each page only loads what's necessary for that page. That means when the homepage is rendered, ...",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://web.dev/articles/code-splitting-with-dynamic-imports-in-nextjs",
+    "name": "Code splitting with dynamic imports in Next.js | Articles",
+    "snippet": "Nov 8, 2019 — Route-based code splitting minimizes the amount of script that needs to be parsed and compiled at once, which results in faster page load times.",
+    "host_name": "web.dev",
+    "rank": 4,
+    "date": "Nov 8, 2019",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/vitejs/vite/discussions/17730",
+    "name": "How to optimize large projects with dynamic imports and",
+    "snippet": "Jul 21, 2024 — Dynamic imports allow you to load modules only when they are needed. This reduces the initial bundle size . split your code based on dynamic ...",
+    "host_name": "github.com",
+    "rank": 5,
+    "date": "Jul 21, 2024",
+    "favicon": ""
+  }
+]

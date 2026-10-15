@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://webglfundamentals.org/webgl/lessons/webgl-3d-lighting-point.html",
+    "name": "WebGL 3D - Point Lighting",
+    "snippet": "How to implement point lighting in WebGL . This article is a continuation of WebGL 3D Directional Lighting . Now in the fragment shader we need to normalize the ...",
+    "host_name": "webglfundamentals.org",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://gamedev.stackexchange.com/questions/19575/is-there-a-way-to-use-an-arbitrary-number-of-lights-in-a-fragment-shader",
+    "name": "Is there a way to use an arbitrary number of lights in",
+    "snippet": "Nov 9, 2011 — Is there a way to pass an arbitrary number of light locations (and colors) for the fragment shader, and loop over them in the shader? If not, then ...",
+    "host_name": "gamedev.stackexchange.com",
+    "rank": 1,
+    "date": "Nov 9, 2011",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/30594511/webgl-fragment-shader-for-multiple-light-sources",
+    "name": "WebGL fragment-shader for multiple light sources?",
+    "snippet": "I want to be able to append multiple light sources to each node of my scene graph, but I have no clue how to do it! From the tutorials on learningwebgl.com ...",
+    "host_name": "stackoverflow.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discourse.threejs.org/t/optimizing-point-lights/36153",
+    "name": "Optimizing Point Lights - Discussion",
+    "snippet": "Mar 19, 2022 — This has caused a success of point light limit increased by 60%! - from max 50 to max 80 point lights . requires very little shader chunks ...",
+    "host_name": "discourse.threejs.org",
+    "rank": 3,
+    "date": "Mar 19, 2022",
+    "favicon": ""
+  },
+  {
+    "url": "https://eng.libretexts.org/Bookshelves/Computer_Science/Applied_Programming/Introduction_to_Computer_Graphics_(Eck)/07%3A_3D_Graphics_with_WebGL/7.02%3A_Lighting_and_Material",
+    "name": "7.2: Lighting and Material",
+    "snippet": "Jul 7, 2020 — When doing per-pixel lighting , the fragment shader can check the value of this variable to decide whether to use the front material or the back ... Read more",
+    "host_name": "eng.libretexts.org",
+    "rank": 4,
+    "date": "Jul 7, 2020",
+    "favicon": ""
+  },
+  {
+    "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Lighting_in_WebGL",
+    "name": "Lighting in WebGL - Web APIs | MDN",
+    "snippet": "May 14, 2025 — It just runs two functions you supply — a vertex shader and a fragment shader — the results you want. Simulating lighting and shading. Point ...",
+    "host_name": "developer.mozilla.org",
+    "rank": 5,
+    "date": "May 14, 2025",
+    "favicon": ""
+  }
+]

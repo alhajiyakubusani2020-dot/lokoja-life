@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://stackoverflow.com/questions/31124704/how-to-efficiently-remove-duplicate-collision-pairs-in-spatial-hash-grid",
+    "name": "How to efficiently remove duplicate collision pairs in spatial",
+    "snippet": "In order to reduce the possible amount of collision checks I decided to use spatial hashing as broadphase algorithm becouse it seems quite ... Read more",
+    "host_name": "stackoverflow.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://handmade.network/p/75/monter/blog/p/2978-collision_system_part_2__sparse_hash-based_grid_partitioning%252C_multithreading%252C_and_future",
+    "name": "Collision System Part 2: Sparse Hash-Based Grid",
+    "snippet": "Mar 10, 2018 — An obvious optimization is just multithreading the collision operation. However, I don't want this multithreaded work to be beneficial to ... Read more",
+    "host_name": "handmade.network",
+    "rank": 1,
+    "date": "Mar 10, 2018",
+    "favicon": ""
+  },
+  {
+    "url": "https://matthias-research.github.io/pages/publications/tetraederCollision.pdf",
+    "name": "Optimized Spatial Hashing for Collision Detection of",
+    "snippet": "by MTBHM Müller · Cited by 833 — We propose a new approach to collision and self– collision detection of dynamically deforming ob- jects that consist of tetrahedrons. Tetrahedral. Read more 8 pages",
+    "host_name": "matthias-research.github.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://gamedev.stackexchange.com/questions/69776/when-is-a-quadtree-preferable-over-spatial-hashing",
+    "name": "When is a quadtree preferable over spatial hashing?",
+    "snippet": "Feb 3, 2014 — I'm making a 2d platformer with lots of objects at the same time. They're all AABB collision detected. I first tried a quadtree to decrease the number ...",
+    "host_name": "gamedev.stackexchange.com",
+    "rank": 3,
+    "date": "Feb 3, 2014",
+    "favicon": ""
+  },
+  {
+    "url": "https://prdeving.wordpress.com/2023/11/10/beyond-brute-force-spatial-hashing-for-optimized-collision-management-in-video-games",
+    "name": "Beyond Brute Force: Spatial Hashing for Optimized Collision",
+    "snippet": "Nov 10, 2023 — Spatial Hashing not only optimizes collision detection , but also provides a foundation on which other systems can be built, such as visibility ... Read more",
+    "host_name": "prdeving.wordpress.com",
+    "rank": 4,
+    "date": "Nov 10, 2023",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.redblobgames.com/x/1730-spatial-hash",
+    "name": "Spatial hash demo",
+    "snippet": "Jul 25, 2017 — Why? Grid-based approaches effectively enlarge the area of interest first to fit the grid, then find all circles that are in those grid squares. Read more",
+    "host_name": "www.redblobgames.com",
+    "rank": 5,
+    "date": "Jul 25, 2017",
+    "favicon": ""
+  }
+]

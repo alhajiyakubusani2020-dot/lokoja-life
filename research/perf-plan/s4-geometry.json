@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://compress-glb.com/blog/draco-vs-meshopt",
+    "name": "Draco vs Meshopt - glTF Compression Compared",
+    "snippet": "Sep 23, 2026 — Our online GLB compressor uses Draco for geometry , with adjustable compression level and quantization bits, and combines it with texture ...",
+    "host_name": "compress-glb.com",
+    "rank": 0,
+    "date": "Sep 23, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://codelabs.developers.google.com/codelabs/draco-3d",
+    "name": "Optimizing 3D data with Draco Geometry Compression",
+    "snippet": "Mar 20, 2026 — Draco is a library for compressing and decompressing 3D geometric meshes and point clouds. It is intended to improve the storage and ...",
+    "host_name": "codelabs.developers.google.com",
+    "rank": 1,
+    "date": "Mar 20, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/donmccurdy/glTF-Transform/discussions/1687",
+    "name": "How to use smaller bit precision for attributes when",
+    "snippet": "Sep 30, 2025 — With Draco , quantization settings in the compressed buffer and in the unpacked buffer are two different things. My suspicious is that three.js ... Read more",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "Sep 30, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://google.github.io/draco",
+    "name": "Draco 3D Graphics Compression",
+    "snippet": "Draco is an open-source library for compressing and decompressing 3D geometric meshes and point clouds. It is intended to improve the storage and transmission ...",
+    "host_name": "google.github.io",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discourse.threejs.org/t/anyone-using-draco/3074",
+    "name": "🐉 Anyone using Draco? - Questions",
+    "snippet": "Jun 9, 2018 — Draco is a library for compressing and decompressing 3D geometric meshes and point clouds. It is intended to improve the storage and ... Read more",
+    "host_name": "discourse.threejs.org",
+    "rank": 4,
+    "date": "Jun 9, 2018",
+    "favicon": ""
+  },
+  {
+    "url": "https://cesium.com/blog/2018/04/09/draco-compression",
+    "name": "Draco Compressed Meshes with glTF and 3D Tiles",
+    "snippet": "Apr 9, 2018 — Draco is a glTF extension for mesh compression . It compresses vertex positions, improving the efficiency and speed of transmitting 3D content ...",
+    "host_name": "cesium.com",
+    "rank": 5,
+    "date": "Apr 9, 2018",
+    "favicon": ""
+  }
+]

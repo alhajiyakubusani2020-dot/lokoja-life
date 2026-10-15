@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://www.reddit.com/r/threejs/comments/1tseqjc/threejs_textureheavy_scenes_hit_vram_limits_fast",
+    "name": "Three.js texture-heavy scenes hit VRAM limits fast — KTX2",
+    "snippet": "KTX2 is a texture container format , With Basis Universal compression it stores textures in a compact form. The GPU can keep it compressed. It ...",
+    "host_name": "www.reddit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discourse.threejs.org/t/compressed-textures-using-more-memory-than-uncompressed-textures/30077",
+    "name": "Compressed textures using more memory than",
+    "snippet": "Sep 20, 2021 — I have few 2k textures in my scene, so I was thinking about using Basis or KTX2 textures formats. So initially I tried replacing only small ...",
+    "host_name": "discourse.threejs.org",
+    "rank": 1,
+    "date": "Sep 20, 2021",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.khronos.org/news/press/khronos-ktx-2-0-textures-enable-compact-visually-rich-gltf-3d-assets",
+    "name": "Khronos KTX 2.0 Textures Enable Compact, Visually Rich,",
+    "snippet": "Apr 20, 2021 — GPU compressed texture formats enable compact in-memory textures , with optimized memory access for faster, more efficient rendering. However, it ...",
+    "host_name": "www.khronos.org",
+    "rank": 2,
+    "date": "Apr 20, 2021",
+    "favicon": ""
+  },
+  {
+    "url": "https://threejsresources.com/guides/textures",
+    "name": "Three.js Textures: Loading, Compression & Performance",
+    "snippet": "Sep 5, 2026 — KTX2 (using Basis Universal supercompression) stays compressed on the GPU , using a fraction of the memory for the same visual resolution, KTX2/ ...",
+    "host_name": "threejsresources.com",
+    "rank": 3,
+    "date": "Sep 5, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://discourse.threejs.org/t/when-to-use-basis-texture/29987",
+    "name": "When to use basis texture? - Questions",
+    "snippet": "Sep 17, 2021 — Textures in a glTF file can be compressed into .ktx2 GPU textures using Basis Universal compression, which offers faster GPU upload and less GPU ...",
+    "host_name": "discourse.threejs.org",
+    "rank": 4,
+    "date": "Sep 17, 2021",
+    "favicon": ""
+  },
+  {
+    "url": "https://pixijs.com/8.x/guides/components/assets/compressed-textures",
+    "name": "Compressed Textures",
+    "snippet": "Compressed textures significantly reduce memory usage and GPU upload time, especially on mobile devices or lower-end hardware. KTX2 .ktx2",
+    "host_name": "pixijs.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://developer.android.com/topic/performance/issues/render",
+    "name": "Slow rendering | App quality",
+    "snippet": "This document explains UI rendering performance , defining jank as skipped frames due to slow rendering and frozen frames as extreme delays.",
+    "host_name": "developer.android.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://metadesignsolutions.com/blog/unity-game-lags-low-end-android-fix",
+    "name": "Why Your Unity Game Lags on Low-End Android (and How",
+    "snippet": "8 days ago — Experiencing poor frame rates? Learn why your Unity game lags on low-end Android devices and discover actionable optimization techniques to ...",
+    "host_name": "metadesignsolutions.com",
+    "rank": 1,
+    "date": "Oct 7, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://androidperformance.com/en/2019/09/05/Android-Jank-Due-To-App",
+    "name": "Overview of Jank and Frame Drops in Android",
+    "snippet": "Sep 5, 2019 — If the screen fails to refresh at 60 FPS (or the target refresh rate) and only hits 55, the user perceives this as jank . Frame rate fluctuations ... Read more",
+    "host_name": "androidperformance.com",
+    "rank": 2,
+    "date": "Sep 5, 2019",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.mdpi.com/2673-3951/3/2/14",
+    "name": "Improving Mobile Game Performance with Basic",
+    "snippet": "by G Koulaxidis · 2022 · Cited by 56 — The basic optimization techniques investigated collectively include low poly models, merge vertices (as a means of achieving low poly models), ... Read more",
+    "host_name": "www.mdpi.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://5stardesigners.com/blog/android-game-performance-optimization-gpu-memory-guide",
+    "name": "Android Game Performance Optimization: GPU & Memory Guide",
+    "snippet": "Master Android game performance optimization with practical strategies for GPU rendering, memory management, & thermal control across devices.",
+    "host_name": "5stardesigners.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/kayvan-kaseb/low-effort-high-impact-android-app-performance-optimization-29ea929d0d5e",
+    "name": "Low-Effort, High-Impact Android App Performance",
+    "snippet": "This essay aims to discuss an end -to- end , low -effort workflow for high-impact Android app performance optimization , grounded in real-world case ... Read more",
+    "host_name": "medium.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

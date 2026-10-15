@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://r3f.docs.pmnd.rs/advanced/scaling-performance",
+    "name": "Scaling performance - React Three Fiber - Poimandres",
+    "snippet": "All you need to do is set the canvas frameloop prop to demand . It will render frames whenever it detects prop changes throughout the component tree.",
+    "host_name": "r3f.docs.pmnd.rs",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/pmndrs/react-three-fiber/discussions/1884",
+    "name": "Is frameloop=\"demand\" with react-spring the most",
+    "snippet": "Dec 3, 2021 — frameloop = demand generally means that threejs only renders when it must. this is less about performance and more about saving battery.",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "Dec 3, 2021",
+    "favicon": ""
+  },
+  {
+    "url": "https://r3f.docs.pmnd.rs/advanced/pitfalls",
+    "name": "Performance pitfalls - Introduction - React Three Fiber",
+    "snippet": "The frame loop is where you should place your animations. React-spring has its own frame-loop and animates outside of React.",
+    "host_name": "r3f.docs.pmnd.rs",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@ertugrulyaman99/react-three-fiber-enhancing-scene-quality-with-drei-performance-tips-976ba3fba67a",
+    "name": "React-Three-Fiber: Enhancing Scene Quality with Drei +",
+    "snippet": "Below are some practical techniques to optimize the scene. frameloop =“ demand ” (Render When Needed). By default, R3F re-renders the scene every ... Read more",
+    "host_name": "medium.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discourse.threejs.org/t/requestanimationframe-in-react-three-fiber/41967",
+    "name": "requestAnimationFrame in React-Three-Fiber - Questions",
+    "snippet": "Aug 28, 2022 — a running frameloop has often even performance benefits because it doesn't need “warm up”, think of it as a running motor. in any case you ...",
+    "host_name": "discourse.threejs.org",
+    "rank": 4,
+    "date": "Aug 28, 2022",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/threejs/comments/169d7ic/3d_r3f_models_shader_lagging_on_mobile",
+    "name": "3D R3F Models + shader lagging on mobile : r/threejs",
+    "snippet": "You will need to add frameloop =\" demand \" to your Canvas. What this does, is only renders frames when there has been a state change, for example ... Read more",
+    "host_name": "www.reddit.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

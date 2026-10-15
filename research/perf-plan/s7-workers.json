@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://discourse.threejs.org/t/single-webworker-is-better-than-many-webworkers-usse-offscreencanvas/54194",
+    "name": "Single WebWorker is better than Many",
+    "snippet": "Jul 23, 2023 — The idea is to initialize a single canvas (scene, camera*, renderer) and offload the heavy computations to multiple threads/ workers while ... Read more",
+    "host_name": "discourse.threejs.org",
+    "rank": 0,
+    "date": "Jul 23, 2023",
+    "favicon": ""
+  },
+  {
+    "url": "https://evilmartians.com/chronicles/faster-webgl-three-js-3d-graphics-with-offscreencanvas-and-web-workers",
+    "name": "Faster WebGL/Three.js 3D graphics with OffscreenCanvas",
+    "snippet": "Apr 2, 2019 — It allows you to transfer canvas access the to Web Worker . It is still thread-safe, as the main thread cannot access < canvas > once you opt for ... Read more",
+    "host_name": "evilmartians.com",
+    "rank": 1,
+    "date": "Apr 2, 2019",
+    "favicon": ""
+  },
+  {
+    "url": "https://web.dev/articles/offscreen-canvas",
+    "name": "OffscreenCanvas—speed up your canvas operations with",
+    "snippet": "Dec 8, 2023 — This document explains how you can use the OffscreenCanvas API to achieve performance improvements when rendering graphics in your web app.",
+    "host_name": "web.dev",
+    "rank": 2,
+    "date": "Dec 8, 2023",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/ai/offscreen-canvas",
+    "name": "GitHub - ai/offscreen-canvas: Polyfill for OffscreenCanvas",
+    "snippet": "JS polyfill (375 bytes ) for OffscreenCanvas to move Three.js, WebGL or 2D canvas to Web Worker. It will improve performance in Chrome and will load worker ... Read more",
+    "host_name": "github.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/76356648/web-worker-still-janks-main-thread",
+    "name": "Web worker still janks main thread - three.js",
+    "snippet": "I’m having a strange issue with a fairly complex ThreeJS scene. I’ve spent a few days moving the entire 3D scene to an offscreencanvas and I’ve moved ...",
+    "host_name": "stackoverflow.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.webgamedev.com/performance/offscreen-canvas",
+    "name": "OffscreenCanvas",
+    "snippet": "Here is a repository showing how to set it up with Three.js and React Three Fiber (demo). OffscreenCanvas is supported by Chrome and Firefox, and will be ... Read more",
+    "host_name": "www.webgamedev.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

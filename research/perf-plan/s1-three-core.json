@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://discourse.threejs.org/t/best-way-to-reduce-draw-calls/25186",
+    "name": "Best Way to Reduce Draw Calls? - Questions",
+    "snippet": "Apr 8, 2021 — Merge all items in the scene into one giant item , then somehow label what geometry belongs to what items. Use a similar approach from there as ...",
+    "host_name": "discourse.threejs.org",
+    "rank": 0,
+    "date": "Apr 8, 2021",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.utsubo.com/blog/threejs-best-practices-100-tips",
+    "name": "100 Three.js Tips That Actually Improve Performance (2026)",
+    "snippet": "Sep 11, 2026 — This guide compiles 100 actionable best practices for Three . js development, with a heavy focus on the new WebGPU renderer.",
+    "host_name": "www.utsubo.com",
+    "rank": 1,
+    "date": "Sep 11, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://threejsroadmap.com/blog/draw-calls-the-silent-killer",
+    "name": "Draw Calls: The Silent Killer",
+    "snippet": "Oct 29, 2025 — 6 Tips for Minimizing Draw Calls · 1. InstancedMesh for Repeated Objects · 2. Shared Materials · 3. Merge Static Geometries · 4. Texture Atlases · 5. Read more",
+    "host_name": "threejsroadmap.com",
+    "rank": 2,
+    "date": "Oct 29, 2025",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/59828683/comparing-fps-between-instance-and-merge-drawcall-and-native",
+    "name": "Comparing FPS between instance and merge drawcall and",
+    "snippet": "With merged geometry you make one call , the driver makes one setup. So merged will generally be faster. As for native being faster that sounds ... Read more",
+    "host_name": "stackoverflow.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discourse.threejs.org/t/how-to-optimize-draw-calls-in-three-js-when-updating-polyline-in-real-time/69203",
+    "name": "How to optimize draw calls in Three.js when updating",
+    "snippet": "Aug 12, 2024 — Merging meshes only works if they can share the same material. You may have to sort the meshes by material first, then only merge meshes of the ...",
+    "host_name": "discourse.threejs.org",
+    "rank": 4,
+    "date": "Aug 12, 2024",
+    "favicon": ""
+  },
+  {
+    "url": "https://tympanus.net/codrops/2025/02/11/building-efficient-three-js-scenes-optimize-performance-while-maintaining-quality",
+    "name": "Building Efficient Three.js Scenes: Optimize Performance",
+    "snippet": "Feb 11, 2025 — In this article, we'll explore strategies to improve rendering performance without sacrificing graphical quality, based on the SINGULARITY ... Read more",
+    "host_name": "tympanus.net",
+    "rank": 5,
+    "date": "Feb 11, 2025",
+    "favicon": ""
+  }
+]
