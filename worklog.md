@@ -805,3 +805,23 @@ Stage Summary:
 - Key decisions: pure-TS crypto (sync in the save path, identical in browser + bun + node); a missing key is legacy-mercy, a wrong signature is tamper; the anomaly verdict keeps weird-but-honest players in the city — rollback is the transport's recovery path, not a punishment; the cloud sig is transport-level evidence (cross-device re-login treats a foreign sig as legacy — no false accusation).
 - Performance: the sign path benches sub-5ms at save sizes (the SILK budget holds); no rendering or 3D surface touched; suites all green, 0 console errors.
 - ROADMAP position: M8→M14 all shipped. Next in line per ROADMAP.md: M15 TELEPORT & PULSE + THE AWARENESS WAR.
+
+---
+Task ID: 2 (M15)
+Agent: Main Agent (Super Z)
+Task: M15 — TELEPORT & PULSE + THE AWARENESS WAR (signed postcards, the city newspaper, Know Your City, the street credit)
+
+Work Log:
+- State audit on resume: found M15 fully built but UNCOMMITTED (files swept into the m14 commit; working tree only carried mode-bit noise). Dev server dead (sandbox policy kills non-boot-ancestry listeners) — restarted via setsid + .zscripts/dev.sh
+- Verified the two pure systems: systems/teleport.ts (frozen v1 street roster contract, base32 RFC4648 URL-safe codec, HMAC-SHA256 via M14 fortress crypto keyed by the SHA-256-stretched app pepper, 96/112-char budget laws refused at mint, mercy-law refusal taxonomy, deterministic re-mint, postcardFor one-copy builder) and systems/pulse.ts (pulseForDay weight law over the EXISTING M8/M11/M2/M10 slices, private-books law, idempotent read book, Know-Your-City 19-checklist honest percent + grade ladder)
+- Verified the store wiring: cityPulse save slice + pendingArrival session slice, shareTeleport/sharePulseCard/arriveByTeleport/openCityPulse actions, THE ARRIVAL LAW (free landing, arrival book, no street credit for landings, URL self-clean, boot postcards wait behind the guest gate + land when the city opens, fresh-life consumption born at the postcard's street), THE SHARE LAW (Web Share → clipboard fall), THE STREET CREDIT (+2 rep once/in-game day through giveReward → kobo-chain + income guard), PulseBanner mounted on the Dashboard, City Pulse phone app, SSR /t/[code] + OG route
+- FIXED the tsc debt (18 new errors, all in test/debug scripts, src/ clean): PulseItem import source (systems/pulse not types), the leftover trailCompared fragment, two union-narrowing gaps (sanitize result, ghost-card decode) — tsc back to EXACTLY the 9 pre-existing; deleted scripts/tmp/dbg-delta.ts (finished scratch, 14 top-level-await errors)
+- FULL regression battery re-run green: world3d / schools 232 / stage3 / stage5 47 / travel / m2 67 / m3 50 / m4 82 / m5 95 / m6 100 / m7 53 / m8 100 / m9 61 (incl. REAL HTTP) / m10 124 / m11 102 / m12 117 / m13 81 (incl. REAL HTTP) / m14 58 (incl. REAL HTTP) / m15 114; lint clean
+- E2E m15-pulse-shots regenerated: 6 PNGs 0 console errors (banner with New Year live, pulse app, share preview 69 chars, SSR postcard page, free-arrival toast, desktop wide)
+- Committed 2e65635 with the full house-style record
+
+Stage Summary:
+- M15 COMPLETE. The city travels by postcard: a signed ≤96-char code carries one honest moment to WhatsApp; the receiver lands on that street free, greeted by the ghost card. The City Pulse prints the civic mesh as news (blast > flood > fuel > … — a total order, never invented), Know Your City turns 19 real ledgers into an honest percent, and a real share pays +2 rep once a day. SAVE v16 adds the delta law (fingerprint skips + the push book) — the first M16 deliverable landed early.
+- Key decisions: the roster is a frozen append-only contract (circulating codes never break); integrity-not-secrecy stated twice for the app-wide pepper; landings never pay credit (credit buys shares, not arrivals); the OG card, the phone preview and the ghost card all speak the SAME postcardFor copy.
+- Performance: zero rendering/3D surface touched; the share path is one HMAC (sub-ms); suites green, 0 console errors.
+- ROADMAP position: M8→M15 all shipped. Next in line per ROADMAP.md: M16 PWA + SILK FINISH.
