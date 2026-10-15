@@ -57,7 +57,8 @@ import { freshJapaState } from '../src/game/systems/japa'
 import { freshGoalState } from '../src/game/systems/goals'
 import { freshOnboardingState, freshAccountState } from '../src/game/systems/guest'
 import { PULSE } from '../src/game/data/config'
-import type { ChaosState, CivicState, RiversState, CalendarState, Weather, PlayerState, PulseItem } from '../src/game/types'
+import type { PulseItem } from '../src/game/systems/pulse'
+import type { ChaosState, CivicState, RiversState, CalendarState, Weather, PlayerState } from '../src/game/types'
 
 let passed = 0
 let failed = 0
@@ -125,7 +126,7 @@ section('the postcard — encode/decode roundtrip + the budget')
     check('the roundtrip restores every field', dec.ok && dec.ok &&
       dec.moment.day === MOMENT.day && dec.moment.locId === MOMENT.locId && dec.moment.name === 'Ada' &&
       dec.moment.level === 6 && dec.moment.rep === 38 && dec.moment.earned === 4300 && dec.moment.moves === 9)
-    check('the ghost walk survives', dec.ok && dec.trailCompared !== undefined ? true : dec.ok && JSON.stringify(dec.moment.trail) === JSON.stringify(MOMENT.trail))
+    check('the ghost walk survives', dec.ok && JSON.stringify(dec.moment.trail) === JSON.stringify(MOMENT.trail))
     const enc2 = encodeTeleport(MOMENT)
     check('DETERMINISM: the same moment mints the same bytes', enc2.ok && enc2.code === enc.code)
     const enc3 = encodeTeleport({ ...MOMENT, day: 42 })
@@ -137,7 +138,8 @@ section('the postcard — encode/decode roundtrip + the budget')
   }
   check('a name over 12 chars refuses', !encodeTeleport({ ...MOMENT, name: 'abcdefghijklmnop' }).ok)
   check('a name with a script injection refuses', !encodeTeleport({ ...MOMENT, name: 'Ada<script>' }).ok)
-  check('a name with inner spaces collapses to one', sanitizeTeleportName('Ada   Hustle').ok && sanitizeTeleportName('Ada   Hustle').name === 'Ada Hustle')
+  const sanSpaces = sanitizeTeleportName('Ada   Hustle')
+  check('a name with inner spaces collapses to one', sanSpaces.ok && sanSpaces.name === 'Ada Hustle')
   check('an off-roster street refuses', !encodeTeleport({ ...MOMENT, locId: 'lagos-island' }).ok)
   check('a trail over the category law refuses', !encodeTeleport({ ...MOMENT, trail: [1, 99, 0] }).ok)
   check('a wrong version refuses', !encodeTeleport({ ...MOMENT, v: 2 as unknown as 1 }).ok)
@@ -505,7 +507,8 @@ section('the store pass — share, credit, arrival, the gate')
     check('the landing is FREE and honest', gs().world!.currentLocation === 'mount-patti' && loc0 === 'home')
     check('the mailbox holds the postcard', gs().cityPulse!.arrivals.length === 1 && gs().cityPulse!.arrivals[0] === musaEnc.code)
     check('THE NO-CREDIT LAW: landings pay nothing', gs().player!.reputation === rep1)
-    check('the ghost card decodes from the book', decodeTeleport(gs().cityPulse!.arrivals[0]).ok && postcardFor(decodeTeleport(gs().cityPulse!.arrivals[0]).moment!).title.includes('Musa'))
+    const ghost = decodeTeleport(gs().cityPulse!.arrivals[0])
+    check('the ghost card decodes from the book', ghost.ok && postcardFor(ghost.moment).title.includes('Musa'))
     // the SAME code twice — the book dedupes nothing but the cap holds
     await gs().arriveByTeleport(musaEnc.code)
     check('a second landing re-books honestly (cap-aware)', gs().cityPulse!.arrivals.length === 2)
