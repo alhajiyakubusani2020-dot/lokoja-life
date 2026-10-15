@@ -24,6 +24,14 @@ import { audio } from '@/game/systems/audio'
 import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
 import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen } from './controls'
+import { music, moodForTimeOfDay } from '@/game/systems/music'
+import { extrasLive } from '@/game/systems/extras'
+import { PATTI_SECRETS } from '@/game/systems/patti'
+
+/** M19 E2E — an honest snapshot of the extras-first state */
+function extrasLevelSnapshot() {
+  return { level: extrasLive.level, tier: extrasLive.tier }
+}
 import { sampleFor } from '@/game/systems/perfProbe'
 import { getDeviceProfile } from '@/game/systems/device'
 import { setDebugScarcity } from '@/game/systems/chaos'
@@ -260,6 +268,23 @@ export function WorldTab({
           cut: s.world ? cutZonesFor(s.world.day) : [],
         }
       },
+      /** M19 E2E — force the day slot (sunset band / dusk shots are deterministic) */
+      forceTime: (t: 'morning' | 'afternoon' | 'evening' | 'night') => {
+        const s = useGameStore.getState()
+        if (s.world) useGameStore.setState({ world: { ...s.world, timeOfDay: t } })
+      },
+      /** M19 E2E — the polish books (story / hill / wardrobe) for honest asserts */
+      m19: () => {
+        const s = useGameStore.getState()
+        return {
+          story: s.story,
+          patti: s.patti,
+          wardrobe: s.wardrobe,
+          settings: s.settings,
+          extras: extrasLevelSnapshot(),
+          secrets: PATTI_SECRETS.map((p) => ({ id: p.id, x: p.x, z: p.z })),
+        }
+      },
     }
     return () => {
       delete (window as unknown as { __lkl?: unknown }).__lkl
@@ -284,6 +309,35 @@ export function WorldTab({
     if (soundOn) ambience.start()
     return () => ambience.stop()
   }, [soundOn])
+
+  // M19 — the afro-fusion soundtrack: starts with the world, follows
+  // sound × music, and the mood answers the in-world clock. The engine
+  // handles mood changes itself (crossfade on the same context).
+  const musicOn = useGameStore((s) => s.settings.sound && s.settings.music)
+  const tod = useGameStore((s) => s.world?.timeOfDay)
+  useEffect(() => {
+    music.setEnabled(musicOn)
+    if (musicOn) music.start(moodForTimeOfDay(tod ?? 'morning'))
+    else music.stop()
+    return () => {
+      music.stop()
+    }
+  }, [musicOn])
+  useEffect(() => {
+    if (musicOn && music.isStarted()) music.setMood(moodForTimeOfDay(tod ?? 'morning'))
+  }, [tod, musicOn])
+
+  // M19 — THE HILL'S WHISPER: a 2Hz poll for undiscovered Patti secrets
+  // (rides the same cadence as the ambience blend — one cheap distance math
+  // per tick, zero React churn unless a secret actually lands)
+  const checkPatti = useGameStore((s) => s.checkPatti)
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.hidden) return
+      checkPatti(playerPos.x, playerPos.z)
+    }, 2000)
+    return () => clearInterval(id)
+  }, [checkPatti])
 
   // settle walking energy no matter HOW the world closes (Exit path resets to
   // zero first, so this only ever catches abnormal unmounts — 0 m is a no-op)

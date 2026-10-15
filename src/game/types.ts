@@ -662,6 +662,10 @@ export interface GameSettings {
   chill: boolean
   /** M13 — Elder mode: large text, high contrast, reduced motion, slow pacing */
   elder: boolean
+  /** M19 — the procedural afro-fusion soundtrack (needs sound too) */
+  music: boolean
+  /** M19 — haptic pulses on rewards/arrivals (touch devices only, elder keeps still) */
+  haptics: boolean
 }
 
 /* ------------------------------- M13 — shield ------------------------------- */
@@ -834,6 +838,58 @@ export interface ForgeState {
   ranLokoja: boolean
 }
 
+/* ------------------------------ M19 — next-gen polish ----------------------- */
+
+/**
+ * M19 — THE STORY slice: THE CONFLUENCE PATH. One deterministic quest
+ * chain — the Crusher boy on the Patti trail → the notebook → the FTH
+ * fever night → the sponsorship desk → the white coat. Pure bookkeeping:
+ * the laws live in systems/story.ts, this is only the save's memory.
+ */
+export interface StoryState {
+  /** the chapter the player has REACHED (0 = not met him yet, 5 = white coat) */
+  chapter: number
+  /** sand carries done for chapter 1 (needs 3 distinct days) */
+  sandDays: number
+  /** the last absolute day a sand carry landed (one per day) */
+  lastSandDay: number
+  /** chapter 2: the notebook paid (₦ or the school path) */
+  notePaid: boolean
+  /** chapter 3: the FTH fever night settled */
+  feverPaid: boolean
+  /** chapter 4: sponsorship days banked (needs 6) */
+  sponsoredDays: number
+  /** the last absolute day a sponsorship ₦500 landed */
+  lastSponsorDay: number
+  /** the absolute day the white coat landed (0 = still waiting) */
+  doctorDay: number
+}
+
+/**
+ * M19 — MT PATTI SECRETS. Five seeded spots on the hill; walk near one
+ * and it is yours forever. The save records which and on what day.
+ */
+export interface PattiState {
+  /** secret id → the absolute day it was found */
+  found: Record<string, number>
+}
+
+/**
+ * M19 — THE WARDROBE slice: the walk-cycle shop + the outfit drops.
+ * Premium clothing styles and walk styles are bought with naira (the
+ * honest engine — no money moves outside addMoney/removeMoney) or
+ * granted by quests/festivals as drops. `activeWalk` is the equipped
+ * walk style key ('street' = the classic default, always owned).
+ */
+export interface WardrobeState {
+  /** premium clothing style keys owned (base styles need no book) */
+  ownedStyles: string[]
+  /** walk style keys owned ('street' is owned by birth) */
+  ownedWalks: string[]
+  /** the equipped walk style key */
+  activeWalk: string
+}
+
 /* ---------------------------------- Save ----------------------------------- */
 
 /**
@@ -848,7 +904,9 @@ export interface GameSave {
    *  v12 (M11): the rivers slice joins the schema
    *  v16 (M15): the pulse slice joins the schema
    *  v17 (M17): the live nation slice joins the schema
-   *  v18 (M18): the city forge slice joins the schema */
+   *  v18 (M18): the city forge slice joins the schema
+   *  v19 (M19): the story, patti and wardrobe slices + settings.music/haptics
+   *  join the schema */
   version: number
   createdAt: number
   updatedAt: number
@@ -883,6 +941,12 @@ export interface GameSave {
   live: LiveState
   /** M18 — the city forge: the vote book + the ledger */
   forge: ForgeState
+  /** M19 — the story: THE CONFLUENCE PATH quest book */
+  story: StoryState
+  /** M19 — the Patti secrets: which of the five are yours */
+  patti: PattiState
+  /** M19 — the wardrobe: owned outfits/walk styles + the equipped walk */
+  wardrobe: WardrobeState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

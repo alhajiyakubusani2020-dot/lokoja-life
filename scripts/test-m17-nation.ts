@@ -272,7 +272,7 @@ section('SAVE v17 — the live slice joins the ladder')
   mem['lokoja-life:save'] = JSON.stringify(bare16)
   const loaded = SaveSystem.load() as unknown as Record<string, unknown> | null
   check('the bare v16 save loads', loaded !== null)
-  check('the ladder walks it to v17', loaded?.version === 18)
+  check('the ladder walks it to v19', loaded?.version === 19)
   const lv = loaded?.live as ReturnType<typeof freshLiveState> | undefined
   check('the live slice arrives defaulted (cursor 0, mic dark, no memberships)', lv !== undefined && lv.cursor === 0 && lv.voiceOn === false && lv.assocId === null && lv.circles.length === 0)
   check('freshLiveState is honest', freshLiveState().stats.chats === 0 && freshLiveState().finesPaid === 0)

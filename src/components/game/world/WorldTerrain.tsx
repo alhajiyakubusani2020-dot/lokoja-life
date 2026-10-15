@@ -31,6 +31,7 @@ import {
   WATER_Y, WORLD_HALF, roadDistance, roadDistanceMajors,
 } from '@/game/world3d/layout'
 import { hash1, mergeGeoms, makeGroundGrainTexture, roadTextures } from '@/game/world3d/terrainArt'
+import { atmoLive } from './atmosphere' // M19 — the flood veil reads the live weather
 
 function smoothstep(a: number, b: number, t: number): number {
   const x = Math.max(0, Math.min(1, (t - a) / (b - a)))
@@ -338,6 +339,90 @@ function Rivers() {
         <circleGeometry args={[15, 28]} />
         <meshBasicMaterial color="#dceee8" transparent opacity={0.12} depthWrite={false} />
       </mesh>
+      {/* M19 — the flood veil: an animated muddy ripple riding the water when
+          the flood weather owns the day (reads atmoLive.flood, zero React) */}
+      <FloodVeil waters={waters} />
+    </group>
+  )
+}
+
+/* ------------------------- M19 — the flood-water veil ------------------------ */
+
+const FLOOD_VERT = /* glsl */ `
+  varying vec2 vUv;
+  varying vec3 vWorld;
+  void main() {
+    vUv = uv;
+    vec4 w = modelMatrix * vec4(position, 1.0);
+    vWorld = w.xyz;
+    gl_Position = projectionMatrix * viewMatrix * w;
+  }
+`
+
+/**
+ * THE FLOOD LAW, rendered: the veil sits 0.09u over the water, tinted
+ * the Niger's real flood brown. Two scrolling sine bands fake the ripple
+ * (fragment-only — the vertices never move, so the cost is one cheap
+ * plane draw). Opacity answers ONLY to atmoLive.flood; at zero the mesh
+ * parks invisible — a dry-season veil costs nothing.
+ */
+function FloodVeil({ waters }: { waters: THREE.BufferGeometry[] }) {
+  const matRef = useRef<THREE.ShaderMaterial>(null)
+  const grpRef = useRef<THREE.Group>(null)
+
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uOpacity: { value: 0 },
+      uMud: { value: new THREE.Color('#5e4f36') },
+      uSky: { value: new THREE.Color('#8a9488') },
+    }),
+    [],
+  )
+
+  useFrame((state, dt) => {
+    const mat = matRef.current
+    const grp = grpRef.current
+    if (!mat || !grp) return
+    const u = mat.uniforms as typeof uniforms
+    u.uTime.value = state.clock.elapsedTime
+    u.uOpacity.value += (atmoLive.flood * 0.5 - u.uOpacity.value) * Math.min(1, dt * 0.6)
+    grp.visible = u.uOpacity.value > 0.012
+    if (!grp.visible) return
+    // the flood sky is heavy grey-green — the veil catches it
+    u.uSky.value.set('#7d8a80')
+  })
+
+  const frag = /* glsl */ `
+    varying vec3 vWorld;
+    uniform float uTime;
+    uniform float uOpacity;
+    uniform vec3 uMud;
+    uniform vec3 uSky;
+    void main() {
+      // two travelling swells — the Niger hauling debris toward the delta
+      float w1 = sin(vWorld.x * 0.55 + uTime * 1.1) * 0.5 + 0.5;
+      float w2 = sin(vWorld.z * 0.43 - uTime * 0.8 + vWorld.x * 0.21) * 0.5 + 0.5;
+      float ripple = w1 * 0.6 + w2 * 0.4;
+      vec3 col = mix(uMud, uSky, ripple * 0.35);
+      gl_FragColor = vec4(col, uOpacity * (0.65 + ripple * 0.35));
+    }
+  `
+
+  return (
+    <group ref={grpRef} visible={false}>
+      {waters.map((g, i) => (
+        <mesh key={`flood-${i}`} geometry={g} renderOrder={2}>
+          <shaderMaterial
+            ref={i === 0 ? matRef : undefined}
+            uniforms={uniforms}
+            vertexShader={FLOOD_VERT}
+            fragmentShader={frag}
+            transparent
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
     </group>
   )
 }

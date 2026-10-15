@@ -318,7 +318,7 @@ section('SAVE v18 — the forge slice joins the ladder')
   mem['lokoja-life:save'] = JSON.stringify(bare17)
   const loaded = SaveSystem.load() as unknown as Record<string, unknown> | null
   check('the bare v17 save loads', loaded !== null)
-  check('the ladder walks it to v18', loaded?.version === 18)
+  check('the ladder walks it to v19', loaded?.version === 19)
   const fg = loaded?.forge as ReturnType<typeof freshForgeState> | undefined
   check('the forge slice arrives defaulted (the seeded vote book, empty ledger)', fg !== undefined && typeof fg?.votes.counts === 'object' && Array.isArray(fg?.ledger) && fg?.ranLokoja === false)
   check('the seed book carries the honest Accra lead', (fg?.votes.counts.accra ?? 0) > (fg?.votes.counts.kano ?? 0))

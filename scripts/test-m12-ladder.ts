@@ -92,7 +92,7 @@ import { LADDER } from '../src/game/data/config'
 import { SaveSystem } from '../src/game/systems/save'
 import { freshCivicState } from '../src/game/systems/civic'
 
-const SAVE_V = 18
+const SAVE_V = 19
 const E = LADDER.education
 const H = LADDER.housing
 const J = LADDER.japa

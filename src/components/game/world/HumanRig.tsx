@@ -48,13 +48,15 @@ export interface RigColors {
 
 /* ------------------------- style + hair resolution ------------------------- */
 
-export type RigStyle = 'tshirt' | 'kaftan' | 'ankara' | 'senator' | 'hoodie' | 'lace'
+export type RigStyle = 'tshirt' | 'kaftan' | 'ankara' | 'senator' | 'hoodie' | 'lace' | 'agbada' | 'jersey' | 'lab-coat' | 'confluence-gold'
 
 const KNOWN_STYLES: ReadonlySet<string> = new Set([
   'tshirt', 'kaftan', 'ankara', 'senator', 'hoodie', 'lace',
+  // M19 — the wardrobe's premium rail (the drops included)
+  'agbada', 'jersey', 'lab-coat', 'confluence-gold',
 ])
-const DRESS_LIKE: ReadonlySet<string> = new Set(['kaftan', 'lace'])
-const LONG_SLEEVE: ReadonlySet<string> = new Set(['kaftan', 'senator', 'hoodie', 'lace'])
+const DRESS_LIKE: ReadonlySet<string> = new Set(['kaftan', 'lace', 'agbada', 'lab-coat', 'confluence-gold'])
+const LONG_SLEEVE: ReadonlySet<string> = new Set(['kaftan', 'senator', 'hoodie', 'lace', 'agbada', 'lab-coat', 'confluence-gold'])
 const SENATOR_TROUSERS = 'senator'
 const CAP_HAIR: ReadonlySet<string> = new Set(['low-cut', 'waves', 'cornrows'])
 const STRAND_HAIR: ReadonlySet<string> = new Set(['dreads', 'braids'])
@@ -110,11 +112,16 @@ interface RigMats {
 function useRigMaterials(c: RigColors): RigMats {
   return useMemo(() => {
     const trim = new THREE.Color(c.cloth).multiplyScalar(0.68)
+    // M19 — the premium cloth laws: the white coat is white, the Confluence
+    // Gold is GOLD (earned colours are not negotiable), agbada keeps the
+    // player's chosen cloth but a richer trim
+    const clothColor = c.style === 'lab-coat' ? '#f2f2ec' : c.style === 'confluence-gold' ? '#c9992e' : c.cloth
+    const trimColor = c.style === 'agbada' || c.style === 'confluence-gold' ? '#e8c86a' : trim
     return {
       skin: new THREE.MeshStandardMaterial({ color: c.skin, roughness: 0.72 }),
-      cloth: new THREE.MeshStandardMaterial({ color: c.cloth, roughness: 0.9 }),
+      cloth: new THREE.MeshStandardMaterial({ color: clothColor, roughness: 0.9 }),
       clothAlt: new THREE.MeshStandardMaterial({ color: c.clothAlt ?? c.cloth, roughness: 0.9 }),
-      trim: new THREE.MeshStandardMaterial({ color: trim, roughness: 0.92 }),
+      trim: new THREE.MeshStandardMaterial({ color: trimColor, roughness: 0.82, metalness: trimColor === '#e8c86a' ? 0.35 : 0 }),
       hair: new THREE.MeshStandardMaterial({ color: c.hair, roughness: 1 }),
       dark: new THREE.MeshStandardMaterial({ color: '#26221e', roughness: 1 }),
       shoe: new THREE.MeshStandardMaterial({ color: '#3a332c', roughness: 0.95 }),
@@ -216,15 +223,22 @@ interface LimbRefs {
   body: THREE.Group | null
 }
 
+import type { WalkRig } from '@/game/systems/wardrobe'
+
 /**
  * The full articulated human — ~1.84 m, pivot-based limbs.
  * speedRef: units/s movement speed (0 = idle breathing).
+ * rig (M19): the walk-style parameters from the wardrobe — 'street' is
+ * the identity element (all multipliers 1, lean 0), so the default path
+ * renders EXACTLY the classic walk. NPC rigs stay street forever.
  */
-export function HumanRig({ colors, speedRef, castShadow = true }: { colors: RigColors; speedRef: { current: number }; castShadow?: boolean }) {
+const STREET_RIG: WalkRig = { freq: 1, swing: 1, bob: 1, sway: 1, lean: 0, shin: 1 }
+export function HumanRig({ colors, speedRef, castShadow = true, rig }: { colors: RigColors; speedRef: { current: number }; castShadow?: boolean; rig?: WalkRig }) {
   const m = useRigMaterials(colors)
   const style = rigStyleOf(colors)
   const hairstyle = rigHairOf(colors)
   const dressLike = DRESS_LIKE.has(style)
+  const walkRig = rig ?? STREET_RIG
   const refs = useRef<LimbRefs>({
     lArm: null, rArm: null, lFore: null, rFore: null,
     lLeg: null, rLeg: null, lShin: null, rShin: null,
@@ -238,8 +252,10 @@ export function HumanRig({ colors, speedRef, castShadow = true }: { colors: RigC
     const s = speedRef.current
     const walk = Math.min(1, s / 4.4)
     const run = Math.max(0, Math.min(1, (s - 4.4) / 3))
-    const f = 8.4 + run * 2.6
-    const swing = Math.sin(t * f) * (0.52 + run * 0.22) * walk
+    // M19 — the wardrobe's walk style bends every honest multiplier; 'street'
+    // is the identity, so the classic walk is byte-identical when unequipped
+    const f = (8.4 + run * 2.6) * walkRig.freq
+    const swing = Math.sin(t * f) * (0.52 + run * 0.22) * walk * walkRig.swing
 
     // arms counter-swing (phase-locked to the legs), elbows flex more while running
     if (r.lArm) r.lArm.rotation.x = -swing
@@ -250,14 +266,14 @@ export function HumanRig({ colors, speedRef, castShadow = true }: { colors: RigC
     // legs: thigh swing + knee flex on the back-swing (toe-off)
     if (r.lLeg) r.lLeg.rotation.x = swing
     if (r.rLeg) r.rLeg.rotation.x = -swing
-    if (r.lShin) r.lShin.rotation.x = Math.max(0, Math.sin(t * f + Math.PI * 0.5)) * 0.82 * walk
-    if (r.rShin) r.rShin.rotation.x = Math.max(0, Math.sin(t * f + Math.PI * 1.5)) * 0.82 * walk
+    if (r.lShin) r.lShin.rotation.x = Math.max(0, Math.sin(t * f + Math.PI * 0.5)) * 0.82 * walk * walkRig.shin
+    if (r.rShin) r.rShin.rotation.x = Math.max(0, Math.sin(t * f + Math.PI * 1.5)) * 0.82 * walk * walkRig.shin
 
     // torso bob (two beats per stride) + run lean + gentle hip sway
     if (r.body) {
-      r.body.position.y = Math.abs(Math.sin(t * f)) * walk * 0.05
-      r.body.rotation.x = run * 0.16
-      r.body.rotation.z = Math.sin(t * f) * 0.035 * walk
+      r.body.position.y = Math.abs(Math.sin(t * f)) * walk * 0.05 * walkRig.bob
+      r.body.rotation.x = run * 0.16 + walkRig.lean
+      r.body.rotation.z = Math.sin(t * f) * 0.035 * walk * walkRig.sway
     }
     // idle breathing — chest scale 1 ± 0.01, faster and subtler than before
     if (r.chest) {
@@ -384,6 +400,52 @@ export function HumanRig({ colors, speedRef, castShadow = true }: { colors: RigC
           </mesh>
           <mesh position={[0, 0.45, 0]} castShadow={sh} material={m.clothAlt}>
             <cylinderGeometry args={[0.382, 0.382, 0.055, 12]} />
+          </mesh>
+        </>
+      )}
+      {/* M19 — the premium rail: agbada / confluence-gold / lab-coat / jersey */}
+      {(style === 'agbada' || style === 'confluence-gold') && (
+        <>
+          {/* the flowing three-part robe — wide to the ankle, real volume */}
+          <mesh position={[0, 0.86, 0]} castShadow={sh} material={m.cloth}>
+            <cylinderGeometry args={[0.24, 0.46, 1.02, 14]} />
+          </mesh>
+          {/* chest embroidery bib */}
+          <mesh position={[0, 1.28, 0.2]} castShadow={sh} material={m.trim}>
+            <boxGeometry args={[0.16, 0.3, 0.014]} />
+          </mesh>
+          {/* the two shoulder flaps agbada is famous for */}
+          <mesh position={[0.19, 1.47, 0]} rotation={[0, 0, -0.16]} castShadow={sh} material={m.trim}>
+            <boxGeometry args={[0.14, 0.2, 0.05]} />
+          </mesh>
+          <mesh position={[-0.19, 1.47, 0]} rotation={[0, 0, 0.16]} castShadow={sh} material={m.trim}>
+            <boxGeometry args={[0.14, 0.2, 0.05]} />
+          </mesh>
+        </>
+      )}
+      {style === 'lab-coat' && (
+        <>
+          {/* the white coat — knee length, honest */}
+          <mesh position={[0, 0.92, 0]} castShadow={sh} material={m.cloth}>
+            <cylinderGeometry args={[0.215, 0.34, 0.88, 12]} />
+          </mesh>
+          {/* the lapel lines */}
+          <mesh position={[0.055, 1.38, 0.16]} rotation={[0, 0, 0.5]} castShadow={sh} material={m.trim}>
+            <boxGeometry args={[0.03, 0.16, 0.012]} />
+          </mesh>
+          <mesh position={[-0.055, 1.38, 0.16]} rotation={[0, 0, -0.5]} castShadow={sh} material={m.trim}>
+            <boxGeometry args={[0.03, 0.16, 0.012]} />
+          </mesh>
+        </>
+      )}
+      {style === 'jersey' && (
+        <>
+          {/* the number 10 — two honest bars on the chest */}
+          <mesh position={[0.045, 1.3, 0.2]} castShadow={sh} material={m.clothAlt}>
+            <boxGeometry args={[0.035, 0.13, 0.012]} />
+          </mesh>
+          <mesh position={[0.095, 1.25, 0.2]} castShadow={sh} material={m.clothAlt}>
+            <boxGeometry args={[0.065, 0.035, 0.012]} />
           </mesh>
         </>
       )}

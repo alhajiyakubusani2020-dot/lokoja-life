@@ -10,6 +10,8 @@
  *   • birds    — scheduled chirp blips by day (outdoors)
  *   • crickets — pulsed high band at night
  *   • room     — faint indoor room tone while inside
+ *   • horns    — traffic hum + stochastic horn stabs (M19, by the roads)
+ *   • zinc     — bright rain-on-zinc-roof ticks while indoors in the rain (M19)
  *
  * update() is called from the HUD poll (throttled) with pure numbers;
  * nothing here touches game state. Failures are swallowed — audio can
@@ -20,6 +22,10 @@ interface AmbienceParams {
   night: boolean
   rain: boolean
   indoors: boolean
+  /** M19 — true while the walker is indoors during rain (bright zinc ticks) */
+  rainIndoors?: boolean
+  /** M19 — 0..1 proximity to roads/traffic (drives the horns layer + stabs) */
+  traffic?: number
   /** 0..1 proximity blends (already computed by the caller) */
   river: number
   market: number
@@ -28,8 +34,9 @@ interface AmbienceParams {
 class WorldAmbience {
   private ctx: AudioContext | null = null
   private master: GainNode | null = null
-  private layers: Partial<Record<'breeze' | 'river' | 'market' | 'rain' | 'room' | 'crickets', GainNode>> = {}
+  private layers: Partial<Record<'breeze' | 'river' | 'market' | 'rain' | 'room' | 'crickets' | 'horns' | 'zinc', GainNode>> = {}
   private birdTimer: ReturnType<typeof setTimeout> | null = null
+  private hornTimer: ReturnType<typeof setTimeout> | null = null
   private started = false
   private enabled = true
   private last: AmbienceParams = { night: false, rain: false, indoors: false, river: 0, market: 0 }
@@ -95,6 +102,8 @@ class WorldAmbience {
       this.layers.rain = layer('highpass', 1400, 0.4, 0)
       this.layers.room = layer('lowpass', 140, 0.5, 0)
       this.layers.crickets = layer('bandpass', 4400, 6, 0)
+      this.layers.horns = layer('bandpass', 520, 2.5, 0)
+      this.layers.zinc = layer('bandpass', 3200, 1.2, 0)
 
       // slow swell on the breeze — the wind breathes
       const lfo = ctx.createOscillator()
@@ -119,6 +128,7 @@ class WorldAmbience {
       master.gain.setTargetAtTime(1, ctx.currentTime, 0.6)
       this.started = true
       this.scheduleBirds()
+      this.scheduleHorns(buf)
     } catch {
       this.started = false
     }
@@ -127,6 +137,8 @@ class WorldAmbience {
   stop() {
     if (this.birdTimer !== null) clearTimeout(this.birdTimer)
     this.birdTimer = null
+    if (this.hornTimer !== null) clearTimeout(this.hornTimer)
+    this.hornTimer = null
     try {
       this.ctx?.close()
     } catch {
@@ -140,7 +152,9 @@ class WorldAmbience {
 
   /** Throttled per-frame-ish blend from the HUD poll. */
   update(p: AmbienceParams) {
-    this.last = p
+    // M19 fields default here so existing callers compile untouched
+    const p2 = { rainIndoors: false, traffic: 0, ...p }
+    this.last = p2
     const ctx = this.ctx
     if (!ctx || !this.started) return
     try {
@@ -148,13 +162,15 @@ class WorldAmbience {
       const set = (g: GainNode | undefined, v: number, tc = 0.9) => {
         if (g) g.gain.setTargetAtTime(v, t, tc)
       }
-      const outdoor = p.indoors ? 0.25 : 1
-      set(this.layers.breeze, p.indoors ? 0.012 : 0.045)
-      set(this.layers.river, Math.max(0, 1 - p.river / 85) * 0.11 * outdoor)
-      set(this.layers.market, Math.max(0, 1 - p.market / 55) * 0.085 * outdoor)
-      set(this.layers.rain, p.rain ? 0.075 * (p.indoors ? 0.4 : 1) : 0, 1.4)
-      set(this.layers.room, p.indoors ? 0.028 : 0, 1.2)
-      set(this.layers.crickets, p.night && !p.indoors ? 0.032 : 0, 1.5)
+      const outdoor = p2.indoors ? 0.25 : 1
+      set(this.layers.breeze, p2.indoors ? 0.012 : 0.045)
+      set(this.layers.river, Math.max(0, 1 - p2.river / 85) * 0.11 * outdoor)
+      set(this.layers.market, Math.max(0, 1 - p2.market / 55) * 0.085 * outdoor)
+      set(this.layers.rain, p2.rain ? 0.075 * (p2.indoors ? 0.4 : 1) : 0, 1.4)
+      set(this.layers.room, p2.indoors ? 0.028 : 0, 1.2)
+      set(this.layers.crickets, p2.night && !p2.indoors ? 0.032 : 0, 1.5)
+      set(this.layers.horns, p2.traffic * 0.05 * outdoor)
+      set(this.layers.zinc, p2.rainIndoors ? 0.05 : 0, 1.1)
     } catch {
       /* ignore */
     }
@@ -191,6 +207,60 @@ class WorldAmbience {
       }
     }
     this.birdTimer = setTimeout(tick, 1800)
+  }
+
+  /**
+   * M19 — traffic horns + zinc-roof rain ticks, one random 4-9s timer for
+   * both. Horn stabs only with real traffic nearby and by day; the zinc
+   * ticks only while the walker is indoors in the rain.
+   */
+  private scheduleHorns(buf: AudioBuffer) {
+    const tick = () => {
+      this.hornTimer = setTimeout(tick, 4000 + Math.random() * 5000)
+      const ctx = this.ctx
+      if (!ctx || !this.started || !this.enabled) return
+      try {
+        // zinc — a tiny 4ms white-noise tick, 30% per tick, 4-6kHz
+        if (this.last.rainIndoors && Math.random() < 0.3 && this.master) {
+          const now = ctx.currentTime
+          const src = ctx.createBufferSource()
+          src.buffer = buf
+          const filter = ctx.createBiquadFilter()
+          filter.type = 'bandpass'
+          filter.frequency.value = 4000 + Math.random() * 2000
+          filter.Q.value = 2
+          const g = ctx.createGain()
+          g.gain.setValueAtTime(0.02, now)
+          g.gain.exponentialRampToValueAtTime(0.0001, now + 0.012)
+          src.connect(filter)
+          filter.connect(g)
+          g.connect(this.master)
+          src.start(now, Math.random() * 1.5, 0.004)
+        }
+        // horn stab — a short detuned saw pair, only with traffic close and by day
+        const traffic = this.last.traffic ?? 0
+        if (traffic <= 0.25 || this.last.night || !this.master) return
+        const now = ctx.currentTime
+        const base = 300 + Math.random() * 200
+        const det = base * 0.02
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.0001, now)
+        g.gain.exponentialRampToValueAtTime(0.035 * traffic, now + 0.015)
+        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
+        for (const f of [base - det / 2, base + det / 2]) {
+          const osc = ctx.createOscillator()
+          osc.type = 'sawtooth'
+          osc.frequency.value = f
+          osc.connect(g)
+          osc.start(now)
+          osc.stop(now + 0.2)
+        }
+        g.connect(this.master)
+      } catch {
+        /* ignore */
+      }
+    }
+    this.hornTimer = setTimeout(tick, 2600)
   }
 }
 

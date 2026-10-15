@@ -32,6 +32,7 @@ import {
 import { NPCS } from '@/game/data/npcs'
 import { INTERIOR, WORLD3D } from '@/game/data/config'
 import { audio } from '@/game/systems/audio'
+import { walkRigFor } from '@/game/systems/wardrobe' // M19 — the equipped walk style
 import { useGameStore } from '@/game/store/useGameStore'
 import {
   addWalkDistance, consumeLook, consumeZoom, getCamMode, isInputFrozen, MOVE, playerPos,
@@ -86,8 +87,12 @@ export function PlayerAvatar({
   speedRef: { current: number }
   driving?: boolean
 }) {
+  // M19 — the equipped walk style rides the wardrobe slice (store subscription
+  // re-renders only when the PLAYER equips something new — rare and cheap)
+  const activeWalk = useGameStore((s) => s.wardrobe.activeWalk)
+  const rig = useMemo(() => walkRigFor({ activeWalk }), [activeWalk])
   if (driving) return null
-  return <HumanRig colors={playerRigColors(avatar)} speedRef={speedRef} castShadow />
+  return <HumanRig colors={playerRigColors(avatar)} speedRef={speedRef} castShadow rig={rig} />
 }
 
 /* -------------------------------- player controller ---------------------------- */

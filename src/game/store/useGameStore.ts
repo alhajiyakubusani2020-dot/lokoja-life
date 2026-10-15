@@ -128,6 +128,11 @@ import { bumpGoal, freshGoalState } from '../systems/goals'
 import { freshLiveState, sanitizeChat, emoteById } from '../systems/live'
 import { freshForgeState, forgeCity, forgeVote as forgeVoteLaw, applyVote, recordBuild, voteWinner, PILOT_LADDER, CITY_SLA_MINUTES } from '../systems/citypack'
 import type { OsmExtract } from '../systems/citypack'
+import { freshStoryState, currentTask, canCarrySand, canPayNotebook, canPayFever, canSponsor as canSponsorStory, canGraduate, applyCarry, applyNotebook, applyFever, applySponsor, applyWhiteCoat, coatDay, STORY, type StoryChapter } from '../systems/story'
+import { freshPattiState, PATTI_SECRETS, nearestSecret, discover, type PattiSecret } from '../systems/patti'
+import { freshWardrobeState, shopBuy, equipWalk as equipWalkLaw, grantDrop, walkRigFor, WALK_BY_KEY, PREMIUM_BY_KEY } from '../systems/wardrobe'
+import { music, moodForTimeOfDay } from '../systems/music'
+import { haptics } from '../systems/haptics'
 import { freshPulseState, pulseForDay, markPulseRead, type PulseItem } from '../systems/pulse'
 import { encodeTeleport, decodeTeleport, postcardFor, type TeleportMoment } from '../systems/teleport'
 import {
@@ -302,6 +307,12 @@ interface GameStore {
   live: import('../types').LiveState | null
   /** M18 — the city forge: the vote book + the ledger */
   forge: import('../types').ForgeState | null
+  /** M19 — the story: THE CONFLUENCE PATH quest book */
+  story: import('../types').StoryState
+  /** M19 — the Patti secrets: which of the five are yours */
+  patti: import('../types').PattiState
+  /** M19 — the wardrobe: owned outfits/walk styles + the equipped walk */
+  wardrobe: import('../types').WardrobeState
   /** M17 — the nation's last sync snapshot (session-only — the wire) */
   liveWire: { roster: { handle: string; band: string; street: string; status: string }[]; events: { seq: number; kind: string; actor: string; payload: Record<string, unknown> }[] } | null
   /** M16 — a cloud push failed offline; the queue flushes when the network returns */
@@ -493,6 +504,28 @@ interface GameStore {
   setChill: (chill: boolean) => void
   /** M13 — Elder mode: large text, high contrast, reduced motion, slow pacing */
   setElder: (elder: boolean) => void
+  /** M19 — the procedural afro-fusion soundtrack (rides the master sound switch) */
+  setMusic: (on: boolean) => void
+  /** M19 — haptic pulses on rewards/arrivals (touch only; elder keeps still) */
+  setHaptics: (on: boolean) => void
+  /** M19 — the wardrobe shop: buy a walk style or premium outfit (honest wallet) */
+  wardrobeBuy: (kind: 'walk' | 'outfit', itemKey: string) => { ok: boolean; why?: string }
+  /** M19 — equip an owned walk style (the rig obeys) */
+  wardrobeEquipWalk: (walkKey: string) => { ok: boolean; why?: string }
+  /** M19 — THE CONFLUENCE PATH: carry sand with the crusher boy (chapter 1) */
+  storyCarrySand: () => { ok: boolean; why?: string }
+  /** M19 — pay the school levy / fetch the notebook (chapter 2) */
+  storyPayNotebook: () => { ok: boolean; why?: string }
+  /** M19 — settle the FTH fever night (chapter 3) */
+  storyPayFever: () => { ok: boolean; why?: string }
+  /** M19 — sponsor the boy's desk for one more day (chapter 4) */
+  storySponsor: () => { ok: boolean; why?: string }
+  /** M19 — the white coat: claim the graduation once the wait is served */
+  storyGraduate: () => { ok: boolean; why?: string }
+  /** M19 — the hill's whisper: poll the player's position for an undiscovered
+   *  secret (called from the HUD's ~2Hz poll); returns the secret when one
+   *  was JUST discovered (so the UI can toast) else null. */
+  checkPatti: (x: number, z: number) => PattiSecret | null
   /** M13 — SPOT THE SCAMMER: play today's round (once per in-game day). */
   playScammer: (pickIndex: number) => void
   /** M13 — the local parent-PIN gate (guests): set it the first time. */
@@ -602,6 +635,7 @@ function applyArrival(
     const place = LOCATION_BY_ID[m.locId]?.name ?? m.locId
     get().notify({ icon: '📍', text: `You land for ${place} — ${m.name}'s postcard, Day ${m.day}. No fare.`, tone: 'good' })
     audio.play('notify')
+    haptics.fire('arrival') // M19 — the postcard buzzes in the pocket
   }
   scheduleAutosave(get)
 }
@@ -700,6 +734,7 @@ function bumpOnboarding(
     get().addMoney(GOALS.onboardingReward, { label: 'Street Certified — onboarding complete', category: 'tip' })
     get().notify({ icon: '🏅', text: `STREET CERTIFIED! You don learn the ropes — ${formatNaira(GOALS.onboardingReward)} don land.`, tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
   }
 }
 
@@ -941,6 +976,7 @@ function commitCivicDays(
       get().addReputation(FESTIVALS.sponsorWinRep)
       get().notify({ icon: '🏆', text: `${rr.winner} don win the Regatta! Your sponsorship pay ${formatNaira(rr.sponsorWin.payout)} — the whole shoreline dey call your name.`, tone: 'good' })
       audio.play('levelup')
+      haptics.fire('levelup')
     } else if (rr.sponsorLose) {
       get().addReputation(FESTIVALS.sponsorLoseRep)
       get().notify({ icon: '🚤', text: `${rr.winner} carry the Regatta trophy. Your crew no win but the street respect the support.`, tone: 'neutral' })
@@ -978,6 +1014,7 @@ function commitCivicDays(
     get().addReputation(RIVERS.rescue.repReward)
     get().notify({ icon: '🛻', text: `COLD-ROOM RESCUE COMPLETE! The trucks don move the stock to the Patti road high ground — ${zoneName} go hear am for the season.`, tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
   }
   if (agg.riverRelief) {
     const p = get().player
@@ -1005,6 +1042,7 @@ function commitCivicDays(
     get().addMoney(LADDER.japa.remittance, { label: 'First remittance — from abroad', category: 'tip' })
     get().notify({ icon: '💸', text: `The first remittance don land — ${formatNaira(LADDER.japa.remittance)} from abroad. The village dey proud of you.`, tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
   }
 
   if (agg.nepaPosted > 0) {
@@ -1053,6 +1091,9 @@ function scheduleAutosave(get: () => GameStore) {
       cityPulse: get().cityPulse ?? freshPulseState(),
       live: get().live ?? freshLiveState(),
       forge: get().forge ?? freshForgeState(),
+      story: get().story,
+      patti: get().patti,
+      wardrobe: get().wardrobe,
       settings,
     })
   }, AUTOSAVE.debounceMs)
@@ -1085,10 +1126,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   live: null,
   liveWire: null,
   forge: null,
+  story: freshStoryState(),
+  patti: freshPattiState(),
+  wardrobe: freshWardrobeState(),
   pendingArrival: null,
   cloudPending: false,
   shockwave: 0,
-  settings: { sound: true, graphics: 'auto' as const, chill: false, elder: false },
+  settings: { sound: true, graphics: 'auto' as const, chill: false, elder: false, music: false, haptics: true },
 
   isTravelling: false,
   isWorking: false,
@@ -1099,8 +1143,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   boot: () => {
     const save = SaveSystem.load()
-    const bootSettings = save?.settings ?? { sound: true, graphics: 'auto', chill: false, elder: false }
+    const bootSettings = save?.settings ?? { sound: true, graphics: 'auto', chill: false, elder: false, music: false, haptics: true }
     syncAudioWithSettings(bootSettings)
+    // M19 — the audio/haptic engines ride the settings at boot
+    haptics.setEnabled(bootSettings.haptics)
+    haptics.setElder(bootSettings.elder)
+    music.setEnabled(bootSettings.sound && bootSettings.music)
     set({ booted: true, hasSave: SaveSystem.hasSave(), settings: bootSettings })
     // M15 — a postcard in the URL: decode it now, land when the city opens
     try {
@@ -1402,6 +1450,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })
     get().bumpGoal('nepa')
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1442,6 +1491,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })
     get().bumpGoal('tax')
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1466,6 +1516,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1511,6 +1562,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ player: { ...p, businesses: [...p.businesses, shop] } })
     get().notify({ icon: def.emoji, text: `${def.name} na yours now! Income go dey enter the till daily.`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1551,6 +1603,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })
     get().bumpGoal('collect')
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1574,6 +1627,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ player: { ...p, businesses: p.businesses.map((b) => (b.typeId === typeId ? { ...b, level: b.level + 1 } : b)) } })
     get().notify({ icon: def.emoji, text: `${def.name} don level up to L${shop.level + 1} — income go show am.`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1607,6 +1661,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1650,6 +1705,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1729,6 +1785,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // a run can cross midnight — the civic mesh follows the day
       commitCivicDays(get, set, w.day, clock.day)
       audio.play('chime')
+      haptics.fire('reward')
       scheduleAutosave(get)
     }
 
@@ -1779,6 +1836,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('levelup')
+    haptics.fire('levelup')
     scheduleAutosave(get)
     return true
   },
@@ -1801,6 +1859,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'neutral',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1883,6 +1942,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
   },
 
@@ -1906,6 +1966,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().notify({ icon: '🏦', text: `${formatNaira(amount)} don enter bank. Money wey dey bank dey safe.`, tone: 'good' })
     get().bumpGoal('deposit')
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -1996,6 +2057,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2040,6 +2102,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     get().bumpGoal('festival')
     scheduleAutosave(get)
     return true
@@ -2065,6 +2128,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2100,6 +2164,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2124,6 +2189,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2150,6 +2216,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2175,6 +2242,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2213,6 +2281,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     get().bumpGoal('festival')
     scheduleAutosave(get)
     return true
@@ -2244,6 +2313,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2274,6 +2344,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })
     get().notify({ icon: '🧱', text: `${count} sack${count > 1 ? 's' : ''} of Crusher sand don land for your compound — the walkway dey wait.`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2300,10 +2371,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (segmentsLeft(after, zoneId) === 0) {
       get().notify({ icon: '🛤️', text: `THE WALKWAY DEY OPEN! ${zoneName} crossing don complete — set your toll and collect.`, tone: 'good' })
       audio.play('levelup')
+      haptics.fire('levelup')
     } else {
       get().notify({ icon: '🧱', text: `One more segment stand — ${segmentsLeft(after, zoneId)} left for ${zoneName}.`, tone: 'neutral' })
     }
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2342,6 +2415,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().addMoney(amount, { label: `Crossing tolls — ${LOCATION_BY_ID[zoneId]?.name ?? zoneId} walkway`, category: 'hustle' })
     get().notify({ icon: '💰', text: `You collect ${formatNaira(amount)} from the toll bowl — the walkers dey pay.`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2365,6 +2439,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ rivers: { ...rivers, canoe: true } })
     get().notify({ icon: '🛶', text: 'The canoe don land! When the river rise, the ferry board go pay you like a landlord.', tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
     scheduleAutosave(get)
     return true
   },
@@ -2473,6 +2548,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       bumpOnboarding(get, set, 'work')
       commitCivicDays(get, set, w.day, clock.day)
       audio.play('chime')
+      haptics.fire('reward')
       scheduleAutosave(get)
     }
     setTimeout(applyDone, WORK.transitionMs)
@@ -2504,6 +2580,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2531,6 +2608,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ education: enrollApply(education, world.day) })
     get().notify({ icon: '🎓', text: 'You don enroll at FUL! Lectures start tomorrow — the semester clock dey run (18 days, 12 lectures, then the exam).', tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
     scheduleAutosave(get)
     return true
   },
@@ -2560,10 +2638,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().addReputation(LADDER.education.deansGrantRep)
       get().notify({ icon: '🏅', text: `THE DEAN'S GRANT! ${LADDER.education.deansLectures} lectures don land — ${formatNaira(LADDER.education.deansGrant)} + the street dey respect the book.`, tone: 'good' })
       audio.play('levelup')
+      haptics.fire('levelup')
     } else {
       get().notify({ icon: '📚', text: `Lecture ${ed.lecturesDone}/${LADDER.education.lecturesNeeded} done — smart XP +${LADDER.education.lectureSmartXp}, stipend ${formatNaira(LADDER.education.lectureStipend)}.`, tone: 'good' })
     }
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2583,9 +2663,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (graduatedNow) {
       get().notify({ icon: '🎓', text: `FINAL EXAM PASSED! The convocation holds in ${LADDER.education.convocationInDays} days — the gown dey press.`, tone: 'good' })
       audio.play('levelup')
+      haptics.fire('levelup')
     } else if (passed) {
       get().notify({ icon: '✅', text: `Semester ${education.semester} passed (score ${examScore(player.skills.smart, education.lecturesDone).toFixed(1)}) — semester ${next.semester} starts tomorrow.`, tone: 'good' })
       audio.play('levelup')
+      haptics.fire('levelup')
     } else {
       get().notify({ icon: '📕', text: `The exam no pass (score ${examScore(player.skills.smart, education.lecturesDone).toFixed(1)} — you need ${LADDER.education.examPassScore}). The semester repeats — the lectures don reset.`, tone: 'bad' })
     }
@@ -2609,6 +2691,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ player: { ...p0, needs: applyNeedsDelta(p0.needs, { mood: LADDER.education.graduateMood }) } })
     get().notify({ icon: '🎓', text: `CONVOCATION! The FUL certificate dey your hand — +${LADDER.education.graduateRep} rep, the career desks don open (Civil Servant, Tutorial Assistant).`, tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
     scheduleAutosave(get)
     return true
   },
@@ -2636,6 +2719,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().removeMoney(gate.amount, { label: 'Rent — one cycle', category: 'other' })
     get().notify({ icon: '🏠', text: `Rent don clear — ${formatNaira(gate.amount)} paid, the book moves ${LADDER.housing.rentCycleDays} days forward.`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2654,6 +2738,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ housing: buyPropertyApply(housing, propertyId) })
     get().notify({ icon: '🏠', text: `KEYS DON LAND! ${prop.name} na your own — no more rent, comfort +${prop.comfort} on every sleep.`, tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
     scheduleAutosave(get)
     return true
   },
@@ -2674,6 +2759,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ player: { ...p0, needs: applyNeedsDelta(p0.needs, { mood: 2 }) } })
     get().notify({ icon: '🛋️', text: `${def?.label ?? 'Furnishing'} don land — the house don warm (+${def?.mood ?? 0} comfort).`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2691,6 +2777,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ housing: resolveWahalaApply(housing) })
     get().notify({ icon: '🤝', text: `Wahala settle — ${formatNaira(gate.cost)} and the compound dey quiet again.`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2733,6 +2820,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ japa: collectNimcApply(japa, world.day) })
     get().notify({ icon: '🪪', text: 'NIMC slip dey your hand — step 1 of 5 don land. The passport window dey wait.', tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2767,6 +2855,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ japa: collectPassportApply(japa, world.day) })
     get().notify({ icon: '📜', text: 'The green book don land — passport dey your hand! The KGIRS clearance dey next.', tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2793,6 +2882,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (real) {
       get().notify({ icon: '🕶️', text: 'The agent sabi somebody! The passport don land TODAY — the street go respect the connect.', tone: 'good' })
       audio.play('levelup')
+      haptics.fire('levelup')
     } else {
       get().addReputation(-LADDER.japa.agentRepHit)
       get().notify({ icon: '🚬', text: `NA WASH! The agent don disappear with ${formatNaira(LADDER.japa.agentFee)} — the street don laugh at you (-${LADDER.japa.agentRepHit} rep). The official window dey wait.`, tone: 'bad' })
@@ -2815,6 +2905,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ japa: clearanceApply(japa, world.day) })
     get().notify({ icon: '🧾', text: 'KGIRS clearance don stamp — the taxman dey shake your hand. The police certificate dey next.', tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2833,6 +2924,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ japa: policeCertificateApply(japa, world.day) })
     get().notify({ icon: '👮', text: 'The character certificate don land — your file complete! The send-off dey wait at the Motor Park.', tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -2862,6 +2954,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     get().notify({ icon: '✈️', text: `THE SEND-OFF! The whole motor park don spray you — JAPA DON LAND (+${LADDER.japa.repReward} rep). The first remittance go reach tomorrow morning.`, tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
     scheduleAutosave(get)
     return true
   },
@@ -2881,6 +2974,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().addReputation(LADDER.mopol.escortRep)
     get().notify({ icon: '🚨', text: `Escort detail done — ${formatNaira(LADDER.mopol.escortPay)} + the siren don clear your road for ${LADDER.mopol.sirenDays} days (journeys ×${LADDER.mopol.sirenMinutesMult}).`, tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
     scheduleAutosave(get)
     return true
   },
@@ -3031,6 +3125,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -3141,6 +3236,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().bumpGoal('meal')
     bumpOnboarding(get, set, 'meal')
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
     return true
   },
@@ -3388,6 +3484,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // M9 — the first ₦500 earned completes the onboarding 'earn' step
     if (get().player!.stats.totalEarned >= 500) bumpOnboarding(get, set, 'earn')
     audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
   },
 
@@ -3457,6 +3554,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           pulse: { id: ++pulseId, amount: paid },
         })
         audio.play('chime')
+        haptics.fire('reward')
         if (get().player!.stats.totalEarned >= 500) bumpOnboarding(get, set, 'earn')
       }
     }
@@ -3486,6 +3584,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ player: { ...player, skillXp: result.skillXp, skills: result.skills } })
     if (result.leveledUp) {
       audio.play('chime')
+      haptics.fire('reward')
       get().notify({
         icon: SKILL_META[skill].emoji,
         text: `${SKILL_META[skill].label} is now Level ${result.newLevel}!`,
@@ -3573,6 +3672,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().bumpGoal('job')
       bumpOnboarding(get, set, 'work')
       if (result.outcome === 'great') audio.play('levelup')
+    haptics.fire('levelup')
       scheduleAutosave(get)
     }
 
@@ -3777,6 +3877,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!player || amount === 0) return
     set({ player: { ...player, cash: Math.max(0, player.cash + amount) } })
     if (amount > 0) audio.play('chime')
+    haptics.fire('reward')
     scheduleAutosave(get)
   },
 
@@ -3788,6 +3889,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (result.leveledUp) {
       set({ shockwave: get().shockwave + 1 })
       audio.play('levelup')
+      haptics.fire('levelup')
       get().notify({
         icon: '🎉',
         text: `Level up! You are now Level ${result.level}.`,
@@ -3842,6 +3944,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (res.perfectDay) {
       get().notify({ icon: '🔥', text: `PERFECT DAY! Goal streak don reach ${res.next.streak}.`, tone: 'good' })
       audio.play('levelup')
+      haptics.fire('levelup')
     }
     scheduleAutosave(get)
   },
@@ -3863,6 +3966,185 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().notify({ icon: elder ? '🔍' : '👓', text: elder ? 'Elder mode on — bigger text, kinder streets.' : 'Elder mode off.', tone: 'neutral' })
   },
 
+  /** M19 — the soundtrack toggle: music rides the master sound switch too. */
+  setMusic: (on) => {
+    const settings = { ...get().settings, music: on }
+    music.setEnabled(settings.sound && on)
+    set({ settings })
+    if (get().player) scheduleAutosave(get)
+    else SaveSystem.patchSettings(settings)
+  },
+
+  /** M19 — haptics toggle; elder mode keeps the phone still regardless. */
+  setHaptics: (on) => {
+    const settings = { ...get().settings, haptics: on }
+    haptics.setEnabled(on)
+    set({ settings })
+    if (get().player) scheduleAutosave(get)
+    else SaveSystem.patchSettings(settings)
+  },
+
+  /* --------------------------- M19 — the wardrobe --------------------------- */
+
+  /** THE SHOP DOOR: the law verdicts first, the wallet pays second. */
+  wardrobeBuy: (kind, itemKey) => {
+    const { player, wardrobe } = get()
+    if (!player) return { ok: false, why: 'Start a life first.' }
+    const v = shopBuy(wardrobe, kind, itemKey)
+    if (!v.ok) return { ok: false, why: v.why }
+    if (player.cash < v.price) return { ok: false, why: `You need ${formatNaira(v.price)} — the wallet no reach.` }
+    get().removeMoney(v.price, { label: `${kind === 'walk' ? 'Walk style' : 'Outfit'} — ${kind === 'walk' ? WALK_BY_KEY.get(itemKey)?.label : PREMIUM_BY_KEY.get(itemKey)?.label ?? itemKey}`, category: 'shop' })
+    const next = kind === 'walk'
+      ? { ...wardrobe, ownedWalks: [...wardrobe.ownedWalks, v.itemKey] }
+      : { ...wardrobe, ownedStyles: [...wardrobe.ownedStyles, v.itemKey] }
+    set({ wardrobe: next })
+    get().notify({ icon: kind === 'walk' ? '🕺' : '👑', text: `${kind === 'walk' ? 'Walk' : 'Outfit'} secured — ${v.itemKey} na yours now.`, tone: 'good' })
+    haptics.fire('reward')
+    scheduleAutosave(get)
+    return { ok: true }
+  },
+
+  /** THE EQUIP DOOR: an owned walk only — the rig never takes credit. */
+  wardrobeEquipWalk: (walkKey) => {
+    const { wardrobe } = get()
+    const v = equipWalkLaw(wardrobe, walkKey)
+    if (!v.ok) return { ok: false, why: v.why }
+    set({ wardrobe: { ...wardrobe, activeWalk: v.walkKey } })
+    audio.play('click')
+    scheduleAutosave(get)
+    return { ok: true }
+  },
+
+  /* ------------------------ M19 — THE CONFLUENCE PATH ----------------------- */
+
+  /** Chapter 1: one carry of sand per day beside the crusher boy. */
+  storyCarrySand: () => {
+    const { player, world, story } = get()
+    if (!player || !world) return { ok: false, why: 'Start a life first.' }
+    if (world.currentLocation !== STORY.meetPlace) return { ok: false, why: 'Find the crusher boy at the Patti trail base.' }
+    const v = canCarrySand(story, { day: world.day, chapter: story.chapter as StoryChapter, energy: player.needs.energy })
+    if (!v.ok) return { ok: false, why: v.why }
+    // the honest needs engine pays the sand's energy, the wallet pays the split
+    set({ player: { ...player, needs: applyNeedsDelta(player.needs, { energy: -STORY.sandEnergy }) } })
+    get().addMoney(STORY.sandPay, { label: 'Sand run with the crusher boy', category: 'hustle' })
+    set({ story: applyCarry(story, world.day) })
+    const after = get().story
+    get().notify({
+      icon: '⛏️',
+      text: after.chapter >= 2
+        ? `Three days of sand — the boy talk say him wan go school. Him name na Musa.`
+        : `Sand carried — ${formatNaira(STORY.sandPay)} split. Musa nod for you.`,
+      tone: 'good',
+    })
+    haptics.fire('quest')
+    get().bumpGoal('work')
+    scheduleAutosave(get)
+    return { ok: true }
+  },
+
+  /** Chapter 2: the notebook — ₦3,500 or the school's own trust (level ≥ 5). */
+  storyPayNotebook: () => {
+    const { player, story } = get()
+    if (!player) return { ok: false, why: 'Start a life first.' }
+    const v = canPayNotebook(story, { chapter: story.chapter as StoryChapter, cash: player.cash, level: player.level })
+    if (!v.ok) return { ok: false, why: v.why }
+    if (v.cost > 0) get().removeMoney(v.cost, { label: "Musa's school levy + notebook", category: 'shop' })
+    set({ story: applyNotebook(story) })
+    get().addReputation(4)
+    get().notify({ icon: '📒', text: v.cost > 0 ? `Notebook + levy paid — ${formatNaira(v.cost)}. Musa dey smile for the first time.` : 'Your word stand in for the levy — the school sabi your face.', tone: 'good' })
+    haptics.fire('quest')
+    get().bumpGoal('work')
+    scheduleAutosave(get)
+    return { ok: true }
+  },
+
+  /** Chapter 3: the fever night at the hospital — ₦2,000 or the story stops here. */
+  storyPayFever: () => {
+    const { player, story } = get()
+    if (!player) return { ok: false, why: 'Start a life first.' }
+    const v = canPayFever(story, { chapter: story.chapter as StoryChapter, cash: player.cash })
+    if (!v.ok) return { ok: false, why: v.why }
+    get().removeMoney(v.cost, { label: 'FTH fever night — Musa', category: 'shop' })
+    set({ story: applyFever(story) })
+    get().addReputation(5)
+    get().notify({ icon: '🏥', text: `The fever break — ${formatNaira(v.cost)} settle am. Musa say he go become doctor, mark am.`, tone: 'good' })
+    haptics.fire('quest')
+    get().bumpGoal('work')
+    scheduleAutosave(get)
+    return { ok: true }
+  },
+
+  /** Chapter 4: ₦500 a day on the desk — six days. */
+  storySponsor: () => {
+    const { player, world, story } = get()
+    if (!player || !world) return { ok: false, why: 'Start a life first.' }
+    const v = canSponsorStory(story, { day: world.day, chapter: story.chapter as StoryChapter, cash: player.cash })
+    if (!v.ok) return { ok: false, why: v.why }
+    get().removeMoney(v.cost, { label: "Sponsor Musa's desk", category: 'shop' })
+    set({ story: applySponsor(story, world.day) })
+    const after = get().story
+    get().notify({
+      icon: '🪑',
+      text: after.sponsoredDays >= STORY.sponsorDays
+        ? `Six days complete — the exams dey come. Wait small.`
+        : `Desk sponsored (${after.sponsoredDays}/${STORY.sponsorDays}) — ${formatNaira(v.cost)} well spent.`,
+      tone: 'good',
+    })
+    haptics.fire('quest')
+    scheduleAutosave(get)
+    return { ok: true }
+  },
+
+  /** Chapter 5: the white coat — the wait served, the city celebrates. */
+  storyGraduate: () => {
+    const { player, world, story } = get()
+    if (!player || !world) return { ok: false, why: 'Start a life first.' }
+    const v = canGraduate(story, { day: world.day })
+    if (!v.ok) return { ok: false, why: v.why }
+    set({ story: applyWhiteCoat(story, world.day) })
+    get().addReputation(STORY.whiteCoatRep)
+    // THE DROPS: the earned agbada + the Chairman Strut — one clean set()
+    const wd = get().wardrobe
+    set({
+      wardrobe: {
+        ...wd,
+        ownedStyles: [...new Set([...wd.ownedStyles, STORY.whiteCoatOutfit])],
+        ownedWalks: [...new Set([...wd.ownedWalks, STORY.whiteCoatWalk])],
+      },
+    })
+    get().notify({ icon: '🎓', text: `DR. MUSA! The white coat don land — Confluence Gold agbada + Chairman Strut na YOURS. Day ${world.day}.`, tone: 'good' })
+    audio.play('levelup')
+    haptics.fire('levelup')
+    scheduleAutosave(get)
+    return { ok: true }
+  },
+
+  /** M19 — THE HILL'S WHISPER: the HUD poll asks; the law answers.
+   *  Rewards pay through the honest engines; the discovery book is idempotent. */
+  checkPatti: (x, z) => {
+    const { world, patti } = get()
+    if (!world) return null
+    const hit = nearestSecret(x, z, patti)
+    if (!hit) return null
+    const res = discover(patti, hit.secret.id, world.day)
+    if (!res.isNew) return null
+    set({ patti: res.state })
+    // the reward rides the SAME engines as every other naira/xp/rep
+    const r = hit.secret.reward
+    if (r.kind === 'cash' && r.amount) get().addMoney(r.amount, { label: `Patti secret — ${hit.secret.name}`, category: 'tip' })
+    if (r.kind === 'xp' && r.amount) get().addXp(r.amount)
+    if (r.kind === 'rep' && r.amount) get().addReputation(r.amount)
+    if (r.kind === 'outfit' && r.item) {
+      const wd = get().wardrobe
+      set({ wardrobe: { ...wd, ownedStyles: [...new Set([...wd.ownedStyles, r.item])] } })
+    }
+    get().notify({ icon: '🗿', text: `SECRET FOUND — ${hit.secret.name}: ${hit.secret.line}`, tone: 'good' })
+    audio.play('levelup')
+    haptics.fire('secret')
+    scheduleAutosave(get)
+    return hit.secret
+  },
+
   /** M13 — SPOT THE SCAMMER: one round per day, honest money for sharp eyes. */
   playScammer: (pickIndex) => {
     const { player, world, shield } = get()
@@ -3881,6 +4163,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ player: { ...get().player!, needs: applyNeedsDelta(get().player!.needs, { mood: res.reward.mood }) } })
       get().notify({ icon: '🛡️', text: `Correct! ${res.lesson} (+${formatNaira(res.reward.cash)})`, tone: 'good' })
       audio.play('chime')
+      haptics.fire('reward')
       get().bumpGoal('study')
     } else {
       get().notify({ icon: '📚', text: `That one na honest talk. Lesson: ${res.lesson}`, tone: 'neutral' })
@@ -3922,6 +4205,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ player: { ...player, ageBand: to } })
     get().notify({ icon: '🛡️', text: `Life stage moved to ${to.toUpperCase()} — the city adjusts to you.`, tone: 'good' })
     audio.play('levelup')
+    haptics.fire('levelup')
     scheduleAutosave(get)
     return true
   },
@@ -3972,6 +4256,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ? `You don claim your name — welcome, ${input.handle.trim()}! (Birth year say ${band.toUpperCase()} — the city adjust to am.)`
         : `You don claim your name — welcome, ${input.handle.trim()}! Your hustle don dey cloud now.`, tone: 'good' })
       audio.play('levelup')
+      haptics.fire('levelup')
       scheduleAutosave(get)
       void get().pushCloud()
       // M15 — the postcard the gate held lands behind the claimed name
@@ -4030,6 +4315,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           cityPulse: winner.cityPulse ?? freshPulseState(),
           live: winner.live ?? freshLiveState(),
           forge: winner.forge ?? freshForgeState(),
+          story: winner.story ?? freshStoryState(),
+          patti: winner.patti ?? freshPattiState(),
+          wardrobe: winner.wardrobe ?? freshWardrobeState(),
           gateOpen: false,
         })
         get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}! ${verdict.why}`, tone: 'good' })
@@ -4041,6 +4329,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}!`, tone: 'good' })
       }
       audio.play('chime')
+      haptics.fire('reward')
       scheduleAutosave(get)
       void get().pushCloud()
       // M15 — the postcard the gate held lands behind the claimed name
@@ -4310,6 +4599,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ live: { ...lv, assocId } })
     get().notify({ icon: '🏛️', text: `${name} don stand — the books dey sealed.`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     return { ok: true, assocId: assocId ?? undefined }
   },
 
@@ -4389,6 +4679,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ live: { ...lv, stats: { ...lv.stats, tradesDone: lv.stats.tradesDone + 1 } } })
       get().notify({ icon: '🤝', text: `Trade sealed with ${t.from} — ₦${t.giveCash.toLocaleString()} don enter.`, tone: 'good' })
       audio.play('chime')
+      haptics.fire('reward')
     }
     return { ok: true }
   },
@@ -4436,6 +4727,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         get().addMoney(payout, { label: `${mine.name} round payout`, category: 'other' })
         get().notify({ icon: '🎉', text: `${mine.name} pays YOU ₦${payout.toLocaleString()} — the ladder reach your turn!`, tone: 'good' })
         audio.play('chime')
+        haptics.fire('reward')
       }
     }
     return { ok: true, paidOut: (res as { paidOut?: string }).paidOut, payout: (res as { payout?: number }).payout }
@@ -4524,6 +4816,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ forge: { ...fg, votes: applyVote(fg.votes, city) } })
     get().notify({ icon: '🗳️', text: `Your vote land for ${city} — ${voteWinner(get().forge?.votes ?? fg.votes) === city ? 'and e dey lead!' : 'the race still open.'}`, tone: 'good' })
     audio.play('chime')
+    haptics.fire('reward')
     // the relay vote rides when claimed (the ballot box keeps the world book)
     const { account } = get()
     if (account.linked && account.token) {
@@ -4622,6 +4915,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cityPulse: get().cityPulse ?? freshPulseState(),
       live: get().live ?? freshLiveState(),
       forge: get().forge ?? freshForgeState(),
+      story: get().story,
+      patti: get().patti,
+      wardrobe: get().wardrobe,
       settings,
     })
     set({ hasSave: true })

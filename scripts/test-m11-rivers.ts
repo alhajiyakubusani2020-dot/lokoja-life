@@ -59,7 +59,7 @@ import { SaveSystem } from '../src/game/systems/save'
 import { freshCivicState } from '../src/game/systems/civic'
 import type { RiversState } from '../src/game/types'
 
-const SAVE_V = 18
+const SAVE_V = 19
 
 let passed = 0
 let failed = 0

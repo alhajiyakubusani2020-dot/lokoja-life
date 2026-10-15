@@ -22,8 +22,11 @@ import { CityMesh } from './CityMesh'
 import { SchoolMesh } from './SchoolMesh'
 import { Birds, Npcs, PlayerController, Rain, SmokeWisps, Traffic } from './Actors'
 import { DriveSystem } from './DriveSystem'
+import { PolishLayer } from './polish'
 import { setPerfRenderer, readFrameStats } from '@/game/systems/perfProbe'
 import { getDeviceProfile, nextDynRes, QUALITY_PRESETS, type DeviceProfile, type DynResState } from '@/game/systems/device'
+import { updateExtrasLevel, extrasLive } from '@/game/systems/extras'
+import { music } from '@/game/systems/music'
 import { useGameStore } from '@/game/store/useGameStore'
 
 /* ------------------------------ perf governors (M3+M7) ------------------------- */
@@ -124,6 +127,15 @@ function DynamicResGovernor({ profile }: { profile: DeviceProfile }) {
       if (action !== 'hold') {
         gl.setPixelRatio(Math.min(dynResLive.cap, window.devicePixelRatio || 1))
       }
+      // M19 — THE EXTRAS-FIRST HEARTBEAT: the same ~2s tick recomputes the
+      // polish verdict; beauty strips tier-by-tier BEFORE resolution moves.
+      const p95 = stats ? stats.p95ms : null
+      updateExtrasLevel(profile.effective, p95, dynResLive.dir)
+      try {
+        music.setIntensity(extrasLive.level) // the drum kit thins under stress too
+      } catch {
+        /* audio is best-effort */
+      }
     }, 2000)
     return () => clearInterval(id)
   }, [gl, profile])
@@ -137,6 +149,10 @@ const skyTargets = {
   horizon: new THREE.Color('#cfe4d4'),
   sun: new THREE.Color('#fff2d0'),
   glow: 1,
+  /** M19 — the Confluence sunset band strength (eased toward the keyframe) */
+  band: 0,
+  /** M19 — the band's colour: rose-gold at dusk, soft gold at sunrise */
+  bandColor: new THREE.Color('#ff8a5e'),
 }
 const starsState = { opacity: 0 }
 
@@ -150,6 +166,8 @@ function SkyDome({ sunRef }: { sunRef: React.MutableRefObject<THREE.Vector3> }) 
       uSunDir: { value: new THREE.Vector3(0.3, 0.8, 0.2) },
       uSunColor: { value: new THREE.Color('#fff2d0') },
       uSunGlow: { value: 1 },
+      uBand: { value: 0 },
+      uBandColor: { value: new THREE.Color('#ff8a5e') },
     }),
     [],
   )
@@ -165,6 +183,8 @@ function SkyDome({ sunRef }: { sunRef: React.MutableRefObject<THREE.Vector3> }) 
     u.uSunColor.value.lerp(skyTargets.sun, k)
     u.uSunDir.value.lerp(sunRef.current, k)
     u.uSunGlow.value += (skyTargets.glow - u.uSunGlow.value) * k
+    u.uBand.value += (skyTargets.band - u.uBand.value) * k
+    u.uBandColor.value.lerp(skyTargets.bandColor, k)
   })
 
   return (
@@ -191,6 +211,8 @@ function SkyDome({ sunRef }: { sunRef: React.MutableRefObject<THREE.Vector3> }) 
           uniform vec3 uSunDir;
           uniform vec3 uSunColor;
           uniform float uSunGlow;
+          uniform float uBand;
+          uniform vec3 uBandColor;
           void main() {
             float h = clamp(vDir.y, 0.0, 1.0);
             vec3 col = mix(uHorizon, uTop, pow(h, 0.55));
@@ -198,6 +220,11 @@ function SkyDome({ sunRef }: { sunRef: React.MutableRefObject<THREE.Vector3> }) 
             col += uSunColor * sun * uSunGlow;
             float haze = pow(max(dot(normalize(vDir), normalize(uSunDir)), 0.0), 7.0);
             col += uSunColor * haze * 0.14 * uSunGlow;
+            // M19 — THE CONFLUENCE SUNSET BAND: a wide rose-gold glow hugging
+            // the horizon on the sun's side. Two pows, no loops — 6 adds total.
+            float bandH = exp(-h * 7.0);
+            float bandSun = pow(max(dot(normalize(vDir), normalize(uSunDir)), 0.0), 2.2);
+            col += uBandColor * bandH * bandSun * uBand * 0.55;
             gl_FragColor = vec4(col, 1.0);
           }
         `}
@@ -282,6 +309,14 @@ function AtmosphereController({
     skyTargets.horizon.lerp(scratch.set(target.skyHorizon), k)
     skyTargets.sun.lerp(scratch.set(target.sunColor), k)
     skyTargets.glow = target.showMoon ? 0.25 : 1
+    // M19 — the band eases toward its keyframe; harmattan dusk burns rose-gold
+    skyTargets.band = target.sunsetBand
+    skyTargets.bandColor.set(timeOfDay === 'morning' ? '#ffd08a' : '#ff7e5e')
+
+    // M19 — the shared live state the polish layers read (zero React churn)
+    atmoLive.weather = weather
+    atmoLive.sunsetBand += (target.sunsetBand - atmoLive.sunsetBand) * k
+    atmoLive.flood += ((weather === 'flood' ? 1 : 0) - atmoLive.flood) * Math.min(1, dt * 0.5)
 
     const sv = sunVec(target.sunDir)
     sunRef.current.set(sv[0], sv[1], sv[2])
@@ -510,6 +545,9 @@ export function WorldScene({
       <CityMesh />
       {/* STAGE 7 — the schools of Lokoja, inside and out */}
       <SchoolMesh />
+      {/* M19 — the beauty extras: harmattan haze + rain puddles (tier-gated,
+          EXTRAS-FIRST governed — beauty strips before resolution moves) */}
+      <PolishLayer tier={profile.effective} />
 
       <PlayerController
         avatar={avatar}

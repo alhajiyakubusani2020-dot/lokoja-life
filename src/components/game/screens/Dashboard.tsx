@@ -53,6 +53,7 @@ import {
 } from '../icons'
 import { audio } from '@/game/systems/audio'
 import { verifyChain } from '@/game/systems/fortress'
+import { currentTask } from '@/game/systems/story' // M19 — the story's live task
 import { GraphicsPicker } from './GraphicsPicker'
 import { formatNaira, nextReputationTier, reputationTier, skillCap, xpToNextLevel } from '@/game/systems/progression'
 import { skillXpToNext, SKILL_META } from '@/game/systems/skills'
@@ -375,8 +376,15 @@ function ProfileTab() {
   const fortress = useGameStore((s) => s.fortress)
   const toggleSound = useGameStore((s) => s.toggleSound)
   const setChill = useGameStore((s) => s.setChill)
+  const setMusic = useGameStore((s) => s.setMusic)
+  const setHaptics = useGameStore((s) => s.setHaptics)
   const saveNow = useGameStore((s) => s.saveNow)
   const returnToMenu = useGameStore((s) => s.returnToMenu)
+  // M19 — the story's live task + the wardrobe's equipped walk
+  const story = useGameStore((s) => s.story)
+  const storyTask = useGameStore((s) => currentTask(s.story, { day: s.world?.day ?? 0, level: s.player?.level ?? 1, cash: s.player?.cash ?? 0 }))
+  const wardrobeActiveWalk = useGameStore((s) => s.wardrobe.activeWalk)
+  const pattiFound = useGameStore((s) => Object.keys(s.patti.found).length)
   // M14 — the fortress honesty row: the ledger's chain walks the live entries
   const chainOk = verifyChain(player.transactions).ok
 
@@ -437,6 +445,141 @@ function ProfileTab() {
             style={{ left: settings.chill ? 30 : 4 }}
           />
         </button>
+      </section>
+
+      {/* M19 — music & haptics: the feel switches */}
+      <section className="lko-card mt-3 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2" aria-label="Music and haptics">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[12px] font-extrabold">🎵 Afro-Fusion Soundtrack</h3>
+            <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+              Procedural highlife — zero download, the city plays it live.
+            </p>
+          </div>
+          <button
+            data-testid="music-toggle"
+            onClick={() => { audio.play('click'); setMusic(!settings.music) }}
+            className={`lko-press relative h-8 w-14 shrink-0 rounded-full transition-colors ${settings.music ? 'bg-[var(--lko-green)]' : 'bg-black/[0.12]'}`}
+            aria-pressed={settings.music}
+            aria-label="Toggle soundtrack"
+          >
+            <span className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform" style={{ left: settings.music ? 30 : 4 }} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[12px] font-extrabold">📳 Haptics</h3>
+            <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+              A small pulse when money lands, a postcard arrives, a secret opens.
+            </p>
+          </div>
+          <button
+            data-testid="haptics-toggle"
+            onClick={() => { audio.play('click'); setHaptics(!settings.haptics) }}
+            className={`lko-press relative h-8 w-14 shrink-0 rounded-full transition-colors ${settings.haptics ? 'bg-[var(--lko-green)]' : 'bg-black/[0.12]'}`}
+            aria-pressed={settings.haptics}
+            aria-label="Toggle haptics"
+          >
+            <span className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform" style={{ left: settings.haptics ? 30 : 4 }} />
+          </button>
+        </div>
+      </section>
+
+      {/* M19 — THE CONFLUENCE PATH: the story's live task */}
+      <section className="lko-card mt-3 p-4" aria-label="Story quest" data-testid="story-panel">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-[12px] font-extrabold">🌅 THE CONFLUENCE PATH</h3>
+          <span data-testid="story-chapter" className="rounded-full bg-[var(--lko-green-soft)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
+            Chapter {story.chapter}/5
+          </span>
+        </div>
+        {story.doctorDay > 0 ? (
+          <p className="mt-2 text-[11px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+            Dr. Musa dey FTH — the boy wey you meet for Patti base don turn doctor. Your name dey inside that story.
+          </p>
+        ) : storyTask ? (
+          <>
+            <p className="mt-2 text-[11.5px] font-extrabold leading-snug">{storyTask.label}</p>
+            <p className="mt-1 text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">{storyTask.hint}</p>
+            {storyTask.kind === 'carry' && (
+              <button
+                type="button"
+                data-testid="story-act"
+                onClick={() => { audio.play('click'); useGameStore.getState().storyCarrySand() }}
+                className="lko-press mt-2.5 min-h-[42px] w-full rounded-xl bg-[var(--lko-green)] text-[12px] font-extrabold text-white"
+              >
+                ⛏️ Carry sand (14 energy · ₦400)
+              </button>
+            )}
+            {storyTask.kind === 'pay' && storyTask.id === 'notebook' && (
+              <button
+                type="button"
+                data-testid="story-act"
+                onClick={() => { audio.play('click'); useGameStore.getState().storyPayNotebook() }}
+                className="lko-press mt-2.5 min-h-[42px] w-full rounded-xl bg-[var(--lko-green)] text-[12px] font-extrabold text-white"
+              >
+                📒 Pay the levy ({storyTask.cost ? `₦${storyTask.cost.toLocaleString('en-NG')}` : 'your word — level 5'})
+              </button>
+            )}
+            {storyTask.kind === 'pay' && storyTask.id === 'fever' && (
+              <button
+                type="button"
+                data-testid="story-act"
+                onClick={() => { audio.play('click'); useGameStore.getState().storyPayFever() }}
+                className="lko-press mt-2.5 min-h-[42px] w-full rounded-xl bg-[var(--lko-green)] text-[12px] font-extrabold text-white"
+              >
+                🏥 Settle the fever night (₦2,000)
+              </button>
+            )}
+            {storyTask.kind === 'pay' && storyTask.id === 'sponsor' && (
+              <button
+                type="button"
+                data-testid="story-act"
+                onClick={() => { audio.play('click'); useGameStore.getState().storySponsor() }}
+                className="lko-press mt-2.5 min-h-[42px] w-full rounded-xl bg-[var(--lko-green)] text-[12px] font-extrabold text-white"
+              >
+                🪑 Sponsor the desk (₦500 · {story.sponsoredDays}/6)
+              </button>
+            )}
+            {storyTask.kind === 'wait' && (
+              <button
+                type="button"
+                data-testid="story-act"
+                onClick={() => { audio.play('click'); useGameStore.getState().storyGraduate() }}
+                className="lko-press mt-2.5 min-h-[42px] w-full rounded-xl bg-[var(--lko-gold)] text-[12px] font-extrabold text-[#33230a]"
+              >
+                🎓 Attend the graduation — FTH
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="mt-2 text-[11px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+            Day 3 — find the crusher boy at the Patti trail base. A story dey wait for the hill.
+          </p>
+        )}
+      </section>
+
+      {/* M19 — the hill's book: the five secrets */}
+      <section className="lko-card mt-3 flex items-center justify-between gap-3 p-4" aria-label="Patti secrets">
+        <div className="min-w-0">
+          <h3 className="text-[12px] font-extrabold">🗿 Mt Patti Secrets</h3>
+          <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+            Five dey hide for the hill. Walk near one — e go open.
+          </p>
+        </div>
+        <span data-testid="patti-count" className="shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--lko-green-deep)]">
+          {pattiFound}/5
+        </span>
+      </section>
+
+      {/* M19 — the wardrobe's equipped walk */}
+      <section className="lko-card mt-3 flex items-center justify-between gap-3 p-4" aria-label="Walk style">
+        <div className="min-w-0">
+          <h3 className="text-[12px] font-extrabold">🕺 Walk Style</h3>
+          <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+            Now walking: <b>{wardrobeActiveWalk}</b>. The Bend-Down Select dey inside the wardrobe (your room).
+          </p>
+        </div>
       </section>
 
       {/* M14 — THE FORTRESS: the honest status row */}

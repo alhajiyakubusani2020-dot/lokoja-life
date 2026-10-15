@@ -34,11 +34,14 @@ import { freshShieldState } from './shield'
 import { freshPulseState } from './pulse'
 import { freshLiveState } from './live'
 import { freshForgeState } from './citypack'
+import { freshStoryState } from './story'
+import { freshPattiState } from './patti'
+import { freshWardrobeState } from './wardrobe'
 import { freshFortressState, CHAIN_SEED, signPayload, verifyPayload, sha256, FORT_KEY_STORAGE, FORTRESS_KEYS } from './fortress'
 
 const SAVE_KEY = FORTRESS_KEYS.primary
 const SHADOW_KEY = FORTRESS_KEYS.shadow
-const SAVE_VERSION = 18
+const SAVE_VERSION = 19
 
 /** M15 — THE DELTA LAW: the state fingerprint of the last payload that hit disk.
  *  Lives OUTSIDE the save (the fortress rule: the books live beside, not inside). */
@@ -285,6 +288,15 @@ function deserialize(raw: string): GameSave | null {
       save.version = 18
       break
     case 18:
+      // v18 → v19 (M19 — NEXT-GEN POLISH): the story (THE CONFLUENCE PATH),
+      // the Patti secrets and the wardrobe book join the save, plus the
+      // settings.music / settings.haptics picks. All defaulted below — a
+      // v18 player wakes up at chapter 0 with a dry hill, an empty
+      // wardrobe, the soundtrack off until they turn it on, and haptics
+      // humming on their phone.
+      save.version = 19
+      break
+    case 19:
       // current version
       break
     default:
@@ -302,11 +314,14 @@ function deserialize(raw: string): GameSave | null {
     }
   }
   if (!save.world.currentLocation) save.world.currentLocation = 'home'
-  if (!save.settings) save.settings = { sound: true, graphics: 'auto', chill: false, elder: false }
+  if (!save.settings) save.settings = { sound: true, graphics: 'auto', chill: false, elder: false, music: false, haptics: true }
   if (typeof save.settings.sound !== 'boolean') save.settings.sound = true
   if (!['auto', 'low', 'mid', 'high'].includes(save.settings.graphics)) save.settings.graphics = 'auto'
   if (typeof save.settings.chill !== 'boolean') save.settings.chill = false
   if (typeof save.settings.elder !== 'boolean') save.settings.elder = false
+  // M19 — music defaults OFF (respect data plans), haptics ON (touch is the point)
+  if (typeof save.settings.music !== 'boolean') save.settings.music = false
+  if (typeof save.settings.haptics !== 'boolean') save.settings.haptics = true
 
   // --- Stage 3 player fields (missing on v1 saves / corrupt data) ---
   const p = save.player as PlayerState
@@ -509,6 +524,38 @@ function deserialize(raw: string): GameSave | null {
   fg.ledger = fg.ledger.filter((e) => e && typeof e.city === 'string').slice(-20)
   if (typeof fg.ranLokoja !== 'boolean') fg.ranLokoja = false
   save.forge = fg
+
+  // --- M19 story / patti / wardrobe (missing on v18-and-older saves) ---
+  const freshSt = freshStoryState()
+  const st = save.story ?? freshSt
+  if (typeof st.chapter !== 'number' || st.chapter < 0 || st.chapter > 5) st.chapter = freshSt.chapter
+  if (typeof st.sandDays !== 'number' || st.sandDays < 0) st.sandDays = freshSt.sandDays
+  if (typeof st.lastSandDay !== 'number' || st.lastSandDay < 0) st.lastSandDay = freshSt.lastSandDay
+  if (typeof st.notePaid !== 'boolean') st.notePaid = freshSt.notePaid
+  if (typeof st.feverPaid !== 'boolean') st.feverPaid = freshSt.feverPaid
+  if (typeof st.sponsoredDays !== 'number' || st.sponsoredDays < 0) st.sponsoredDays = freshSt.sponsoredDays
+  if (typeof st.lastSponsorDay !== 'number' || st.lastSponsorDay < 0) st.lastSponsorDay = freshSt.lastSponsorDay
+  if (typeof st.doctorDay !== 'number' || st.doctorDay < 0) st.doctorDay = freshSt.doctorDay
+  save.story = st
+
+  const freshPt = freshPattiState()
+  const pt = save.patti ?? freshPt
+  if (!pt.found || typeof pt.found !== 'object') pt.found = freshPt.found
+  for (const [k, n] of Object.entries(pt.found)) {
+    if (typeof n !== 'number' || n < 0) delete pt.found[k]
+  }
+  save.patti = pt
+
+  const freshWd = freshWardrobeState()
+  const wd = save.wardrobe ?? freshWd
+  if (!Array.isArray(wd.ownedStyles)) wd.ownedStyles = freshWd.ownedStyles
+  if (!Array.isArray(wd.ownedWalks)) wd.ownedWalks = freshWd.ownedWalks
+  wd.ownedStyles = wd.ownedStyles.filter((k) => typeof k === 'string')
+  wd.ownedWalks = wd.ownedWalks.filter((k) => typeof k === 'string')
+  if (typeof wd.activeWalk !== 'string' || !wd.ownedWalks.includes(wd.activeWalk)) {
+    wd.activeWalk = wd.ownedWalks.includes('street') || wd.ownedWalks.length === 0 ? 'street' : wd.ownedWalks[0]
+  }
+  save.wardrobe = wd
 
   // --- M2 civic mesh (missing on v3-and-older saves) ---
   if (!save.civic) {

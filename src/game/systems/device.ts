@@ -118,6 +118,35 @@ export function resolveQuality(setting: QualitySetting, tier: QualityTier): Qual
   return setting === 'auto' ? tier : setting
 }
 
+/* ------------------------ M19 — the EXTRAS-FIRST law ------------------------ */
+
+/**
+ * THE IMPOSSIBLE-TO-LAG LAW, part 1: beauty degrades BEFORE gameplay.
+ * M19's polish layers (harmattan dust, puddles, water ripples, sunset
+ * band) each cost a little GPU. When the device struggles, they give
+ * way tier-by-tier — the dynres governor only touches pixel ratio once
+ * the polish is already at its tier floor. Gameplay laws NEVER wait
+ * for beauty.
+ *
+ * The verdict is a small number so the scene can gate cheaply:
+ *   level 0 — every polish layer at its tier floor / off
+ *   level 1 — mid polish (half the dust planes, puddles fade, simple water)
+ *   level 2 — full polish (all layers the tier allows)
+ * A p95 of null (no samples yet — first seconds) trusts the tier.
+ */
+export function extrasVerdict(
+  tier: QualityTier,
+  p95ms: number | null,
+  dynresDir: 'steady' | 'hot' | 'cool',
+): 0 | 1 | 2 {
+  if (tier === 'low') return 0 // the tier gate law: low receives base beauty only
+  if (p95ms !== null && p95ms >= DYNRES.hotP95) return 0 // struggling right now — strip to floor
+  if (dynresDir === 'hot') return 0 // the governor is already walking down — yield early
+  if (p95ms !== null && p95ms >= 32) return 1 // warm — keep mid polish only
+  if (dynresDir === 'steady' && p95ms !== null && p95ms > 26) return 1 // hovering — hold mid
+  return 2 // comfortable — the full show
+}
+
 /* ----------------------------- dynamic resolution ---------------------------- */
 
 export interface DynResState {

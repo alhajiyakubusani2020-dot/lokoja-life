@@ -124,7 +124,7 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   mem.set(SaveSystem.SAVE_KEY, v2)
   const loaded2 = SaveSystem.load()
   check('v2 save loads', loaded2 !== null)
-  check('v2 upgraded to v18', loaded2?.version === 18)
+  check('v2 upgraded to v19', loaded2?.version === 19)
   check('v2 player gets empty garage / bank / strangers', loaded2?.player.vehicles.length === 0 && loaded2?.player.bankBalance === 0 && Object.keys(loaded2?.player.relationships ?? {}).length === 0)
   check('v2 player keeps cash + ledger', loaded2?.player.cash === 4200 && loaded2?.player.transactions.length === 0)
   check('v2 world untouched', loaded2?.world.day === 6 && loaded2?.world.currentLocation === 'kpata-market')
@@ -137,7 +137,7 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   const v1 = JSON.stringify({ version: 1, createdAt: 1, updatedAt: 2, player: v1Player, world: baseWorld, settings: { sound: true, chill: false } })
   mem.set(SaveSystem.SAVE_KEY, v1)
   const loaded1 = SaveSystem.load()
-  check('v1 save loads and reaches v18', loaded1?.version === 18)
+  check('v1 save loads and reaches v19', loaded1?.version === 19)
   check('v1 gets Stage 3 defaults too', loaded1?.player.skillXp.hustle === 0 && Array.isArray(loaded1?.player.activeOpportunities))
   check('v1 gets Stage 5 defaults too', loaded1?.player.vehicles.length === 0 && loaded1?.player.bankBalance === 0)
 
@@ -151,7 +151,7 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   })
   mem.set(SaveSystem.SAVE_KEY, v5)
   const loaded5 = SaveSystem.load()
-  check('v5 save loads and reaches v18 (M5→…→M18 ladder)', loaded5?.version === 18)
+  check('v5 save loads and reaches v19 (M5→…→M19 ladder)', loaded5?.version === 19)
   check('v5 biz gains staff=0 + no upgrades', loaded5?.player.businesses[0]?.staff === 0 && JSON.stringify(loaded5?.player.businesses[0]?.upgrades ?? []) === '[]')
   check('v5 keeps its till through the migration', loaded5?.player.businesses[0]?.accrued === 1500)
   check('v5 gets a clean fleet ledger', loaded5?.fleet.day === 6 && loaded5?.fleet.done.length === 0)
@@ -171,8 +171,11 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   const { freshEducationState } = await import('../src/game/systems/education')
   const { freshHousingState } = await import('../src/game/systems/housing')
   const { freshJapaState } = await import('../src/game/systems/japa')
+  const { freshStoryState } = await import('../src/game/systems/story')
+  const { freshPattiState } = await import('../src/game/systems/patti')
+  const { freshWardrobeState } = await import('../src/game/systems/wardrobe')
   const fresh: GameSave = {
-    version: 7, createdAt: 1, updatedAt: 2, calendar: freshCalendarState(), rivers: freshRiversState(), education: freshEducationState(), housing: freshHousingState(), japa: freshJapaState(),
+    version: 7, story: freshStoryState(), patti: freshPattiState(), wardrobe: freshWardrobeState(), createdAt: 1, updatedAt: 2, calendar: freshCalendarState(), rivers: freshRiversState(), education: freshEducationState(), housing: freshHousingState(), japa: freshJapaState(),
     shield: { scammerDay: 0, scammerCorrect: 0, scammerWrong: 0, scammerStreak: 0, parentPinHash: null },
     fortress: { anomalies: 0, dayEarnedDay: 0, dayEarned: 0, slotTxCount: 0, slotTxSlot: 0, chainTail: 'lko-chain-seed', fingerprint: null },
     cityPulse: { readDay: 0, seen: [], arrivals: [], stats: { shares: 0, arrivalsIn: 0 } },
@@ -186,7 +189,7 @@ console.log('\n— Save migration (v1/v2 → v3) —')
     onboarding: freshOnboardingState(),
     account: freshAccountState(),
     fleet: { day: 6, done: ['gig-6-okada-0'] },
-    settings: { sound: true, graphics: 'auto', chill: false, elder: false },
+    settings: { sound: true, graphics: 'auto', chill: false, elder: false, music: false, haptics: true },
   }
   SaveSystem.write(fresh)
   const rt = SaveSystem.load()
@@ -202,7 +205,7 @@ console.log('\n— Save migration (v1/v2 → v3) —')
   })
   mem.set(SaveSystem.SAVE_KEY, v6)
   const loaded6 = SaveSystem.load()
-  check('v6 save loads and reaches v18', loaded6?.version === 18)
+  check('v6 save loads and reaches v19', loaded6?.version === 19)
   check('v6 relationship gains gift/hangout cooldown defaults', loaded6?.player.relationships.musa?.lastGiftDay === 0 && loaded6?.player.relationships.musa?.lastHangoutDay === 0)
   check('v6 keeps familiarity through the migration', loaded6?.player.relationships.musa?.familiarity === 55)
 }

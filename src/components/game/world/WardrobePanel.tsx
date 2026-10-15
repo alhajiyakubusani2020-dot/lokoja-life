@@ -33,6 +33,7 @@ import {
   HAIR_COLORS,
   SKIN_TONES,
 } from '@/game/data/avatar'
+import { WALK_STYLES, PREMIUM_OUTFITS, PREMIUM_BY_KEY, WALK_BY_KEY } from '@/game/systems/wardrobe'
 import type { AvatarConfig, PlayerState } from '@/game/types'
 
 /* ------------------------------ small controls ------------------------------ */
@@ -129,6 +130,10 @@ function WardrobeSheet({ player }: { player: PlayerState }) {
 
   // draft look — re-seeded from the real save each time the sheet opens
   const [draft, setDraft] = useState<AvatarConfig>(() => ({ ...player.avatar }))
+  // M19 — the two tabs: the free look + the Bend-Down Select premium rail
+  const [tab, setTab] = useState<'look' | 'shop'>('look')
+  const wardrobe = useGameStore((s) => s.wardrobe)
+  const playerCash = useGameStore((s) => s.player?.cash ?? 0)
 
   // Escape closes (desktop nicety, matches every other sheet — the sheet
   // only exists while the bus says open, so no gate needed here)
@@ -168,7 +173,7 @@ function WardrobeSheet({ player }: { player: PlayerState }) {
               <div>
                 <h2 className="lko-display text-lg text-[var(--lko-green-deep)]">Wardrobe</h2>
                 <p className="text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-                  Fresh look — who dey show today?
+                  {tab === 'look' ? 'Fresh look — who dey show today?' : 'Bend-Down Select — walks + premium cloth'}
                 </p>
               </div>
               <button
@@ -180,9 +185,116 @@ function WardrobeSheet({ player }: { player: PlayerState }) {
                 <Icon name="close" size={18} />
               </button>
             </div>
+            {/* M19 — the tab rail */}
+            <div className="mt-2 flex gap-1.5">
+              {(['look', 'shop'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  data-testid={`wardrobe-tab-${t}`}
+                  onClick={() => { audio.play('click'); setTab(t) }}
+                  aria-pressed={tab === t}
+                  className={`lko-press flex-1 rounded-lg py-1.5 text-[11px] font-extrabold uppercase tracking-wide ${
+                    tab === t ? 'bg-[var(--lko-green)] text-white' : 'border border-[var(--lko-line)] bg-[var(--lko-surface)] text-[var(--lko-ink-soft)]'
+                  }`}
+                >
+                  {t === 'look' ? '🪞 Look' : '🛍️ Shop'}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="px-4">
+            {tab === 'shop' ? (
+              /* ---------------- M19 — THE BEND-DOWN SELECT SHOP ---------------- */
+              <div data-testid="wardrobe-shop">
+                <p className="mt-2 rounded-lg bg-[var(--lko-gold-soft,#faf3df)] px-3 py-2 text-[11px] font-semibold leading-snug text-[#6b4e12]">
+                  Walks change how you MOVE — the 3D rig obeys. Premium cloth na real cloth: your
+                  3D self wears it the moment you step out. Wallet: ₦{playerCash.toLocaleString('en-NG')}.
+                </p>
+                <Section label="Walk styles">
+                  <div className="w-full space-y-2">
+                    {WALK_STYLES.map((w) => {
+                      const owned = w.key === 'street' || wardrobe.ownedWalks.includes(w.key)
+                      const active = wardrobe.activeWalk === w.key
+                      return (
+                        <div key={w.key} className="lko-card flex items-center justify-between gap-3 p-3">
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-extrabold">{w.label}</p>
+                            <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">{w.blurb}</p>
+                          </div>
+                          {active ? (
+                            <span data-testid={`walk-${w.key}`} className="shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--lko-green-deep)]">WALKING</span>
+                          ) : owned ? (
+                            <button
+                              type="button"
+                              data-testid={`walk-${w.key}`}
+                              onClick={() => { audio.play('click'); useGameStore.getState().wardrobeEquipWalk(w.key) }}
+                              className="lko-press shrink-0 rounded-full bg-[var(--lko-green)] px-3 py-1.5 text-[10px] font-extrabold text-white"
+                            >
+                              Walk it
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              data-testid={`walk-${w.key}`}
+                              onClick={() => { audio.play('click'); useGameStore.getState().wardrobeBuy('walk', w.key) }}
+                              className="lko-press shrink-0 rounded-full bg-[var(--lko-gold)] px-3 py-1.5 text-[10px] font-extrabold text-[#33230a]"
+                            >
+                              ₦{w.price.toLocaleString('en-NG')}
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Section>
+                <Section label="Premium outfits">
+                  <div className="w-full space-y-2">
+                    {PREMIUM_OUTFITS.map((o) => {
+                      const owned = wardrobe.ownedStyles.includes(o.key)
+                      const worn = draft.clothingStyle === o.key
+                      const buyable = o.price > 0
+                      return (
+                        <div key={o.key} className="lko-card flex items-center justify-between gap-3 p-3">
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-extrabold">{o.label}</p>
+                            <p className="text-[10.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">{o.blurb}</p>
+                          </div>
+                          {owned ? (
+                            worn ? (
+                              <span data-testid={`outfit-${o.key}`} className="shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--lko-green-deep)]">ON YOU</span>
+                            ) : (
+                              <button
+                                type="button"
+                                data-testid={`outfit-${o.key}`}
+                                onClick={() => { audio.play('click'); patch({ clothingStyle: o.key }); setTab('look') }}
+                                className="lko-press shrink-0 rounded-full bg-[var(--lko-green)] px-3 py-1.5 text-[10px] font-extrabold text-white"
+                              >
+                                Wear it
+                              </button>
+                            )
+                          ) : buyable ? (
+                            <button
+                              type="button"
+                              data-testid={`outfit-${o.key}`}
+                              onClick={() => { audio.play('click'); useGameStore.getState().wardrobeBuy('outfit', o.key) }}
+                              className="lko-press shrink-0 rounded-full bg-[var(--lko-gold)] px-3 py-1.5 text-[10px] font-extrabold text-[#33230a]"
+                            >
+                              ₦{o.price.toLocaleString('en-NG')}
+                            </button>
+                          ) : (
+                            <span className="shrink-0 rounded-full border border-[var(--lko-line)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--lko-ink-soft)]">EARN IT</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Section>
+              </div>
+            ) : (
+            /* ------------------------- the free LOOK tab ------------------------ */
+            <>
             {/* live preview */}
             <div className="mt-1 flex items-center gap-4">
               <div className="lko-card shrink-0 p-2">
@@ -240,11 +352,15 @@ function WardrobeSheet({ player }: { player: PlayerState }) {
 
             {/* outfit */}
             <Section label="Outfit style">
-              {AVATAR_CLOTHING_STYLES.map((s) => (
+              {[
+                ...AVATAR_CLOTHING_STYLES.map((s) => ({ key: s.key, label: s.label, hint: s.description })),
+                // M19 — owned premium outfits join the rail (wear what you own)
+                ...PREMIUM_OUTFITS.filter((o) => wardrobe.ownedStyles.includes(o.key)).map((o) => ({ key: o.key, label: o.label, hint: o.blurb })),
+              ].map((s) => (
                 <StyleChip
                   key={s.key}
                   label={s.label}
-                  hint={s.description}
+                  hint={s.hint}
                   active={draft.clothingStyle === s.key}
                   onSelect={() => patch({ clothingStyle: s.key })}
                 />
@@ -283,6 +399,8 @@ function WardrobeSheet({ player }: { player: PlayerState }) {
                 Wear it
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       </div>
