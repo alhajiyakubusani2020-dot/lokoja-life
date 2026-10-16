@@ -754,3 +754,251 @@ export function resolveInteriorPosition(
   z = Math.max(-hz, Math.min(hz, z))
   return [x, z]
 }
+
+/* ------------------- G2 — district interiors (spaces breadth) -------------------
+ * Door-worthy rooms for the G2 roster expansion, schema-identical to the
+ * interiors above. They register in INTERIOR_BY_ID (so every consumer keeps
+ * one honest lookup) but intentionally stay OUT of the INTERIORS array: the
+ * 3D door mesh in world3d/layout.ts is pinned one-door-per-INTERIORS-entry
+ * by scripts/test-world3d.ts, and the new pins' exterior door positions are
+ * the parent's next wiring step. scripts/test-m21-spaces.ts runs the SAME
+ * laws over this registry: footprint validity, spawn/clamp, exit hotspot,
+ * BFS pathability from spawn to every hotspot and action.
+ * ------------------------------------------------------------------------------ */
+
+const PALACE_HALL: InteriorDef = (() => {
+  const walls: WallSeg[] = [
+    // 12 × 9 m, door gap on the SOUTH wall (x −0.9..0.9)
+    wall(-6, -4.5, 6, -4.5),
+    wall(-6, -4.5, -6, 4.5),
+    wall(6, -4.5, 6, 4.5),
+    wall(-6, 4.5, -0.9, 4.5),
+    wall(0.9, 4.5, 6, 4.5),
+  ]
+  return {
+    id: 'palace-reception-hall',
+    name: "Maigari's Reception Hall",
+    locationId: 'maigari-palace',
+    size: { w: 12, d: 9 },
+    rooms: [
+      { name: 'Audience floor', x: 0, z: 1.1, w: 12, d: 6.2 },
+      { name: 'Throne dais', x: 0, z: -3.4, w: 12, d: 2.2 },
+    ],
+    walls,
+    furniture: [
+      // the dais — a low riser, the throne chair, flanking stools
+      { kind: 'riser', x: 0, z: -3.6, rotY: 0, tone: 0 },
+      { kind: 'podium', x: 0, z: -3.75, rotY: 0, tone: 0 },
+      { kind: 'chair', x: -1.4, z: -3.7, rotY: Math.PI, tone: 1 },
+      { kind: 'chair', x: 1.4, z: -3.7, rotY: Math.PI, tone: 2 },
+      { kind: 'sign', x: 0, z: -4.3, rotY: 0, s: 1.3, tone: 0 },
+      // visitors' benches down both sides of the audience floor
+      { kind: 'bench', x: -2.7, z: 0.4, rotY: 0, tone: 1 },
+      { kind: 'bench', x: 2.7, z: 0.4, rotY: 0, tone: 1 },
+      { kind: 'bench', x: -2.7, z: 1.9, rotY: 0, tone: 2 },
+      { kind: 'bench', x: 2.7, z: 1.9, rotY: 0, tone: 2 },
+      // the mat where petitioners stand, and the hall's dignity
+      { kind: 'rug', x: 0, z: 0.6, rotY: 0, s: 1.4, tone: 0 },
+      { kind: 'shelf', x: -5.55, z: -1.2, rotY: Math.PI / 2, tone: 1 },
+      { kind: 'ceilingfan', x: 0, z: -1.2, rotY: 0, tone: 0 },
+      { kind: 'pot', x: -3.9, z: 3.5, rotY: 0, tone: 0, s: 1.3 },
+      { kind: 'pot', x: 3.9, z: 3.5, rotY: 0, tone: 1, s: 1.3 },
+    ],
+    hotspots: [
+      { id: 'palace-exit', kind: 'exit', x: 0, z: 3.2, label: 'Step out of the palace' },
+    ],
+    spawn: { x: 0, z: 2.4, facing: Math.PI },
+    door: { x: 0, z: 4.05 },
+    palette: { floor: '#a8824f', floorAlt: '#93713f', wall: '#efe2c4', accent: '#8A3A6E' },
+    mealSpot: false,
+    shopSpot: false,
+  }
+})()
+
+const STADIUM_OFFICE: InteriorDef = (() => {
+  const walls: WallSeg[] = [
+    // 10 × 8 m, door gap on the SOUTH wall (x −0.9..0.9)
+    wall(-5, -4, 5, -4),
+    wall(-5, -4, -5, 4),
+    wall(5, -4, 5, 4),
+    wall(-5, 4, -0.9, 4),
+    wall(0.9, 4, 5, 4),
+  ]
+  return {
+    id: 'stadium-office',
+    name: 'Township Stadium Office',
+    locationId: 'township-stadium',
+    size: { w: 10, d: 8 },
+    rooms: [
+      { name: 'Waiting hall', x: 0, z: 1.2, w: 10, d: 5.2 },
+      { name: 'Fixtures desk', x: 0, z: -2.4, w: 10, d: 3 },
+    ],
+    walls,
+    furniture: [
+      // the secretary's counter + queue board (every Nigerian office, one plan)
+      { kind: 'counter', x: 0, z: -2.6, rotY: 0, tone: 1 },
+      { kind: 'partition', x: 0, z: -1.82, rotY: 0, tone: 0 },
+      { kind: 'queueboard', x: 2.9, z: -2.6, rotY: -Math.PI / 2, tone: 0 },
+      { kind: 'table', x: -1.6, z: -3.3, rotY: 0, tone: 1 },
+      { kind: 'chair', x: -1.6, z: -3.9, rotY: Math.PI, tone: 1 },
+      { kind: 'shelf', x: -4.55, z: -3, rotY: Math.PI / 2, tone: 1 },
+      { kind: 'sign', x: 4.3, z: -3.8, rotY: 0, s: 1.1, tone: 0 },
+      // matchday queue benches under the fan
+      { kind: 'bench', x: -1.8, z: 1.4, rotY: 0, tone: 1 },
+      { kind: 'bench', x: -1.8, z: 2.7, rotY: 0, tone: 1 },
+      { kind: 'ceilingfan', x: 0, z: 0.2, rotY: 0, tone: 0 },
+      { kind: 'crate', x: 4.4, z: 3.4, rotY: 0.2, tone: 0 },
+    ],
+    hotspots: [
+      { id: 'stadium-office-exit', kind: 'exit', x: 0, z: 3.1, label: 'Step back to the stands' },
+    ],
+    spawn: { x: 0, z: 2.4, facing: Math.PI },
+    door: { x: 0, z: 3.55 },
+    palette: { floor: '#b4a886', floorAlt: '#a2966f', wall: '#ece6d2', accent: '#3D8A37' },
+    floorTiles: true,
+    mealSpot: false,
+    shopSpot: false,
+  }
+})()
+
+const SOKAMMS_ROOM: InteriorDef = (() => {
+  const walls: WallSeg[] = [
+    // 8 × 6 m, door gap on the EAST wall (z −0.9..0.9)
+    wall(-4, -3, 4, -3),
+    wall(-4, 3, 4, 3),
+    wall(-4, -3, -4, 3),
+    wall(4, -3, 4, -0.9),
+    wall(4, 0.9, 4, 3),
+  ]
+  return {
+    id: 'sokamms-room',
+    name: 'Sokamms Room 4',
+    locationId: 'sokamms-motel',
+    size: { w: 8, d: 6 },
+    rooms: [
+      { name: 'Bedside', x: -1.4, z: -0.4, w: 5, d: 5 },
+      { name: 'Wash corner', x: 3.1, z: -2, w: 1.8, d: 2 },
+    ],
+    walls,
+    furniture: [
+      { kind: 'bed', x: -2.5, z: -1.4, rotY: 0, tone: 0 },
+      { kind: 'wardrobe', x: -0.8, z: -2.55, rotY: 0, tone: 0 },
+      { kind: 'tv', x: 0.6, z: -1.3, rotY: Math.PI, tone: 0 },
+      { kind: 'shower', x: 3.2, z: -2.2, rotY: 0, tone: 0 },
+      { kind: 'mirror', x: 3.7, z: -1.1, rotY: -Math.PI / 2, tone: 0 },
+      { kind: 'table', x: -2.9, z: 1.9, rotY: 0, tone: 1 },
+      { kind: 'chair', x: -1.9, z: 1.9, rotY: -Math.PI / 2, tone: 0 },
+      { kind: 'fan', x: 2.9, z: 2.3, rotY: -Math.PI / 4, tone: 0 },
+      { kind: 'mat', x: 2.9, z: 0, rotY: 0, tone: 0 },
+    ],
+    hotspots: [
+      { id: 'sokamms-bed', kind: 'bed', x: -2.5, z: -0.5, label: 'Rest on the bed' },
+      { id: 'sokamms-bath', kind: 'bath', x: 3.1, z: -1.4, label: 'Freshen up' },
+      { id: 'sokamms-tv', kind: 'tv', x: 0.6, z: -0.5, label: 'Watch some TV' },
+      { id: 'sokamms-exit', kind: 'exit', x: 3.2, z: 0.6, label: 'Check out to the road' },
+    ],
+    spawn: { x: 2.7, z: 0, facing: -Math.PI / 2 },
+    door: { x: 3.7, z: 0 },
+    palette: { floor: '#8a7454', floorAlt: '#79654a', wall: '#efe6d0', accent: '#4A6E8A' },
+    mealSpot: false,
+    shopSpot: false,
+  }
+})()
+
+const ADANKOLO_READING_ROOM: InteriorDef = (() => {
+  const walls: WallSeg[] = [
+    // 10 × 8 m, door gap on the SOUTH wall (x −0.9..0.9)
+    wall(-5, -4, 5, -4),
+    wall(-5, -4, -5, 4),
+    wall(5, -4, 5, 4),
+    wall(-5, 4, -0.9, 4),
+    wall(0.9, 4, 5, 4),
+  ]
+  return {
+    id: 'adankolo-reading-room',
+    name: 'Adankolo Community Study Room',
+    locationId: 'adankolo',
+    size: { w: 10, d: 8 },
+    rooms: [
+      { name: 'Desk rows', x: 0, z: -0.3, w: 10, d: 5.4 },
+      { name: 'Welcome mat', x: 0, z: 3, w: 10, d: 1.8 },
+    ],
+    walls,
+    furniture: [
+      // two rows of two school desks facing the blackboard
+      { kind: 'blackboard', x: 0, z: -3.8, rotY: 0, tone: 0 },
+      { kind: 'school-desk', x: -2.2, z: -1.5, rotY: 0, tone: 0 },
+      { kind: 'school-desk', x: 0.6, z: -1.5, rotY: 0, tone: 1 },
+      { kind: 'school-desk', x: -2.2, z: 0.9, rotY: 0, tone: 2 },
+      { kind: 'school-desk', x: 0.6, z: 0.9, rotY: 0, tone: 0 },
+      // the lending shelf and the wall map of Kogi
+      { kind: 'shelf', x: -4.55, z: 2.4, rotY: Math.PI / 2, tone: 1 },
+      { kind: 'wallmap', x: 3.2, z: -3.85, rotY: 0, tone: 0 },
+      { kind: 'ceilingfan', x: -0.8, z: -0.3, rotY: 0, tone: 0 },
+      { kind: 'sign', x: -3.6, z: -3.8, rotY: 0, tone: 1 },
+      { kind: 'fan', x: 4.5, z: 3.3, rotY: Math.PI, tone: 0 },
+    ],
+    hotspots: [
+      { id: 'adankolo-reading-exit', kind: 'exit', x: 0, z: 3.1, label: 'Step back to the ward' },
+    ],
+    actions: [
+      { id: 'adankolo-reading-study', kind: 'study', x: -0.9, z: -0.3, label: 'Read for a while' },
+    ],
+    spawn: { x: 0, z: 2.6, facing: Math.PI },
+    door: { x: 0, z: 3.55 },
+    palette: { floor: '#9c7a4f', floorAlt: '#8a6a42', wall: '#e9e0c8', accent: '#2E7D5B' },
+    mealSpot: false,
+    shopSpot: false,
+  }
+})()
+
+const EMIWOZIRI_FISH_SHED: InteriorDef = (() => {
+  const walls: WallSeg[] = [
+    // 8 × 6 m, door gap on the EAST wall (z −0.9..0.9)
+    wall(-4, -3, 4, -3),
+    wall(-4, 3, 4, 3),
+    wall(-4, -3, -4, 3),
+    wall(4, -3, 4, -0.9),
+    wall(4, 0.9, 4, 3),
+  ]
+  return {
+    id: 'emiwoziri-fish-shed',
+    name: 'Emiwoziri Fish Shed',
+    locationId: 'emiwoziri',
+    size: { w: 8, d: 6 },
+    rooms: [{ name: 'Shed floor', x: 0, z: 0, w: 8, d: 6 }],
+    walls,
+    furniture: [
+      // the gutting counter with its pots, crates of the morning catch
+      { kind: 'counter', x: -1.0, z: -2.2, rotY: 0, s: 1.2, tone: 0 },
+      { kind: 'pot', x: -1.7, z: -2.1, rotY: 0, tone: 0, s: 1.1 },
+      { kind: 'pot', x: -0.4, z: -2.1, rotY: 0, tone: 1, s: 1.1 },
+      { kind: 'crate', x: -3.3, z: 1.6, rotY: 0.2, tone: 0 },
+      { kind: 'crate', x: -2.5, z: 2.0, rotY: -0.15, tone: 1 },
+      { kind: 'crate', x: -3.1, z: -1.6, rotY: 0.4, tone: 2 },
+      { kind: 'shelf', x: -3.65, z: 0, rotY: Math.PI / 2, tone: 0 },
+      { kind: 'bench', x: 1.6, z: 1.9, rotY: 0, tone: 1 },
+      { kind: 'fan', x: 3.4, z: 2.4, rotY: -Math.PI / 4, tone: 0 },
+    ],
+    hotspots: [
+      { id: 'emiwoziri-shed-exit', kind: 'exit', x: 3.1, z: 0, label: 'Step out to the landing' },
+    ],
+    spawn: { x: 2.5, z: 0, facing: -Math.PI / 2 },
+    door: { x: 3.7, z: 0 },
+    palette: { floor: '#7d6a4a', floorAlt: '#6d5b3e', wall: '#ddd2b4', accent: '#2C6E8A' },
+    mealSpot: false,
+    shopSpot: false,
+  }
+})()
+
+/** the G2 registry — schema-identical, BFS-proven, one lookup everywhere */
+export const DISTRICT_INTERIORS: InteriorDef[] = [
+  PALACE_HALL,
+  STADIUM_OFFICE,
+  SOKAMMS_ROOM,
+  ADANKOLO_READING_ROOM,
+  EMIWOZIRI_FISH_SHED,
+]
+
+// keep INTERIOR_BY_ID the single source every consumer trusts
+for (const gi of DISTRICT_INTERIORS) INTERIOR_BY_ID[gi.id] = gi

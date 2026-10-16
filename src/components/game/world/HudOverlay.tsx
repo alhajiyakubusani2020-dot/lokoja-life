@@ -27,6 +27,7 @@ import type { TransportId, VehicleModel } from '@/game/types'
 import { calculateTravel } from '@/game/systems/travel'
 import { allTravelOptions } from '@/game/systems/garage'
 import { fuelMultFor } from '@/game/systems/chaos'
+import { playerCountIn, wireToPresences, type WirePresenceRow } from '@/game/systems/liveRoom'
 import { formatNaira } from '@/game/systems/progression'
 import { ambience } from '@/game/systems/ambience'
 import { audio } from '@/game/systems/audio'
@@ -284,6 +285,7 @@ export function HudOverlay({
 }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
+  const liveWire = useGameStore((s) => s.liveWire)
   const isTravelling = useGameStore((s) => s.isTravelling)
   const travelAction = useGameStore((s) => s.travel)
   const restAction = useGameStore((s) => s.rest)
@@ -598,6 +600,18 @@ export function HudOverlay({
   }
 
   const currentLoc = LOCATION_BY_ID[world.currentLocation]
+  // M21 — the co-presence chip: REAL presence rows ONLY, TTL honored at
+  // render (a stale ping is an absent neighbor). It re-evaluates with the
+  // live slice's own sync cadence — this component adds ZERO new intervals.
+  // The sim crowd is deliberately NOT shown here: the nation snapshot is
+  // not subscribed in this tree, and no heavy subscription gets added for
+  // a decoration (the phone's Live room carries the labeled (sim) line).
+  const copresenceNow = Date.now()
+  const coPresent = playerCountIn(
+    wireToPresences((liveWire?.roster ?? []) as WirePresenceRow[], copresenceNow),
+    world.currentLocation,
+    copresenceNow,
+  )
   const hotDef = interior && hotspot ? interior.hotspots.find((h) => h.id === hotspot) ?? null : null
   const doorDef = !interior && nearestAnchor?.startsWith('door:') ? INTERIOR_BY_ID[nearestAnchor.slice(5)] ?? null : null
   const promptLoc = !interior && !doorDef && nearestAnchor ? resolveAnchorLoc(nearestAnchor) : null
@@ -654,6 +668,16 @@ export function HudOverlay({
               {interior ? interior.name : currentLoc.name}
             </span>
           </span>
+          {/* M21 — co-presence: exists ONLY when a real OTHER player shares this street (count 1 = just you) */}
+          {coPresent >= 2 && (
+            <span
+              data-testid="hud-copresence"
+              aria-label={`${coPresent} real players on this street`}
+              className="flex items-center gap-1 whitespace-nowrap rounded-full bg-black/40 px-2.5 py-2 text-[10.5px] font-extrabold text-white/85 backdrop-blur-md"
+            >
+              👥 {coPresent} here
+            </span>
+          )}
         </div>
 
         <div className="pointer-events-auto flex flex-col items-end gap-1.5">

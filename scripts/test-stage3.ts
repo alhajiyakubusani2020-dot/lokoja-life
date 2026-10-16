@@ -16,6 +16,7 @@ import { JOBS, JOB_BY_ID } from '../src/game/data/jobs'
 import { HUSTLES, HUSTLE_BY_ID } from '../src/game/data/hustles'
 import { NPCS } from '../src/game/data/npcs'
 import { LOCATIONS } from '../src/game/data/locations'
+import { LOC_ACTIONS } from '../src/game/data/locActions'
 import type { PlayerState } from '../src/game/types'
 
 let failures = 0
@@ -79,7 +80,18 @@ console.log('\n— Data integrity —')
     JOBS.length === 21 && JOBS.every((j) => LOCATIONS.some((l) => l.id === j.locationId)),
   )
   check('all hustles reference real NPCs + locations', HUSTLES.every((h) => NPCS.some((n) => n.id === h.npcId) && LOCATIONS.some((l) => l.id === h.locationId)))
-  check('every location except home offers work (home = rest)', LOCATIONS.filter((l) => l.id !== 'home').every((l) => HUSTLES.some((h) => h.locationId === l.id) || JOBS.some((j) => j.locationId === l.id)))
+  // G2-SPACES appended 10 district spaces (append-only roster law). Their
+  // work is carried by their OWN action boards (LOC_ACTIONS — 'hustle'
+  // doors + stage-99 work rows honestly greyed), not yet by HUSTLES/JOB
+  // rows. The law's spirit is unchanged — no dead space in Lokoja:
+  const G2_SPACE_IDS = ['adankolo', 'emiwoziri', 'filele', 'numai', 'kpatakpoli', 'kpato', 'township-stadium', 'maigari-palace', 'pati-ridge-hill', 'sokamms-motel']
+  check(
+    'every location except home offers work (legacy rows via jobs/hustles, G2 spaces via their action board)',
+    LOCATIONS.filter((l) => l.id !== 'home').every((l) =>
+      HUSTLES.some((h) => h.locationId === l.id) ||
+      JOBS.some((j) => j.locationId === l.id) ||
+      (G2_SPACE_IDS.includes(l.id) && LOC_ACTIONS[l.id]?.some((a) => a.kind === 'earn'))),
+  )
   check('jobs are not pay-identical', new Set(JOBS.map((j) => j.basePay)).size > 6)
   check('jobs train different skills', new Set(JOBS.map((j) => j.skillTraining.skill)).size === 3)
 }

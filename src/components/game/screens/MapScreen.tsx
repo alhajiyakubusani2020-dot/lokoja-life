@@ -33,6 +33,7 @@ import { FleetBlock } from '../FleetBlock'
 import { FestivalPanel } from '../FestivalPanel'
 import { RiversPanel } from '../RiversPanel'
 import { EducationPanel, HousingPanel, JapaPanel } from '../LadderPanels'
+import { LocVibeLine, LocActionBoard } from '../LocationSheet'
 import type { TransportId } from '@/game/types'
 import { useGameStore } from '@/game/store/useGameStore'
 import {
@@ -526,6 +527,9 @@ export function MapScreen({
                 {selected.description}
               </p>
 
+              {/* M21 — the day's street vibe + the real action board (map flow) */}
+              {!isSelectedLocked && <LocVibeLine locationId={selected.id} />}
+
               {/* locked notice — honest, quiet */}
               {isSelectedLocked && (
                 <div className="mt-3 rounded-xl border border-black/[0.06] bg-black/[0.03] p-4 text-center">
@@ -678,6 +682,16 @@ export function MapScreen({
                   {!isSelectedLocked && <EducationPanel location={selected} />}
                   {!isSelectedLocked && <HousingPanel location={selected} />}
                   {!isSelectedLocked && <JapaPanel location={selected} />}
+
+                  {/* M21 — the honest action board: door-backed rows fire when standing here */}
+                  {!isSelectedLocked && (
+                    <LocActionBoard
+                      locationId={selected.id}
+                      isCurrent={isSelectedCurrent}
+                      onOpenWork={onOpenWork}
+                      onClose={() => setUserSelectedId(null)}
+                    />
+                  )}
                 </>
               )}
 

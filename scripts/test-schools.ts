@@ -49,7 +49,12 @@ console.log('\nSTAGE 7 — THE SCHOOL REGISTRY')
 check('twelve real schools', SCHOOLS.length === 12)
 check('school ids unique', new Set(SCHOOLS.map((s) => s.id)).size === SCHOOLS.length)
 check('every school registered as a first-class location', SCHOOLS.every((s) => !!LOCATION_BY_ID[s.id]))
-check('stable city ids untouched (10 legacy locations)', LOCATIONS.filter((l) => !SCHOOL_BY_ID[l.id]).length === 10)
+// G2-SPACES appended 10 district spaces to the same registry (append-only
+// law) — the LEGACY LAW this check guards is still "the ten launch rows keep
+// their identity": now pinned by id AND by honest count (10 legacy + 10 G2).
+const LEGACY_CITY_IDS = ['home', 'kpata-market', 'ganaja-junction', 'confluence', 'mount-patti', 'historic-lokoja', 'government-area', 'university-area', 'food-area', 'transport-area']
+check('stable city ids untouched (the ten launch rows, pinned by id)', LEGACY_CITY_IDS.every((id) => !!LOCATION_BY_ID[id] && !SCHOOL_BY_ID[id]))
+check('non-school roster = 10 legacy + 10 G2 spaces', LOCATIONS.filter((l) => !SCHOOL_BY_ID[l.id]).length === 20, `got ${LOCATIONS.filter((l) => !SCHOOL_BY_ID[l.id]).length}`)
 check(
   'kind coverage — 3 university, 1 polytechnic, 7 secondary, 1 college',
   SCHOOLS.filter((s) => s.kind === 'university').length === 3 &&

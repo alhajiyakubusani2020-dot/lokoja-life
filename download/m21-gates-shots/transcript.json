@@ -1,0 +1,87 @@
+{
+  "base": "http://localhost:3001",
+  "errors": [],
+  "transcript": [
+    {
+      "step": "guest-gate",
+      "ok": false,
+      "note": "gate not visible after creation — continuing"
+    },
+    {
+      "step": "phone-grid",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/01-phone-grid-21.png",
+      "text": "Gate Walker\nLV 1\n₦5,000\nNobody\nDay 1 · Morning\n₦5,000\nWetin dey happen,\nGate Walker\nChats\n0 paddy dem\nCity Pulse\nThe city talk wetin e see\nLive\nRoster · Live · Union · Ajo\nForge\nA city na data — 3-hour SLA\nNation\n10k souls · ops · the honest mirror\nFamily Shield\nScam drill + elder mode\nBank\n₦0\nHustle Board\n0 dey wait\nCivic\nEverything dey calm\nMy Biz\nOwn a shop for Lokoja\nSettings\nSound dey on\nWhot!\nThe 54-card table · play Emeka\nConfluence Path\nThe five chapters book\nCareer\nThe ladder, rung by rung\nSchool\nBooks before beta\nHouses\nRent, keys, wahala\nHealth\nThe body book\nGarage\nYour wheels, loud and clear\nWardrobe\nStrut + stitch\nContacts\nWho you know for Lokoja\nMt Patti\nThe summit book\nPhone dey work anywhere for Lokoja — even for keke.\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "whot-open",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/02-whot-table.png",
+      "text": "Gate Walker\nLV 1\n₦5,000\nNobody\nDay 1 · Morning\n₦5,000\nWhot!\nWhot! vs Emeka Dispatch\n54-card pack · winner takes the pot (2× ₦200)\nHouse Rules\nMatch the call card's suit or number · 1 = skip next player · 8 = hold on (two-man match: both mean you go again) · 2 = pick two · 5 = pick three (a same-number card defends, e dey stack) · 14 = go to market (opponent picks 1, you play again) · 20 = Whot — wild, caller names the suit · no legal card? Pick from the market.\nThe table dey set\nStake ₦200 — winner takes ₦400. The stake pays through the wallet when you deal.\nDEAL — match #1 · day 1\nThe Book\nstake: ₦200 (pot ₦400) · matches dealt: 0\ndeck law: circles 12 · triangles 12 · squares 9 · crosses 9 · stars 7 · whots 5 = 54 (no 6, no 9 — na Whot law)\nshuffle seed: day 1 × match — same day, same match, same shuffle. Determinism na law.\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "whot-dealt",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/03-whot-dealt.png",
+      "text": "Gate Walker\nLV 1\n₦4,800\nNobody\nDay 1 · Morning\n₦4,800\nWhot!\nWhot! vs Emeka Dispatch\n54-card pack · winner takes the pot (2× ₦200)\nHouse Rules\nMatch the call card's suit or number · 1 = skip next player · 8 = hold on (two-man match: both mean you go again) · 2 = pick two · 5 = pick three (a same-number card defends, e dey stack) · 14 = go to market (opponent picks 1, you play again) · 20 = Whot — wild, caller names the suit · no legal card? Pick from the market.\n🏍️ Emeka Dispatch\n6 cards in hand\nCALL CARD\n● 4\nmarket: 41\nYour hand (6)\nPICK 1\nWHOT 20\n▲ 13\n■ 7\n▲ 7\n▲ 4\n▲ 10\nThe market dey open — your move.\nThe Book\nstake: ₦200 (pot ₦400) · matches dealt: 1\ndeck law: circles 12 · triangles 12 · squares 9 · crosses 9 · stars 7 · whots 5 = 54 (no 6, no 9 — na Whot law)\nshuffle seed: day 1 × match — same day, same match, same shuffle. Determinism na law.\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "whot-played",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/04-whot-match.png",
+      "text": "Gate Walker\nLV 1\n₦4,800\nNobody\nDay 1 · Morning\n₦4,800\nWhot!\nWhot! vs Emeka Dispatch\n54-card pack · winner takes the pot (2× ₦200)\nHouse Rules\nMatch the call card's suit or number · 1 = skip next player · 8 = hold on (two-man match: both mean you go again) · 2 = pick two · 5 = pick three (a same-number card defends, e dey stack) · 14 = go to market (opponent picks 1, you play again) · 20 = Whot — wild, caller names the suit · no legal card? Pick from the market.\n🏍️ Emeka Dispatch\n0 cards in hand\nCALL CARD\n▲ 2\nmarket: 35\nYOU OWE 2 — a 2 defends\nYour hand (12)\n😔 Emeka Dispatch wins — ₦200 stake don go\nPLAY AGAIN — match #2\nThe Book\nstake: ₦200 (pot ₦400) · matches dealt: 1\ndeck law: circles 12 · triangles 12 · squares 9 · crosses 9 · stars 7 · whots 5 = 54 (no 6, no 9 — na Whot law)\nshuffle seed: day 1 × match — same day, same match, same shuffle. Determinism na law.\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "story-app",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/05-story-book.png",
+      "text": "Gate Walker\nLV 1\n₦4,800\nNobody\nDay 1 · Morning\n₦4,800\nConfluence Path\nConfluence Path\nThe Crusher boy's ladder — no lottery, no luck: the same grind, the same day, the same naira\nNow\nThe hill is quiet — the boy comes down the trail on day 3. Till then, the city dey run.\nThe Path\n● Patti Base\nyou dey here\nPatti base — a small boy hails you: \"Abeg, help me carry sand. I go share my cut. No be scam.\"\n○ The Sand Days\nahead\nBucket by bucket, day by day — the boy counts your days, not your grammar. Three honest carries and he opens his notebook.\n○ The Notebook\nahead\n\"My school fee don spoil my head,\" he says. ₦3,500 — or the school knows your name and waves the levy.\n○ The Fever Night\nahead\nThe GRA hospital by night — the boy shakes with fever and the bill is ₦2,000. You pay. Nobody forgets who stood there.\n○ The Sponsorship Desk\nahead\n₦500 a day, six days straight at the GRA desk. Government work is slow — but it is steady, and it comes with respect.\n○ The White Coat\nahead\nThe white coat fits. Confluence gold under the collar, and the Chairman Strut walks out through the hospital doors.\nThe Desk's Book\nsand carries: 0/3 (₦400 + 14⚡ each)\nnotebook levy: ₦3,500 (waived at Level 5+)\nfever night: ₦2,000 at the Government Area\ndesk days: 0/6 (₦500 a day)\nwhite coat: not yet earned\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "contacts-app",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/06-contacts-book.png",
+      "text": "Gate Walker\nLV 1\n₦4,800\nNobody\nDay 1 · Morning\n₦4,800\nContacts\nContacts\n14 Lokoja faces · 0 met · 0 paddys\nThe Paddy Book\nFamiliarity 0–100: 15 acquaintance · 40 paddy · 75 close-paddy. One chat a day per person — the street no dey rush.\n🧵 Musa\nFabric trader wey sabi everybody for Kpata. — Kpata\nStranger\n0/100\nThey still dey size you up.\n🌶️ Hajiya Amina\nPepper queen of Kpata. Sharp eyes, kind heart. — Kpata\nStranger\n0/100\nThey still dey size you up.\n🍲 Mama Ngozi\nRuns the busiest buka on the Food Strip. — Food Strip\nStranger\n0/100\nThey still dey size you up.\n🏍️ Emeka Dispatch\nDelivery rider. If e fit move, Emeka fit carry am. — Ganaja\nStranger\n0/100\nThey still dey size you up.\n🛺 Baba T.\nKeke unit leader at Motor Park. Order na im hobby. — Motor Park\nStranger\n0/100\nThey still dey size you up.\n📚 Chantel\nStudent rep wey always get one small plan. — Univ.\nStranger\n0/100\nThey still dey size you up.\n🗂️ Alhaji Sule\nOffice clerk. Paperwork na religion for am. — GRA\nStranger\n0/100\nThey still dey size you up.\n🏛️ Uncle Ben\nSelf-appointed keeper of old Lokoja stories. — Historic\nStranger\n0/100\nThey still dey size you up.\n🎣 Idris\nFisherman wey sabi every current of the two rivers. — Confluence\nStranger\n0/100\nThey still dey size you up.\n⛰️ Baba Danjuma\nTrail guide. Him leg don climb Patti ten thousand times. — Mt. Patti\nStranger\n0/100\nThey still dey size you up.\n🧪 Hauwa\nScience student wey sabi every formula for WAEC. — GYB Model\nStranger\n0/100\nThey still dey size you up.\n🎓 Chidi\nFUL guy. Permanent site na him second house. — FUL\nStranger\n0/100\nThey still dey size you up.\n📖 Mi"
+    },
+    {
+      "step": "live-room",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/07-live-room.png",
+      "text": "Gate Walker\nLV 1\n₦4,800\nNobody\nDay 1 · Morning\n₦4,800\nLive Nation\nLive Nation\nSpectator view — claim your name to talk\n🎙️ OFF\n📍 Your Place — who dey here now\nREAL PRESENCE\nJust you here now — real players show up here when dem enter your street.\n~900 souls on this street (sim) · the roster na real people — the crowd na simulation.\n🎤 The room mic is dark — claim your name to talk here.\nStreet\nLive\nUnion\nAjo\n👁️ Spectator view\nThe nation moves in front of you — but the mic stays dark and the money tables stay shut until you claim your name. No new signup: your name, one PIN.\nWHO DEY AROUND\nThe wire dey quiet — nobody else don claim yet.\nNo talk yet — be the first voice on the wire.\n🎤 The mic is dark — claim your name to talk.\n📍 Call the nation to your street\nYour postcard dey fly on the live wire — anybody wey click go land for your street FREE (no fare, no bus).\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "map-roster",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/08-map-32-pins.png",
+      "text": "Map Walker\nLV 1\n₦5,000\nNobody\nCURRENT LOCATION\nYour Place\nDay 1\nClear skies — the city moves easy.\nLOKOJA\nKOGI STATE · NIGERIA\nTHE CONFLUENCE CITY · REAL STREET MAP\nN\n0\n1 km\n2 km\nHome\nKpata\nGanaja\n🎉\nConfluence\nMt. Patti\nHistoric\nGRA\nUniv.\nFood Strip\n🔧\nMotor Park\nFUL\nFUL Adankolo\nKSP\nSalem\nNursing Schl.\nCrowther\nGYB Model\nFaithview\nAl-Azhar\nBaptist HS\nJulitola\nChristfield\nAdankolo\nEmiwoziri\nFilele\nNumai\nKpatakpoli\nKpato\nStadium\nPalace\nPati Ridge\nSokamms\nLOKOJA ATLAS\n0/32 explored\nStill out there: Your Place, Kpata Market, Ganaja Junction, The Confluence, Mount Patti, Historic Lokoja, Government Area, University Area, Mama’s Food Strip, Motor Park, Federal University Lokoja, FUL Adankolo Campus, Kogi State Polytechnic, Salem University, College of Nursing Sciences, Crowther Memorial College, GYB Model Science Secondary School, Faithview Academy, Al-Azhar International College, Baptist High School, Julitola International School, Christfield School, Adankolo, Emiwoziri, Filele, Numai, Kpatakpoli, Kpato, Township Stadium, Maigari's Palace, Pati Ridge Hill, Sokamms Global Motel. Walk there in the 3D city to discover it.\nWalk is free but tiring\nKeke is cheap\nTaxi is fastest\n🔧\nMotor Park garage sells rides\n🏍️ Your rides sip fuel — no fare\n🛵 Own a ride? Driver gigs wait at the park\n₦\nYour shop has money\nGovernment wan see you\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "stadium-sheet",
+      "ok": false,
+      "note": "sheet open but no vibe/action rows in DOM"
+    },
+    {
+      "step": "stadium-sheet",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/09-stadium-actions.png",
+      "text": "Map Walker\nLV 1\n₦5,000\nNobody\nCURRENT LOCATION\nYour Place\nDay 1\nClear skies — the city moves easy.\nLOKOJA\nKOGI STATE · NIGERIA\nTHE CONFLUENCE CITY · REAL STREET MAP\nN\n0\n1 km\n2 km\nHome\nKpata\nGanaja\n🎉\nConfluence\nMt. Patti\nHistoric\nGRA\nUniv.\nFood Strip\n🔧\nMotor Park\nFUL\nFUL Adankolo\nKSP\nSalem\nNursing Schl.\nCrowther\nGYB Model\nFaithview\nAl-Azhar\nBaptist HS\nJulitola\nChristfield\nAdankolo\nEmiwoziri\nFilele\nNumai\nKpatakpoli\nKpato\nStadium\nPalace\nPati Ridge\nSokamms\nLOKOJA ATLAS\n0/32 explored\nStill out there: Your Place, Kpata Market, Ganaja Junction, The Confluence, Mount Patti, Historic Lokoja, Government Area, University Area, Mama’s Food Strip, Motor Park, Federal University Lokoja, FUL Adankolo Campus, Kogi State Polytechnic, Salem University, College of Nursing Sciences, Crowther Memorial College, GYB Model Science Secondary School, Faithview Academy, Al-Azhar International College, Baptist High School, Julitola International School, Christfield School, Adankolo, Emiwoziri, Filele, Numai, Kpatakpoli, Kpato, Township Stadium, Maigari's Palace, Pati Ridge Hill, Sokamms Global Motel. Walk there in the 3D city to discover it.\nWalk is free but tiring\nKeke is cheap\nTaxi is fastest\n🔧\nMotor Park garage sells rides\n🏍️ Your rides sip fuel — no fare\n🛵 Own a ride? Driver gigs wait at the park\n₦\nYour shop has money\nGovernment wan see you\nTownship Stadium\n“The city’s roaring bowl”\nThe oval stands and green pitch south of the motor park, floodlights standing tall over matchday dust. Local clubs dream here, and the stall around the back sells the coldest minerals in town.\nACTIVITIES HERE\nPick"
+    },
+    {
+      "step": "guest-gate-travel",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/10-guest-gate-travel.png",
+      "text": "Map Walker\nLV 1\n₦5,000\nNobody\nCURRENT LOCATION\nYour Place\nDay 1\nClear skies — the city moves easy.\nLOKOJA\nKOGI STATE · NIGERIA\nTHE CONFLUENCE CITY · REAL STREET MAP\nN\n0\n1 km\n2 km\nHome\nKpata\nGanaja\n🎉\nConfluence\nMt. Patti\nHistoric\nGRA\nUniv.\nFood Strip\n🔧\nMotor Park\nFUL\nFUL Adankolo\nKSP\nSalem\nNursing Schl.\nCrowther\nGYB Model\nFaithview\nAl-Azhar\nBaptist HS\nJulitola\nChristfield\nAdankolo\nEmiwoziri\nFilele\nNumai\nKpatakpoli\nKpato\nStadium\nPalace\nPati Ridge\nSokamms\nLOKOJA ATLAS\n0/32 explored\nStill out there: Your Place, Kpata Market, Ganaja Junction, The Confluence, Mount Patti, Historic Lokoja, Government Area, University Area, Mama’s Food Strip, Motor Park, Federal University Lokoja, FUL Adankolo Campus, Kogi State Polytechnic, Salem University, College of Nursing Sciences, Crowther Memorial College, GYB Model Science Secondary School, Faithview Academy, Al-Azhar International College, Baptist High School, Julitola International School, Christfield School, Adankolo, Emiwoziri, Filele, Numai, Kpatakpoli, Kpato, Township Stadium, Maigari's Palace, Pati Ridge Hill, Sokamms Global Motel. Walk there in the 3D city to discover it.\nWalk is free but tiring\nKeke is cheap\nTaxi is fastest\n🔧\nMotor Park garage sells rides\n🏍️ Your rides sip fuel — no fare\n🛵 Own a ride? Driver gigs wait at the park\n₦\nYour shop has money\nGovernment wan see you\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou\nLokoja knows your face\nClaim your name to keep going — your hustle dey safe, nothing dey lost.\n✕\n🪪 Claim a name\n🔁 I don claim before\nBorn\n2020\n2019\n2018\n2017\n2016\n2015\n2014\n2013\n2012\n2011\n2010\n2009\n2008\n2007\n2006\n2005\n20"
+    },
+    {
+      "step": "after-travel",
+      "ok": true,
+      "note": "/home/z/my-project/download/m21-gates-shots/11-stadium-arrived.png",
+      "text": "🤝\nToday na free ride — tomorrow, come claim your name.\nMap Walker\nLV 1\n₦5,000\nNobody\nCURRENT LOCATION\nYour Place\nDay 1\nClear skies — the city moves easy.\nLOKOJA\nKOGI STATE · NIGERIA\nTHE CONFLUENCE CITY · REAL STREET MAP\nN\n0\n1 km\n2 km\nHome\nKpata\nGanaja\n🎉\nConfluence\nMt. Patti\nHistoric\nGRA\nUniv.\nFood Strip\n🔧\nMotor Park\nFUL\nFUL Adankolo\nKSP\nSalem\nNursing Schl.\nCrowther\nGYB Model\nFaithview\nAl-Azhar\nBaptist HS\nJulitola\nChristfield\nAdankolo\nEmiwoziri\nFilele\nNumai\nKpatakpoli\nKpato\nStadium\nPalace\nPati Ridge\nSokamms\nLOKOJA ATLAS\n0/32 explored\nStill out there: Your Place, Kpata Market, Ganaja Junction, The Confluence, Mount Patti, Historic Lokoja, Government Area, University Area, Mama’s Food Strip, Motor Park, Federal University Lokoja, FUL Adankolo Campus, Kogi State Polytechnic, Salem University, College of Nursing Sciences, Crowther Memorial College, GYB Model Science Secondary School, Faithview Academy, Al-Azhar International College, Baptist High School, Julitola International School, Christfield School, Adankolo, Emiwoziri, Filele, Numai, Kpatakpoli, Kpato, Township Stadium, Maigari's Palace, Pati Ridge Hill, Sokamms Global Motel. Walk there in the 3D city to discover it.\nWalk is free but tiring\nKeke is cheap\nTaxi is fastest\n🔧\nMotor Park garage sells rides\n🏍️ Your rides sip fuel — no fare\n🛵 Own a ride? Driver gigs wait at the park\n₦\nYour shop has money\nGovernment wan see you\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "desktop-world",
+      "ok": true,
+      "note": "desktop world settle"
+    }
+  ]
+}

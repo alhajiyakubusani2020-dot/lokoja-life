@@ -40,6 +40,10 @@ export interface LokojaLocation {
   /** multiplies trip minutes + energy (uphill trails, rough roads…) */
   travelModifier: number
   activities: LocationActivity[]
+  /** G2 — which CHAOS zone (src/game/systems/chaos.ts CHAOS_ZONE_IDS) this
+   *  location stands in. Optional: the ten launch entries ARE the zones
+   *  themselves (id === zone id), so only newer entries need to claim one. */
+  district?: string
 }
 
 export const LOCATIONS: LokojaLocation[] = [
@@ -310,3 +314,262 @@ LOCATIONS.push(...SCHOOL_LOCATIONS)
 
 // rebuild the id map so schools are first-class citizens everywhere
 for (const l of SCHOOL_LOCATIONS) LOCATION_BY_ID[l.id] = l
+
+/* ------------------------------ G2 — spaces breadth ----------------------------
+ * Ten more real Lokoja spaces join the SAME registry (append-only law — the
+ * ten launch rows + the school rows above keep their exact identity). Every
+ * name below was mined from the repo's REAL geo data before it was added:
+ *
+ *   Adankolo / Emiwoziri / Filele / Numai / Kpatakpoli / Kpato
+ *     → scripts/geo/network.json `places` (real OSM nodes, projected by the
+ *       same pipeline as the 3D world — mapX/mapY below ARE that projection:
+ *       mapX = 50 + x/6.2, mapY = 50 + z/6.2, rim-pulled past 272u).
+ *   Maigari's Palace / Pati Ridge Hill / Sokamms Global Motel
+ *     → the raw OSM tiles the pipeline was built from
+ *       (scripts/geo/tiles/t_1_2d.osm, t_0_2.osm, t_1_0.osm).
+ *   Township Stadium → the world's own 3D landmark
+ *       (src/components/game/world/CityMesh.tsx — "Township Stadium — oval
+ *       stands + green pitch + floodlights, south of the motor park"), the
+ *       same facility the OSM tiles record as "Lokoja International Stadium".
+ *
+ * `district` claims the CHAOS zone each place honestly stands in
+ * (src/game/systems/chaos.ts CHAOS_ZONE_IDS). The ten launch districts stay
+ * covered by their own launch rows (id === zone id).
+ * --------------------------------------------------------------------------- */
+
+const G2_LOCATIONS: LokojaLocation[] = [
+  {
+    id: 'adankolo',
+    name: 'Adankolo',
+    shortName: 'Adankolo',
+    tagline: 'The old campus quarter',
+    description:
+      'A busy ward on the west side of town where student lodges squeeze between family compounds. Adankolo carries the university\u2019s first home in its name — half the okada men here know a lecturer by face.',
+    color: '#2E7D5B',
+    accent: '#14432E',
+    emoji: '🏘️',
+    unlockLevel: 1,
+    mapX: 11.2,
+    mapY: 40.9,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1.25,
+    district: 'university-area',
+    activities: [
+      { key: 'hustle', label: 'Pick up hustles', stage: 3 },
+      { key: 'room-hunt', label: 'Hunt a student room', stage: 99 },
+      { key: 'campus-gist', label: 'Hear the campus gist', stage: 99 },
+    ],
+  },
+  {
+    id: 'emiwoziri',
+    name: 'Emiwoziri',
+    shortName: 'Emiwoziri',
+    tagline: 'Where the road kisses the river sand',
+    description:
+      'A riverine settlement on the southern bank, past where the tar gives up. Canoes ride low with sand and firewood, and the fishermen read the water like a newspaper.',
+    color: '#2C6E8A',
+    accent: '#123B4C',
+    emoji: '🛶',
+    unlockLevel: 1,
+    mapX: 57.9,
+    mapY: 92.2,
+    transport: ['keke', 'taxi'],
+    travelModifier: 1.3,
+    district: 'confluence',
+    activities: [
+      { key: 'hustle', label: 'Pick up hustles', stage: 3 },
+      { key: 'net-mending', label: 'Help mend the nets', stage: 99 },
+      { key: 'sand-landing', label: 'Watch the sand landing', stage: 99 },
+    ],
+  },
+  {
+    id: 'filele',
+    name: 'Filele',
+    shortName: 'Filele',
+    tagline: 'The farm road\u2019s last stop',
+    description:
+      'A village on the north-west flank under the Patti ridge, where the city noise fades into yam mounds and cassava rows. The air smells of woodsmoke and turned earth.',
+    color: '#7A8A3A',
+    accent: '#3D4519',
+    emoji: '🌾',
+    unlockLevel: 1,
+    // pulled 6.9u north-west of the raw node onto the empty NW shoulder
+    // (the node crowd sits on the Felele corridor pins; same honest pull
+    // the schools use — "the farm road's last stop" IS the far corner)
+    mapX: 25.0,
+    mapY: 5.4,
+    transport: ['keke', 'taxi'],
+    travelModifier: 1.4,
+    district: 'mount-patti',
+    activities: [
+      { key: 'hustle', label: 'Pick up hustles', stage: 3 },
+      { key: 'farm-shift', label: 'Farm work shifts', stage: 99 },
+      { key: 'harvest-market', label: 'Harvest-day market', stage: 99 },
+    ],
+  },
+  {
+    id: 'numai',
+    name: 'Numai',
+    shortName: 'Numai',
+    tagline: 'Quiet streets, loud goats',
+    description:
+      'A small settlement north-east of the Adankolo side, all footpaths, low fences and front yards. Everybody knows whose goat ate whose vegetables — and they will tell you, at length.',
+    color: '#A0672E',
+    accent: '#4F3113',
+    emoji: '🌳',
+    unlockLevel: 1,
+    // pulled 3u north-east of the raw node onto the dry shoulder of the
+    // stream (same honest pull the schools use — node blocked by water)
+    mapX: 62.4,
+    mapY: 28.7,
+    transport: ['keke', 'taxi'],
+    travelModifier: 1.2,
+    district: 'university-area',
+    activities: [
+      { key: 'hustle', label: 'Pick up hustles', stage: 3 },
+      { key: 'grazing-route', label: 'Walk the grazing route', stage: 99 },
+      { key: 'frontyard-league', label: 'Front-yard football league', stage: 99 },
+    ],
+  },
+  {
+    id: 'kpatakpoli',
+    name: 'Kpatakpoli',
+    shortName: 'Kpatakpoli',
+    tagline: 'East of the bustle',
+    description:
+      'A village quarter east of town where the compounds spread out and the sky gets bigger. Keke men negotiate hard for the trip — the road back always takes longer than the road in.',
+    color: '#3F7A5C',
+    accent: '#1F4030',
+    emoji: '🏡',
+    unlockLevel: 1,
+    mapX: 75.7,
+    mapY: 64.5,
+    transport: ['keke', 'taxi'],
+    travelModifier: 1.35,
+    district: 'ganaja-junction',
+    activities: [
+      { key: 'hustle', label: 'Pick up hustles', stage: 3 },
+      { key: 'compound-gist', label: 'Compound evening gist', stage: 99 },
+      { key: 'well-queue', label: 'Join the well queue', stage: 99 },
+    ],
+  },
+  {
+    id: 'kpato',
+    name: 'Kpato',
+    shortName: 'Kpato',
+    tagline: 'Far side of the Otukpo road',
+    description:
+      'A village out along the south-east road where the Lokoja-Otukpo road carries traders, timber and long-suffering goats. The junction boys here wave down every keke like a celebrity.',
+    color: '#B8763A',
+    accent: '#5C3A1A',
+    emoji: '🐐',
+    unlockLevel: 1,
+    mapX: 77.7,
+    mapY: 84.0,
+    transport: ['keke', 'taxi'],
+    travelModifier: 1.4,
+    district: 'ganaja-junction',
+    activities: [
+      { key: 'hustle', label: 'Pick up hustles', stage: 3 },
+      { key: 'roadside-roast', label: 'Roadside roast stand', stage: 99 },
+      { key: 'timber-load', label: 'Help load timber', stage: 99 },
+    ],
+  },
+  {
+    id: 'township-stadium',
+    name: 'Township Stadium',
+    shortName: 'Stadium',
+    tagline: 'The city\u2019s roaring bowl',
+    description:
+      'The oval stands and green pitch south of the motor park, floodlights standing tall over matchday dust. Local clubs dream here, and the stall around the back sells the coldest minerals in town.',
+    color: '#3D8A37',
+    accent: '#1D4519',
+    emoji: '🏟️',
+    unlockLevel: 1,
+    // pin sits in the open parkland pocket south-east of the Motor Park — the
+    // 3D landmark (CityMesh.tsx) stands in the same transport-area parkland;
+    // pulled east onto dry, unobstructed canvas like the schools' rim pull
+    // (the raw OSM stadium node is blocked on the grid by the Julitola pin
+    // and the real river channel). Evidence stays the landmark + OSM.
+    mapX: 51.0,
+    mapY: 67.8,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
+    district: 'transport-area',
+    activities: [
+      { key: 'hustle', label: 'Pick up hustles', stage: 3 },
+      { key: 'morning-drill', label: 'Join morning drill', stage: 99 },
+      { key: 'matchday-work', label: 'Matchday crowd work', stage: 99 },
+    ],
+  },
+  {
+    id: 'maigari-palace',
+    name: "Maigari's Palace",
+    shortName: 'Palace',
+    tagline: 'The throne of the old town',
+    description:
+      'The Maigari\u2019s compound — turbaned chiefs, quiet courtyards, and greeting protocols older than the state itself. Arrive with respect and both hands visible; leave with your name remembered.',
+    color: '#8A3A6E',
+    accent: '#451D37',
+    emoji: '👑',
+    unlockLevel: 2,
+    // pulled 2.3u south-west off the Crowther school pin (≥6u pin law) —
+    // the old town between Patti's foot and the historic quarter
+    mapX: 42.6,
+    mapY: 30.4,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1,
+    district: 'historic-lokoja',
+    activities: [
+      { key: 'greeting', label: 'Pay your respect', stage: 99 },
+      { key: 'palace-errand', label: 'Palace errands', stage: 99 },
+      { key: 'festival-grounds', label: 'Walk the festival grounds', stage: 99 },
+    ],
+  },
+  {
+    id: 'pati-ridge-hill',
+    name: 'Pati Ridge Hill',
+    shortName: 'Pati Ridge',
+    tagline: 'Patti\u2019s quieter shoulder',
+    description:
+      'The lesser shoulder of the great ridge, west of the main trail. No crowds, no vendors — just wind, grass and a view that makes the whole city look like a mat weave.',
+    color: '#6E5A2E',
+    accent: '#372D14',
+    emoji: '🥾',
+    unlockLevel: 2,
+    mapX: 25.2,
+    mapY: 31.7,
+    transport: ['walk', 'keke'],
+    travelModifier: 1.5,
+    district: 'mount-patti',
+    activities: [
+      { key: 'trail-hike', label: 'Hike the ridge trail', stage: 99 },
+      { key: 'photo-walk', label: 'Photo walk', stage: 99 },
+      { key: 'bird-watch', label: 'Bird watching hour', stage: 99 },
+    ],
+  },
+  {
+    id: 'sokamms-motel',
+    name: 'Sokamms Global Motel',
+    shortName: 'Sokamms',
+    tagline: 'A soft bed on the south road',
+    description:
+      'The traveller\u2019s stop on the southern approach — painted walls, a humming generator, and a night guard who doubles as the gist channel. When home is too far, Sokamms is home enough.',
+    color: '#4A6E8A',
+    accent: '#243745',
+    emoji: '🛏️',
+    unlockLevel: 1,
+    mapX: 45.0,
+    mapY: 88.3,
+    transport: ['walk', 'keke', 'taxi'],
+    travelModifier: 1.15,
+    district: 'confluence',
+    activities: [
+      { key: 'day-rest', label: 'Take a day room', stage: 99 },
+      { key: 'gist-corner', label: 'Sit at the gist corner', stage: 99 },
+    ],
+  },
+]
+
+LOCATIONS.push(...G2_LOCATIONS)
+for (const l of G2_LOCATIONS) LOCATION_BY_ID[l.id] = l

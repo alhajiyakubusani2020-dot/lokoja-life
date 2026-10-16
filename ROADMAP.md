@@ -123,6 +123,26 @@
   forge status, live-nation health), feature flags + one-command rollback, opt-in telemetry only (kids:
   none). Solo doctrine: 10M players cost the same ops as 10k.
 
+### M21 — CLOSE THE GATES (post-roadmap product wave) — size L
+The head-to-head vs lagoslife.app said Lagos Life leads as a PRODUCT in three
+places. M21 closes all three with honest engineering, no invented data:
+- **GATE 1 — APP BREADTH (11 → 21 apps)**: Wardrobe, Garage, Houses, Health,
+  School, Career, Contacts, Mt Patti book, Confluence Path book, and WHOT! —
+  a fully playable 54-card Nigerian Whot match vs Emeka (seeded, deterministic,
+  ₦200 stake through the real economy doors, kid band plays free). Every app
+  reads only real systems.
+- **GATE 2 — SPACES (10 → 32 locations, every district covered)**: 10 new
+  real-geo locations (Adankolo, Emiwoziri, Filele, Numai, Kpatakpoli, Kpato,
+  Township Stadium, Maigari's Palace, Pati Ridge Hill, Sokamms Global Motel) —
+  every name grep-verified in the repo's own OSM data. 107 action boards +
+  129 rotating street-vibe lines across all 32 spots, 5 new interiors, and
+  the board wired into BOTH the shared sheet and the map's inline sheet.
+- **GATE 3 — LIVING MULTIPLAYER (the honesty build)**: location-room presence
+  ("who dey here now" REAL roster + the always-labeled "(sim)" NPC crowd line),
+  the adults-only money-spray riding the real removeMoney door with refund law,
+  and the guest gate rebuilt as probeable native buttons (the a11y smell from
+  the teardown, closed). Zero fake player counts, forever.
+
 ---
 
 ## CONTINUOUS LAWS ON EVERY MILESTONE

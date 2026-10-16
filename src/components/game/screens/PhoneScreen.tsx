@@ -36,6 +36,16 @@ import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
 import { ChatThread, tierChipClass } from './phone/ChatThread'
 import { PulseApp } from './phone/PulseApp'
+import WardrobeApp, { APP_TITLE as WARDROBE_TITLE } from './phone/apps/wardrobe-app'
+import GarageApp from './phone/apps/garage-app'
+import HousesApp from './phone/apps/houses-app'
+import HealthApp from './phone/apps/health-app'
+import SchoolApp from './phone/apps/school-app'
+import CareerApp from './phone/apps/career-app'
+import ContactsApp from './phone/apps/contacts-app'
+import PattiApp from './phone/apps/patti-app'
+import StoryApp from './phone/apps/story-app'
+import WhotApp from './phone/apps/whot-app'
 import { LiveApp } from './phone/LiveApp'
 import { ForgeApp } from './phone/ForgeApp'
 import { NationApp } from './phone/NationApp'
@@ -47,8 +57,11 @@ import {
   CheckIcon,
   ChevronRightIcon,
   HourglassIcon,
+  MapIcon,
   PlaceIcon,
   SaveIcon,
+  SmartIcon,
+  SunriseIcon,
   SettingsIcon,
   SocialIcon,
   ShieldIcon,
@@ -56,7 +69,7 @@ import {
   TargetIcon,
 } from '../icons'
 
-type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse' | 'live' | 'forge' | 'nation'
+type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse' | 'live' | 'forge' | 'nation' | 'wardrobe' | 'garage' | 'houses' | 'health' | 'school' | 'career' | 'contacts' | 'patti' | 'story' | 'whot'
 
 /** M15 — a banner can deep-link the handset straight into an app (one-shot). */
 let phoneDeepLink: PhoneApp | null = null
@@ -882,6 +895,77 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
       tint: 'bg-[var(--lko-river-soft)] text-[var(--lko-river)]',
       icon: SettingsIcon,
     },
+    // ---- M21 gate 1: the ten honest readers + the Whot! table ----
+    {
+      key: 'whot',
+      label: 'Whot!',
+      sub: 'The 54-card table · play Emeka',
+      tint: 'bg-amber-50 text-amber-700',
+      icon: TargetIcon,
+    },
+    {
+      key: 'story',
+      label: 'Confluence Path',
+      sub: 'The five chapters book',
+      tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]',
+      icon: MapIcon,
+    },
+    {
+      key: 'career',
+      label: 'Career',
+      sub: 'The ladder, rung by rung',
+      tint: 'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]',
+      icon: CoinsIcon,
+    },
+    {
+      key: 'school',
+      label: 'School',
+      sub: 'Books before beta',
+      tint: 'bg-emerald-50 text-emerald-700',
+      icon: SmartIcon,
+    },
+    {
+      key: 'houses',
+      label: 'Houses',
+      sub: 'Rent, keys, wahala',
+      tint: 'bg-[var(--lko-river-soft)] text-[var(--lko-river)]',
+      icon: BankIcon,
+    },
+    {
+      key: 'health',
+      label: 'Health',
+      sub: 'The body book',
+      tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]',
+      icon: ShieldIcon,
+    },
+    {
+      key: 'garage',
+      label: 'Garage',
+      sub: 'Your wheels, loud and clear',
+      tint: 'bg-orange-50 text-[var(--lko-terra)]',
+      icon: TargetIcon,
+    },
+    {
+      key: 'wardrobe',
+      label: 'Wardrobe',
+      sub: 'Strut + stitch',
+      tint: 'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]',
+      icon: SocialIcon,
+    },
+    {
+      key: 'contacts',
+      label: 'Contacts',
+      sub: 'Who you know for Lokoja',
+      tint: 'bg-[var(--lko-river-soft)] text-[var(--lko-river)]',
+      icon: SocialIcon,
+    },
+    {
+      key: 'patti',
+      label: 'Mt Patti',
+      sub: 'The summit book',
+      tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]',
+      icon: SunriseIcon,
+    },
   ]
 
   const titles: Record<Exclude<PhoneApp, 'grid'>, string> = {
@@ -896,6 +980,16 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     live: 'Live Nation',
     forge: 'City Forge',
     nation: 'Nation Dashboard',
+    wardrobe: WARDROBE_TITLE,
+    garage: 'Garage',
+    houses: 'Houses',
+    health: 'Health',
+    school: 'School',
+    career: 'Career',
+    contacts: 'Contacts',
+    patti: 'Mt Patti',
+    story: 'Confluence Path',
+    whot: 'Whot!',
   }
 
   return (
@@ -956,6 +1050,16 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
                   {app === 'biz' && <BizApp />}
                   {app === 'shield' && <ShieldApp />}
                   {app === 'pulse' && <PulseApp />}
+                  {app === 'wardrobe' && <WardrobeApp />}
+                  {app === 'garage' && <GarageApp />}
+                  {app === 'houses' && <HousesApp />}
+                  {app === 'health' && <HealthApp />}
+                  {app === 'school' && <SchoolApp />}
+                  {app === 'career' && <CareerApp />}
+                  {app === 'contacts' && <ContactsApp />}
+                  {app === 'patti' && <PattiApp />}
+                  {app === 'story' && <StoryApp />}
+                  {app === 'whot' && <WhotApp />}
                   {app === 'live' && <LiveApp />}
                   {app === 'forge' && <ForgeApp />}
                   {app === 'nation' && <NationApp />}

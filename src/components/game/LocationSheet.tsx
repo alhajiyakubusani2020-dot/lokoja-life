@@ -20,6 +20,8 @@ import { fuelMultFor } from '@/game/systems/chaos'
 import { pavedMinutesMult } from '@/game/systems/calendar'
 import { BIZ } from '@/game/data/config'
 import { LOCATION_BY_ID } from '@/game/data/locations'
+import { LOC_ACTIONS, type LocAction } from '@/game/data/locActions'
+import { LOC_VIBES } from '@/game/data/locVibes'
 import { BizBlock } from './BizBlock'
 import { FleetBlock } from './FleetBlock'
 import { FestivalPanel } from './FestivalPanel'
@@ -88,6 +90,145 @@ function TravelOptionRow({
   )
 }
 
+/* ----------------------- G2 — the vibe line + action board -------------------
+ * Rotating scene line (world.day % lines) + the location's real action board
+ * from locActions.ts. Exported so BOTH detail surfaces (this shared sheet and
+ * the 2D map / 3D HUD's own detail blocks) can render the exact same board
+ * with one line. Doors fire the REAL store actions — nothing here invents a
+ * mutation; rows whose honest door is contextual (Work tab, phone apps, the
+ * world HUD panels) stay informational and say so.
+ * -------------------------------------------------------------------------- */
+
+const NEED_EFFECT_EMOJI: Record<string, string> = {
+  health: '❤️',
+  energy: '⚡',
+  hunger: '🍲',
+  mood: '🙂',
+}
+
+function NeedsEffects({ effects }: { effects: NonNullable<LocAction['effects']> }) {
+  const parts = (Object.keys(NEED_EFFECT_EMOJI) as (keyof typeof NEED_EFFECT_EMOJI)[])
+    .filter((k) => effects[k] !== undefined && effects[k] !== 0)
+    .map((k) => `${effects[k]! > 0 ? '+' : ''}${effects[k]}${NEED_EFFECT_EMOJI[k]}`)
+  if (!parts.length) return null
+  return <span className="shrink-0 text-[10px] font-bold tabular-nums text-[var(--lko-ink-soft)]">{parts.join(' ')}</span>
+}
+
+export function LocVibeLine({ locationId }: { locationId: string }) {
+  const world = useGameStore((s) => s.world)
+  const lines = LOC_VIBES[locationId]
+  if (!lines?.length) return null
+  const vibe = lines[(world?.day ?? 0) % lines.length]
+  return (
+    <p
+      data-testid="loc-vibe-line"
+      className="mt-2 rounded-xl bg-[var(--lko-gold-soft)]/25 px-3 py-2 text-[12px] italic leading-relaxed text-[var(--lko-ink-soft)]"
+    >
+      “{vibe}”
+    </p>
+  )
+}
+
+export function LocActionBoard({
+  locationId,
+  isCurrent,
+  onOpenWork,
+  onClose,
+}: {
+  locationId: string
+  /** door-backed rows only fire when the player stands here */
+  isCurrent: boolean
+  onOpenWork?: () => void
+  onClose?: () => void
+}) {
+  const actions = LOC_ACTIONS[locationId] ?? []
+  if (!actions.length) return null
+
+  const fire = (a: LocAction) => {
+    const s = useGameStore.getState()
+    if (a.door === 'rest' && (a.arg === 'nap' || a.arg === 'sleep')) s.rest(a.arg)
+    else if (a.door === 'relaxIndoors' && (a.arg === 'tv' || a.arg === 'bath')) s.relaxIndoors(a.arg)
+    else if (a.door === 'workout') s.workout()
+    else if (a.door === 'study') s.study(a.label)
+    else if (a.door === 'searchHustles') {
+      s.searchHustles()
+      // the found offers live on the Work board — ride the same deep-link
+      // the work chips use instead of duplicating the board here
+      onClose?.()
+      onOpenWork?.()
+    }
+  }
+
+  return (
+    <div>
+      <h4 className="lko-label mb-1.5">Things to do here</h4>
+      <div className="flex flex-col gap-1.5">
+        {actions.map((a) => {
+          const wired =
+            a.kind === 'needs' &&
+            (a.door === 'rest' || a.door === 'relaxIndoors' || a.door === 'workout' || a.door === 'study')
+          const hustle = a.door === 'searchHustles'
+          const canFire = (wired || hustle) && isCurrent
+          if (canFire) {
+            return (
+              <button
+                key={a.key}
+                onClick={() => {
+                  audio.play('click')
+                  fire(a)
+                }}
+                className="lko-press flex min-h-[44px] items-center gap-2.5 rounded-xl border border-[var(--lko-line)] bg-[var(--lko-surface)] px-3 py-1.5 text-left hover:border-[var(--lko-green)]/50"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base" style={{ background: 'var(--lko-cream)' }} aria-hidden>
+                  {a.emoji}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-extrabold text-[var(--lko-ink)]">{a.label}</span>
+                  {a.effects && <span className="block text-[10px] font-semibold text-[var(--lko-ink-soft)]">honest shift · one clock slot</span>}
+                </span>
+                {a.effects && <NeedsEffects effects={a.effects} />}
+              </button>
+            )
+          }
+          return (
+            <div
+              key={a.key}
+              data-testid={`loc-action-${a.key}`}
+              className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-[var(--lko-line)] bg-black/[0.015] px-3 py-1.5"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base" style={{ background: 'var(--lko-cream)' }} aria-hidden>
+                {a.emoji}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-extrabold text-[var(--lko-ink)]">
+                  {a.label}
+                  {a.kind === 'spend' && a.cost ? (
+                    <span className="ml-1.5 rounded-full bg-[var(--lko-terra)]/15 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-[var(--lko-terra)]">
+                      {formatNaira(a.cost)}
+                    </span>
+                  ) : null}
+                  {a.door && (
+                    <span className="ml-1.5 rounded-full bg-black/[0.05] px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wide text-[var(--lko-ink-soft)]" title={`rides the real ${a.door}() door`}>
+                      {a.door}()
+                    </span>
+                  )}
+                </span>
+                {a.note && <span className="block text-[10px] font-semibold leading-snug text-[var(--lko-ink-soft)]">{a.note}</span>}
+              </span>
+              {a.effects && <NeedsEffects effects={a.effects} />}
+            </div>
+          )
+        })}
+      </div>
+      {!isCurrent && (
+        <p className="mt-1 text-[10px] font-semibold text-[var(--lko-ink-soft)]">
+          Travel here first — the live rows only fire when you are standing in {LOCATION_BY_ID[locationId]?.shortName ?? 'the spot'}.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export interface LocationSheetProps {
   locationId: string
   onClose: () => void
@@ -152,6 +293,9 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
         {selected.description}
       </p>
 
+      {/* G2 — the day's scene line (rotates with the world day) */}
+      <LocVibeLine locationId={selected.id} />
+
       {/* locked notice */}
       {isSelectedLocked && (
         <div className="mt-3 rounded-xl border border-[var(--lko-line)] bg-black/[0.02] p-4 text-center">
@@ -206,6 +350,18 @@ export function LocationSheet({ locationId, onClose, onOpenWork, onTravel }: Loc
             })}
           </div>
         </>
+      )}
+
+      {/* G2 — the action board: real doors + honest informational rows */}
+      {!isSelectedLocked && (
+        <div className="mt-3.5">
+          <LocActionBoard
+            locationId={selected.id}
+            isCurrent={isSelectedCurrent}
+            onOpenWork={onOpenWork}
+            onClose={onClose}
+          />
+        </div>
       )}
 
       {/* M3 — the shopfront: this location's business (buy / collect / upgrade) */}

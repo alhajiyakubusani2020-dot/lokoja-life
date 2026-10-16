@@ -1,13 +1,22 @@
 'use client'
 
 /**
- * LOKOJA LIFE — LiveApp (M17: THE LIVE NATION)
- * --------------------------------------------
+ * LOKOJA LIFE — LiveApp (M17: THE LIVE NATION + M21: THE LIVING ROOM)
+ * ------------------------------------------------------------------
  * The phone's live wire: the street roster, the tiered chat (kid
  * emotes / teen wall / adult links-law), the join-postcard, the
  * stream board (viewers-as-crowd), the co-op unions (sealed treasuries,
  * the two-key law, the Market Union court) and the real-player ajo
  * circles (the ladder, the panic, the court guarantee).
+ *
+ * M21 — THE ROOM sits pinned at the top: the REAL roster of whoever
+ * is standing on your street right now (presence TTL honored), the
+ * honest empty state, the SIM crowd line (labeled, muted, separate —
+ * the ONLY sanctioned way the NPC crowd shows), a room-scoped mic
+ * riding the SAME liveSendChat/law path, and — adults only — the
+ * SPRAY: real ₦ through the store's honest engine, broadcast on the
+ * room's street channel. THE PRIME LAW: this screen never fakes a
+ * person; the roster is real presence, the crowd is clearly (sim).
  *
  * This UI never simulates: every move rides the store's live actions,
  * the relay books the truth, and the local engines move the local
@@ -17,7 +26,12 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
-import { EMOTE_LIBRARY } from '@/game/systems/live'
+import { EMOTE_LIBRARY, type LiveIdentity } from '@/game/systems/live'
+import {
+  crowdNote, roomChannel, roomRoster, sprayAllowed, sprayEvent,
+  wireToPresences, SPRAY_MIN, SPRAY_STEP, type WirePresenceRow,
+} from '@/game/systems/liveRoom'
+import { LOCATION_BY_ID } from '@/game/data/locations'
 import { formatNaira } from '@/game/systems/progression'
 
 type Tab = 'street' | 'streams' | 'union' | 'ajo'
@@ -30,13 +44,18 @@ const TABS: { key: Tab; label: string }[] = [
 ]
 
 interface RosterRow { handle: string; band: string; street: string; status: string }
-interface WireEvent { seq: number; kind: string; actor: string; payload: Record<string, unknown> }
+interface WireEvent { seq: number; kind: string; actor: string; payload: Record<string, unknown>; channel?: string }
 interface StreamRow { id: string; host: string; kind: string; title: string; viewers: number }
 interface TradeRow { id: string; fromHandle: string; giveCash: number; wantCash: number; terms: string }
+
+/** the spray notes the room offers — every one a lawful ₦100 multiple inside the bounds */
+const SPRAY_TIERS: number[] = [1, 5, 10, 50].map((k) => k * SPRAY_STEP)
 
 export function LiveApp() {
   const [tab, setTab] = useState<Tab>('street')
   const [draft, setDraft] = useState('')
+  const [roomDraft, setRoomDraft] = useState('')
+  const [sprayAmt, setSprayAmt] = useState(SPRAY_TIERS[0] ?? SPRAY_MIN)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -51,6 +70,9 @@ export function LiveApp() {
   const liveAction = useGameStore((s) => s.liveAction)
   const liveShareJoin = useGameStore((s) => s.liveShareJoin)
   const liveToggleVoice = useGameStore((s) => s.liveToggleVoice)
+  const removeMoney = useGameStore((s) => s.removeMoney)
+  const addMoney = useGameStore((s) => s.addMoney)
+  const nationSnapshot = useGameStore((s) => s.nationSnapshot)
 
   const claimed = account.linked && !!account.token
   const band = (account.ageBand ?? 'adult') as 'kid' | 'teen' | 'adult'
@@ -75,6 +97,22 @@ export function LiveApp() {
   const roster = (wire?.roster ?? []).filter((r) => r.handle !== account.handle)
   const events = (wire?.events ?? []).filter((e) => e.kind === 'chat' || e.kind === 'emote' || e.kind === 'join' || e.kind === 'stream' || e.kind === 'court')
 
+  /* ------------------ M21 — THE ROOM (who dey here NOW) ------------------
+   * keyed by the SAME location id the presence ping sends, TTL honored
+   * by the pure law, refreshed by the SAME 12s heartbeat — zero new
+   * timers. The sim crowd is a separate, labeled number. */
+  const locId = world.currentLocation
+  const locName = LOCATION_BY_ID[locId]?.name ?? locId
+  const roomChannelId = roomChannel(locId)
+  const nowMs = Date.now()
+  const roomPresences = wireToPresences((wire?.roster ?? []) as WirePresenceRow[], nowMs)
+  const roomAll = roomRoster(roomPresences, locId, nowMs)
+  const roomOthers = roomAll.filter((r) => r.handle !== account.handle)
+  const roomEvents = ((wire?.events ?? []) as WireEvent[])
+    .filter((e) => e.channel === roomChannelId && (e.kind === 'chat' || e.kind === 'emote'))
+  const simCrowd = nationSnapshot?.districts.find((d) => d.id === locId)?.pop ?? 0
+  const sprayOk = sprayAllowed({ handle: account.handle, band } satisfies LiveIdentity, player.cash)
+
   const say = (msg: string) => {
     setNotice(msg)
     setTimeout(() => setNotice(null), 3200)
@@ -87,6 +125,39 @@ export function LiveApp() {
     setBusy(false)
     if (!res.ok) say(res.why === 'word-wall' ? 'The Union moderators no gree that word.' : res.why === 'too-long' ? 'Too long — shorten am.' : res.why ?? 'no gree')
     else setDraft('')
+  }
+
+  // the ROOM mic — the SAME liveSendChat door, the room's street channel;
+  // the M17 tier laws ride inside the action (never bypassed)
+  const sendRoom = async () => {
+    if (!roomDraft.trim() || busy) return
+    setBusy(true)
+    const res = await liveSendChat(roomDraft, roomChannelId)
+    setBusy(false)
+    if (!res.ok) say(res.why === 'word-wall' ? 'The Union moderators no gree that word.' : res.why === 'too-long' ? 'Too long — shorten am.' : res.why ?? 'no gree')
+    else setRoomDraft('')
+  }
+
+  // THE SPRAY (adult money table): real ₦ through the store's honest
+  // engine, the moment broadcast on the room channel. Pay → broadcast;
+  // a wire that refuses gets its naira back — no unbacked broadcast.
+  const doSpray = async () => {
+    if (!claimed || busy) return
+    if (!sprayOk) { say('Money spray na adult table — and your pocket must reach ₦100.'); return }
+    if (player.cash < sprayAmt) { say('Pocket no reach that note — pick smaller.'); return }
+    const spray = sprayEvent(account.handle ?? 'me', locId, sprayAmt, world.day)
+    if (!spray.ok) { say(spray.why === 'not-multiple' ? 'Spray na ₦100 notes only.' : 'That spray no fit the room law.'); return }
+    setBusy(true)
+    const paid = removeMoney(sprayAmt, { label: `money spray — ${locName}`, category: 'fun' })
+    if (!paid) { setBusy(false); say('Pocket no reach — the spray no pass.'); return }
+    const res = await liveSendChat(spray.text, spray.channel)
+    setBusy(false)
+    if (!res.ok) {
+      addMoney(sprayAmt, { label: 'spray refund — the wire no gree', category: 'fun' })
+      say(`The wire no gree — ₦${sprayAmt.toLocaleString('en-US')} don return to your pocket.`)
+      return
+    }
+    useGameStore.getState().notify({ icon: '💰', text: `₦${sprayAmt.toLocaleString('en-US')} spray — the room see am!`, tone: 'good' })
   }
 
   return (
@@ -107,6 +178,106 @@ export function LiveApp() {
         >
           🎙️ {live?.voiceOn ? 'ON' : 'OFF'}
         </button>
+      </div>
+
+      {/* ------------- M21 — THE ROOM: who dey here now (pinned) ------------- */}
+      <div className="mx-4 mb-2 rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="live-room">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-[12.5px] font-black">📍 {locName} — who dey here now</p>
+          <p className="shrink-0 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-[var(--lko-ink-soft)]">
+            {roomOthers.length > 0 ? `${roomOthers.length} real walker${roomOthers.length > 1 ? 's' : ''}` : 'real presence'}
+          </p>
+        </div>
+
+        {roomOthers.length === 0 ? (
+          <p className="mt-1 text-[11px] font-semibold leading-snug text-[var(--lko-ink-soft)]" data-testid="live-room-empty">
+            Just you here now — real players show up here when dem enter your street.
+          </p>
+        ) : (
+          <ul className="mt-1.5 max-h-24 space-y-1 overflow-y-auto" data-testid="live-room-roster">
+            {roomOthers.map((r) => (
+              <li key={r.handle} className="flex items-center justify-between text-[12px] font-bold">
+                <span>{r.band === 'kid' ? '🧒' : r.band === 'teen' ? '🧑' : '🧍'} {r.handle}</span>
+                <span className="text-[10px] font-extrabold text-[var(--lko-ink-soft)]">{r.status}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {roomEvents.length > 0 && (
+          <div className="mt-1.5 space-y-1" data-testid="live-room-feed">
+            {roomEvents.slice(-3).map((e) => (
+              <p key={e.seq} className="rounded-lg bg-black/[0.03] px-2 py-1 text-[10.5px] font-semibold">
+                {e.kind === 'emote'
+                  ? <span><b>{e.actor}</b> <span aria-hidden>{String(e.payload.glyph ?? '👋')}</span> {String(e.payload.phrase ?? '')}</span>
+                  : <span><b>{e.actor}</b>: {String(e.payload.text ?? '')}</span>}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* the SIM crowd — muted, smaller, separate: the roster above is the real one */}
+        <p className="mt-1.5 border-t border-black/[0.05] pt-1.5 text-[9.5px] font-bold text-[var(--lko-ink-soft)]" data-testid="live-room-sim">
+          {crowdNote(simCrowd)} · the roster na real people — the crowd na simulation.
+        </p>
+
+        {/* the room mic — the SAME tiered laws on the room channel */}
+        {claimed && (band === 'teen' || band === 'adult') ? (
+          <div className="mt-2 flex gap-2">
+            <input
+              data-testid="live-room-composer"
+              value={roomDraft}
+              onChange={(e) => setRoomDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void sendRoom() }}
+              maxLength={band === 'teen' ? 140 : 280}
+              placeholder={band === 'teen' ? 'Talk to the room (moderated, 140)' : 'Talk to the room (no links — the law)'}
+              className="min-w-0 flex-1 rounded-xl bg-black/[0.04] px-3 py-2 text-[12px] font-semibold outline-none"
+              aria-label="Room chat message"
+            />
+            <button data-testid="live-room-send" onClick={() => void sendRoom()} disabled={busy}
+              className="lko-press rounded-xl bg-[var(--lko-green)] px-3 py-2 text-[11px] font-extrabold text-white">
+              Send
+            </button>
+          </div>
+        ) : claimed && band === 'kid' ? (
+          <div className="mt-2 grid grid-cols-6 gap-1" data-testid="live-room-emotes">
+            {EMOTE_LIBRARY.map((em) => (
+              <button key={em.id} onClick={() => void liveSendEmote(em.id, roomChannelId)}
+                className="lko-press rounded-lg bg-[var(--lko-green-soft)] py-1 text-center text-[14px]"
+                aria-label={`Send room emote: ${em.phrase}`}>
+                <span aria-hidden>{em.glyph}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-[11px] font-semibold text-[var(--lko-ink-soft)]">🎤 The room mic is dark — claim your name to talk here.</p>
+        )}
+
+        {/* THE SPRAY — adult money table ONLY; structurally absent for minors */}
+        {claimed && band === 'adult' && (
+          <div className="mt-2 border-t border-black/[0.05] pt-2" data-testid="live-room-spray">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.06em] text-[var(--lko-ink-soft)]">🧺 Spray — real ₦, the room sees am</p>
+              <div className="flex gap-1">
+                {SPRAY_TIERS.map((a) => (
+                  <button key={a} onClick={() => setSprayAmt(a)} aria-label={`Spray amount ₦${a}`}
+                    className={`lko-press rounded-lg px-1.5 py-0.5 text-[9.5px] font-extrabold ${sprayAmt === a ? 'bg-[var(--lko-green)] text-white' : 'bg-black/[0.05] text-[var(--lko-ink-soft)]'}`}>
+                    {a >= 1000 ? `₦${a / 1000}k` : `₦${a}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              data-testid="live-room-spray-fire"
+              disabled={busy || !sprayOk || player.cash < sprayAmt}
+              onClick={() => void doSpray()}
+              title={player.cash < sprayAmt ? 'Your pocket no reach this note — pick smaller' : 'Real naira leaves your pocket — the broadcast carries the truth'}
+              className="lko-press mt-1.5 w-full rounded-xl bg-[var(--lko-amber)] py-1.5 text-[10.5px] font-black text-[#1a1e18] disabled:opacity-40"
+            >
+              Spray {formatNaira(sprayAmt)} for {locName}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* tabs */}

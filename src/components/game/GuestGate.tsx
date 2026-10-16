@@ -8,6 +8,13 @@
  * for unlinked guests. Claim (register) or Return (login) — the store's
  * merge law decides what continues, and nothing is ever lost.
  * "Maybe later" buys the rest of TODAY through the honest grace law.
+ *
+ * M21 A11Y FIX (teardown finding): the gate's ACTION buttons carry the
+ * probeable law — REAL native <button> elements, explicit type="button",
+ * aria-labels, and the canonical data-testids automation can trust:
+ * `guest-claim` (the primary claim/return action) and `guest-enter`
+ * (enter without claiming — the one-day grace). LOGIC, VERDICTS AND
+ * STORE DOORS ARE UNTOUCHED — this is markup/a11y only.
  */
 
 import { useState } from 'react'
@@ -83,6 +90,7 @@ export function GuestGate() {
             </p>
           </div>
           <button
+            type="button"
             onClick={() => { audio.play('click'); closeGate() }}
             aria-label="Close"
             className="lko-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-[var(--lko-ink-soft)]"
@@ -96,8 +104,10 @@ export function GuestGate() {
           {(['claim', 'return'] as const).map((m) => (
             <button
               key={m}
+              type="button"
               onClick={() => { audio.play('click'); setMode(m); setWhy(null) }}
               className={`lko-press rounded-lg px-2 py-1.5 text-[12px] font-extrabold ${mode === m ? 'bg-white text-[var(--lko-green-deep)] shadow-sm' : 'text-[var(--lko-ink-soft)]'}`}
+              aria-label={m === 'claim' ? 'Claim a new name' : 'Return to a claimed name'}
             >
               {m === 'claim' ? '🪪 Claim a name' : '🔁 I don claim before'}
             </button>
@@ -188,9 +198,11 @@ export function GuestGate() {
         )}
 
         <button
-          data-testid="gate-submit"
+          type="button"
+          data-testid="guest-claim"
           disabled={busy || handle.length < 3 || pin.length < 4 || (mode === 'claim' && (minor ? parentPin.length !== 6 : contact.length < 5))}
           onClick={() => { audio.play('click'); void submit() }}
+          aria-label={mode === 'claim' ? 'Claim my name — register' : 'Return to my name — login'}
           className="lko-press mt-3 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-[var(--lko-green)] text-[14px] font-extrabold text-white disabled:opacity-40"
         >
           {busy ? 'The register dey write…' : mode === 'claim' ? (minor ? 'Claim with the parent shield' : 'Claim my name') : 'Return to my name'}
@@ -201,8 +213,10 @@ export function GuestGate() {
             Guests play free — the cloud save, streaks and leaderboards wait behind the name.
           </p>
           <button
-            data-testid="gate-maybe"
+            type="button"
+            data-testid="guest-enter"
             onClick={() => { audio.play('click'); acceptGateGrace() }}
+            aria-label="Maybe later — enter now with the one-day grace"
             className="lko-press shrink-0 rounded-lg bg-black/[0.05] px-3 py-2 text-[11.5px] font-extrabold text-[var(--lko-ink-soft)]"
           >
             Maybe later
