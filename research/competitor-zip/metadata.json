@@ -1,0 +1,6 @@
+{
+  "name": "Lagos Life 3D - Virtual Lagos Simulator",
+  "description": "Immersive 3D open-world simulation of Lagos, Nigeria with Danfo buses, Lekki Bridge, bustling street hustles, and Afrobeat radio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
