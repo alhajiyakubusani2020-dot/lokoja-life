@@ -15,7 +15,7 @@
 import dynamic from 'next/dynamic'
 import { useEffect } from 'react'
 import { MainMenu } from '@/components/game/screens/MainMenu'
-import { useGameStore } from '@/game/store/useGameStore'
+import { useMenuStore } from '@/game/store/menu-store'
 import { preloadDashboard } from '@/components/game/screens/dashboard-chunk'
 import { GameSkeleton } from '@/components/game/GameSkeleton'
 
@@ -29,11 +29,13 @@ const Dashboard = dynamic(() => import('@/components/game/screens/Dashboard').th
 })
 
 export default function Home() {
-  const screen = useGameStore((s) => s.screen)
-  const booted = useGameStore((s) => s.booted)
-  const boot = useGameStore((s) => s.boot)
-  const saveNow = useGameStore((s) => s.saveNow)
-  const elder = useGameStore((s) => s.settings.elder)
+  /* SILK II — the shell reads the MENU SLICE only: the entry chunk carries
+   * the menu store, not the 213KB game store. The game screens stay
+   * dynamic-imported below, and the fat store is reached at click time. */
+  const screen = useMenuStore((s) => s.screen)
+  const booted = useMenuStore((s) => s.booted)
+  const boot = useMenuStore((s) => s.boot)
+  const elder = useMenuStore((s) => s.settings.elder)
 
   // M13 — ELDER MODE: one root class drives the accessibility law
   // (large text, high contrast, reduced motion) for the WHOLE app.
@@ -65,7 +67,12 @@ export default function Home() {
   // flush the autosave when the tab/app is hidden or closed
   useEffect(() => {
     const flush = () => {
-      if (useGameStore.getState().screen === 'game') saveNow()
+      if (useMenuStore.getState().screen !== 'game') return
+      // the fat chunk is loaded whenever the game screen is live — the
+      // import resolves instantly and the save rides out
+      void import('@/game/store/useGameStore')
+        .then((m) => m.useGameStore.getState().saveNow())
+        .catch(() => {})
     }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') flush()
@@ -76,7 +83,7 @@ export default function Home() {
       window.removeEventListener('pagehide', flush)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [saveNow])
+  }, [])
 
   // brief boot splash — avoids save-detection flicker on first paint
   if (!booted) {

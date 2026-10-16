@@ -11,7 +11,7 @@
  * next world entry.
  */
 
-import { useGameStore } from '@/game/store/useGameStore'
+import { useMenuStore } from '@/game/store/menu-store'
 import { getDeviceProfile, deviceLine, type QualitySetting } from '@/game/systems/device'
 import { audio } from '@/game/systems/audio'
 
@@ -23,8 +23,10 @@ const OPTIONS: Array<{ value: QualitySetting; label: string }> = [
 ]
 
 export function GraphicsPicker() {
-  const settings = useGameStore((s) => s.settings)
-  const setGraphics = useGameStore((s) => s.setGraphics)
+  /* SILK II — the picker reads the MENU SLICE (this dialog lives on the
+   * menu; the pick patches the save on disk and the next world entry obeys) */
+  const settings = useMenuStore((s) => s.settings)
+  const setGraphics = useMenuStore((s) => s.setGraphics)
   const profile = getDeviceProfile(settings.graphics)
 
   return (

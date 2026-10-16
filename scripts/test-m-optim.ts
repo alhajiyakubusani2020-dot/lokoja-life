@@ -1,3 +1,4 @@
+import "./geo/bootstrap"
 /**
  * LOKOJA LIFE — SILK II: THE OPTIMIZATION LAWS (pure rule checks, no browser)
  * ---------------------------------------------------------------------------

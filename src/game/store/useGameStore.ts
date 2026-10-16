@@ -78,6 +78,7 @@ import {
 import { SaveSystem } from '../systems/save'
 import { refreshDeviceProfile } from '../systems/device'
 import { audio, syncAudioWithSettings } from '../systems/audio'
+import { useMenuStore, menuSetScreen } from './menu-store'
 import {
   nextSlot,
   rollNewDayWeather,
@@ -330,6 +331,9 @@ interface GameStore {
 
   /* lifecycle */
   boot: () => void
+  /** M15/M16 world-boot hooks (postcard + offline queue) — idempotent, safe
+   *  to call from the dashboard idle preload or before continueGame */
+  bootWorldHooks: () => void
   setScreen: (screen: Screen) => void
 
   /* core actions */
@@ -1150,6 +1154,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     haptics.setElder(bootSettings.elder)
     music.setEnabled(bootSettings.sound && bootSettings.music)
     set({ booted: true, hasSave: SaveSystem.hasSave(), settings: bootSettings })
+    get().bootWorldHooks()
+  },
+
+  setScreen: (screen) => menuSetScreen(screen),
+
+  /** M15/M16 world-boot hooks — the parts of boot() that only matter once
+   *  the FAT store exists (postcard decode + the offline queue). Idempotent:
+   *  the postcard decode just re-sets the same value, the listener wires
+   *  itself exactly once. boot() runs it; the dashboard idle preload and
+   *  continueGame run it too, so the menu-only boot can stay thin. */
+  bootWorldHooks: () => {
     // M15 — a postcard in the URL: decode it now, land when the city opens
     try {
       const t = new URLSearchParams(window.location.search).get('t')
@@ -1170,8 +1185,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (queued && navigator.onLine) void get().flushCloudQueue()
     } catch { /* no window — the queue law sleeps */ }
   },
-
-  setScreen: (screen) => set({ screen }),
 
   /* ---------------------------- core actions ---------------------------- */
 
@@ -1230,7 +1243,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       pendingArrival: get().pendingArrival,
       gateOpen: false,
       fleet: { day: 1, done: [] },
-      screen: 'game',
       offers: [],
     })
     // M15 — a postcard was waiting for a fresh life: land at that street
@@ -1239,11 +1251,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       applyArrival(set, get, pending.code, pending.moment, { silent: true })
     }
     scheduleAutosave(get)
+    menuSetScreen('game') // the menu store owns screen — this is the writer
   },
 
   continueGame: () => {
     const save = SaveSystem.load()
     if (!save) return false
+    get().bootWorldHooks() // the postcard must exist before the landing reads it
     // M7: defensive graphics default (saves restored from older backups)
     const settings = { ...save.settings, graphics: save.settings.graphics ?? 'auto' }
     syncAudioWithSettings(settings)
@@ -1268,7 +1282,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       forge: save.forge ?? freshForgeState(),
       fleet: save.fleet,
       settings,
-      screen: 'game',
     })
     // M15 — a postcard came with the boot URL: land the moment the city opens
     const pendingBoot = get().pendingArrival
@@ -1277,12 +1290,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (!verdict.blocked) applyArrival(set, get, pendingBoot.code, pendingBoot.moment)
       else set({ gateOpen: true })
     }
+    menuSetScreen('game') // the menu store owns screen — this is the writer
     return true
   },
 
   returnToMenu: () => {
     get().saveNow()
-    set({ screen: 'menu', hasSave: SaveSystem.hasSave() })
+    set({ hasSave: SaveSystem.hasSave() })
+    menuSetScreen('menu') // the menu store owns screen — this is the writer
+    useMenuStore.getState().refreshFromDisk() // the menu re-reads disk truth
   },
 
   /* --------------------------- needs / time ----------------------------- */
@@ -4965,3 +4981,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   dismissNotification: (id) =>
     set({ notifications: get().notifications.filter((n) => n.id !== id) }),
 }))
+
+/* THE SCREEN MIRROR — the menu store owns `screen` (SILK II: the menu
+ * slice is all the entry chunk carries); the fat store mirrors it so every
+ * in-game reader stays reactive without a repo-wide migration. One writer,
+ * one mirror, zero drift. Wired at module scope so tests and the browser
+ * share the exact same law. */
+useMenuStore.subscribe((s, prev) => {
+  if (s.screen !== prev.screen && useGameStore.getState().screen !== s.screen) {
+    useGameStore.setState({ screen: s.screen })
+  }
+})

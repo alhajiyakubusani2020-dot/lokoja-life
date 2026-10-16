@@ -22,7 +22,7 @@
  * added; ~21 draw calls total. Zero Math.random — seeded helpers only.
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
@@ -54,116 +54,169 @@ function TerrainMesh() {
     return t
   }, [])
 
-  const geometry = useMemo(() => {
+  /* SILK II — THE TIME-SLICE LAW: the heightfield used to build in ONE
+   * synchronous useMemo (25,921 vertices × 3 heightAt + 2 road queries
+   * each) — a 50–150ms mount jam on low-end phones. The geometry shell is
+   * allocated instantly and the per-vertex work is sliced into useFrame
+   * with a 6ms frame budget, so the land RISES over a handful of frames
+   * under the entering veil instead of freezing one. The per-vertex math
+   * and its row-major order are UNCHANGED — bit-identical output, only the
+   * schedule moved. */
+  const build = useMemo(() => {
     const geo = new THREE.PlaneGeometry(WORLD_HALF * 2, WORLD_HALF * 2, SEG, SEG)
     geo.rotateX(-Math.PI / 2)
-    const pos = geo.attributes.position as THREE.BufferAttribute
-    const colors = new Float32Array(pos.count * 3)
-
-    // dry-season Guinea-savanna palette — warm and earthy, no greens that glow
-    const c = new THREE.Color()
-    const base = new THREE.Color('#7f8f4c') // gold-olive savanna
-    const mottD = new THREE.Color('#6d7f40') // richer olive mottling
-    const mottL = new THREE.Color('#9d9a5c') // dry gold mottling
-    const lush = new THREE.Color('#59763a') // river lowland green
-    const dust = new THREE.Color('#b58a58') // laterite dust halo
-    const dustD = new THREE.Color('#a1764a') // packed earth right by roads
-    const dryHi = new THREE.Color('#a39a5e') // parched high ground
-    const rock = new THREE.Color('#8f7f63') // Patti stone on slopes
-    const iron = new THREE.Color('#7c5c40') // ironstone strata band
-    const paleBand = new THREE.Color('#a58f66') // pale laterite strata band
-    const footFan = new THREE.Color('#b09a68') // erosion fan at the mountain foot
-    const sand = new THREE.Color('#c2aa72') // bank sand
-    const mud = new THREE.Color('#66543a') // wet waterline mud
-    const bed = new THREE.Color('#4c5a40') // riverbed, hints through the water
-
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i)
-      const z = pos.getZ(i)
-      const y = heightAt(x, z)
-      pos.setY(i, y)
-      c.copy(base)
-
-      // low-frequency mottling — two octave bands, never the same twice
-      const n1 = Math.sin(x * 0.052 + z * 0.031) * 0.5 + Math.sin(x * 0.021 - z * 0.047 + 1.3) * 0.5
-      const n2 = Math.sin(x * 0.14 + z * 0.11 + 2.1) * 0.5 + Math.sin(x * 0.09 - z * 0.16 + 0.6) * 0.5
-      c.lerp(n1 > 0 ? mottL : mottD, Math.abs(n1) * 0.34)
-      c.lerp(n2 > 0 ? mottL : mottD, Math.abs(n2) * 0.13)
-
-      // parched patches on high ground, broken up by the second noise band
-      const dryT = Math.max(0, (y - 4.5) / 9) * (0.55 + 0.45 * n2)
-      if (dryT > 0) c.lerp(dryHi, Math.min(1, dryT) * 0.65)
-
-      // richer green lowlands near the rivers (moisture gradient)
-      const { d, halfWidth } = riverInfo(x, z)
-      const moist = 1 - smoothstep(2, 26, d - halfWidth)
-      if (moist > 0) c.lerp(lush, moist * 0.6)
-
-      // dusty laterite halos: a wide soft band along the MAJOR roads (smooth
-      // on the coarse mesh) plus a tight packed-earth rim on every street
-      const rd = roadDistance(x, z)
-      const rm = roadDistanceMajors(x, z)
-      const halo = 1 - smoothstep(2.4, 13, rm)
-      if (halo > 0) c.lerp(dust, halo * 0.6)
-      const packed = 1 - smoothstep(1.0, 2.8, rd)
-      if (packed > 0) c.lerp(dustD, packed * 0.75)
-
-      // dust bowls around the market / motor park / junction / food strip
-      for (const dd of DUSTY_DISTRICTS) {
-        const ddx = x - dd.x
-        const ddz = z - dd.z
-        const dd2 = ddx * ddx + ddz * ddz
-        const rOut = dd.radius * 1.9
-        if (dd2 < rOut * rOut) {
-          const t = 1 - smoothstep(dd.radius * 0.62, rOut, Math.sqrt(dd2))
-          if (t > 0) c.lerp(dust, t * 0.5)
-        }
-      }
-
-      // rocky slopes — steeper ground reveals the Patti stone, but the real
-      // hill wears its geology in BANDS: ironstone and pale laterite strata
-      // alternate as the mountain rises, the grassy savanna crown keeps its
-      // top (the rest house lawn), and a pale erosion fan spreads at the foot
-      const slope =
-        (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
-      const pd = Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z)
-      let rockT = 0
-      if (slope > 0.32) rockT = Math.min(1, (slope - 0.32) * 2.2)
-      if (y > 16) rockT = Math.max(rockT, Math.min(1, (y - 16) / 14))
-      // the summit crown stays grassy — pull the stone back where the hill tops out
-      const crownT = 1 - smoothstep(24, 40, pd)
-      if (crownT > 0 && y > 20) rockT *= 1 - crownT * 0.85
-      if (rockT > 0.02) {
-        const band = Math.sin(y * 1.35 + Math.sin(x * 0.11 + z * 0.09) * 0.85)
-        c.lerp(band > 0 ? iron : paleBand, rockT * 0.82)
-      } else if (slope > 0.32) {
-        // non-Patti steep ground (stream gullies) keeps the neutral stone
-        c.lerp(rock, Math.min(1, (slope - 0.32) * 2.2))
-      }
-      // the erosion fan — where the hill sheds into the plain, on gentle ground only
-      const fanT = (1 - Math.abs(pd - 76) / 14) * (1 - smoothstep(0.26, 0.48, slope))
-      if (fanT > 0) c.lerp(footFan, Math.min(0.42, fanT * 0.55))
-
-      // river banks — sand shelf, wet dark line, darker bed under the water
-      if (d < halfWidth + 9) {
-        const sandT = 1 - smoothstep(halfWidth + 1.5, halfWidth + 9, d)
-        if (sandT > 0) c.lerp(sand, sandT * 0.75)
-      }
-      if (d < halfWidth + 1.2) c.lerp(mud, 1 - smoothstep(halfWidth - 1, halfWidth + 1.2, d))
-      if (d < halfWidth - 0.6) c.lerp(bed, 1 - smoothstep(halfWidth - 4, halfWidth - 0.6, d))
-
-      colors[i * 3] = c.r
-      colors[i * 3 + 1] = c.g
-      colors[i * 3 + 2] = c.b
+    return {
+      geo,
+      pos: geo.attributes.position as THREE.BufferAttribute,
+      colors: new Float32Array(geo.attributes.position.count * 3),
     }
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-    geo.computeVertexNormals()
-    return geo
   }, [])
 
+  /* the frame loop mutates the buffers through this holder — the render
+   * path only ever READS the memo (react-hooks immutability law) */
+  const holder = useRef<typeof build | null>(null)
+  useEffect(() => {
+    holder.current = build
+  }, [build])
+
+  /* the palette + scratch, hoisted out of the frame loop (zero-alloc law) */
+  const paint = useMemo(() => {
+    const mk = (hex: string) => new THREE.Color(hex)
+    return {
+      c: mk('#000000'),
+      base: mk('#7f8f4c'), // gold-olive savanna
+      mottD: mk('#6d7f40'), // richer olive mottling
+      mottL: mk('#9d9a5c'), // dry gold mottling
+      lush: mk('#59763a'), // river lowland green
+      dust: mk('#b58a58'), // laterite dust halo
+      dustD: mk('#a1764a'), // packed earth right by roads
+      dryHi: mk('#a39a5e'), // parched high ground
+      rock: mk('#8f7f63'), // Patti stone on slopes
+      iron: mk('#7c5c40'), // ironstone strata band
+      paleBand: mk('#a58f66'), // pale laterite strata band
+      footFan: mk('#b09a68'), // erosion fan at the mountain foot
+      sand: mk('#c2aa72'), // bank sand
+      mud: mk('#66543a'), // wet waterline mud
+      bed: mk('#4c5a40'), // riverbed, hints through the water
+    }
+  }, [])
+
+  const buildState = useRef({ row: 0, done: false })
+  const [ready, setReady] = useState(false)
+
+  useFrame(() => {
+    const s = buildState.current
+    if (s.done) return
+    const h = holder.current
+    if (!h) return
+    const { geo, pos, colors } = h
+    const t0 = performance.now()
+    const perRow = SEG + 1
+    const { c, base, mottD, mottL, lush, dust, dustD, dryHi, rock, iron, paleBand, footFan, sand, mud, bed } = paint
+    while (s.row < perRow && performance.now() - t0 < 6) {
+      const rowStart = s.row * perRow
+      for (let col = 0; col < perRow; col++) {
+        const i = rowStart + col
+        const x = pos.getX(i)
+        const z = pos.getZ(i)
+        const y = heightAt(x, z)
+        pos.setY(i, y)
+        c.copy(base)
+
+        // low-frequency mottling — two octave bands, never the same twice
+        const n1 = Math.sin(x * 0.052 + z * 0.031) * 0.5 + Math.sin(x * 0.021 - z * 0.047 + 1.3) * 0.5
+        const n2 = Math.sin(x * 0.14 + z * 0.11 + 2.1) * 0.5 + Math.sin(x * 0.09 - z * 0.16 + 0.6) * 0.5
+        c.lerp(n1 > 0 ? mottL : mottD, Math.abs(n1) * 0.34)
+        c.lerp(n2 > 0 ? mottL : mottD, Math.abs(n2) * 0.13)
+
+        // parched patches on high ground, broken up by the second noise band
+        const dryT = Math.max(0, (y - 4.5) / 9) * (0.55 + 0.45 * n2)
+        if (dryT > 0) c.lerp(dryHi, Math.min(1, dryT) * 0.65)
+
+        // richer green lowlands near the rivers (moisture gradient)
+        const { d, halfWidth } = riverInfo(x, z)
+        const moist = 1 - smoothstep(2, 26, d - halfWidth)
+        if (moist > 0) c.lerp(lush, moist * 0.6)
+
+        // dusty laterite halos: a wide soft band along the MAJOR roads (smooth
+        // on the coarse mesh) plus a tight packed-earth rim on every street
+        const rd = roadDistance(x, z)
+        const rm = roadDistanceMajors(x, z)
+        const halo = 1 - smoothstep(2.4, 13, rm)
+        if (halo > 0) c.lerp(dust, halo * 0.6)
+        const packed = 1 - smoothstep(1.0, 2.8, rd)
+        if (packed > 0) c.lerp(dustD, packed * 0.75)
+
+        // dust bowls around the market / motor park / junction / food strip
+        for (const dd of DUSTY_DISTRICTS) {
+          const ddx = x - dd.x
+          const ddz = z - dd.z
+          const dd2 = ddx * ddx + ddz * ddz
+          const rOut = dd.radius * 1.9
+          if (dd2 < rOut * rOut) {
+            const t = 1 - smoothstep(dd.radius * 0.62, rOut, Math.sqrt(dd2))
+            if (t > 0) c.lerp(dust, t * 0.5)
+          }
+        }
+
+        // rocky slopes — steeper ground reveals the Patti stone, but the real
+        // hill wears its geology in BANDS: ironstone and pale laterite strata
+        // alternate as the mountain rises, the grassy savanna crown keeps its
+        // top (the rest house lawn), and a pale erosion fan spreads at the foot
+        const slope =
+          (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
+        const pd = Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z)
+        let rockT = 0
+        if (slope > 0.32) rockT = Math.min(1, (slope - 0.32) * 2.2)
+        if (y > 16) rockT = Math.max(rockT, Math.min(1, (y - 16) / 14))
+        // the summit crown stays grassy — pull the stone back where the hill tops out
+        const crownT = 1 - smoothstep(24, 40, pd)
+        if (crownT > 0 && y > 20) rockT *= 1 - crownT * 0.85
+        if (rockT > 0.02) {
+          const band = Math.sin(y * 1.35 + Math.sin(x * 0.11 + z * 0.09) * 0.85)
+          c.lerp(band > 0 ? iron : paleBand, rockT * 0.82)
+        } else if (slope > 0.32) {
+          // non-Patti steep ground (stream gullies) keeps the neutral stone
+          c.lerp(rock, Math.min(1, (slope - 0.32) * 2.2))
+        }
+        // the erosion fan — where the hill sheds into the plain, on gentle ground only
+        const fanT = (1 - Math.abs(pd - 76) / 14) * (1 - smoothstep(0.26, 0.48, slope))
+        if (fanT > 0) c.lerp(footFan, Math.min(0.42, fanT * 0.55))
+
+        // river banks — sand shelf, wet dark line, darker bed under the water
+        if (d < halfWidth + 9) {
+          const sandT = 1 - smoothstep(halfWidth + 1.5, halfWidth + 9, d)
+          if (sandT > 0) c.lerp(sand, sandT * 0.75)
+        }
+        if (d < halfWidth + 1.2) c.lerp(mud, 1 - smoothstep(halfWidth - 1, halfWidth + 1.2, d))
+        if (d < halfWidth - 0.6) c.lerp(bed, 1 - smoothstep(halfWidth - 4, halfWidth - 0.6, d))
+
+        colors[i * 3] = c.r
+        colors[i * 3 + 1] = c.g
+        colors[i * 3 + 2] = c.b
+      }
+      s.row++
+    }
+    pos.needsUpdate = true // the land rises live under the veil
+    if (s.row >= perRow) {
+      s.done = true
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+      geo.computeVertexNormals()
+      setReady(true) // the painted land takes over from the flat shell
+    }
+  })
+
   return (
-    <mesh geometry={geometry} receiveShadow>
-      <meshStandardMaterial vertexColors map={grain} roughness={0.95} metalness={0} />
+    <mesh geometry={build.geo} receiveShadow>
+      {/* the flat savanna shell renders while the heightfield rises; the
+          painted vertex colours + grain take over the frame it completes */}
+      <meshStandardMaterial
+        vertexColors={ready}
+        map={grain}
+        color={ready ? '#ffffff' : '#7f8f4c'}
+        roughness={0.95}
+        metalness={0}
+      />
     </mesh>
   )
 }

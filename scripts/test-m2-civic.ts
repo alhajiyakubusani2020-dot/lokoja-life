@@ -1,3 +1,4 @@
+import "./geo/bootstrap"
 /**
  * LOKOJA LIFE — M2: the civic mesh (pure rule checks)
  * ----------------------------------------------------

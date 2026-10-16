@@ -1,3 +1,4 @@
+import "./geo/bootstrap"
 /**
  * LOKOJA LIFE — Stage 7: THE SCHOOLS OF LOKOJA
  * ---------------------------------------------

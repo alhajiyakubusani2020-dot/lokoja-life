@@ -66,11 +66,22 @@ import { preloadWorldChunk } from './world-chunk'
 /* SILK II — THE WORLD RIDES ITS OWN CHUNK: three.js + the OSM geo stack
  * (formerly ~490KB gz welded into the dashboard chunk) now load when the
  * player first opens the world — idle-preloaded right after boot, so
- * map-first / phone-first sessions never pay for the 3D stack. */
-const WorldTab = nextDynamic(() => import('../world/WorldTab').then((m) => m.WorldTab), {
-  ssr: false,
-  loading: () => null,
-})
+ * map-first / phone-first sessions never pay for the 3D stack.
+ * THE GEO GATE: the geo data itself moved to /world/geo-v1.bin (60KB
+ * binary, element-exact round-trip proven) — the loader awaits the gate
+ * (fetch + decode + fill) BEFORE the WorldTab chunk evaluates, because
+ * layout.ts derives module-scope structures from the filled arrays. */
+const WorldTab = nextDynamic(
+  () =>
+    import('@/game/world3d/geo-gate')
+      .then((g) => g.openWorldGeo())
+      .then(() => import('../world/WorldTab'))
+      .then((m) => m.WorldTab),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+)
 
 /* --------------------------- small HUD helpers ----------------------------- */
 

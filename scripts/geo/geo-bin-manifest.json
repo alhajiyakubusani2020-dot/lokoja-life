@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "file": "/world/geo-v1.bin",
+  "bytes": 60071,
+  "sha256": "57b5ed0342e8a5ebbd79ef988a10d7342f9d978fec41ab2980765baa3d8dc16e",
+  "coordHash": "c0ecee1e166a0f7bb9b4ff0b0c3628654be93e67d6241a12cb3739cf8c0f2560",
+  "coordHashFnv": "613d5b66",
+  "counts": {
+    "roads": 2655,
+    "rivers": 16,
+    "bridges": 16,
+    "loops": 5,
+    "strings": 37
+  },
+  "spotChecks": {
+    "road0_osm": 1106078216,
+    "road0_first": [
+      -235.4,
+      -110.8
+    ],
+    "river0_id": "niger",
+    "river0_w": 12.5,
+    "bridges": 16
+  }
+}

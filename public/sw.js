@@ -95,7 +95,8 @@ const isImmutableStatic = (url) => {
   return (
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
-    url.pathname.startsWith('/art/')
+    url.pathname.startsWith('/art/') ||
+    url.pathname.startsWith('/world/') // the geo .bin — content-versioned filename, immutable forever
   )
 }
 

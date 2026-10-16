@@ -16,7 +16,7 @@ import Image from 'next/image'
 import { audio } from '@/game/systems/audio'
 import { GAME_META } from '@/game/data/config'
 import { MENU_TIPS } from '@/game/data/flavor'
-import { useGameStore } from '@/game/store/useGameStore'
+import { useMenuStore } from '@/game/store/menu-store'
 import { PinIcon, SparkleIcon, SettingsIcon } from '../icons'
 import {
   Dialog,
@@ -38,12 +38,15 @@ function PlayMark({ className }: { className?: string }) {
 }
 
 export function MainMenu() {
-  const hasSave = useGameStore((s) => s.hasSave)
-  const settings = useGameStore((s) => s.settings)
-  const toggleSound = useGameStore((s) => s.toggleSound)
-  const setScreen = useGameStore((s) => s.setScreen)
-  const continueGame = useGameStore((s) => s.continueGame)
-  const resetGame = useGameStore((s) => s.resetGame)
+  /* SILK II — the menu reads the MENU SLICE: continue/reset reach the fat
+   * game store through dynamic imports at click time, so the entry chunk
+   * never carries the game. */
+  const hasSave = useMenuStore((s) => s.hasSave)
+  const settings = useMenuStore((s) => s.settings)
+  const toggleSound = useMenuStore((s) => s.toggleSound)
+  const setScreen = useMenuStore((s) => s.setScreen)
+  const continueGame = useMenuStore((s) => s.continueGame)
+  const resetGame = useMenuStore((s) => s.resetGame)
 
   const [tipIndex, setTipIndex] = useState(0)
 
@@ -137,7 +140,7 @@ export function MainMenu() {
             <button
               onClick={() => {
                 audio.play('click')
-                continueGame()
+                void continueGame()
               }}
               disabled={!hasSave}
               className="lko-press flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border border-white/25 bg-white/12 text-base font-extrabold tracking-wide text-white backdrop-blur-sm disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/40"
@@ -184,7 +187,7 @@ export function MainMenu() {
                       onClick={() => {
                         if (window.confirm('Delete your save and start fresh? This cannot be undone.')) {
                           audio.play('notify')
-                          resetGame()
+                          void resetGame()
                         }
                       }}
                       className="lko-press mt-3 min-h-[40px] w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-bold text-red-600"

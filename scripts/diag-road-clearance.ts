@@ -1,3 +1,4 @@
+import "./geo/bootstrap"
 /**
  * M1 diagnostic — how many buildings/props sit ON the rendered carriageway?
  * Mirrors the render half-widths used by WorldTerrain + the road spatial grid.

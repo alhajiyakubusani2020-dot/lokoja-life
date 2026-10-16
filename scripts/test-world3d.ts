@@ -1,3 +1,4 @@
+import "./geo/bootstrap"
 /**
  * LOKOJA LIFE — Stage 3D increment 2 regression checks
  * -----------------------------------------------------

@@ -1,3 +1,4 @@
+import "./geo/bootstrap"
 /**
  * LOKOJA LIFE — M3: OWN THE CITY (pure rule checks)
  * --------------------------------------------------
