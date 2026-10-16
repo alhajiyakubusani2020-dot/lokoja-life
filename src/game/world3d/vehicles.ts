@@ -2,8 +2,8 @@
  * LOKOJA LIFE — Vehicle Shop (Stage 4)
  * ------------------------------------
  * Shared low-poly builders for the town's street fleet: keke napep,
- * okada, danfo, taxi + private sedans — plus the deterministic
- * parked-car placement data and the night-light switch.
+ * okada, danfo, taxi, private sedans + the interstate lorry — plus the
+ * deterministic parked-car placement data and the night-light switch.
  *
  * Design rules:
  *  - every family caches its geometries/materials at module level, so
@@ -37,16 +37,21 @@ export interface VehicleRig {
   bank: THREE.Group
   /** spin these around local x by (distance / wheel radius) */
   wheels: THREE.Object3D[]
+  /** front-axle wheel groups — the lorry fills both; the rest stay []
+   *  (keke/okada yaw their whole `steer` fork instead) */
+  frontWheels: THREE.Object3D[]
   /** front-wheel/fork yaw hint (keke + okada), null on four-wheelers */
   steer: THREE.Group | null
 }
+
+export type ParkedBuild = 'keke' | 'sedan' | 'danfo' | 'okada' | 'taxi' | 'lorry'
 
 export interface ParkedVehicleDef {
   x: number
   z: number
   y: number
   rotY: number
-  build: 'keke' | 'sedan'
+  build: ParkedBuild
   variant: SedanVariant
 }
 
@@ -131,6 +136,8 @@ const SEAT = mat('#31302c', 0.95, 0)
 const SKIN_DARK = mat('#5C3A21', 0.9, 0)
 const PARK_HEAD = mat('#d8d2c0', 0.4, 0.5)
 const PARK_TAIL = mat('#6e1f18', 0.5, 0.2)
+const LORRY_CAB = mat('#3a5a7a', 0.55, 0.18)   // faded freight blue
+const LORRY_CANVAS = mat('#6b6350', 0.95, 0)   // weathered tarp
 
 const SEDAN_COLORS: Record<Exclude<SedanVariant, 'taxi'>, string> = {
   white: '#e8e6de',
@@ -310,7 +317,7 @@ function makeRig(): { rig: VehicleRig; bank: THREE.Group } {
   const group = new THREE.Group()
   const bank = new THREE.Group()
   group.add(bank)
-  return { rig: { group, bank, wheels: [], steer: null }, bank }
+  return { rig: { group, bank, wheels: [], frontWheels: [], steer: null }, bank }
 }
 
 /** add a mesh to the bank group at a position (optional shadow casting) */
@@ -627,6 +634,98 @@ export function buildSedan(variant: SedanVariant, parked = false): VehicleRig {
   return rig
 }
 
+/* ------------------------------------ LORRY ------------------------------------ */
+
+/**
+ * Interstate haulage lorry (Bedford/DAF style): faded freight-blue cab,
+ * chrome grille, slatted cargo bed on corner posts under an arched
+ * canvas tarp, mudguards over the twin rear axles, vertical exhaust
+ * stack, six wheels. The one heavy vehicle in the fleet — longer,
+ * wider and taller than the danfo, so the motor park reads like one.
+ */
+export function buildLorry(parked = false): VehicleRig {
+  const { rig, bank } = makeRig()
+
+  // chassis spine — full length, bridging all three axles
+  put(bank, new THREE.Mesh(bx('lorChassis', 1.2, 0.24, 5.0), FRAME), 0, 0.52, 0, true)
+
+  // cab — boxy interstate nose with a flat roof cap
+  put(bank, new THREE.Mesh(bx('lorCab', 1.9, 1.7, 1.5), LORRY_CAB), 0, 1.3, 1.5, true)
+  put(bank, new THREE.Mesh(bx('lorRoof', 1.94, 0.12, 1.54), LORRY_CAB), 0, 2.21, 1.5, true)
+
+  // glazing — tilted windscreen + side windows, pillars stay blue
+  const ws = new THREE.Mesh(geo('lorWs', () => new THREE.PlaneGeometry(1.6, 0.6)), GLASS_DARK)
+  ws.rotation.x = -0.08
+  put(bank, ws, 0, 1.62, 2.255)
+  for (const sx of [-1, 1]) {
+    put(bank, new THREE.Mesh(bx('lorWin', 0.06, 0.5, 0.7), GLASS_DARK), sx * 0.955, 1.6, 1.35)
+  }
+
+  // chrome grille + front bumper
+  put(bank, new THREE.Mesh(bx('lorGrille', 1.1, 0.55, 0.1), CHROME), 0, 0.95, 2.27)
+  put(bank, new THREE.Mesh(bx('lorBumpF', 2.0, 0.24, 0.32), BUMPER), 0, 0.5, 2.42, true)
+
+  // cargo bed: floor, 4 corner posts, low wooden side slats + tailboard
+  put(bank, new THREE.Mesh(bx('lorFloor', 1.9, 0.14, 3.3), DARK_TRIM), 0, 0.74, -0.85, true)
+  for (const sx of [-1, 1]) {
+    for (const z of [0.78, -2.48]) {
+      put(bank, new THREE.Mesh(bx('lorPost', 0.1, 0.9, 0.1), FRAME), sx * 0.9, 1.26, z, true)
+    }
+    put(bank, new THREE.Mesh(bx('lorSlat', 0.07, 0.34, 3.1), DARK_TRIM), sx * 0.93, 0.98, -0.85)
+  }
+  put(bank, new THREE.Mesh(bx('lorSlatR', 1.86, 0.34, 0.07), DARK_TRIM), 0, 0.98, -2.5)
+
+  // arched canvas tarp — half cylinder laced between the corner posts
+  const tarp = new THREE.Mesh(
+    geo('lorTarp', () => {
+      const g = new THREE.CylinderGeometry(0.86, 0.86, 3.1, 10, 1, false, Math.PI / 2, Math.PI)
+      g.rotateX(Math.PI / 2)
+      return g
+    }),
+    LORRY_CANVAS,
+  )
+  put(bank, tarp, 0, 1.13, -0.85, true)
+
+  // mudguards bridging both rear axles
+  for (const sx of [-1, 1]) {
+    put(bank, new THREE.Mesh(bx('lorMud', 0.28, 0.08, 1.9), DARK_TRIM), sx * 0.9, 0.92, -1.5, true)
+  }
+
+  // vertical exhaust stack behind the cab
+  put(bank, new THREE.Mesh(geo('lorStack', () => new THREE.CylinderGeometry(0.05, 0.05, 1.7, 6)), CHROME), -0.98, 1.55, 0.72)
+
+  // side mirrors
+  for (const sx of [-1, 1]) {
+    put(bank, new THREE.Mesh(bx('lorMir', 0.05, 0.22, 0.14), DARK_TRIM), sx * 1.08, 1.7, 2.02)
+  }
+
+  // lights — the same registry the danfo uses, so applyVehicleNight flips them
+  for (const sx of [-1, 1]) {
+    put(bank, headDisc(0.11, parked), sx * 0.72, 1.0, 2.255)
+    const tl = tailDisc(0.08, parked)
+    tl.rotation.y = Math.PI
+    put(bank, tl, sx * 0.7, 0.98, -2.545)
+  }
+
+  // wheels — steerable front axle pair + twin rear axles (6 total)
+  for (const sx of [-1, 1]) {
+    const w = buildWheel(0.4, 0.24)
+    w.position.set(sx * 0.85, 0.4, 1.35)
+    bank.add(w)
+    rig.wheels.push(w)
+    rig.frontWheels.push(w)
+  }
+  for (const sx of [-1, 1]) {
+    for (const z of [-1.1, -1.9]) {
+      const w = buildWheel(0.42, 0.26)
+      w.position.set(sx * 0.85, 0.42, z)
+      bank.add(w)
+      rig.wheels.push(w)
+    }
+  }
+  return rig
+}
+
 /* --------------------------- player vehicle spawning --------------------------- */
 
 /** a place the player's own ride can sit: ground position + facing */
@@ -749,13 +848,21 @@ const BAY_LATERALS = [4.8, 5.2, 4.5, 5.5, 4.3]
  * parked cars sit on real street shoulders (IBB Way, the market streets,
  * the motor-park road) wherever the graph actually runs.
  */
-const BAY_SPECS: { anchor: string; dx: number; dz: number; side: 1 | -1; build: 'keke' | 'sedan'; variant: SedanVariant }[] = [
+const BAY_SPECS: { anchor: string; dx: number; dz: number; side: 1 | -1; build: ParkedBuild; variant: SedanVariant }[] = [
   { anchor: 'kpata-market', dx: -16, dz: 8, side: -1, build: 'sedan', variant: 'silver' },  // market street
   { anchor: 'ganaja-junction', dx: 8, dz: -14, side: 1, build: 'sedan', variant: 'taxi' },  // junction shoulder
   { anchor: 'home', dx: 2, dz: 18, side: 1, build: 'sedan', variant: 'white' },             // street below home
   { anchor: 'transport-area', dx: 16, dz: 4, side: 1, build: 'sedan', variant: 'darkblue' }, // motor-park road
   { anchor: 'historic-lokoja', dx: -12, dz: 6, side: -1, build: 'keke', variant: 'white' }, // Patti foot road — a resting keke
   { anchor: 'food-area', dx: 14, dz: -10, side: 1, build: 'sedan', variant: 'maroon' },     // food strip
+  // — heavy + transit variety (Stage 4b, append-only): offsets walked on the
+  // real major-road graph; each lands on the first shoulder that clears
+  { anchor: 'transport-area', dx: -48, dz: 18, side: -1, build: 'lorry', variant: 'white' }, // motor-park approach — interstate haulage
+  { anchor: 'kpata-market', dx: 33, dz: -12, side: 1, build: 'danfo', variant: 'white' },    // market loading shoulder
+  { anchor: 'food-area', dx: -48, dz: 36, side: 1, build: 'danfo', variant: 'white' },       // transit corridor north of the food strip
+  { anchor: 'ganaja-junction', dx: 16, dz: 18, side: -1, build: 'okada', variant: 'white' }, // junction okada rank
+  { anchor: 'government-area', dx: 12, dz: -20, side: 1, build: 'taxi', variant: 'taxi' },   // secretariat kerb
+  { anchor: 'sokamms-motel', dx: -18, dz: -10, side: 1, build: 'sedan', variant: 'maroon' }, // motel car-park edge
 ]
 
 /** nearest point on any MAJOR road to (px,pz) */

@@ -1505,6 +1505,14 @@ export interface LampDef {
   rotY: number
   /** highway masts: taller pole, bigger head */
   tall: boolean
+  /** outreach arm length — grows with the lamp's setback, like real
+   *  outer-rim masts on wide/dual carriageways (1.05 standard) */
+  reach: number
+  /** the carriageway the lamp serves: sample point + its render half-width —
+   *  the ground truth the "positioned correctly" law is tested against */
+  serveX: number
+  serveZ: number
+  serveHalf: number
 }
 
 /**
@@ -1519,7 +1527,10 @@ export const LAMPS: LampDef[] = (() => {
   const SPACING: Record<string, number> = { highway: 13, major: 14, secondary: 15, minor: 19 }
   const out: LampDef[] = []
   const seen = new Set<string>()
-  const put = (x: number, z: number, rotY: number, tall: boolean, force = false): void => {
+  const put = (
+    x: number, z: number, rotY: number, tall: boolean,
+    serveX: number, serveZ: number, serveHalf: number, force = false,
+  ): void => {
     const k = `${Math.round(x / 3.5)}:${Math.round(z / 3.5)}`
     if (!force && seen.has(k)) return
     if (heightAt(x, z) <= WATER_Y + 0.15) return // never standing in carved water ground
@@ -1529,7 +1540,13 @@ export const LAMPS: LampDef[] = (() => {
     // is invalid where a highway/feeder road runs through it (dual carriageways)
     if (roadGap(x, z) < 0.3) return
     seen.add(k)
-    out.push({ x, z, y: heightAt(x, z), rotY, tall })
+    // THE OUTREACH LAW — the arm reaches toward the carriageway it serves,
+    // stopping 0.35 short of the sample so the lens hangs over the inner
+    // lane (real outer-rim masts carry longer brackets; quack is a lamp
+    // whose light never touches its road)
+    const serveDist = Math.hypot(serveX - x, serveZ - z)
+    const reach = Math.min(tall ? 3.4 : 3.0, Math.max(1.05, serveDist - 0.35))
+    out.push({ x, z, y: heightAt(x, z), rotY, tall, reach, serveX, serveZ, serveHalf })
   }
   // corner masts on every real bridge — on dry bank ground just past each
   // abutment, arms over the deck so the crossing is lit. Stream valleys carve
@@ -1550,7 +1567,14 @@ export const LAMPS: LampDef[] = (() => {
             if (heightAt(lx, lz) <= WATER_Y + 0.15) continue
             if (roadGap(lx, lz) < 0.3) continue
             if (inSchoolYard(lx, lz)) continue
-            put(lx, lz, Math.atan2(-nx * sd, -nz * sd), b.cls === 'asphalt', true)
+            // serve the deck point NEAREST this mast: project the mast onto
+            // the deck centreline (clamped to the span) — the arm lights the
+            // crossing at the abutment, not some far mid-span fantasy
+            const alongDeck = Math.max(-b.length / 2, Math.min(b.length / 2, ((b.length + 3) / 2 + along) * end))
+            // every bridge mast is a MAST — tall pole, long bracket, the
+            // reach clamp that suits a structure lighting a wide deck
+            put(lx, lz, Math.atan2(-nx * sd, -nz * sd), true,
+              b.x + dirX * alongDeck, b.z + dirZ * alongDeck, b.width / 2 + 1.0, true)
             placed = true
             break
           }
@@ -1585,15 +1609,15 @@ export const LAMPS: LampDef[] = (() => {
           const rims: [number, number][] = [
             [nx * offset * side, nz * offset * side],
             [-nx * offset * side, -nz * offset * side],
-            [nx * (offset + 0.6) * side, nz * (offset + 0.6) * side],
-            [nx * (offset + 1.3) * side, nz * (offset + 1.3) * side],
+            [nx * (offset + 0.55) * side, nz * (offset + 0.55) * side],
+            [nx * (offset + 1.0) * side, nz * (offset + 1.0) * side],
             [-nx * (offset + 0.7) * side, -nz * (offset + 0.7) * side],
           ]
           for (const [ox, oz] of rims) {
             const lx = px + ox
             const lz = pz + oz
             if (roadGap(lx, lz) < 0.3) continue
-            put(lx, lz, Math.atan2(px - lx, pz - lz), tall)
+            put(lx, lz, Math.atan2(px - lx, pz - lz), tall, px, pz, half)
             break
           }
           side = -side

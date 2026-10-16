@@ -31,6 +31,7 @@ import {
   WATER_Y, WORLD_HALF, roadDistance, roadDistanceMajors,
 } from '@/game/world3d/layout'
 import { hash1, mergeGeoms, makeGroundGrainTexture, roadTextures } from '@/game/world3d/terrainArt'
+import { KERB_RUNS, ZEBRAS } from '@/game/world3d/roads'
 import { atmoLive } from './atmosphere' // M19 — the flood veil reads the live weather
 
 function smoothstep(a: number, b: number, t: number): number {
@@ -972,6 +973,87 @@ function Flowers() {
   return <instancedMesh ref={ref} args={[geo, mat, list.length]} frustumCulled={false} />
 }
 
+/* --------------------------------- kerbs ------------------------------------ */
+
+/**
+ * Raised concrete kerb lines along both edges of every asphalt artery —
+ * the data comes from world3d/roads.ts (pure laws: junction mouths stay
+ * open, bridges carry their own structure, nothing in water/yards). Each
+ * run segment becomes one draped slab that rides heightAt at both ends.
+ * All merged: one draw call, one material.
+ */
+function Kerbs() {
+  const geo = useMemo(() => {
+    const slabs: THREE.BufferGeometry[] = []
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const p = new THREE.Vector3()
+    const s = new THREE.Vector3(1, 1, 1)
+    for (const r of KERB_RUNS) {
+      const dx = r.bx - r.ax
+      const dz = r.bz - r.az
+      const len = Math.hypot(dx, dz)
+      if (len < 0.4 || len > 6) continue // data guarantee: ≤ one 4u sample + chord; skip strays
+      const mx = (r.ax + r.bx) / 2
+      const mz = (r.az + r.bz) / 2
+      const yL = heightAt(r.ax, r.az)
+      const yR = heightAt(r.bx, r.bz)
+      e.set(0, Math.atan2(dx, dz), 0)
+      q.setFromEuler(e)
+      p.set(mx, (yL + yR) / 2 + 0.075, mz)
+      m.compose(p, q, s)
+      const slab = new THREE.BoxGeometry(0.22, 0.15, len + 0.08)
+      slab.applyMatrix4(m)
+      slabs.push(slab)
+    }
+    return slabs.length ? mergeGeoms(slabs) : null
+  }, [])
+  if (!geo) return null
+  return (
+    <mesh geometry={geo} castShadow receiveShadow>
+      <meshStandardMaterial color="#b3ad9f" roughness={0.95} metalness={0} />
+    </mesh>
+  )
+}
+
+/* --------------------------------- zebras ------------------------------------ */
+
+/**
+ * Zebra crossings at the artery junction mouths — 5 worn-white bands per
+ * crossing, laid across the carriageway just outside each junction disc,
+ * from the same deterministic roads.ts data. One merged draw call riding
+ * the markings' polygon offset so the paint never z-fights the tarmac.
+ */
+function Zebras() {
+  const geo = useMemo(() => {
+    const stripes: THREE.BufferGeometry[] = []
+    for (const z of ZEBRAS) {
+      const ux = Math.sin(z.rotY)
+      const uz = Math.cos(z.rotY)
+      const across = z.half * 2 - 0.6
+      if (across < 1.2) continue
+      for (let i = 0; i < 5; i++) {
+        const along = (i - 2) * 0.95
+        const x = z.x + ux * along
+        const zz = z.z + uz * along
+        const stripe = new THREE.PlaneGeometry(across, 0.48)
+        stripe.rotateX(-Math.PI / 2)
+        stripe.rotateY(z.rotY)
+        stripe.translate(x, heightAt(x, zz) + 0.115, zz)
+        stripes.push(stripe)
+      }
+    }
+    return stripes.length ? mergeGeoms(stripes) : null
+  }, [])
+  if (!geo) return null
+  return (
+    <mesh geometry={geo} receiveShadow>
+      <meshStandardMaterial color="#ddd8c4" roughness={0.85} metalness={0} polygonOffset polygonOffsetFactor={-2} />
+    </mesh>
+  )
+}
+
 /* ---------------------------------- export ---------------------------------- */
 
 export function WorldTerrain() {
@@ -982,6 +1064,8 @@ export function WorldTerrain() {
       <Flowers />
       <Rivers />
       <Roads />
+      <Kerbs />
+      <Zebras />
       <Bridges />
     </group>
   )

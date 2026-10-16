@@ -26,7 +26,7 @@ import { ANCHOR_BY_ID, DISTRICTS, heightAt, makeRng, NPC_ZONES, POINTS_OF_INTERE
 import { ALL_DOORS } from '@/game/world3d/schools'
 import { bridgeDeckY, cameraObstructionT, resolvePosition } from '@/game/world3d/collision'
 import {
-  applyVehicleNight, buildDanfo, buildKeke, buildOkada, buildSedan, headlightConeMaterial,
+  applyVehicleNight, buildDanfo, buildKeke, buildLorry, buildOkada, buildSedan, headlightConeMaterial,
   PARKED_VEHICLES, type SedanVariant, type VehicleRig,
 } from '@/game/world3d/vehicles'
 import { NPCS } from '@/game/data/npcs'
@@ -722,7 +722,7 @@ export function Npcs({
  * Parked cars render statically from the seeded placement data.
  */
 
-type VehicleKind = 'keke' | 'okada' | 'danfo' | 'taxi' | 'sedan'
+type VehicleKind = 'keke' | 'okada' | 'danfo' | 'taxi' | 'sedan' | 'lorry'
 
 interface VehiclePlan {
   kind: VehicleKind
@@ -742,13 +742,14 @@ interface VehiclePlan {
 // speeds are presentation feel, scaled off the shared config base
 const BASE = WORLD3D.trafficBaseSpeed
 
-/** the town's fleet mix — 13 rigs across the real road loops (perf ceiling ~14) */
+/** the town's fleet mix — 14 rigs across the real road loops (perf ceiling ~14) */
 const TRAFFIC_MIX: { kind: VehicleKind; loop: number; lane: number; base: number; variant?: SedanVariant }[] = [
   { kind: 'keke', loop: 0, lane: 1.55, base: 1.0 },
   { kind: 'taxi', loop: 0, lane: -1.7, base: 1.14 },
   { kind: 'danfo', loop: 0, lane: 1.9, base: 0.8 },
   { kind: 'okada', loop: 0, lane: -1.4, base: 1.32 },
   { kind: 'danfo', loop: 0, lane: 2.1, base: 0.72 },
+  { kind: 'lorry', loop: 0, lane: -2.1, base: 0.58 },
   { kind: 'danfo', loop: 1, lane: 1.9, base: 0.78 },
   { kind: 'keke', loop: 1, lane: -1.55, base: 0.96 },
   { kind: 'sedan', loop: 1, lane: 1.75, base: 1.06, variant: 'white' },
@@ -839,15 +840,16 @@ function loopPoint(loopIdx: number, s: number, out: LoopPoint): void {
 }
 
 // feel constants per family: body roll gain/cap + wheel radius (spin rate)
-const ROLL_GAIN: Record<VehicleKind, number> = { keke: 0.55, okada: 3.4, taxi: 0.24, sedan: 0.24, danfo: 0.15 }
-const MAX_ROLL: Record<VehicleKind, number> = { keke: 0.09, okada: 0.4, taxi: 0.05, sedan: 0.05, danfo: 0.04 }
-const WHEEL_R: Record<VehicleKind, number> = { keke: 0.34, okada: 0.33, taxi: 0.34, sedan: 0.34, danfo: 0.38 }
+const ROLL_GAIN: Record<VehicleKind, number> = { keke: 0.55, okada: 3.4, taxi: 0.24, sedan: 0.24, danfo: 0.15, lorry: 0.1 }
+const MAX_ROLL: Record<VehicleKind, number> = { keke: 0.09, okada: 0.4, taxi: 0.05, sedan: 0.05, danfo: 0.04, lorry: 0.03 }
+const WHEEL_R: Record<VehicleKind, number> = { keke: 0.34, okada: 0.33, taxi: 0.34, sedan: 0.34, danfo: 0.38, lorry: 0.41 }
 
 function buildTrafficRig(v: VehiclePlan): VehicleRig {
   if (v.kind === 'keke') return buildKeke()
   if (v.kind === 'okada') return buildOkada(v.toneIdx)
   if (v.kind === 'danfo') return buildDanfo()
   if (v.kind === 'taxi') return buildSedan('taxi')
+  if (v.kind === 'lorry') return buildLorry()
   return buildSedan(v.variant)
 }
 
@@ -863,9 +865,14 @@ function getRigs(): VehicleRig[] {
 
 function getParkedRigs(): VehicleRig[] {
   if (!PARKED_RIG_CACHE) {
-    PARKED_RIG_CACHE = PARKED_VEHICLES.map((p) =>
-      p.build === 'keke' ? buildKeke(true) : buildSedan(p.variant, true),
-    )
+    PARKED_RIG_CACHE = PARKED_VEHICLES.map((p) => {
+      if (p.build === 'keke') return buildKeke(true)
+      if (p.build === 'danfo') return buildDanfo(true)
+      if (p.build === 'okada') return buildOkada(0, true)
+      if (p.build === 'taxi') return buildSedan('taxi', true)
+      if (p.build === 'lorry') return buildLorry(true)
+      return buildSedan(p.variant, true)
+    })
   }
   return PARKED_RIG_CACHE
 }
@@ -991,14 +998,14 @@ export function Traffic({ timeOfDay }: { timeOfDay: TimeOfDay }) {
       {VEHICLES.map((v, i) => (
         <group key={i} ref={(el) => { refs.current[i] = el }}>
           <primitive object={getRigs()[i].group} />
-          <BlobShadow scale={v.kind === 'danfo' ? 2 : 1.6} />
+          <BlobShadow scale={v.kind === 'lorry' ? 2.6 : v.kind === 'danfo' ? 2 : 1.6} />
         </group>
       ))}
       {/* parked fleet — static visual-only rigs, no frame updates */}
       {PARKED_VEHICLES.map((p, i) => (
         <group key={`parked-${i}`} position={[p.x, p.y, p.z]} rotation={[0, p.rotY, 0]}>
           <primitive object={getParkedRigs()[i].group} />
-          <BlobShadow scale={p.build === 'sedan' ? 1.7 : 1.3} />
+          <BlobShadow scale={p.build === 'lorry' ? 2.6 : p.build === 'sedan' || p.build === 'taxi' ? 1.7 : p.build === 'danfo' ? 2 : 1.3} />
         </group>
       ))}
       {/* fake headlight pools — one shared material, four riders (night only) */}

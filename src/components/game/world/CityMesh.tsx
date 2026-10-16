@@ -39,7 +39,7 @@ import {
   POINTS_OF_INTEREST, ROCKS, ROCK_TONES, ROOF_TONES,
   RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type BuildingDef, type LampDef, type WorldAnchor,
 } from '@/game/world3d/layout'
-import { hash1 } from '@/game/world3d/terrainArt'
+import { hash1, mergeGeoms } from '@/game/world3d/terrainArt'
 import { ALL_DOORS, SCHOOL_TREES } from '@/game/world3d/schools'
 import { atmoLive } from './atmosphere'
 import { playerPos } from './controls'
@@ -1038,9 +1038,63 @@ function Rocks() {
 /* ---------------------------------- lamps ------------------------------------ */
 
 /**
- * Street lights: pole + curved arm reaching OVER the carriageway + cowl +
- * sodium head that glows at night + a warm pool of light on the road under
- * the head. Highway masts are taller with a longer reach. All instanced.
+ * ONE real street lamp body, merged into a single instanced geometry:
+ * bolted base flange + collar, tapered pole and a top stub collar the
+ * swan-neck arm bolts onto. `tall` = highway mast. Local frame: arm
+ * reaches +Z; instances rotate by the lamp's rotY. The arm itself is a
+ * SEPARATE unit-length instanced tube so each lamp's outreach bracket
+ * can grow with its setback (LampDef.reach) — exactly how real
+ * outer-rim masts on wide carriageways carry longer arms.
+ */
+function buildLampBody(tall: boolean): THREE.BufferGeometry {
+  const h = tall ? 5.1 : 3.8
+  const rT = tall ? 0.07 : 0.055
+  const rB = tall ? 0.105 : 0.085
+  const parts: THREE.BufferGeometry[] = []
+  // bolted base flange + weathering collar
+  const base = new THREE.CylinderGeometry(rB * 1.9, rB * 2.3, 0.22, 8)
+  base.translate(0, 0.11, 0)
+  parts.push(base)
+  const collar = new THREE.CylinderGeometry(rB * 1.35, rB * 1.65, 0.18, 8)
+  collar.translate(0, 0.32, 0)
+  parts.push(collar)
+  // tapered pole
+  const pole = new THREE.CylinderGeometry(rT, rB, h, 8)
+  pole.translate(0, h / 2, 0)
+  parts.push(pole)
+  // stub collar where the outreach arm bolts on
+  const stub = new THREE.CylinderGeometry(rT * 1.5, rT * 1.5, 0.14, 8)
+  stub.translate(0, h - 0.02, 0)
+  parts.push(stub)
+  return mergeGeoms(parts)
+}
+
+/**
+ * The swan-neck outreach arm as a UNIT-length tube (0..1 along +Z):
+ * rises off the pole collar, levels out over the carriageway. Instances
+ * scale Z by the lamp's reach so a far-setback mast still hangs its lens
+ * over the tarmac. Y is untouched by the stretch — the head height law
+ * (4.55 / 5.45) holds for every lamp.
+ */
+function buildLampArm(tall: boolean): THREE.BufferGeometry {
+  const h = tall ? 5.1 : 3.8
+  const headY = tall ? 5.45 : 4.55
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, h - 0.08, 0),
+    new THREE.Vector3(0, h + (tall ? 0.42 : 0.4), 0.26),
+    new THREE.Vector3(0, headY - 0.05, 0.66),
+    new THREE.Vector3(0, headY - 0.08, 1.0),
+  ])
+  return new THREE.TubeGeometry(curve, 12, tall ? 0.05 : 0.042, 6, false)
+}
+
+/**
+ * Street lights: bolted flange + tapered pole + swan-neck arm reaching
+ * OVER the carriageway (each lamp's bracket grows with its setback) +
+ * luminaire housing with a sodium lens that glows at night + a warm
+ * pool of light on the road under the head. Highway masts are taller
+ * with a longer reach. All instanced — 9 draw calls for the whole
+ * town's lighting.
  */
 function Lamps() {
   const glowRef = useRef<THREE.MeshStandardMaterial>(null)
@@ -1051,11 +1105,16 @@ function Lamps() {
 
   const poles = useMemo(() => LAMPS.filter((l) => !l.tall), [])
   const masts = useMemo(() => LAMPS.filter((l) => l.tall), [])
-  const armLen = (l: LampDef) => (l.tall ? 1.5 : 1.05)
-  const headAt = (l: LampDef): [number, number, number] => {
-    const a = armLen(l)
-    return [l.x + Math.sin(l.rotY) * a, l.y + (l.tall ? 5.45 : 4.55), l.z + Math.cos(l.rotY) * a]
-  }
+  const headAt = (l: LampDef): [number, number, number] => [
+    l.x + Math.sin(l.rotY) * l.reach, l.y + (l.tall ? 5.45 : 4.55), l.z + Math.cos(l.rotY) * l.reach,
+  ]
+  const geos = useMemo(() => ({
+    poleBody: buildLampBody(false), mastBody: buildLampBody(true),
+    poleArm: buildLampArm(false), mastArm: buildLampArm(true),
+    poleFix: (() => { const g = new THREE.BoxGeometry(0.5, 0.13, 0.26); g.rotateX(0.09); return g })(),
+    mastFix: (() => { const g = new THREE.BoxGeometry(0.62, 0.13, 0.3); g.rotateX(0.09); return g })(),
+  }), [])
+  useEffect(() => () => { Object.values(geos).forEach((g) => g.dispose()) }, [geos])
 
   useFrame(() => {
     const g = atmoLive.nightGlow
@@ -1066,82 +1125,89 @@ function Lamps() {
 
   return (
     <group>
-      {/* poles — standard streets + taller highway masts */}
+      {/* merged lamp bodies (flange + collar + tapered pole + stub) */}
       {[
-        { arr: poles, h: 3.8, r: 0.08 },
-        { arr: masts, h: 5.1, r: 0.1 },
+        { arr: poles, geo: geos.poleBody },
+        { arr: masts, geo: geos.mastBody },
       ].map((grp, gi) => (
         <InstancedGroup
-          key={gi}
+          key={`body-${gi}`}
           count={grp.arr.length}
+          castShadow
           setup={(i, m) => {
             const l = grp.arr[i]
-            m.position.set(l.x, l.y + grp.h / 2, l.z)
-            m.rotation.set(0, 0, 0)
+            m.position.set(l.x, l.y, l.z)
+            m.rotation.set(0, l.rotY, 0)
             m.scale.set(1, 1, 1)
           }}
         >
-          <cylinderGeometry args={[grp.r, grp.r * 1.4, grp.h, 6]} />
-          <meshStandardMaterial color="#3a3f3a" roughness={0.7} metalness={0.4} />
+          <primitive object={grp.geo} attach="geometry" />
+          <meshStandardMaterial color="#33383a" roughness={0.55} metalness={0.65} />
         </InstancedGroup>
       ))}
-      {/* arms reaching out over the carriageway */}
+      {/* swan-neck arms — unit tube stretched to each lamp's reach */}
       {[
-        { arr: poles, h: 3.8, arm: 1.05 },
-        { arr: masts, h: 5.1, arm: 1.5 },
+        { arr: poles, geo: geos.poleArm },
+        { arr: masts, geo: geos.mastArm },
       ].map((grp, gi) => (
         <InstancedGroup
           key={`arm-${gi}`}
           count={grp.arr.length}
           setup={(i, m) => {
             const l = grp.arr[i]
-            const a = grp.arm * 0.5
-            m.position.set(l.x + Math.sin(l.rotY) * a, l.y + grp.h + 0.12, l.z + Math.cos(l.rotY) * a)
+            m.position.set(l.x, l.y, l.z)
+            m.rotation.set(0, l.rotY, 0)
+            m.scale.set(1, 1, l.reach)
+          }}
+        >
+          <primitive object={grp.geo} attach="geometry" />
+          <meshStandardMaterial color="#33383a" roughness={0.55} metalness={0.65} />
+        </InstancedGroup>
+      ))}
+      {/* luminaire housings canted toward the tarmac, at the arm tips */}
+      {[
+        { arr: poles, geo: geos.poleFix, head: 4.55 },
+        { arr: masts, geo: geos.mastFix, head: 5.45 },
+      ].map((grp, gi) => (
+        <InstancedGroup
+          key={`fix-${gi}`}
+          count={grp.arr.length}
+          castShadow
+          setup={(i, m) => {
+            const l = grp.arr[i]
+            m.position.set(
+              l.x + Math.sin(l.rotY) * l.reach,
+              l.y + grp.head - 0.1,
+              l.z + Math.cos(l.rotY) * l.reach,
+            )
             m.rotation.set(0, l.rotY, 0)
             m.scale.set(1, 1, 1)
           }}
         >
-          <boxGeometry args={[0.09, 0.09, 1]} />
-          <meshStandardMaterial color="#3a3f3a" roughness={0.7} metalness={0.4} />
+          <primitive object={grp.geo} attach="geometry" />
+          <meshStandardMaterial color="#2c3134" roughness={0.5} metalness={0.7} />
         </InstancedGroup>
       ))}
-      {/* cowls over the heads, at the arm tips */}
+      {/* sodium lenses under each housing — the glow that flips at dusk */}
       {[
-        { arr: poles, head: 4.55, arm: 1.05 },
-        { arr: masts, head: 5.45, arm: 1.5 },
+        { arr: poles, head: 4.55, w: 0.2 },
+        { arr: masts, head: 5.45, w: 0.24 },
       ].map((grp, gi) => (
         <InstancedGroup
-          key={`cowl-${gi}`}
+          key={`lens-${gi}`}
           count={grp.arr.length}
           setup={(i, m) => {
             const l = grp.arr[i]
-            const [hx, hy, hz] = headAt(l)
-            m.position.set(hx, hy + 0.14, hz)
+            m.position.set(
+              l.x + Math.sin(l.rotY) * l.reach,
+              l.y + grp.head - 0.185,
+              l.z + Math.cos(l.rotY) * l.reach,
+            )
             m.rotation.set(0, l.rotY, 0)
-            m.scale.setScalar(l.tall ? 1.25 : 1)
+            m.scale.set(1, 1, 1)
           }}
         >
-          <coneGeometry args={[0.32, 0.2, 8]} />
-          <meshStandardMaterial color="#2c312e" roughness={0.65} metalness={0.35} />
-        </InstancedGroup>
-      ))}
-      {/* sodium heads */}
-      {[
-        { arr: poles, head: 4.55 },
-        { arr: masts, head: 5.45 },
-      ].map((grp, gi) => (
-        <InstancedGroup
-          key={`head-${gi}`}
-          count={grp.arr.length}
-          setup={(i, m) => {
-            const l = grp.arr[i]
-            const [hx, hy, hz] = headAt(l)
-            m.position.set(hx, hy, hz)
-            m.rotation.set(0, 0, 0)
-            m.scale.setScalar(l.tall ? 1.25 : 1)
-          }}
-        >
-          <sphereGeometry args={[0.16, 8, 6]} />
+          <boxGeometry args={[0.42, 0.04, grp.w]} />
           <meshStandardMaterial ref={gi === 0 ? glowRef : glowRefMast} color="#ffe9c0" emissive="#ffca7a" emissiveIntensity={0.1} />
         </InstancedGroup>
       ))}
