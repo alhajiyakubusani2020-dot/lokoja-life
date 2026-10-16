@@ -11,6 +11,11 @@ const race = async <T,>(p: Promise<T>, ms: number, fb: T): Promise<T> => {
 const run = async (): Promise<void> => {
   const browser = await chromium.launch({ args: ['--disable-dev-shm-usage'] })
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  // headless SwiftShader lands low tier (no shadows -> no __lklRenderer hook);
+  // force the high preset so the census reads the FULL scene cost
+  await page.addInitScript(() => {
+    ;(window as unknown as Record<string, unknown>).__lklForceQuality = 'high'
+  })
   await race(page.goto(`${BASE}/?e2e=1`, { waitUntil: 'domcontentloaded' }), 15000, null)
   await page.waitForTimeout(1200)
   // each step waits for the NEXT screen to actually exist (dynamic chunks + dev compile)

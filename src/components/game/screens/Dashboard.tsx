@@ -12,7 +12,8 @@
  * is untouched — only the visual layer was redesigned.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import nextDynamic from 'next/dynamic'
 import { Avatar } from '../Avatar'
 import { NeedsBar } from '../NeedsBar'
 import { BottomNav, ComingSoon, type TabKey } from '../BottomNav'
@@ -28,9 +29,7 @@ import { MoneyPop, Shockwave } from '../Juice'
 import { MapScreen } from './MapScreen'
 import { WorkScreen } from './WorkScreen'
 import { PhoneScreen } from './PhoneScreen'
-import { WorldTab } from '../world/WorldTab'
-import {
-  PlaceIcon,
+import {  PlaceIcon,
   TimeIcon,
   WeatherIcon,
   SkillIcon,
@@ -62,6 +61,16 @@ import { LEVEL_UNLOCKS, WEATHER_META } from '@/game/data/config'
 import { FOODS } from '@/game/data/foods'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { useGameStore } from '@/game/store/useGameStore'
+import { preloadWorldChunk } from './world-chunk'
+
+/* SILK II — THE WORLD RIDES ITS OWN CHUNK: three.js + the OSM geo stack
+ * (formerly ~490KB gz welded into the dashboard chunk) now load when the
+ * player first opens the world — idle-preloaded right after boot, so
+ * map-first / phone-first sessions never pay for the 3D stack. */
+const WorldTab = nextDynamic(() => import('../world/WorldTab').then((m) => m.WorldTab), {
+  ssr: false,
+  loading: () => null,
+})
 
 /* --------------------------- small HUD helpers ----------------------------- */
 
@@ -747,6 +756,13 @@ export function Dashboard() {
   const [focusLoc, setFocusLoc] = useState<string | null>(null)
   /** remount key so tab switches replay the gentle fade */
   const [tabTick, setTabTick] = useState(0)
+
+  /* SILK II — the world chunk warms in the first idle window after the
+   * dashboard paints (never fights first paint; on-demand if the player
+   * beats the idle callback to the World tab). */
+  useEffect(() => {
+    preloadWorldChunk()
+  }, [])
 
   const xpNeeded = xpToNextLevel(player.level)
   const tier = reputationTier(player.reputation)

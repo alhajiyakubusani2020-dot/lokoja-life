@@ -14,6 +14,21 @@
  *
  * Window glow / lamp glow read atmoLive.nightGlow (driven by the REAL
  * world clock) — no React re-render on time changes.
+ *
+ * SILK II — the frame law. The city's three heaviest static lesions are
+ * healed here: (1) THE DOOR LIGHT LAW — the 98 per-door pointLights are
+ * gone; a fixed pool of 6 point lights (DoorLights) tracks the K nearest
+ * door anchors imperatively (K by effective tier: 0 low / 4 mid / 6 high,
+ * read live from extrasLive), intensity following atmoLive.nightGlow each
+ * frame — the shader's point-light count is per-tier constant. (2) THE
+ * DOOR MERGE LAW — 98 doors × 7 private meshes became 6 InstancedMesh
+ * buckets (one per part-kind, 686 instances, 6 materials), matrices
+ * composed by doorPartMatrix to be exactly the old scene-graph
+ * transforms; only the frame (posts + lintel) casts shadows. (3) THE
+ * LABEL LAW — location labels cull by distance from the player (140u,
+ * the 3 nearest always alive) via imperative per-frame writes; invisible
+ * sprites skip the y-bounce. Every per-frame write is allocation-free
+ * module scratch; zero new timers; zero React state.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -27,6 +42,9 @@ import {
 import { hash1 } from '@/game/world3d/terrainArt'
 import { ALL_DOORS, SCHOOL_TREES } from '@/game/world3d/schools'
 import { atmoLive } from './atmosphere'
+import { playerPos } from './controls'
+import { extrasLive } from '@/game/systems/extras'
+import type { QualityTier } from '@/game/systems/device'
 import {
   ANTENNAS, AWNINGS, AWNING_TONES, BARRELS, BASKETS, CLOTH_TONES, CRATES, GATE_LEAVES, LAUNDRY_LINES,
   ROAD_SIGNS, SHELTERS, SHOP_NAMES, SIGNBOARDS, TIRES, UTILITY_POLES, WALL_SEGMENTS, WATER_TANKS, WIRE_SPANS,
@@ -2090,7 +2108,66 @@ function PointOfInterestProps() {
   )
 }
 
+/* --------------------- SILK II — the shared nearest-K law --------------------- */
+
+/**
+ * THE NEAREST-K LAW (SILK II): fill `idx` with the array indices of the k
+ * nearest points of `pts` to (px, pz), nearest first. Ties break to the
+ * LOWER array index — the data keeps its own order, so every player sees
+ * the same selection every time (THE DETERMINISM LAW). Pure insertion into
+ * caller-owned scratch: zero allocations per call — the frame loops run
+ * this every frame. Returns how many slots were filled
+ * (≤ min(k, idx.length, pts.length)). Exported for the SILK smoke rig.
+ */
+export function nearestKInto(
+  idx: Int32Array,
+  d2: Float64Array,
+  pts: readonly { x: number; z: number }[],
+  px: number,
+  pz: number,
+  k: number,
+): number {
+  const n = Math.min(k, idx.length, pts.length)
+  if (n <= 0) return 0
+  let filled = 0
+  for (let i = 0; i < pts.length; i++) {
+    const dx = pts[i].x - px
+    const dz = pts[i].z - pz
+    const dist2 = dx * dx + dz * dz
+    if (filled === n && dist2 >= d2[n - 1]) continue // rim ties keep the earlier entry
+    if (filled < n) filled++
+    let slot = filled - 1
+    while (slot > 0 && d2[slot - 1] > dist2) {
+      d2[slot] = d2[slot - 1]
+      idx[slot] = idx[slot - 1]
+      slot--
+    }
+    d2[slot] = dist2
+    idx[slot] = i
+  }
+  return filled
+}
+
 /* ---------------------------------- labels ----------------------------------- */
+
+/**
+ * THE LABEL LAW (SILK II): the 22 location labels are depthTest:false
+ * overlays — the old build drew every one of them, always, and bounced
+ * all 22 every frame. Now a label is visible only within
+ * LABEL_CULL_RANGE of the player (XZ), with the 3 NEAREST kept alive
+ * regardless so an arrival always reads its name. Visibility and the
+ * y-bounce are imperative per-frame writes; invisible sprites skip the
+ * bounce math entirely. Zero allocations (module scratch), zero React
+ * churn, sprite scale + atlas untouched (readability unchanged).
+ */
+const LABEL_CULL_RANGE = 140
+const LABEL_KEEP_NEAR = 3
+const LABEL_COUNT = ANCHORS.length
+
+// module scratch for the per-frame cull — no per-frame allocation
+const labelD2 = new Float64Array(LABEL_COUNT)
+const labelKeepI = new Int32Array(LABEL_KEEP_NEAR)
+const labelKeepD = new Float64Array(LABEL_KEEP_NEAR)
 
 function LocationLabels() {
   const sprites = useMemo(
@@ -2104,11 +2181,32 @@ function LocationLabels() {
   const groupRef = useRef<THREE.Group>(null)
 
   useFrame((s) => {
-    if (!groupRef.current) return
+    const grp = groupRef.current
+    if (!grp) return
     const t = s.clock.elapsedTime
-    groupRef.current.children.forEach((child, i) => {
+    const px = playerPos.x
+    const pz = playerPos.z
+    for (let i = 0; i < LABEL_COUNT; i++) {
+      const a = ANCHORS[i]
+      const dx = a.x - px
+      const dz = a.z - pz
+      labelD2[i] = dx * dx + dz * dz
+    }
+    // the 3-nearest keep-alive — the same deterministic law as the door lights
+    nearestKInto(labelKeepI, labelKeepD, ANCHORS, px, pz, LABEL_KEEP_NEAR)
+    const range2 = LABEL_CULL_RANGE * LABEL_CULL_RANGE
+    for (let i = 0; i < LABEL_COUNT; i++) {
+      const child = grp.children[i]
+      if (!child) continue
+      const near =
+        labelD2[i] <= range2 ||
+        i === labelKeepI[0] ||
+        i === labelKeepI[1] ||
+        i === labelKeepI[2]
+      if (child.visible !== near) child.visible = near
+      if (!near) continue // THE CULL LAW: invisible labels cost no bounce writes
       child.position.y = ANCHORS[i].y + 7.4 + Math.sin(t * 1.1 + i * 1.7) * 0.18
-    })
+    }
   })
 
   return (
@@ -2129,50 +2227,234 @@ function LocationLabels() {
  * frame, door slab, awning and a small hanging sign. Positioned from the
  * SAME DOORS data the interact system uses — walk to the prop, press E,
  * you're inside.
+ *
+ * SILK II — THE DOOR MERGE LAW: the old build mounted 686 private meshes
+ * (98 doors × 7 parts) with 686 private materials. Every door's parts are
+ * identical (each part carries one fixed paint — there is NO per-door
+ * colour variation in the data, so instanceColor is unnecessary), so each
+ * part-kind is ONE InstancedMesh bucket: 6 buckets, 6 materials, 686
+ * instances. doorPartMatrix composes each instance's world matrix to be
+ * EXACTLY the transform the old nested scene graph produced (verified
+ * vertex-exact by the SILK smoke rig). Shadow casting follows the SILK
+ * brief: only the frame buckets (posts + lintel) cast — the old slab and
+ * awning shadows were slivers lost inside the doorway at gameplay
+ * distance; the step keeps receiving, nothing else does.
+ *
+ * SILK II — THE DOOR LIGHT LAW: the old build mounted a pointLight on
+ * EVERY door — 98 lights, so every lit fragment paid a 98-light loop and
+ * the JSX intensity was frozen at the mount-time nightGlow (≈0: dead
+ * weight that still billed the loop). DoorLights keeps a fixed pool of 6
+ * point lights tracking the K nearest door anchors to the player, K by
+ * the effective tier read live from extrasLive (0 low — the emissive glow
+ * planes carry the night look / 4 mid / 6 high). Intensity follows
+ * atmoLive.nightGlow each frame at the old scale (×6, distance 6,
+ * decay 1.8, same warm colour, same anchor spot). The pool size never
+ * varies, so the shader's point-light count is constant per tier — no
+ * dusk recompile stalls, no React churn, no per-frame allocations.
  */
+
+interface DoorTransform {
+  x: number
+  y: number
+  z: number
+  rotY: number
+}
+
+interface DoorPartSpec {
+  kind: 'step' | 'post' | 'lintel' | 'slab' | 'awning' | 'sign'
+  /** instances per door (the frame posts are a pair) */
+  perDoor: 1 | 2
+  /** shared geometry dims — exactly the old per-mesh <boxGeometry args> */
+  geo: [number, number, number]
+  /** local transform inside the door frame (the old mesh's position/rotation) */
+  x: number
+  y: number
+  z: number
+  rotX: number
+  rotY: number
+  /** for the post pair: instance s sits at x + sideX[s] */
+  sideX: readonly [number, number] | null
+  cast: boolean
+  receive: boolean
+  color: string
+  roughness: number
+  /** the sign plate is the one emissive part (follows nightGlow live) */
+  emissive?: string
+}
+
+/** the exact old per-door part transforms, one bucket per part-kind.
+ *  Exported for the SILK smoke rig (instance-count + matrix verification). */
+export const DOOR_PARTS: DoorPartSpec[] = [
+  { kind: 'step', perDoor: 1, geo: [1.7, 0.12, 0.9], x: 0, y: 0.06, z: 0.35, rotX: 0, rotY: 0, sideX: null, cast: false, receive: true, color: '#b9a98d', roughness: 1 },
+  { kind: 'post', perDoor: 2, geo: [0.13, 2.1, 0.13], x: 0, y: 1.05, z: 0, rotX: 0, rotY: 0, sideX: [-0.62, 0.62], cast: true, receive: false, color: '#6a4c30', roughness: 1 },
+  { kind: 'lintel', perDoor: 1, geo: [1.42, 0.14, 0.15], x: 0, y: 2.14, z: 0, rotX: 0, rotY: 0, sideX: null, cast: true, receive: false, color: '#6a4c30', roughness: 1 },
+  { kind: 'slab', perDoor: 1, geo: [0.86, 1.94, 0.055], x: 0.45, y: 1.02, z: 0.16, rotX: 0, rotY: -0.62, sideX: null, cast: false, receive: false, color: '#2e7d5b', roughness: 0.75 },
+  { kind: 'awning', perDoor: 1, geo: [1.6, 0.05, 0.95], x: 0, y: 2.32, z: 0.42, rotX: 0.34, rotY: 0, sideX: null, cast: false, receive: false, color: '#c94f2e', roughness: 0.85 },
+  { kind: 'sign', perDoor: 1, geo: [0.5, 0.34, 0.03], x: 0, y: 1.88, z: 0.3, rotX: 0, rotY: 0, sideX: null, cast: false, receive: false, color: '#e8dcc3', roughness: 0.9, emissive: '#e8a317' },
+]
+
+// module scratch — the composition runs at mount only but stays alloc-free
+const _doorParent = new THREE.Matrix4()
+const _doorLocal = new THREE.Matrix4()
+
+/**
+ * THE DOOR MATRIX LAW: one part instance's world matrix, EXACTLY the old
+ * scene graph — T(door) · Ry(door.rotY) · T(local) · R(local). The old
+ * build expressed this as nested Object3Ds; this is the same arithmetic
+ * on the same numbers. Exported for the SILK smoke rig.
+ */
+export function doorPartMatrix(out: THREE.Matrix4, door: DoorTransform, part: DoorPartSpec, s: number): THREE.Matrix4 {
+  _doorParent.makeRotationY(door.rotY)
+  _doorParent.setPosition(door.x, door.y, door.z)
+  if (part.rotX !== 0) _doorLocal.makeRotationX(part.rotX)
+  else if (part.rotY !== 0) _doorLocal.makeRotationY(part.rotY)
+  else _doorLocal.identity()
+  _doorLocal.setPosition(part.x + (part.sideX ? part.sideX[s] : 0), part.y, part.z)
+  return out.multiplyMatrices(_doorParent, _doorLocal)
+}
+
+/** one part-kind bucket: ONE InstancedMesh across all 98 doors */
+function DoorBucket({ part, glowScale = 0 }: { part: DoorPartSpec; glowScale?: number }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const count = ALL_DOORS.length * part.perDoor
+
+  useEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    const m = new THREE.Matrix4()
+    for (let i = 0; i < ALL_DOORS.length; i++) {
+      for (let s = 0; s < part.perDoor; s++) {
+        mesh.setMatrixAt(i * part.perDoor + s, doorPartMatrix(m, ALL_DOORS[i], part, s))
+      }
+    }
+    mesh.instanceMatrix.needsUpdate = true
+  }, [part])
+
+  const mat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: part.color,
+        roughness: part.roughness,
+        metalness: 0,
+        emissive: part.emissive ?? '#000000',
+        emissiveIntensity: 0,
+      }),
+    [part],
+  )
+  useEffect(() => () => mat.dispose(), [mat])
+
+  // the sign plate is the one emissive part — it follows nightGlow live
+  // through a ref (the Shopfronts sign convention — the old JSX read
+  // nightGlow once at mount; the file's own convention is the live read)
+  const matRef = useRef<THREE.MeshStandardMaterial | null>(null)
+  useEffect(() => {
+    matRef.current = mat
+  }, [mat])
+  useFrame(() => {
+    if (glowScale > 0 && matRef.current) matRef.current.emissiveIntensity = atmoLive.nightGlow * glowScale
+  })
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, count]} castShadow={part.cast} receiveShadow={part.receive}>
+      <boxGeometry args={part.geo} />
+      <primitive object={mat} attach="material" />
+    </instancedMesh>
+  )
+}
+
+/* -------------------------- SILK II — the door lights ------------------------- */
+
+/**
+ * THE DOOR LIGHT POOL: 6 point lights, always mounted, tracking the K
+ * nearest door anchors — the exact spots the old per-door lights sat at
+ * (door frame + (0, 2, 0.5), the frame's yaw applied). K follows the
+ * effective tier live (extrasLive — the polish layers' own live pattern):
+ * 0 on low, 4 on mid, 6 on high. Active slots stay visible at intensity 0
+ * in daytime so the shader's light count never churns; only the spares
+ * (pool slots beyond the tier count) sit dark + hidden.
+ */
+export const DOOR_LIGHT_POOL = 6
+export const DOOR_LIGHT_BY_TIER: Record<QualityTier, number> = { low: 0, mid: 4, high: 6 }
+
+interface DoorLightSource {
+  x: number
+  y: number
+  z: number
+}
+
+/** doors eligible for the pool (the old `d.light !== false` law) with the
+ *  exact anchor the old JSX light occupied. Exported for the smoke rig. */
+export const DOOR_LIGHT_SOURCES: DoorLightSource[] = ALL_DOORS.filter((d) => d.light !== false).map((d) => ({
+  x: d.x + Math.sin(d.rotY) * 0.5,
+  y: d.y + 2,
+  z: d.z + Math.cos(d.rotY) * 0.5,
+}))
+
+// module scratch — the per-frame nearest-K allocates nothing
+const _lightIdx = new Int32Array(DOOR_LIGHT_POOL)
+const _lightD2 = new Float64Array(DOOR_LIGHT_POOL)
+
+/** nearest door lights to the player, nearest first (ties → data order) */
+export function pickNearestDoorLights(px: number, pz: number, k: number): number {
+  return nearestKInto(_lightIdx, _lightD2, DOOR_LIGHT_SOURCES, px, pz, k)
+}
+
+function DoorLights() {
+  const refs = useRef<(THREE.PointLight | null)[]>([])
+
+  useFrame(() => {
+    const k = DOOR_LIGHT_BY_TIER[extrasLive.tier]
+    const active = Math.min(k, DOOR_LIGHT_SOURCES.length)
+    const glow = atmoLive.nightGlow
+    // selection only matters while a glow can read it; the ACTIVE slots
+    // keep tracking (visible at intensity 0 by day) so the light count is
+    // stable across the whole day cycle
+    if (glow > 0 && active > 0) pickNearestDoorLights(playerPos.x, playerPos.z, active)
+    for (let s = 0; s < DOOR_LIGHT_POOL; s++) {
+      const light = refs.current[s]
+      if (!light) continue
+      if (s >= active) {
+        // THE SPARE LAW: pool slots beyond the tier count sit dark + hidden
+        light.intensity = 0
+        light.visible = false
+        continue
+      }
+      light.visible = true
+      if (glow <= 0) {
+        light.intensity = 0
+        continue
+      }
+      const src = DOOR_LIGHT_SOURCES[_lightIdx[s]]
+      light.position.set(src.x, src.y, src.z)
+      light.intensity = glow * 6
+    }
+  })
+
+  return (
+    <group>
+      {Array.from({ length: DOOR_LIGHT_POOL }, (_, i) => (
+        <pointLight
+          key={i}
+          ref={(el) => { refs.current[i] = el }}
+          color="#ffd9a0"
+          intensity={0}
+          distance={6}
+          decay={1.8}
+        />
+      ))}
+    </group>
+  )
+}
+
 function Doorways() {
   return (
     <group>
-      {ALL_DOORS.map((d) => (
-        <group key={d.interiorId} position={[d.x, d.y, d.z]} rotation={[0, d.rotY, 0]}>
-          {/* step */}
-          <mesh position={[0, 0.06, 0.35]} receiveShadow>
-            <boxGeometry args={[1.7, 0.12, 0.9]} />
-            <meshStandardMaterial color="#b9a98d" roughness={1} />
-          </mesh>
-          {/* frame posts + lintel */}
-          {[-0.62, 0.62].map((x) => (
-            <mesh key={x} position={[x, 1.05, 0]} castShadow>
-              <boxGeometry args={[0.13, 2.1, 0.13]} />
-              <meshStandardMaterial color="#6a4c30" roughness={1} />
-            </mesh>
-          ))}
-          <mesh position={[0, 2.14, 0]} castShadow>
-            <boxGeometry args={[1.42, 0.14, 0.15]} />
-            <meshStandardMaterial color="#6a4c30" roughness={1} />
-          </mesh>
-          {/* the door slab, ajar */}
-          <mesh position={[0.45, 1.02, 0.16]} rotation={[0, -0.62, 0]} castShadow>
-            <boxGeometry args={[0.86, 1.94, 0.055]} />
-            <meshStandardMaterial color="#2e7d5b" roughness={0.75} />
-          </mesh>
-          {/* awning */}
-          <mesh position={[0, 2.32, 0.42]} rotation={[0.34, 0, 0]} castShadow>
-            <boxGeometry args={[1.6, 0.05, 0.95]} />
-            <meshStandardMaterial color="#c94f2e" roughness={0.85} />
-          </mesh>
-          {/* hanging sign plate */}
-          <mesh position={[0, 1.88, 0.3]}>
-            <boxGeometry args={[0.5, 0.34, 0.03]} />
-            <meshStandardMaterial color="#e8dcc3" roughness={0.9} emissive="#e8a317" emissiveIntensity={atmoLive.nightGlow * 0.35} />
-          </mesh>
-          {/* warm doorstep glow at night (city doors only — the 24 school
-              doors keep their light budget for the compound floodlamps) */}
-          {d.light !== false && (
-            <pointLight position={[0, 2.0, 0.5]} color="#ffd9a0" intensity={atmoLive.nightGlow * 6} distance={6} decay={1.8} />
-          )}
-        </group>
+      {/* one instanced bucket per part-kind — 686 instances, 6 draw calls */}
+      {DOOR_PARTS.map((p) => (
+        <DoorBucket key={p.kind} part={p} glowScale={p.kind === 'sign' ? 0.35 : 0} />
       ))}
+      {/* the SILK II light pool — 6 point lights for the whole city's doors */}
+      <DoorLights />
     </group>
   )
 }

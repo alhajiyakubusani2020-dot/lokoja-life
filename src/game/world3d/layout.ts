@@ -127,37 +127,227 @@ export const RIVERS: RiverDef[] = GEO_RIVERS.map((r) => ({
 export const CONFLUENCE_POINT: [number, number] =
   RIVERS[1].points[RIVERS[1].points.length - 1]
 
-/** distance from (x,z) to a polyline */
-function polylineDistance(x: number, z: number, pts: [number, number][]): { d: number } {
-  let best = Infinity
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [ax, az] = pts[i]
-    const [bx, bz] = pts[i + 1]
-    const dx = bx - ax
-    const dz = bz - az
-    const len2 = dx * dx + dz * dz
-    let t = len2 === 0 ? 0 : ((x - ax) * dx + (z - az) * dz) / len2
-    t = Math.max(0, Math.min(1, t))
-    const px = ax + dx * t
-    const pz = az + dz * t
-    const d = Math.hypot(x - px, z - pz)
-    if (d < best) best = d
-  }
-  return { d: best }
+/* --------------------- river spatial grid (SILK II P2) ----------------------
+ * heightAt + collision used to linearly scan ALL 333 river segments per
+ * query (~55 queries/frame ≈ 18-25k point-segment distance evals on the main
+ * thread). This uniform grid — built ONCE at module init from the SAME
+ * RIVERS arrays in the SAME river-major/point order — answers every query
+ * with EXACTLY the brute-force result: same formula, same inputs, only
+ * fewer candidate segments.
+ *
+ *  • CELL 32u, picked from the segment-length distribution: p75 = 8.5u,
+ *    p90 = 16.6u — 90% of segments span at most a 2×2 cell neighbourhood;
+ *    only the Niger/Benue spines (p99 = 61.6u, max 97.8u) span more. 32u
+ *    also keeps the whole 34u contract square at 3-4 cells per axis.
+ *  • THE CONTRACT RADIUS (RIVER_Q_RADIUS = 34u) ≥ the largest threshold any
+ *    caller applies (32.25u — Niger half-width 6.25 + the 26u riverside
+ *    fade; the full catalog lives in scripts/tests/m-optim.ts).
+ *  • EXACTNESS AT ANY DISTANCE — a segment within distance R of a point
+ *    always touches the square [x±R]×[z±R] (every segment is inserted into
+ *    every cell its AABB overlaps), so the square query sees a SUPERSET of
+ *    every relevant segment; if no candidate ≤ the contract radius comes
+ *    back, the search expands ring-by-ring (strict per-cell rect prune)
+ *    until no unscanned cell can hold a strictly-closer segment. The true
+ *    nearest segment is returned for EVERY point, near or far — raw-d
+ *    readers (moisture gradients) see brute-identical values too.
+ *  • THE WINNER LAW — brute force scans segments in ascending index order
+ *    with strict `<`, so its winner is the lexicographic minimum over
+ *    (distance, index). The grid scan evaluates candidates in cell order
+ *    and keeps exactly that lexicographic minimum: the same segment wins on
+ *    every input, float ties included. No tolerance, no epsilon.
+ */
+
+/** grid contract radius ≥ every cataloged caller cutoff (max 32.25u) */
+export const RIVER_Q_RADIUS = 34
+
+/** uniform query-grid cell, shared by the river/anchor/school grids */
+const QCELL = 32
+
+/** deterministic numeric cell key — avoids per-lookup string building */
+function qcellKey(cx: number, cz: number): number {
+  return (cx + 512) * 1024 + (cz + 512)
 }
 
-/** distance to every river centreline (min), for carving + collision */
-export function riverInfo(x: number, z: number): { d: number; halfWidth: number } {
-  let d = Infinity
-  let halfWidth = 0
+interface RiverSeg {
+  /** global segment index — river-major, point order = the brute scan order */
+  idx: number
+  ax: number
+  az: number
+  bx: number
+  bz: number
+  /** river.width / 2 precomputed (identical float to the brute expression) */
+  half: number
+  /** segment AABB — the pre-reject gate: 4 compares instead of the scan body */
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+}
+
+const RIVER_GRID: Map<number, RiverSeg[]> = new Map()
+
+// built ONCE, in segment order — idx ascending is the brute-force scan order
+{
+  let idx = 0
   for (const r of RIVERS) {
-    const { d: rd } = polylineDistance(x, z, r.points)
-    if (rd < d) {
-      d = rd
-      halfWidth = r.width / 2
+    for (let i = 0; i < r.points.length - 1; i++) {
+      const [ax, az] = r.points[i]
+      const [bx, bz] = r.points[i + 1]
+      const s: RiverSeg = {
+        idx: idx++,
+        ax,
+        az,
+        bx,
+        bz,
+        half: r.width / 2,
+        minX: Math.min(ax, bx),
+        maxX: Math.max(ax, bx),
+        minZ: Math.min(az, bz),
+        maxZ: Math.max(az, bz),
+      }
+      const minX = Math.floor(Math.min(ax, bx) / QCELL)
+      const maxX = Math.floor(Math.max(ax, bx) / QCELL)
+      const minZ = Math.floor(Math.min(az, bz) / QCELL)
+      const maxZ = Math.floor(Math.max(az, bz) / QCELL)
+      for (let cx = minX; cx <= maxX; cx++) {
+        for (let cz = minZ; cz <= maxZ; cz++) {
+          const k = qcellKey(cx, cz)
+          const arr = RIVER_GRID.get(k)
+          if (arr) arr.push(s)
+          else RIVER_GRID.set(k, [s])
+        }
+      }
     }
   }
-  return { d, halfWidth }
+}
+
+// per-query duplicate marker — REUSED across queries via an epoch stamp
+// (single-threaded world3d, queries never nest; epoch wraps reset the array)
+const Q_SEEN = new Int32Array(RIVERS.reduce((n, r) => n + r.points.length - 1, 0))
+let qEpoch = 0
+
+/**
+ * The exact nearest-river query behind riverInfo and collision.ts —
+ * brute-force-identical tuple ({ d, halfWidth, cx, cz } of the winning
+ * segment) at a fraction of the evals. `evaluated`/`cells` are honest
+ * per-query counters (unique segments evaluated / cells looked up) for the
+ * test suite's speed law.
+ */
+export function riverNearest(
+  x: number,
+  z: number,
+): { d: number; halfWidth: number; cx: number; cz: number; evaluated: number; cells: number } {
+  qEpoch = (qEpoch + 1) | 0
+  if (qEpoch === 0) {
+    Q_SEEN.fill(0)
+    qEpoch = 1
+  }
+  let evaluated = 0
+  let cells = 0
+  let best = Infinity
+  let bestHalf = 0
+  let bestCx = x
+  let bestCz = z
+  let bestIdx = -1
+
+  // evaluate one candidate segment under the (d, idx) winner law — the
+  // formula is the brute-force scan body, byte for byte. The AABB gate is
+  // an EXACT pre-reject: if the segment's box lies beyond `best` on either
+  // axis, every point of it is farther than best (no beat, no tie), so the
+  // lexicographic winner is untouched — only the hypot body is skipped.
+  const scan = (s: RiverSeg): void => {
+    if (Q_SEEN[s.idx] === qEpoch) return // segment spans several query cells
+    if (best < Infinity && (s.maxX < x - best || s.minX > x + best || s.maxZ < z - best || s.minZ > z + best)) return
+    Q_SEEN[s.idx] = qEpoch
+    evaluated++
+    const dx = s.bx - s.ax
+    const dz = s.bz - s.az
+    const len2 = dx * dx + dz * dz
+    let t = len2 === 0 ? 0 : ((x - s.ax) * dx + (z - s.az) * dz) / len2
+    t = Math.max(0, Math.min(1, t))
+    const px = s.ax + dx * t
+    const pz = s.az + dz * t
+    const d = Math.hypot(x - px, z - pz)
+    if (d < best || (d === best && s.idx < bestIdx)) {
+      best = d
+      bestHalf = s.half
+      bestCx = px
+      bestCz = pz
+      bestIdx = s.idx
+    }
+  }
+
+  // phase 1 — the contract square: sees every segment with d ≤ RIVER_Q_RADIUS.
+  // Per-cell rect prune (exact-safe: a segment inside a cell lies at or beyond
+  // the cell's rect distance, so rx > best means it can neither beat nor tie
+  // the current winner — the lexicographic (d, idx) min is untouched).
+  const minX = Math.floor((x - RIVER_Q_RADIUS) / QCELL)
+  const maxX = Math.floor((x + RIVER_Q_RADIUS) / QCELL)
+  const minZ = Math.floor((z - RIVER_Q_RADIUS) / QCELL)
+  const maxZ = Math.floor((z + RIVER_Q_RADIUS) / QCELL)
+  for (let cx = minX; cx <= maxX; cx++) {
+    const rx = x < cx * QCELL ? cx * QCELL - x : x > (cx + 1) * QCELL ? x - (cx + 1) * QCELL : 0
+    for (let cz = minZ; cz <= maxZ; cz++) {
+      if (best < Infinity) {
+        const rz = z < cz * QCELL ? cz * QCELL - z : z > (cz + 1) * QCELL ? z - (cz + 1) * QCELL : 0
+        if (rx > best || rz > best) continue
+      }
+      const arr = RIVER_GRID.get(qcellKey(cx, cz))
+      if (!arr) continue
+      cells++
+      for (let i = 0; i < arr.length; i++) scan(arr[i])
+    }
+  }
+
+  // phase 2 — ring expansion for far points (nothing within the contract
+  // radius): grow the square until no unscanned cell can hold a strictly
+  // closer segment. A segment outside the square grown by g rings lies
+  // strictly beyond `clear + g*QCELL`, so the stop is exact; the strict
+  // per-cell rect prune only ever skips cells that cannot beat OR TIE best.
+  if (best > RIVER_Q_RADIUS) {
+    const clear = Math.min(
+      x - minX * QCELL,
+      (maxX + 1) * QCELL - x,
+      z - minZ * QCELL,
+      (maxZ + 1) * QCELL - z,
+    )
+    for (let g = 1; g <= 40; g++) {
+      const loX = minX - g
+      const hiX = maxX + g
+      const loZ = minZ - g
+      const hiZ = maxZ + g
+      const loPrev = g - 1
+      for (let cx = loX; cx <= hiX; cx++) {
+        for (let cz = loZ; cz <= hiZ; cz++) {
+          // skip cells already scanned in earlier rings
+          if (cx >= minX - loPrev && cx <= maxX + loPrev && cz >= minZ - loPrev && cz <= maxZ + loPrev) continue
+          const rx = x < cx * QCELL ? cx * QCELL - x : x > (cx + 1) * QCELL ? x - (cx + 1) * QCELL : 0
+          const rz = z < cz * QCELL ? cz * QCELL - z : z > (cz + 1) * QCELL ? z - (cz + 1) * QCELL : 0
+          if (best < Infinity && (rx > best || rz > best)) continue
+          const arr = RIVER_GRID.get(qcellKey(cx, cz))
+          if (!arr) continue
+          cells++
+          for (let i = 0; i < arr.length; i++) scan(arr[i])
+        }
+      }
+      if (best < clear + g * QCELL) break
+    }
+  }
+
+  return { d: best, halfWidth: bestHalf, cx: bestCx, cz: bestCz, evaluated, cells }
+}
+
+/** distance to every river centreline (min), for carving + collision —
+ *  grid-accelerated, brute-force-exact (see the river spatial grid above) */
+export function riverInfo(x: number, z: number): { d: number; halfWidth: number } {
+  const q = riverNearest(x, z)
+  return { d: q.d, halfWidth: q.halfWidth }
+}
+
+/** test-suite instrumentation: the river grid's per-query cost counters */
+export function riverQueryStats(x: number, z: number): { evaluated: number; cells: number } {
+  const q = riverNearest(x, z)
+  return { evaluated: q.evaluated, cells: q.cells }
 }
 
 /* ---------------------------------- roads ---------------------------------- */
@@ -526,6 +716,114 @@ for (const sp of SCHOOL_SITES) {
   SCHOOL_PLATEAU_H[sp.id] = Math.max(0.4, baseNoise(sp.x, sp.z) * 0.55)
 }
 
+/* ----------------- anchor + school plateau query grids (SILK II P2) -----------------
+ * heightAt also blended ALL 22 anchors (within PLATEAU_R*1.9 = 26.6u) and ALL
+ * 12 school sites (within plateauR*2.0, max 60u) per call — another ~34 hypots
+ * stacked on the river scan. Same surgery, static-point flavour: two tiny point
+ * grids built ONCE in array order; the query returns the candidate SUPERSET in
+ * INDEX order (the blends are sequential, so order is part of the contract)
+ * and the blend body keeps the exact original distance condition — byte-for-
+ * byte the same math, only fewer candidates.
+ */
+
+interface GridPoint<T extends { x: number; z: number }> {
+  /** index in the source array — the brute-force blend order */
+  idx: number
+  p: T
+  /** insertion/query radius (world units) */
+  r: number
+}
+
+function pointGridAdd<T extends { x: number; z: number }>(grid: Map<number, GridPoint<T>[]>, gp: GridPoint<T>): void {
+  const minX = Math.floor((gp.p.x - gp.r) / QCELL)
+  const maxX = Math.floor((gp.p.x + gp.r) / QCELL)
+  const minZ = Math.floor((gp.p.z - gp.r) / QCELL)
+  const maxZ = Math.floor((gp.p.z + gp.r) / QCELL)
+  for (let cx = minX; cx <= maxX; cx++) {
+    for (let cz = minZ; cz <= maxZ; cz++) {
+      const k = qcellKey(cx, cz)
+      const arr = grid.get(k)
+      if (arr) arr.push(gp)
+      else grid.set(k, [gp])
+    }
+  }
+}
+
+/**
+ * Fill `out` (reused scratch, zero allocation) with every grid point whose
+ * cell overlaps [x±radius]² — a superset of every point within `radius` —
+ * sorted by insertion index with duplicates dropped. Returns the count.
+ *
+ * DEDUP IS MARK-FIRST: a point that spans several query cells arrives once
+ * per cell, so every candidate is admitted by the epoch mark BEFORE the
+ * sorted insert — the sort then never sees a duplicate and the scratch
+ * arrays stay exactly as long as the unique candidate set. (An earlier
+ * drop-after-shift variant left ghost tail entries behind every `continue`
+ * and double-blended plateau anchors — the m-optim equality sweep caught it.)
+ */
+let pqEpoch = 0
+function pointGridQuery<T extends { x: number; z: number }>(
+  grid: Map<number, GridPoint<T>[]>,
+  marks: Int32Array,
+  outIdx: number[],
+  out: GridPoint<T>[],
+  x: number,
+  z: number,
+  radius: number,
+): number {
+  pqEpoch = (pqEpoch + 1) | 0
+  if (pqEpoch === 0) {
+    marks.fill(0)
+    pqEpoch = 1
+  }
+  out.length = 0
+  outIdx.length = 0
+  const minX = Math.floor((x - radius) / QCELL)
+  const maxX = Math.floor((x + radius) / QCELL)
+  const minZ = Math.floor((z - radius) / QCELL)
+  const maxZ = Math.floor((z + radius) / QCELL)
+  for (let cx = minX; cx <= maxX; cx++) {
+    for (let cz = minZ; cz <= maxZ; cz++) {
+      const arr = grid.get(qcellKey(cx, cz))
+      if (!arr) continue
+      for (let i = 0; i < arr.length; i++) {
+        const gp = arr[i]
+        if (marks[gp.idx] === pqEpoch) continue // spans several cells — admitted already
+        marks[gp.idx] = pqEpoch
+        // insertion sort by idx (tiny candidate sets, no duplicates remain)
+        let j = out.length
+        while (j > 0 && outIdx[j - 1] > gp.idx) {
+          outIdx[j] = outIdx[j - 1]
+          out[j] = out[j - 1]
+          j--
+        }
+        outIdx[j] = gp.idx
+        out[j] = gp
+      }
+    }
+  }
+  return out.length
+}
+
+const ANCHOR_GRID: Map<number, GridPoint<WorldAnchor>[]> = new Map()
+const ANCHOR_MARKS = new Int32Array(ANCHORS.length)
+for (let i = 0; i < ANCHORS.length; i++) {
+  pointGridAdd(ANCHOR_GRID, { idx: i, p: ANCHORS[i], r: PLATEAU_R * 1.9 })
+}
+const ANCHOR_Q: GridPoint<WorldAnchor>[] = []
+const ANCHOR_Q_IDX: number[] = []
+
+const SCHOOL_GRID: Map<number, GridPoint<SchoolSite>[]> = new Map()
+const SCHOOL_MARKS = new Int32Array(SCHOOL_SITES.length)
+let SCHOOL_Q_RADIUS = 0
+for (let i = 0; i < SCHOOL_SITES.length; i++) {
+  const r = SCHOOL_SITES[i].plateauR * 2.0
+  if (r > SCHOOL_Q_RADIUS) SCHOOL_Q_RADIUS = r
+  pointGridAdd(SCHOOL_GRID, { idx: i, p: SCHOOL_SITES[i], r })
+}
+const SCHOOL_Q: GridPoint<SchoolSite>[] = []
+const SCHOOL_Q_IDX: number[] = []
+
 /**
  * Terrain height at any world position.
  * Layers: rolling base → Mount Patti mound (real summit position) →
@@ -552,7 +850,11 @@ export function heightAt(x: number, z: number): number {
   if (pd < 96) h = pattiTerrace(h)
 
   // anchor plateaus — flat buildable/walkable sites
-  for (const a of ANCHORS) {
+  // (SILK II: point-grid candidates in idx order — the blend is sequential,
+  // so the ORDER of the original array scan is part of the contract)
+  const nA = pointGridQuery(ANCHOR_GRID, ANCHOR_MARKS, ANCHOR_Q_IDX, ANCHOR_Q, x, z, PLATEAU_R * 1.9)
+  for (let i = 0; i < nA; i++) {
+    const a = ANCHOR_Q[i].p
     const d = Math.hypot(x - a.x, z - a.z)
     if (d < PLATEAU_R * 1.9) {
       const w = 1 - smoothstep(PLATEAU_R * 0.62, PLATEAU_R * 1.9, d)
@@ -572,7 +874,10 @@ export function heightAt(x: number, z: number): number {
   // can gully through a school yard (a stream that meets a compound simply
   // runs to its fence; the yard itself stays honest, flat and dry).
   // Fully flat across the whole compound footprint, fading to the plain beyond.
-  for (const sp of SCHOOL_SITES) {
+  // (SILK II: point-grid candidates in idx order, same sequential contract)
+  const nS = pointGridQuery(SCHOOL_GRID, SCHOOL_MARKS, SCHOOL_Q_IDX, SCHOOL_Q, x, z, SCHOOL_Q_RADIUS)
+  for (let i = 0; i < nS; i++) {
+    const sp = SCHOOL_Q[i].p
     const dS = Math.hypot(x - sp.x, z - sp.z)
     if (dS < sp.plateauR * 2.0) {
       const w = 1 - smoothstep(sp.plateauR * 1.02, sp.plateauR * 2.0, dS)
@@ -580,6 +885,69 @@ export function heightAt(x: number, z: number): number {
     }
   }
 
+  return h
+}
+
+/**
+ * SILK II test instrumentation — the PRE-GRID heightAt, verbatim: linear
+ * anchor/school scans + a linear river scan computed locally from RIVERS.
+ * The m-optim suite asserts the grid-accelerated heightAt is EXACTLY this
+ * on a deterministic sweep (the equality law, enforced forever). Costs
+ * nothing at runtime — it exists only when a test calls it.
+ */
+export function __silk2BruteHeightAt(x: number, z: number): number {
+  const bruteRiver = (px: number, pz: number): { d: number; halfWidth: number } => {
+    let best = Infinity
+    let halfWidth = 0
+    for (const r of RIVERS) {
+      const pts = r.points
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [ax, az] = pts[i]
+        const [bx, bz] = pts[i + 1]
+        const dx = bx - ax
+        const dz = bz - az
+        const len2 = dx * dx + dz * dz
+        let t = len2 === 0 ? 0 : ((px - ax) * dx + (pz - az) * dz) / len2
+        t = Math.max(0, Math.min(1, t))
+        const qx = ax + dx * t
+        const qz = az + dz * t
+        const d = Math.hypot(px - qx, pz - qz)
+        if (d < best) {
+          best = d
+          halfWidth = r.width / 2
+        }
+      }
+    }
+    return { d: best, halfWidth }
+  }
+
+  let h = baseNoise(x, z) * 0.55
+  const rim = Math.hypot(x, z)
+  h += smoothstep(WALK_BOUND - 26, WALK_BOUND + 14, rim) * 14
+  const pd = Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z)
+  const pattiRise = smoothstep(85, 8, pd)
+  h += Math.pow(pattiRise, 1.3) * 34
+  if (pd < 96) h = pattiTerrace(h)
+  for (const a of ANCHORS) {
+    const d = Math.hypot(x - a.x, z - a.z)
+    if (d < PLATEAU_R * 1.9) {
+      const w = 1 - smoothstep(PLATEAU_R * 0.62, PLATEAU_R * 1.9, d)
+      h = h * (1 - w) + a.plateauH * w
+    }
+  }
+  const { d, halfWidth } = bruteRiver(x, z)
+  const margin = Math.min(9, 2 + halfWidth)
+  if (d < halfWidth + margin) {
+    const carve = 1 - smoothstep(halfWidth - 2, halfWidth + margin, d)
+    h = h * (1 - carve) + (WATER_Y - 1.7) * carve
+  }
+  for (const sp of SCHOOL_SITES) {
+    const dS = Math.hypot(x - sp.x, z - sp.z)
+    if (dS < sp.plateauR * 2.0) {
+      const w = 1 - smoothstep(sp.plateauR * 1.02, sp.plateauR * 2.0, dS)
+      h = h * (1 - w) + SCHOOL_PLATEAU_H[sp.id] * w
+    }
+  }
   return h
 }
 

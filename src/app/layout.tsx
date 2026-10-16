@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Outfit } from "next/font/google";
+import { Geist, Outfit } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { PwaRegister } from "@/components/game/PwaRegister";
@@ -9,10 +9,8 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+/* SILK II: Geist Mono cut — the game UI never renders mono (only the unused
+   ui/chart wrapper did); the CSS var falls back to the system mono stack. */
 
 /* Outfit — the game's display voice: geometric, warm, confident.
    Used by .lko-display for the logo, headings and big numbers. */
@@ -74,8 +72,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} antialiased`}
-      >
+        className={`${geistSans.variable} ${outfit.variable} antialiased`}      >
         {children}
         <Toaster />
         <PwaRegister />

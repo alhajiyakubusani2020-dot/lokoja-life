@@ -10,7 +10,7 @@
  * resolve() every frame with its intended position and gets a legal one.
  */
 
-import { BUILDINGS, BRIDGES, inSchoolYard, POINTS_OF_INTEREST, RIVERS, WALK_BOUND, type BuildingDef } from './layout'
+import { BUILDINGS, BRIDGES, inSchoolYard, POINTS_OF_INTEREST, WALK_BOUND, riverNearest, type BuildingDef } from './layout'
 import { SCHOOL_BOXES, isSchoolCollider, type SchoolBox } from './schools'
 
 /** (layout.inSchoolYard re-exported locally for the river override) */
@@ -144,33 +144,14 @@ function onBridge(x: number, z: number): boolean {
 
 /* --------------------------------- rivers ---------------------------------- */
 
-/** closest distance to any river centreline */
+/** closest distance to any river centreline — SILK II: answered by the
+ *  layout river spatial grid, EXACTLY the brute-force winner (the
+ *  (distance, segment-index) lexicographic minimum the linear scan found,
+ *  ties included) at a fraction of the segment evals. See layout.ts
+ *  `river spatial grid` for the exactness law + the cutoff catalog. */
 function riverDistance(x: number, z: number): { d: number; halfWidth: number; cx: number; cz: number } {
-  let best = Infinity
-  let halfWidth = 0
-  let bestCx = x
-  let bestCz = z
-  for (const r of RIVERS) {
-    for (let i = 0; i < r.points.length - 1; i++) {
-      const [ax, az] = r.points[i]
-      const [bx, bz] = r.points[i + 1]
-      const dx = bx - ax
-      const dz = bz - az
-      const len2 = dx * dx + dz * dz
-      let t = len2 === 0 ? 0 : ((x - ax) * dx + (z - az) * dz) / len2
-      t = Math.max(0, Math.min(1, t))
-      const px = ax + dx * t
-      const pz = az + dz * t
-      const d = Math.hypot(x - px, z - pz)
-      if (d < best) {
-        best = d
-        halfWidth = r.width / 2
-        bestCx = px
-        bestCz = pz
-      }
-    }
-  }
-  return { d: best, halfWidth, cx: bestCx, cz: bestCz }
+  const q = riverNearest(x, z)
+  return { d: q.d, halfWidth: q.halfWidth, cx: q.cx, cz: q.cz }
 }
 
 /* ------------------------------- the resolver ------------------------------- */

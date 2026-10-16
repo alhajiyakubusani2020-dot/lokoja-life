@@ -164,12 +164,17 @@ export function queueInteract() {
   interactQueued = true
 }
 
-/** camera look consumes the accumulated drag delta */
+/** camera look consumes the accumulated drag delta.
+ *  SILK II: returns a SHARED scratch (zero allocation in the frame loop) —
+ *  the single-frame-ownership law: read it in the tick that consumed it,
+ *  never hold the reference across frames. */
+const LOOK_SCRATCH: { dx: number; dy: number } = { dx: 0, dy: 0 }
 export function consumeLook(): { dx: number; dy: number } {
-  const out = { dx: lookDx, dy: lookDy }
+  LOOK_SCRATCH.dx = lookDx
+  LOOK_SCRATCH.dy = lookDy
   lookDx = 0
   lookDy = 0
-  return out
+  return LOOK_SCRATCH
 }
 
 let zoomDelta = 0
@@ -189,7 +194,9 @@ function onWheel(e: WheelEvent) {
   zoomDelta += Math.sign(e.deltaY) * 1.1
 }
 
-/** unified movement vector, camera-relative intent (y+ = forward) */
+/** unified movement vector, camera-relative intent (y+ = forward).
+ *  SILK II: shared scratch, same single-frame-ownership law as consumeLook. */
+const MOVE_SCRATCH: { x: number; y: number; sprint: boolean } = { x: 0, y: 0, sprint: false }
 export function readMoveInput(): { x: number; y: number; sprint: boolean } {
   let x: number
   let y: number
@@ -207,7 +214,10 @@ export function readMoveInput(): { x: number; y: number; sprint: boolean } {
     x = len > 1 ? kx / len : kx
     y = len > 1 ? ky / len : ky
   }
-  return { x, y, sprint: sprintHeld }
+  MOVE_SCRATCH.x = x
+  MOVE_SCRATCH.y = y
+  MOVE_SCRATCH.sprint = sprintHeld
+  return MOVE_SCRATCH
 }
 
 /** one-shot interact request (E / Enter / HUD button) */

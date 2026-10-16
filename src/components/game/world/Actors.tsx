@@ -256,7 +256,9 @@ export function PlayerController({
     // ---- nearest anchor / point of interest (interaction discovery) ----
     let nearestId: string | null = null
     let nearestD = Infinity
-    for (const [id, a] of Object.entries(ANCHOR_BY_ID)) {
+    for (let ai = 0; ai < ANCHOR_ENTRIES.length; ai++) {
+      const id = ANCHOR_ENTRIES[ai][0]
+      const a = ANCHOR_ENTRIES[ai][1]
       const d = Math.hypot(a.x - s.x, a.z - s.z)
       if (d < MOVE.interactRadius && d < nearestD) {
         nearestD = d
@@ -320,7 +322,7 @@ export function PlayerController({
     // third-person rig — parked BEHIND the player (opposite the view dir)
     const cosP = Math.cos(s.camPitch)
     const rigDist = s.camDist * rig.dist
-    const desired = new THREE.Vector3(
+    const desired = CAM_DESIRED.set(
       s.x - Math.sin(s.camYaw) * rigDist * cosP,
       groundY + MOVE.cameraHeight + rig.height + Math.sin(s.camPitch) * rigDist * 0.9,
       s.z - Math.cos(s.camYaw) * rigDist * cosP,
@@ -332,7 +334,7 @@ export function PlayerController({
     // to just before the first obstructed sample (known clipping fix)
     const obsT = cameraObstructionT(s.x, s.z, desired.x, desired.z, desired.y)
     if (obsT !== null) {
-      desired.lerpVectors(new THREE.Vector3(s.x, groundY + 1.7, s.z), desired, obsT)
+      desired.lerpVectors(CAM_FROM.set(s.x, groundY + 1.7, s.z), desired, obsT)
     }
     camera.position.lerp(desired, Math.min(1, dt * (getCamMode() === 'drone' ? 4.2 : 6.5)))
     camera.lookAt(s.x, groundY + 1.7, s.z)
@@ -390,6 +392,14 @@ const npcTalk = {
   pos: new Float32Array(NPC_COUNT * 3),
   target: { live: false, i: -1, id: '', name: '' } as TalkTarget,
 }
+
+/* ---- SILK II: the player loop allocates NOTHING -------------------------
+ * ANCHOR_ENTRIES is hoisted once (Object.entries used to allocate a fresh
+ * 22-tuple array EVERY FRAME); the camera boom reuses module scratch
+ * vectors instead of `new THREE.Vector3` twice per frame. */
+const ANCHOR_ENTRIES: Array<[string, { x: number; z: number }]> = Object.entries(ANCHOR_BY_ID)
+const CAM_DESIRED = new THREE.Vector3()
+const CAM_FROM = new THREE.Vector3()
 
 /** one fixed overlay host for all talk DOM (created lazily, client-only) */
 let TALK_HOST: HTMLDivElement | null = null
@@ -1030,21 +1040,36 @@ export function Rain({ weather }: { weather: Weather }) {
     return g
   }, [])
 
+  /* SILK II — the fall is GPU law now: the vertex shader wraps each drop's
+   * y with mod(position.y - uTime·uFall), so the per-frame CPU loop and the
+   * full position-buffer upload are GONE. The static y doubles as the wrap
+   * phase; the camera-quantized reposition stays (one vector write). */
+  const uTimeRef = useRef({ value: 0 })
+  const mat = useMemo(() => {
+    const m = new THREE.PointsMaterial({
+      color: '#aebfc9',
+      size: dropSize,
+      transparent: true,
+      opacity: dropOpacity,
+      sizeAttenuation: true,
+    })
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = uTimeRef.current
+      shader.uniforms.uFall = { value: fallSpeed }
+      shader.vertexShader = `uniform float uTime;\nuniform float uFall;\n${shader.vertexShader}`.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n  transformed.y = mod(position.y - uTime * uFall, 28.0);',
+      )
+    }
+    m.customProgramCacheKey = () => 'lko-rain-fall'
+    return m
+  }, [dropSize, dropOpacity, fallSpeed, uTimeRef])
+  useEffect(() => () => mat.dispose(), [mat])
+
   useFrame((state, dt) => {
     const pts = ref.current
     if (!pts || !active) return
-    const attr = pts.geometry.attributes.position as THREE.BufferAttribute
-    const arr = attr.array as Float32Array
-    const fall = fallSpeed * Math.min(dt, 0.05)
-    for (let i = 0; i < COUNT; i++) {
-      arr[i * 3 + 1] -= fall
-      if (arr[i * 3 + 1] < 0) {
-        arr[i * 3] = (Math.random() - 0.5) * 44
-        arr[i * 3 + 1] = 24 + Math.random() * 4
-        arr[i * 3 + 2] = (Math.random() - 0.5) * 44
-      }
-    }
-    attr.needsUpdate = true
+    uTimeRef.current.value += Math.min(dt, 0.05)
     // follow the camera area in coarse steps so the shower is always around you
     pts.position.set(
       Math.round(state.camera.position.x / 22) * 22,
@@ -1056,7 +1081,7 @@ export function Rain({ weather }: { weather: Weather }) {
   if (!active) return null
   return (
     <points ref={ref} geometry={geo} frustumCulled={false}>
-      <pointsMaterial color="#aebfc9" size={dropSize} transparent opacity={dropOpacity} sizeAttenuation />
+      <primitive object={mat} attach="material" />
     </points>
   )
 }

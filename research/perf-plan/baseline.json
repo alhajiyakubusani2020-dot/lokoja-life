@@ -1,0 +1,31 @@
+{
+  "captured": "2026-10-16",
+  "build": "prod standalone, BUILD_ID SDNRdMPwyCQEbuOF2k96e (m19, Oct 15) — pre-SILK-II surgery",
+  "silk_gates": {
+    "G1_tti_fast3g_seconds": 2.48,
+    "G2_wire_kb": 389,
+    "G3_warm_interaction_ms": 8,
+    "G4_heap_mb": 28,
+    "G4_note": "heap under budget; settle() never confirmed canvas in headless — the documented m7/m19 SwiftShader desktop wedge (environment, not product). Real-device capture (m7) remains the FPS authority.",
+    "G5_sw_bill_mb": 3.1,
+    "G5b_worker_controls": true
+  },
+  "draw_census_high_tier_390x844": {
+    "calls": 281,
+    "triangles": 617894,
+    "geometries": 347,
+    "textures": 21,
+    "programs": 30,
+    "dpr": 1,
+    "note": "frustum culling keeps real draws far under the static estimate; the 98-point-light cost lives in the shader fragment loop + program size, not call count"
+  },
+  "targets": {
+    "G1_tti": "< 1.5s",
+    "G2_menu_wire": "< 220KB gz",
+    "G2_game_path": "< 300KB gz",
+    "draw_calls_high": "< 281 baseline must not regress; doors/lights target shader+program cost",
+    "frame_loop_allocs": 0,
+    "point_lights": "<= 6 nearest + emissive glow",
+    "river_query": "O(cell) candidates, exact equality vs brute force"
+  }
+}
