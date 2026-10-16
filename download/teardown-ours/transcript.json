@@ -1,0 +1,74 @@
+{
+  "transcript": [
+    {
+      "step": "main-menu",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/01-menu.png",
+      "text": "LOKOJA • KOGI STATE • NIGERIA\nA NIGERIAN LIFE SIM\nLOKOJA\nLIFE\nBuild your life at the meeting point of the Niger and Benue.\nThe Niger and Benue meet at Lokoja — and so do opportunity and hustle.\nSTART YOUR LIFE\nContinue your life\nSettings\nAn original Nigerian life sim • Made for Lokoja"
+    },
+    {
+      "step": "character-creation",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/02-creation.png",
+      "text": "Create Your Hustler\nWho is coming to build a life in Lokoja?\nSurprise me (random look)\nLIFE STAGE — WHO DEY PLAY?\nPikin (6–12)\nTeen (13–17)\nAdult (18+)\nThe whole Lokoja: every hustle, every road, the JAPA gauntlet and the night life.\nGENDER / AVATAR TYPE\nMan\nWoman\nSKIN TONE\nHAIRSTYLE\nBald\nLow Cut\nWaves\nAfro\nCornrows\nDreads\nLong Braids\nTwo Puffs\nHAIR COLOUR\nCLOTHING STYLE\nT-Shirt\nEveryday hustle wear\nKaftan\nClean traditional look\nAnkara Print\nFull pattern flex\nSenator Wear\nSharp for business\nHoodie\nStreet hoodie — blessed and chilly\nLace\nLace grandeur — occasion wear\nCLOTHING COLOUR\nEnter your name to start"
+    },
+    {
+      "step": "tab-home",
+      "ok": false,
+      "note": "nav button not found"
+    },
+    {
+      "step": "tab-you",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/03-tab-you.png",
+      "text": "Tear Down\nLV 1\n₦5,000\nNobody\nTear Down\nHustler • Nobody\n“Just another face in Lokoja”\n🪪 Guest mode — claim your name\n🍃 Chill Mode\nA gentler Lokoja: half the drain, kinder taxman, softer disco. Every law still runs.\n🎵 Afro-Fusion Soundtrack\nProcedural highlife — zero download, the city plays it live.\n📳 Haptics\nA small pulse when money lands, a postcard arrives, a secret opens.\n🌅 THE CONFLUENCE PATH\nChapter 0/5\nDay 3 — find the crusher boy at the Patti trail base. A story dey wait for the hill.\n🗿 Mt Patti Secrets\nFive dey hide for the hill. Walk near one — e go open.\n0/5\n🕺 Walk Style\nNow walking: street. The Bend-Down Select dey inside the wardrobe (your room).\n🛡️ Fortress\nSave signed · ledger chained · income guarded. Anomalies: 0.\n🔒 SECURE\nREPUTATION\n0\n100 rep to “Known”\nLIFE SO FAR\nSHIFTS WORKED\n0\nHUSTLES DONE\n0\nTOTAL EARNED\n₦0\nTOTAL SPENT\n₦0\nYOUR PATH SO FAR\nBasic jobs\nKpata Market\nGanaja Junction\nXP to Level 2: 120\nSETTINGS\nSound\nGraphics\nAuto\nLow\nMid\nHigh\nAuto · LOW tier (auto) · WebGL2 · ANGLE (Google, Vulkan 1.3.0 (Swi · software GPU (ANGLE (Google, Vulkan 1.3.0 (SwiftShader)\nApplied on the next world entry. The game also tunes itself while you play — if frames sag, it quietly lowers render detail, and climbs back when there is headroom.\nSave now\nMain menu (auto-saves)\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "tab-work",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/04-tab-work.png",
+      "text": "Tear Down\nLV 1\n₦5,000\nNobody\nWORK • YOU DEY HERE\nYour Place\nSlot 1/4\nHUSTLE BOARD — HEAR THE GIST\nLook around for hustles\nAsk around this area • quick errands from real people\nSHIFTS AT HOME\n0\nNo formal shifts here — check the hustle board or explore other areas.\nWORK IN OTHER PARTS OF LOKOJA\nMarket Worker\nKpata Market\nGo\n→\nDelivery Worker\nGanaja Junction\nGo\n→\nDriver\nMotor Park\nGo\n→\nFisherman\nThe Confluence\nGo\n→\nPhotographer\nUniversity Area\n•\nLevel 2\nGo\n→\nShop Assistant\nKpata Market\nGo\n→\nCleaner\nMotor Park\nGo\n→\nTour Guide\nThe Confluence\nGo\n→\nGovernment Worker\nGovernment Area\n•\nLevel 3\nGo\n→\nEntrepreneur\nGanaja Junction\nGo\n→\nEvening Class Tutor\nFUL Adankolo Campus\n•\nLevel 2\nGo\n→\nClinic Errand Runner\nCollege of Nursing Sciences\n•\nLevel 3\nGo\n→\nCampus Caretaker\nSalem University\n•\nLevel 3\nGo\n→\nAfter-School Supervisor\nFaithview Academy\nGo\n→\nClass Assistant\nAl-Azhar International College\n•\nLevel 2\nGo\n→\nChoir Practice Assistant\nBaptist High School\nGo\n→\nSchool Bus Conductor\nJulitola International School\n•\nLevel 2\nGo\n→\nNursery Assistant\nChristfield School\nGo\n→\nCivil Servant — GRA\nGovernment Area\n•\nLevel 3\nGo\n→\nTutorial Assistant — FUL\nFederal University Lokoja\n•\nLevel 2\nGo\n→\nPolice Recruit\nGovernment Area\n•\nLevel 3\nGo\n→\nMONEY — DAY 1\nEARNED TODAY\n+₦0\nSPENT TODAY\n−₦0\nRECENT\nNo money moves yet — your first hustle dey wait.\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "tab-bag",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/05-tab-bag.png",
+      "text": "Tear Down\nLV 1\n₦5,000\nNobody\nInventory & Shops\nArrives in Stage 4\nBuy food, drinks and tools; keep your pace meals and fishing gear close. A hungry hustler cannot hustle.\nTHE MENU IS GETTING READY\n🍛\nRice & Stew\nThe dependable classic. White rice, red stew.\n₦350\n🫘\nBeans & Bread\nEwa agoyin style. Slow energy for a long hustle.\n₦300\n🍞\nAgege Bread\nSoft, big, and everywhere.\n₦150\n🧆\nAkara\nHot bean cakes straight from the oil. Morning sweetness.\n₦200\n🍠\nYam & Egg Sauce\nSunday-morning energy any day of the week.\n₦500\n🍢\nSuya\nSpicy grilled beef with yaji pepper. Pure joy.\n₦600\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "tab-map",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/06-tab-map.png",
+      "text": "Tear Down\nLV 1\n₦5,000\nNobody\nCURRENT LOCATION\nYour Place\nDay 1\nClear skies — the city moves easy.\nLOKOJA\nKOGI STATE · NIGERIA\nTHE CONFLUENCE CITY · REAL STREET MAP\nN\n0\n1 km\n2 km\nHome\nKpata\nGanaja\n🎉\nConfluence\nMt. Patti\nHistoric\nGRA\nUniv.\nFood Strip\n🔧\nMotor Park\nFUL\nFUL Adankolo\nKSP\nSalem\nNursing Schl.\nCrowther\nGYB Model\nFaithview\nAl-Azhar\nBaptist HS\nJulitola\nChristfield\nLOKOJA ATLAS\n0/22 explored\nStill out there: Your Place, Kpata Market, Ganaja Junction, The Confluence, Mount Patti, Historic Lokoja, Government Area, University Area, Mama’s Food Strip, Motor Park, Federal University Lokoja, FUL Adankolo Campus, Kogi State Polytechnic, Salem University, College of Nursing Sciences, Crowther Memorial College, GYB Model Science Secondary School, Faithview Academy, Al-Azhar International College, Baptist High School, Julitola International School, Christfield School. Walk there in the 3D city to discover it.\nWalk is free but tiring\nKeke is cheap\nTaxi is fastest\n🔧\nMotor Park garage sells rides\n🏍️ Your rides sip fuel — no fare\n🛵 Own a ride? Driver gigs wait at the park\n₦\nYour shop has money\nGovernment wan see you\nHome\nWorld\nMap\nWork\nPhone\nBag\nYou"
+    },
+    {
+      "step": "world-truth",
+      "ok": true,
+      "note": "{\"tier\":\"low\",\"doors\":98,\"tod\":\"morning\"}"
+    },
+    {
+      "step": "world-first-settle",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/07-world-a.png",
+      "text": "Exit\nYour Place\n₦5,000\nDay 1\nMorning\nSunny\n1/22 places found\nFollow\nN\n1 fps\nWelcome to Lokoja\nSkip\nDrag the left stick to walk around.\n→\nEnter Your place\n🧵\nMusa dey around\n“Carry fabric bundles” — gist dey Work board\nWork\n✕\nRUN"
+    },
+    {
+      "step": "world-mount-patti",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/08-world-patti.png",
+      "text": "Exit\nYour Place\n₦5,000\nDay 1\nMorning\nSunny\n1/22 places found\nFollow\nN\n2 fps\nWelcome to Lokoja\nSkip\nDrag the left stick to walk around.\n→\nEnter Your place\nRUN\nLokoja knows your face\nClaim your name to keep going — your hustle dey safe, nothing dey lost.\n✕\n🪪 Claim a name\n🔁 I don claim before\nBorn\n2020\n2019\n2018\n2017\n2016\n2015\n2014\n2013\n2012\n2011\n2010\n2009\n2008\n2007\n2006\n2005\n2004\n2003\n2002\n2001\n2000\n1999\n1998\n1997\n1996\n1995\n1994\n1993\n1992\n1991\n1990\n1989\n1988\n1987\n1986\n1985\n1984\n1983\n1982\n1981\n1980\n1979\n1978\n1977\n1976\n1975\n1974\n1973\n1972\n1971\n1970\n1969\n1968\n1967\n1966\n1965\n1964\n1963\n1962\n1961\n18+\nClaim my name\nGuests play free — the cloud save, streaks and leaderboards wait behind the name.\nMaybe later"
+    },
+    {
+      "step": "world-confluence",
+      "ok": true,
+      "note": "/home/z/my-project/download/teardown-ours/09-world-confluence.png",
+      "text": "Exit\nYour Place\n₦5,000\nDay 1\nMorning\nSunny\n1/22 places found\nFollow\nN\n2 fps\nWelcome to Lokoja\nSkip\nDrag the left stick to walk around.\n→\nEnter Your place\n🧵\nMusa dey around\n“Carry fabric bundles” — gist dey Work board\nWork\n✕\nRUN\nLokoja knows your face\nClaim your name to keep going — your hustle dey safe, nothing dey lost.\n✕\n🪪 Claim a name\n🔁 I don claim before\nBorn\n2020\n2019\n2018\n2017\n2016\n2015\n2014\n2013\n2012\n2011\n2010\n2009\n2008\n2007\n2006\n2005\n2004\n2003\n2002\n2001\n2000\n1999\n1998\n1997\n1996\n1995\n1994\n1993\n1992\n1991\n1990\n1989\n1988\n1987\n1986\n1985\n1984\n1983\n1982\n1981\n1980\n1979\n1978\n1977\n1976\n1975\n1974\n1973\n1972\n1971\n1970\n1969\n1968\n1967\n1966\n1965\n1964\n1963\n1962\n1961\n18+\nClaim my name\nGuests play free — the cloud save, streaks and leaderboards wait behind the name.\nMaybe later"
+    },
+    {
+      "step": "phone",
+      "ok": false,
+      "note": "Phone nav button not found"
+    }
+  ],
+  "errors": []
+}

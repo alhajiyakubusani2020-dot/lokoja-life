@@ -1037,3 +1037,18 @@ Work Log:
 
 Stage Summary:
 - M20 SHIPPED — ROADMAP.md v2 is COMPLETE, M8→M20 all built and gated. The nation is planet-scale-shaped: 10k souls sim off-thread (worker witnessed in the browser), saves ride a binary delta with a <1MB ceiling and an honest fallback, the ops layer has flags + a one-command rollback + opt-in-only telemetry that structurally cannot count a child, and the Nation Dashboard mirrors it all with zero invented numbers. THE ENDING: the full roadmap verdict — nothing left queued. Next session owns: whatever the user dreams next (Abuja pilot data, GPU shoot rig, or the world's first city-forge community).
+
+---
+Task ID: TEARDOWN-OURS-VS-LAGOSLIFE
+Agent: Super Z (parent)
+Task: tear OUR OWN app apart exactly like Lagos Life was torn (play every screen, shoot everything, look at every shot), then compare head-to-head who is ahead.
+
+Work Log:
+- Crawled the live dev :3000 with Playwright in 5 passes (scripts/e2e-teardown-ours{,2,3,4b,4c,4d,4e}.ts): menu, creation, all 7 dashboard tabs, the 3D world (settled, 98 doors witnessed, tier low), a real interior entry (crowther-memorial-office / Principal's Block), the phone grid + ALL 11 phone apps.
+- 32 screenshots saved to download/teardown-ours/, 20 personally LOOKED at (every phone app, every tab, world, interior, map). 0 console errors across every pass.
+- Found the guest-gate automation trap honestly: the modal's buttons are NOT native <button> tags and are invisible to innerText/querySelector probes (4 scripts failed before coordinate clicks from my own screenshots worked); it re-fires on arrival for guests. Logged as an a11y smell, not fixed (teardown-only turn).
+- Headless truth: 2 fps SwiftShader floor (documented m7 environment limit); travel-hook relocation not visible within 3.5s at 2 fps — noted honestly, not hidden.
+- Comparison built from BOTH code counts (11 phone apps, 10 streets, 22 jobs, 14 NPCs, 46 systems, 26 suites, 59,651 src lines) and the user's Lagos Life teardown (37+ apps, 32 locations/city, real multiplayer 38k online, brands).
+
+Stage Summary:
+- VERDICT DELIVERED: Lagos Life ahead as a PRODUCT (real players, content breadth, brands); Lokoja Life ahead as ENGINEERING (walkable 3D + 98 interiors, SILK gates, save fortress, kid wall, City Forge, 10k-NPC worker-thread nation sim). Gap list stated. No code changed this turn.
