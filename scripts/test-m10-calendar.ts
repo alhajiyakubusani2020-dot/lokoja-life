@@ -71,7 +71,7 @@ import { SaveSystem } from '../src/game/systems/save'
 import type { CalendarState } from '../src/game/types'
 
 const A = FESTIVALS.anchors
-const SAVE_V = 19
+const SAVE_V = 20
 
 let passed = 0
 let failed = 0
@@ -456,7 +456,7 @@ section('the save v10 → v11 migration')
   }
   mem.set(SaveSystem.SAVE_KEY, JSON.stringify(v10))
   const loaded = SaveSystem.load()
-  check('v10 save migrates to v16', loaded?.version === SAVE_V)
+  check('v10 save migrates to v20', loaded?.version === SAVE_V)
   check('the calendar slice arrives fresh and harmless', !!loaded?.calendar && loaded.calendar.day === 0 && loaded.calendar.meatPacks === 0 && Array.isArray(loaded.calendar.paved))
   check('nothing else moved (chaos/goals/account intact)', loaded?.chaos.stats.blowouts === 1 && loaded?.goals.streak === 2 && loaded?.account.linked === true)
   mem.set(SaveSystem.SAVE_KEY, '{broken json')
@@ -629,7 +629,7 @@ section('the REAL store pass — sleep into the Regatta, stake the year')
   } catch {
     parsed = null
   }
-  check('the calendar slice persists into the v16 save', parsed?.version === SAVE_V && typeof parsed?.calendar?.meatPacks === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
+  check('the calendar slice persists into the v20 save', parsed?.version === SAVE_V && typeof parsed?.calendar?.meatPacks === 'number', `raw head=${raw ? raw.slice(0, 60) : 'null'}`)
 }
 
 console.log(`\n========================================`)

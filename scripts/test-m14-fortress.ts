@@ -205,7 +205,7 @@ section('the save v14→v15 migration — the fortress joins the save')
   // a v14 save carried NO envelope — the legacy bare form
   mem['lokoja-life:save'] = JSON.stringify(legacy)
   const loaded = SaveSystem.load()
-  check('a bare v14 save loads at v19 as LEGACY', loaded?.version === 19 && SaveSystem.transportVerdict() === 'legacy')
+  check('a bare v14 save loads at v20 as LEGACY', loaded?.version === 20 && SaveSystem.transportVerdict() === 'legacy')
   check('the fortress slice arrives (clean book, seed tail)',
     loaded?.fortress.anomalies === 0 && loaded?.fortress.chainTail === CHAIN_SEED && loaded?.fortress.fingerprint === null)
   // a write re-issues it as a SIGNED envelope
@@ -214,7 +214,7 @@ section('the save v14→v15 migration — the fortress joins the save')
   const env = JSON.parse(raw) as { fmt?: number; sig?: string }
   check('the next write seals it: the envelope (fmt 2) carries a real sig',
     env.fmt === 2 && typeof env.sig === 'string' && env.sig.length === 64)
-  check('the sealed save verifies against the device key', SaveSystem.load()?.version === 19 && SaveSystem.transportVerdict() === 'ok')
+  check('the sealed save verifies against the device key', SaveSystem.load()?.version === 20 && SaveSystem.transportVerdict() === 'ok')
   delete (globalThis as Record<string, unknown>).window
 }
 

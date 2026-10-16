@@ -29,7 +29,23 @@ export function PwaRegister() {
     w.__lkoSwRegistered = true
 
     const register = () => {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(() => {
+        // M20 — THE LAST-GOOD BOOK: record the deployed shell version
+        // (read from the served worker source, never invented). The
+        // Nation Dashboard + the rollback command read this book.
+        fetch('/sw.js', { cache: 'no-store' })
+          .then((res) => (res.ok ? res.text() : ''))
+          .then((src) => {
+            const m = /SW_VERSION\s*=\s*'([^']+)'/.exec(src)
+            if (m && m[1]) {
+              // dynamic import — flags.ts is device-side ops, the register never blocks on it
+              import('@/game/systems/flags')
+                .then((f) => f.recordDeploy(m[1]))
+                .catch(() => { /* the book is a gift, never a gate */ })
+            }
+          })
+          .catch(() => { /* offline boot — the book keeps its old rows */ })
+      }).catch(() => {
         // a refused worker is a silent downgrade to the normal web —
         // the game still runs; offline-first is a gift, not a gate
         w.__lkoSwRegistered = false

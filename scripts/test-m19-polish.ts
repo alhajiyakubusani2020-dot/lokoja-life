@@ -365,7 +365,7 @@ section('SAVE v19 — the polish joins the book')
 
 {
   const SAVE_V = SaveSystem.SAVE_VERSION
-  check('the save version is 19', SAVE_V === 19)
+  check('the save version is 20', SAVE_V === 20)
 
   // a bare v18 save migrates: story/patti/wardrobe defaulted + settings healed
   // (the shim transport — the same Map the store pass shares)
@@ -383,7 +383,7 @@ section('SAVE v19 — the polish joins the book')
   }
   localStorage.setItem(SaveSystem.SAVE_KEY, JSON.stringify(v18))
   const loaded = SaveSystem.load()
-  check('a v18 save migrates to v19', loaded?.version === 19)
+  check('a v18 save migrates to v20', loaded?.version === 20)
   check('the story slice arrives at chapter 0', !!loaded?.story && loaded.story.chapter === 0 && loaded.story.doctorDay === 0)
   check('the hill arrives silent', !!loaded?.patti && Object.keys(loaded.patti.found).length === 0)
   check('the wardrobe arrives with street only', !!loaded?.wardrobe && loaded.wardrobe.activeWalk === 'street' && loaded.wardrobe.ownedWalks.length === 0)

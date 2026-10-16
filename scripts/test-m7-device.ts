@@ -219,7 +219,7 @@ console.log('\nSAVE v8 — the graphics pick joins the schema')
     player: basePlayer, world: baseWorld, settings: { sound: true },
   }))
   const v8 = SaveSystem.load()
-  check('v7 save loads and reaches v19 (M8+…+M19 join)', v8?.version === 19)
+  check('v7 save loads and reaches v20 (M8+…+M20 join)', v8?.version === 20)
   check('v7 player wakes up on Auto', v8?.settings.graphics === 'auto')
   check('v7 sound setting survived the ladder', v8?.settings.sound === true)
 

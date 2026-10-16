@@ -126,7 +126,15 @@ import {
   type ChaosDayResult,
 } from '../systems/chaos'
 import { bumpGoal, freshGoalState } from '../systems/goals'
+import { riverLevelFor } from '../systems/rivers'
+import { deltaPushFields } from '../systems/binarydelta'
 import { freshLiveState, sanitizeChat, emoteById } from '../systems/live'
+import { freshNationState, recordInflation, recordModeration, crowdToggle, moderationScore, inflationTrend, setLiveSnapshot } from '../systems/nation'
+import type { NationState } from '../systems/nation'
+import type { CrowdSnapshot, WorldPulse } from '../systems/nation-sim'
+import { startNationSim, stopNationSim } from '../systems/nation-bridge'
+import { readFlags, setFlag, type FlagKey } from '../systems/flags'
+import { freshTelemetryBook, recordTelemetry, telemetryPayload, telemetryDayRoll, type TelemetryBook } from '../systems/telemetry'
 import { freshForgeState, forgeCity, forgeVote as forgeVoteLaw, applyVote, recordBuild, voteWinner, PILOT_LADDER, CITY_SLA_MINUTES } from '../systems/citypack'
 import type { OsmExtract } from '../systems/citypack'
 import { freshStoryState, currentTask, canCarrySand, canPayNotebook, canPayFever, canSponsor as canSponsorStory, canGraduate, applyCarry, applyNotebook, applyFever, applySponsor, applyWhiteCoat, coatDay, STORY, type StoryChapter } from '../systems/story'
@@ -314,6 +322,16 @@ interface GameStore {
   patti: import('../types').PattiState
   /** M19 — the wardrobe: owned outfits/walk styles + the equipped walk */
   wardrobe: import('../types').WardrobeState
+  /** M20 — the nation ops slice: crowd switch + the city's honest books */
+  nation: NationState
+  /** M20 — the live crowd aggregate (session-only — the worker's wire) */
+  nationSnapshot: CrowdSnapshot | null
+  /** M20 — which path the sim took ('worker' | 'main'), session-only honesty for the dashboard */
+  nationPath: 'worker' | 'main' | null
+  /** M20 — the device's ops flags (outside the save — the fortress rule) */
+  opsFlags: Record<FlagKey, boolean>
+  /** M20 — the telemetry counter book (device-level, opt-in or dark) */
+  telemetry: TelemetryBook
   /** M17 — the nation's last sync snapshot (session-only — the wire) */
   liveWire: { roster: { handle: string; band: string; street: string; status: string }[]; events: { seq: number; kind: string; actor: string; payload: Record<string, unknown> }[] } | null
   /** M16 — a cloud push failed offline; the queue flushes when the network returns */
@@ -590,6 +608,22 @@ interface GameStore {
   forgeVote: (city: string) => Promise<{ ok: boolean; why?: string }>
   /** pull the world's honest vote counts from the ballot box */
   forgeVotesPull: () => Promise<void>
+
+  /* ---------------------- M20 — planet scale + ops ---------------------- */
+  /** the day crossing speaks to the sim + the books (inflation ledger, telemetry roll) */
+  nationPulseDay: (newDay: number) => void
+  /** the M17 chat gate's refusal lands in the moderation book (no text, by type) */
+  recordModerationHit: (why: string) => void
+  /** the honest opt-in — the dashboard's telemetry switch */
+  setTelemetryOptIn: (on: boolean) => void
+  /** flush the counter book to the relay (opt-in + band guarded both sides) */
+  telemetryFlush: () => Promise<{ ok: boolean; why?: string }>
+  /** the crowd's switch — dark or alive, the seed/count ride the save */
+  nationSetCrowd: (on: boolean) => void
+  /** an ops flag flip (device-level, outside the save) */
+  opsSetFlag: (key: FlagKey, value: boolean) => void
+  /** the bridge's snapshot lands here (the ONLY crossing) */
+  nationSnapshotIngest: (s: CrowdSnapshot) => void
   saveNow: () => void
   resetGame: () => void
 
@@ -880,6 +914,9 @@ function commitCivicDays(
   const { civic: rolled, chaos: rolledChaos, calendar: rolledCal, rivers: rolledRiv, housing: rolledHou, japa: rolledJap, agg } = civicRollForDays(civic, chaos, calendar, rivers, housing, japa, player.stats.totalEarned, prevDay, newDay, bizCount, solarCount, newWeather, undefined, chill)
   set({ civic: rolled, chaos: rolledChaos, calendar: rolledCal, rivers: rolledRiv, housing: rolledHou, japa: rolledJap })
 
+  // M20 — the nation's books + the crowd sim ride the SAME day crossing
+  for (let d = prevDay + 1; d <= newDay; d++) get().nationPulseDay(d)
+
   // M3 — the shops earn while the city turns: accrue into each till (market
   // multipliers read the ALREADY-ROLLED civic slice; M8 — the chaos thread
   // prices the dark days and the scarcity harvest). Tax only sees this
@@ -1098,9 +1135,49 @@ function scheduleAutosave(get: () => GameStore) {
       story: get().story,
       patti: get().patti,
       wardrobe: get().wardrobe,
+      nation: get().nation ?? freshNationState(),
       settings,
     })
   }, AUTOSAVE.debounceMs)
+}
+
+/** M20 — the crowd sim's lifecycle owner (the worker-or-main bridge). */
+let nationBridge: ReturnType<typeof startNationSim> | null = null
+
+function startNationBridge(get: () => GameStore): void {
+  const nation = get().nation ?? freshNationState()
+  const flags = get().opsFlags ?? readFlags()
+  stopNationSim()
+  nationBridge = null
+  if (!nation.crowd.on || flags.crowdSim === false) {
+    useGameStoreRef.setState({ nationSnapshot: null, nationPath: null })
+    return
+  }
+  const world = get().world
+  nationBridge = startNationSim({
+    seed: nation.crowd.seed,
+    count: nation.crowd.count,
+    allowWorker: flags.workerSim !== false,
+    initialPulse: {
+      day: world?.day ?? 1,
+      weather: (world?.weather ?? 'sunny') as WorldPulse['weather'],
+      floodLevel: 0,
+      marketMult: 1,
+      festival: null,
+    },
+    onSnapshot: (snap) => {
+      const st = useGameStoreRef.getState()
+      if (st.nationSnapshot?.tick === snap.tick) return
+      st.nationSnapshotIngest(snap)
+    },
+  })
+  useGameStoreRef.setState({ nationPath: nationBridge.path() })
+}
+
+/** the store's own ref — the bridge callback reads the freshest state */
+const useGameStoreRef: { getState: () => GameStore; setState: (partial: Partial<GameStore>) => void } = {
+  getState: () => { throw new Error('nation bridge: store not ready') },
+  setState: () => { throw new Error('nation bridge: store not ready') },
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -1133,6 +1210,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   story: freshStoryState(),
   patti: freshPattiState(),
   wardrobe: freshWardrobeState(),
+  nation: freshNationState(),
+  nationSnapshot: null,
+  nationPath: null,
+  opsFlags: readFlags(),
+  telemetry: freshTelemetryBook(),
   pendingArrival: null,
   cloudPending: false,
   shockwave: 0,
@@ -1240,11 +1322,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cityPulse: freshPulseState(),
       live: freshLiveState(),
       forge: freshForgeState(),
+      nation: freshNationState(),
+      nationSnapshot: null,
+      telemetry: freshTelemetryBook(),
       pendingArrival: get().pendingArrival,
       gateOpen: false,
       fleet: { day: 1, done: [] },
       offers: [],
     })
+    startNationBridge(get)
     // M15 — a postcard was waiting for a fresh life: land at that street
     const pending = get().pendingArrival
     if (pending) {
@@ -1280,9 +1366,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cityPulse: save.cityPulse ?? freshPulseState(),
       live: save.live ?? freshLiveState(),
       forge: save.forge ?? freshForgeState(),
+      nation: save.nation ?? freshNationState(),
       fleet: save.fleet,
       settings,
     })
+    startNationBridge(get)
     // M15 — a postcard came with the boot URL: land the moment the city opens
     const pendingBoot = get().pendingArrival
     if (pendingBoot) {
@@ -4334,6 +4422,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           story: winner.story ?? freshStoryState(),
           patti: winner.patti ?? freshPattiState(),
           wardrobe: winner.wardrobe ?? freshWardrobeState(),
+          nation: winner.nation ?? freshNationState(),
           gateOpen: false,
         })
         get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}! ${verdict.why}`, tone: 'good' })
@@ -4548,7 +4637,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!account.linked || !account.token) return { ok: false, why: 'guest-mic-dark' }
     const band = (account.ageBand ?? 'adult') as 'kid' | 'teen' | 'adult'
     const verdict = sanitizeChat({ handle: account.handle, band }, text)
-    if (!verdict.ok) return { ok: false, why: verdict.why }
+    if (!verdict.ok) {
+      if (verdict.why) get().recordModerationHit(verdict.why) // M20 — the ops book counts the refusal (no text, by type)
+      return { ok: false, why: verdict.why }
+    }
     const res = await get().liveAction('chat', { text: verdict.text, channel })
     if (!res.ok) return { ok: false, why: res.why }
     const lv = live ?? freshLiveState()
@@ -4858,6 +4950,113 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } catch { /* offline — the seeded book reads */ }
   },
 
+  /* ---------------------- M20 — planet scale + ops ---------------------- */
+
+  nationPulseDay: (newDay) => {
+    const world = get().world
+    if (!world) return
+    const d = Math.max(1, Math.floor(newDay))
+    // THE ONE-CHANNEL LAW: the book records the SAME liquidity product
+    // the day roll folded into the market (civic.ts's civicDayRoll input)
+    const mult = liquidityMultFor(d) * calendarMarketMult(d) * riverMarketMult(d)
+    const nation0 = get().nation ?? freshNationState()
+    const inf = recordInflation(nation0.inflation, d, mult)
+    const nation = inf.recorded ? { ...nation0, inflation: inf.next } : nation0
+    if (inf.recorded) set({ nation })
+    // the sim hears the day's real facts (weather, the river, the calendar)
+    if (nationBridge && nationBridge.alive()) {
+      const festival = festivalForDay(d)
+      nationBridge.pulse({
+        day: d,
+        weather: (world.weather ?? 'sunny') as WorldPulse['weather'],
+        floodLevel: riverLevelFor(d),
+        marketMult: mult,
+        festival: festival ? String((festival as { id?: string }).id ?? festival) : null,
+      })
+    }
+    // the telemetry book crosses the day too (its own 30-day window law)
+    const tel0 = get().telemetry ?? freshTelemetryBook()
+    const tel = telemetryDayRoll(tel0, d)
+    if (tel.day !== tel0.day) set({ telemetry: tel })
+    // the daily flush — opt-in gated inside the endpoint AND the book
+    void get().telemetryFlush()
+  },
+
+  recordModerationHit: (why) => {
+    const world = get().world
+    if (!world) return
+    const band = (get().account.ageBand ?? 'adult') as string
+    const nation0 = get().nation ?? freshNationState()
+    const res = recordModeration(nation0.moderation, world.day, why, band)
+    if (!res.recorded) return
+    set({ nation: { ...nation0, moderation: res.next } })
+  },
+
+  setTelemetryOptIn: (on) => {
+    const nation0 = get().nation ?? freshNationState()
+    set({ nation: { ...nation0, telemetryOptIn: on }, telemetry: { ...(get().telemetry ?? freshTelemetryBook()), optIn: on } })
+    const flags = setFlag('telemetryAsk', true)
+    set({ opsFlags: flags })
+    get().notify({ icon: '📊', text: on ? 'The city counts quiet numbers for itself — never words, never a child.' : 'Telemetry dark. Your city, your books.' , tone: 'good' })
+    scheduleAutosave(get)
+  },
+
+  telemetryFlush: async () => {
+    const { account, world } = get()
+    const book = get().telemetry ?? freshTelemetryBook()
+    const payload = telemetryPayload(book)
+    if (!payload) return { ok: false, why: 'dark' }
+    if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
+    const band = (account.ageBand ?? 'adult') as 'kid' | 'teen' | 'adult'
+    if (band === 'kid') return { ok: false, why: 'no-minor-data' }
+    try {
+      const res = await fetch('/api/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
+        body: JSON.stringify({ ...payload, band }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; why?: string }
+      if (!res.ok || !data.ok) return { ok: false, why: data.why ?? 'the counter box no gree' }
+      return { ok: true }
+    } catch {
+      return { ok: false, why: 'offline' }
+    }
+  },
+
+  nationSetCrowd: (on) => {
+    const nation0 = get().nation ?? freshNationState()
+    const nation = crowdToggle(nation0, on)
+    set({ nation })
+    if (!on) {
+      stopNationSim()
+      nationBridge = null
+      set({ nationSnapshot: null, nationPath: null })
+    } else if (get().world) {
+      startNationBridge(get)
+    }
+    get().notify({ icon: '🏙️', text: on ? `The nation breathes — ${nation.crowd.count.toLocaleString()} souls on the thread.` : 'The crowd sleeps — the city is yours alone.', tone: 'good' })
+    scheduleAutosave(get)
+  },
+
+  opsSetFlag: (key, value) => {
+    const flags = setFlag(key, value)
+    set({ opsFlags: flags })
+    if (key === 'crowdSim') {
+      if (!value) {
+        stopNationSim()
+        nationBridge = null
+        set({ nationSnapshot: null, nationPath: null })
+      } else if (get().world && (get().nation ?? freshNationState()).crowd.on) {
+        startNationBridge(get)
+      }
+    }
+  },
+
+  nationSnapshotIngest: (s) => {
+    setLiveSnapshot(s)
+    set({ nationSnapshot: s })
+  },
+
   /** M9 — push the current save to the cloud (linked accounts only). M14: the
    *  envelope's signature rides along. M15: THE ZERO-BYTE PUSH — an unchanged
    *  life costs the network nothing; M16: an offline push QUEUES, it never dies. */
@@ -4886,14 +5085,38 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const env = JSON.parse(SaveSystem.readEnvelope() ?? '{}') as { sig?: string }
       sig = typeof env.sig === 'string' ? env.sig : ''
     } catch { /* unsigned legacy — the pull treats it as legacy-ok */ }
+    // M20 — THE BINARY DELTA PUSH: the wire carries the CHANGE against the
+    // exact string the vault accepted last time. A refused patch (a stranger's
+    // base, an older server, a torn codec) falls back to the whole envelope —
+    // the M9 transport is the fallback, never a wall.
+    const nextEnv = JSON.stringify(save)
+    const deltaFields = deltaPushFields(SaveSystem.lastPushedEnv(), nextEnv)
     try {
-      const res = await fetch('/api/cloud/push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
-        body: JSON.stringify({ ...SaveSystem.toCloudPayload(save), sig }),
-      })
+      let res: Response
+      if (deltaFields) {
+        res = await fetch('/api/cloud/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
+          body: JSON.stringify({ schema_version: save.version, patch: deltaFields.patch, sig: SaveSystem.sigForString(nextEnv) }),
+        })
+      } else {
+        res = await fetch('/api/cloud/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
+          body: JSON.stringify({ ...SaveSystem.toCloudPayload(save), sig }),
+        })
+      }
+      if (!res.ok && deltaFields) {
+        // THE FALLBACK LAW — one honest retry, whole envelope
+        res = await fetch('/api/cloud/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${account.token}` },
+          body: JSON.stringify({ ...SaveSystem.toCloudPayload(save), sig }),
+        })
+      }
       if (!res.ok) return { ok: false, why: 'cloud refused' }
       SaveSystem.markPushed(save)
+      SaveSystem.markPushedEnv(nextEnv)
       set({ cloudPending: false })
       try { window.localStorage.removeItem('lokoja-life:cloud-queue') } catch { /* done */ }
       return { ok: true }
@@ -4934,6 +5157,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       story: get().story,
       patti: get().patti,
       wardrobe: get().wardrobe,
+      nation: get().nation ?? freshNationState(),
       settings,
     })
     set({ hasSave: true })
@@ -4941,6 +5165,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   resetGame: () => {
     SaveSystem.clear()
+    stopNationSim()
     set({
       player: null,
       world: null,
@@ -4960,6 +5185,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cityPulse: freshPulseState(),
       live: freshLiveState(),
       forge: freshForgeState(),
+      nation: freshNationState(),
+      nationSnapshot: null,
+      nationPath: null,
+      telemetry: freshTelemetryBook(),
       liveWire: null,
       pendingArrival: null,
       cloudPending: false,
@@ -4981,6 +5210,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   dismissNotification: (id) =>
     set({ notifications: get().notifications.filter((n) => n.id !== id) }),
 }))
+
+useGameStoreRef.getState = () => useGameStore.getState()
+useGameStoreRef.setState = (partial) => useGameStore.setState(partial)
 
 /* THE SCREEN MIRROR — the menu store owns `screen` (SILK II: the menu
  * slice is all the entry chunk carries); the fat store mirrors it so every

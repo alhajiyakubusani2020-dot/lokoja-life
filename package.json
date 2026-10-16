@@ -10,7 +10,8 @@
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "ops:rollback": "bash scripts/ops-rollback.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

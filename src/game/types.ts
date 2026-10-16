@@ -906,7 +906,9 @@ export interface GameSave {
    *  v17 (M17): the live nation slice joins the schema
    *  v18 (M18): the city forge slice joins the schema
    *  v19 (M19): the story, patti and wardrobe slices + settings.music/haptics
-   *  join the schema */
+   *  join the schema
+   *  v20 (M20): the nation slice joins the schema — the crowd switch, the
+   *  inflation ledger, the moderation book and the telemetry opt-in */
   version: number
   createdAt: number
   updatedAt: number
@@ -947,6 +949,9 @@ export interface GameSave {
   patti: PattiState
   /** M19 — the wardrobe: owned outfits/walk styles + the equipped walk */
   wardrobe: WardrobeState
+  /** M20 — the nation ops slice: crowd switch + inflation ledger +
+   *  moderation book (no text, by type) + telemetry opt-in */
+  nation: import('./systems/nation').NationState
 }
 
 /* ---------------------------------- Meta ----------------------------------- */

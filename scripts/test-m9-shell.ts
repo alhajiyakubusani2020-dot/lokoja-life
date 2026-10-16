@@ -39,6 +39,7 @@ import { freshShieldState } from '../src/game/systems/shield'
 import { freshStoryState } from '../src/game/systems/story'
 import { freshPattiState } from '../src/game/systems/patti'
 import { freshWardrobeState } from '../src/game/systems/wardrobe'
+import { freshNationState } from '../src/game/systems/nation'
 import { civicDayRoll, freshCivicState } from '../src/game/systems/civic'
 import { GOALS, CHILL, NEEDS } from '../src/game/data/config'
 import { freshCalendarState } from '../src/game/systems/calendar'
@@ -206,7 +207,7 @@ console.log('\nGUEST LAWS — play first, login to continue, lose nothing')
   // THE MERGE LAW — never lose progress
   const mk = (day: number, earned: number): GameSave => ({
     version: 10,
-    story: freshStoryState(), patti: freshPattiState(), wardrobe: freshWardrobeState(),
+    story: freshStoryState(), patti: freshPattiState(), wardrobe: freshWardrobeState(), nation: freshNationState(),
     calendar: freshCalendarState(),
     rivers: freshRiversState(),
     education: freshEducationState(),
@@ -348,7 +349,7 @@ console.log('\nREAL STORE PASS — goals, onboarding, the gate, through the live
   const parsed = e0 && e0.fmt === 2 ? e0.data : e0
   check(
     'the save carries goals + onboarding + account',
-    parsed?.version === 19 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
+    parsed?.version === 20 && Array.isArray(parsed?.goals?.ids) && parsed?.goals?.ids?.length === 3 && parsed?.onboarding?.rewarded === true && parsed?.account?.linked === false,
     `v${parsed?.version} ids:${JSON.stringify(parsed?.goals?.ids)} rewarded:${parsed?.onboarding?.rewarded} linked:${parsed?.account?.linked}`,
   )
 }

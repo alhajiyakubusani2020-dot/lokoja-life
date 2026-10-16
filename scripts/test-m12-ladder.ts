@@ -92,7 +92,7 @@ import { LADDER } from '../src/game/data/config'
 import { SaveSystem } from '../src/game/systems/save'
 import { freshCivicState } from '../src/game/systems/civic'
 
-const SAVE_V = 19
+const SAVE_V = 20
 const E = LADDER.education
 const H = LADDER.housing
 const J = LADDER.japa
@@ -423,7 +423,7 @@ section('the save v12 → v13 migration')
   }
   mem.set(SaveSystem.SAVE_KEY, JSON.stringify(v12))
   const loaded = SaveSystem.load()
-  check('v12 save migrates to v18', loaded?.version === SAVE_V)
+  check('v12 save migrates to v20', loaded?.version === SAVE_V)
   check('the education slice arrives fresh and harmless', !!loaded?.education && loaded.education.enrolled === false && loaded.education.semester === 1 && loaded.education.graduated === false)
   check('the housing slice arrives fresh (renting, clean book)', !!loaded?.housing && loaded.housing.owned === null && loaded.housing.rentOwed === 0 && loaded.housing.wahala === null)
   check('the japa slice arrives fresh (empty file)', !!loaded?.japa && loaded.japa.nimcDay === 0 && loaded.japa.flownDay === 0 && loaded.japa.policeShifts === 0)

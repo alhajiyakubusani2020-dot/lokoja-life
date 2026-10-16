@@ -112,6 +112,18 @@ model AjoRow {
   updatedAt      DateTime @updatedAt
 }
 /// M18 — the "YOUR CITY NEXT?" ballot box: one vote per city per account.
+// M20 — the opt-in telemetry counters (one row per account per day;
+// a kid account NEVER gets a row — the door 403s before the upsert)
+model TelemetryRow {
+  id         String   @id @default(cuid())
+  accountId  String
+  day        Int
+  counters   String
+  createdAt  DateTime @default(now())
+
+  @@unique([accountId, day])
+}
+
 model ForgeVote {
   id        String   @id @default(cuid())
   accountId String

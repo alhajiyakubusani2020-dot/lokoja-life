@@ -38,6 +38,7 @@ import { ChatThread, tierChipClass } from './phone/ChatThread'
 import { PulseApp } from './phone/PulseApp'
 import { LiveApp } from './phone/LiveApp'
 import { ForgeApp } from './phone/ForgeApp'
+import { NationApp } from './phone/NationApp'
 import { GraphicsPicker } from './GraphicsPicker'
 import {
   ArrowLeftIcon,
@@ -55,7 +56,7 @@ import {
   TargetIcon,
 } from '../icons'
 
-type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse' | 'live' | 'forge'
+type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse' | 'live' | 'forge' | 'nation'
 
 /** M15 — a banner can deep-link the handset straight into an app (one-shot). */
 let phoneDeepLink: PhoneApp | null = null
@@ -833,6 +834,13 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
       icon: TargetIcon,
     },
     {
+      key: 'nation',
+      label: 'Nation',
+      sub: '10k souls · ops · the honest mirror',
+      tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]',
+      icon: CoinsIcon,
+    },
+    {
       key: 'shield',
       label: 'Family Shield',
       sub: player.ageBand === 'adult' ? 'Scam drill + elder mode' : `🛡️ ${player.ageBand.toUpperCase()} — scam drill`,
@@ -887,6 +895,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     pulse: 'City Pulse',
     live: 'Live Nation',
     forge: 'City Forge',
+    nation: 'Nation Dashboard',
   }
 
   return (
@@ -949,6 +958,7 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
                   {app === 'pulse' && <PulseApp />}
                   {app === 'live' && <LiveApp />}
                   {app === 'forge' && <ForgeApp />}
+                  {app === 'nation' && <NationApp />}
                   {app === 'settings' && <SettingsApp />}
                 </div>
               </>

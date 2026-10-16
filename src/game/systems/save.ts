@@ -37,17 +37,20 @@ import { freshForgeState } from './citypack'
 import { freshStoryState } from './story'
 import { freshPattiState } from './patti'
 import { freshWardrobeState } from './wardrobe'
+import { freshNationState } from './nation'
 import { freshFortressState, CHAIN_SEED, signPayload, verifyPayload, sha256, FORT_KEY_STORAGE, FORTRESS_KEYS } from './fortress'
 
 const SAVE_KEY = FORTRESS_KEYS.primary
 const SHADOW_KEY = FORTRESS_KEYS.shadow
-const SAVE_VERSION = 19
+const SAVE_VERSION = 20
 
 /** M15 — THE DELTA LAW: the state fingerprint of the last payload that hit disk.
  *  Lives OUTSIDE the save (the fortress rule: the books live beside, not inside). */
 const DELTA_HASH_KEY = 'lokoja-life:save-hash'
 /** M15 — the fingerprint of the last payload the cloud vault accepted (the zero-byte push). */
 export const PUSHED_HASH_KEY = 'lokoja-life:pushed-hash'
+/** M20 — the EXACT string the vault last accepted (the binary delta's base). */
+const LAST_PUSHED_ENV_KEY = 'lokoja-life:last-pushed-env'
 
 /**
  * THE STATE FINGERPRINT — sha256 over the save with the timestamps
@@ -297,6 +300,14 @@ function deserialize(raw: string): GameSave | null {
       save.version = 19
       break
     case 19:
+      // v19 → v20 (M20 — PLANET SCALE + OPS): the nation slice joins the
+      // save — the crowd switch, the inflation ledger, the moderation
+      // book and the telemetry opt-in (dark by default). Defaulted
+      // below — a v19 player wakes up with the city alive, the books
+      // empty and their data theirs.
+      save.version = 20
+      break
+    case 20:
       // current version
       break
     default:
@@ -557,6 +568,30 @@ function deserialize(raw: string): GameSave | null {
   }
   save.wardrobe = wd
 
+  // --- M20 nation slice (missing on v19-and-older saves) ---
+  if (!save.nation) {
+    save.nation = freshNationState()
+  } else {
+    const fresh = freshNationState()
+    const crowd = save.nation.crowd
+    save.nation = {
+      crowd: {
+        seed: typeof crowd?.seed === 'number' && Number.isFinite(crowd.seed) ? crowd.seed : fresh.crowd.seed,
+        count: typeof crowd?.count === 'number' && crowd.count > 0 && crowd.count <= 50_000 ? Math.floor(crowd.count) : fresh.crowd.count,
+        on: typeof crowd?.on === 'boolean' ? crowd.on : fresh.crowd.on,
+      },
+      inflation: Array.isArray(save.nation.inflation)
+        ? save.nation.inflation.filter((r) => r && typeof r.day === 'number' && typeof r.mult === 'number').slice(-12)
+        : [],
+      moderation: Array.isArray(save.nation.moderation)
+        ? save.nation.moderation
+            .filter((r) => r && typeof r.day === 'number' && typeof r.why === 'string' && typeof r.band === 'string')
+            .slice(-40)
+        : [],
+      telemetryOptIn: save.nation.telemetryOptIn === true,
+    }
+  }
+
   // --- M2 civic mesh (missing on v3-and-older saves) ---
   if (!save.civic) {
     save.civic = freshCivicState()
@@ -747,6 +782,26 @@ export const SaveSystem = {
     return stateFingerprint(save)
   },
 
+  /** M20 — the exact string the vault last accepted (the delta's base; null on a fresh device). */
+  lastPushedEnv(): string | null {
+    if (!storageAvailable()) return null
+    return window.localStorage.getItem(LAST_PUSHED_ENV_KEY)
+  },
+
+  /** M20 — record the accepted string after a successful vault write. */
+  markPushedEnv(env: string): void {
+    if (!storageAvailable()) return
+    try {
+      window.localStorage.setItem(LAST_PUSHED_ENV_KEY, env)
+    } catch { /* storage full — the next push just goes whole-envelope */ }
+  },
+
+  /** M20 — sign an exact envelope string with the device key (the delta path's sig). */
+  sigForString(envStr: string): string {
+    const key = fortKey()
+    return key ? signPayload(envStr, key) : ''
+  },
+
   /** Remove the save (used by "Start Over"). */
   clear(): void {
     if (!storageAvailable()) return
@@ -754,6 +809,7 @@ export const SaveSystem = {
     window.localStorage.removeItem(SHADOW_KEY)
     window.localStorage.removeItem(DELTA_HASH_KEY)
     window.localStorage.removeItem(PUSHED_HASH_KEY)
+    window.localStorage.removeItem(LAST_PUSHED_ENV_KEY)
   },
 
   /** The raw signed envelope of the primary (the cloud push carries it whole). */
