@@ -174,6 +174,11 @@ export function wireEnsure(
 
   s.on('wire:event', (ev: WireFeedEvent) => pushFeed([ev]))
 
+  // W5: the social push lane — forward to every registered listener
+  s.on('wire:social', (p: WireSocialPush) => {
+    if (p && typeof p.type === 'string') for (const fn of socialPushFns) fn(p)
+  })
+
   s.on('wire:roster', (r: { scope?: string; roster?: WireRosterRow[] }) => {
     if (r?.roster) useWireStore.setState({ roster: r.roster })
   })
@@ -210,17 +215,47 @@ export interface WireSendResult {
   stripped?: boolean
 }
 
-type Ack = { ok?: boolean; why?: string; stripped?: boolean }
+type Ack = { ok?: boolean; why?: string; stripped?: string | boolean; [k: string]: unknown }
 
-function emitAck(ev: string, body: Record<string, unknown>): Promise<WireSendResult> {
+/** THE RAW ACK DOOR (W5) — the social-net module rides this for its own
+ * server verbs; the chat/emote/dm senders below stay the faces' doors. */
+export function wireEmitAck(ev: string, body: Record<string, unknown>): Promise<{ ok: boolean; why?: string; [k: string]: unknown }> {
   return new Promise((resolve) => {
     if (!socket?.connected) return resolve({ ok: false, why: 'wire-down' })
     socket.timeout(5000).emit(ev, body, (err: unknown, res?: Ack) => {
       if (err) return resolve({ ok: false, why: 'wire-slow' })
       if (!res) return resolve({ ok: false, why: 'wire-slow' })
-      resolve({ ok: !!res.ok, why: res.why, stripped: res.stripped })
+      resolve({ ok: !!res.ok, why: res.why, ...res })
     })
   })
+}
+
+/* ── W5: the wire:social push lane — the server prods the person directly
+ * (a request landed, a paddy accepted, a hangout postcard arrived). Any
+ * module may listen; the social-net store registers the first. ── */
+export interface WireSocialPush {
+  type: string
+  from?: string
+  by?: string
+  street?: string
+  seq?: number
+  [k: string]: unknown
+}
+
+type SocialPushFn = (p: WireSocialPush) => void
+const socialPushFns = new Set<SocialPushFn>()
+
+export function wireOnSocial(fn: SocialPushFn): () => void {
+  // registration only — the ensure-time forwarder on the live socket is the
+  // ONE listener (a direct socket.on here would double-deliver every push)
+  socialPushFns.add(fn)
+  return () => {
+    socialPushFns.delete(fn)
+  }
+}
+
+function emitAck(ev: string, body: Record<string, unknown>): Promise<WireSendResult> {
+  return wireEmitAck(ev, body) as Promise<WireSendResult>
 }
 
 /** Chat through the fast lane — the server door runs the REAL sanitizeChat. */
@@ -241,4 +276,9 @@ export function wireOpenDm(withHandle: string): void {
 /** DM through the fast lane — server laws apply; both sides must be on the wire. */
 export function wireSendDm(toHandle: string, text: string): Promise<WireSendResult> {
   return emitAck('dm', { to: toHandle, text })
+}
+
+/** W5: the hangout postcard — invite a paddy to your street. */
+export function wireSendInvite(toHandle: string, street: string): Promise<WireSendResult> {
+  return emitAck('social:invite', { to: toHandle, street })
 }

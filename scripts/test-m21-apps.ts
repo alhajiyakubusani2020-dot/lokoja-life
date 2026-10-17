@@ -115,7 +115,10 @@ section('M21 · the registry law (no collision with the phone\u2019s existing ap
 const phoneScreenSrc = readFileSync(join(HERE, '../src/components/game/screens/PhoneScreen.tsx'), 'utf8')
 const unionMatch = phoneScreenSrc.match(/type PhoneApp = ([^\n]+)/)
 const existingIds = unionMatch ? (unionMatch[1]!.match(/'([a-z-]+)'/g) ?? []).map((s) => s.replace(/'/g, '')) : []
-check('the PhoneApp union was read from the real source (grid + 11 legacy + 10 manifest = 22)', unionMatch !== null && existingIds.length === 22 && existingIds.includes('grid'))
+// THE AMENDMENT (M24-UI wave): the union grew from 22 to 27 — grid + 11
+// legacy + 10 manifest + the five social faces (messages/calls/connect/
+// wallet/profile). The registry law counts the REAL union, not a memory.
+check('the PhoneApp union was read from the real source (grid + 11 legacy + 10 manifest + 5 social = 27)', unionMatch !== null && existingIds.length === 27 && existingIds.includes('grid'))
 check('every manifest id is wired into the union EXACTLY ONCE (no dupes, none missing)', M21_APPS.every((e) => existingIds.filter((id) => id === e.id).length === 1))
 check('the 11 legacy apps still stand beside the ten', ['chats','bank','hustle','civic','biz','settings','shield','pulse','live','forge','nation'].every((id) => existingIds.includes(id)))
 

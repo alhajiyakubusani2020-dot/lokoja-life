@@ -141,3 +141,32 @@ model StreamRow {
   status      String   @default("live")
   updatedAt   DateTime @updatedAt
 }
+
+/// M24 W5 THE CONNECT — the nation's social graph, SERVER truth (the
+/// device store stays honest by labeling itself). One row per direction;
+/// the PAIR is the relationship. state: 'pending' (requestedBy initiated)
+/// | 'friend' | 'blocked' (one-directional refusal wall). Both doors —
+/// the nation-wire socket AND the /api/live/action relay — write the
+/// SAME rows through the SAME pure laws (systems/socialgraph).
+model FriendRow {
+  id          Int      @id @default(autoincrement())
+  ownerHandle String
+  peerHandle  String
+  state       String   @default("pending")
+  requestedBy String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([ownerHandle, peerHandle])
+}
+
+/// M24 W5 — the moderation queue: evidence for the union's eyes (the W12
+/// console reads it). Nothing automatic happens to a reported handle here.
+model ReportRow {
+  id           Int      @id @default(autoincrement())
+  byHandle     String
+  targetHandle String
+  reason       String
+  status       String   @default("open")
+  createdAt    DateTime @default(now())
+}

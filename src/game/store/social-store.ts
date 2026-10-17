@@ -26,7 +26,7 @@ import {
   type CallState,
 } from '../systems/callflow'
 
-export interface DmMsg { id: string; from: 'me' | string; text: string; ts: number }
+export interface DmMsg { id: string; from: 'me' | string; text: string; ts: number; kind?: 'dm' | 'hangout'; street?: string; seq?: number }
 export interface FriendRequest { handle: string; dir: 'in' | 'out'; ts: number }
 export interface SocialProfile { displayName: string; bio: string; vibe: string }
 
@@ -89,6 +89,10 @@ interface SocialStore extends SocialPersist {
   /* DMs */
   sendDm: (handle: string, text: string) => { ok: boolean; why?: 'blocked' | 'empty' | 'too-long' }
   receiveDm: (handle: string, text: string) => void
+  /** W5 — a hangout postcard lands (the 🎮 row; the wire's kind 'hangout'). */
+  receiveHangout: (handle: string, street: string) => void
+  /** W5 — merge SERVER DM history (LiveEvent rows) into a thread; seq-deduped. */
+  absorbServerDms: (handle: string, rows: { seq: number; kind: string; actor: string; payload: Record<string, unknown> }[]) => void
   markDmRead: (handle: string) => void
   setPendingDm: (handle: string | null) => void
 
@@ -195,6 +199,37 @@ export const useSocialStore = create<SocialStore>((set, get) => {
       const unread = { ...s.unread, [handle]: (s.unread[handle] ?? 0) + 1 }
       set({ dms, unread })
       persist({ dms, unread })
+    },
+    receiveHangout: (handle, street) => {
+      const s = get()
+      const msg: DmMsg = { id: `ho:${Date.now()}:${Math.floor(Math.random() * 1e5)}`, from: handle, text: `wan hangout for ${street}`, ts: Date.now(), kind: 'hangout', street }
+      const dms = { ...s.dms, [handle]: [...(s.dms[handle] ?? []), msg] }
+      const unread = { ...s.unread, [handle]: (s.unread[handle] ?? 0) + 1 }
+      set({ dms, unread })
+      persist({ dms, unread })
+    },
+    absorbServerDms: (handle, rows) => {
+      const s = get()
+      if (!rows.length) return
+      const seen = new Set((s.dms[handle] ?? []).map((m) => m.id))
+      const fresh: DmMsg[] = []
+      for (const r of rows) {
+        const id = `srv:${r.seq}`
+        if (seen.has(id)) continue
+        seen.add(id)
+        if (r.kind === 'hangout') {
+          const street = typeof r.payload?.street === 'string' ? r.payload.street : 'home'
+          fresh.push({ id, from: r.actor, text: `wan hangout for ${street}`, ts: Number(r.payload?.ts) || Date.now(), kind: 'hangout', street, seq: r.seq })
+        } else {
+          const text = typeof r.payload?.text === 'string' ? r.payload.text : ''
+          if (!text) continue
+          fresh.push({ id, from: r.actor, text, ts: Number(r.payload?.ts) || Date.now(), seq: r.seq })
+        }
+      }
+      if (!fresh.length) return
+      const merged = [...(s.dms[handle] ?? []), ...fresh].sort((a, b) => a.ts - b.ts)
+      set({ dms: { ...s.dms, [handle]: merged } })
+      persist({ dms: { ...s.dms, [handle]: merged } })
     },
     markDmRead: (handle) => {
       const s = get()

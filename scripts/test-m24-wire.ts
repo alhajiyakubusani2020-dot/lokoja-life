@@ -277,7 +277,11 @@ try {
   const hdm = await heardBdm
   check('B receives the DM sub-second WITHOUT ever joining the room (delivery rides the person, not their tabs)', !!hdm && hdm.dt < 1000, hdm ? `${hdm.dt}ms` : 'never')
   const dmOff = await emit(sa, 'dm', { to: C, text: 'you dey?' })
-  check('an OFFLINE paddy refuses honestly (DM waits for W5)', dmOff.ok === false && (dmOff.why ?? '').startsWith('offline'))
+  // THE W5 AMENDMENT: offline claimed paddies now RECEIVE — the DM persists
+  // in LiveEvent and the cursor replay / history law delivers it. The honest
+  // refusal left is the never-claimed handle (no-such-paddy) — checked on
+  // sb2's FRESH bucket below so socket sa's chat-cap math stays undisturbed.
+  check('W5 LAW: a claimed-but-offline paddy RECEIVES the DM (persisted)', dmOff.ok === true && typeof dmOff.seq === 'number', JSON.stringify(dmOff))
 
   section('14. FAIL-CLOSED BANDS — the plausibility law')
   const wdb = new Database('/home/z/my-project/db/custom.db')
@@ -303,6 +307,9 @@ try {
   check('nothing was lost across the drop (resume covers the gap)', res2.ok === true && Array.isArray(res2.events))
 
   section('13. THE RATE LAW — the last law, so the bucket is fresh')
+  // the W5 ghost law rides sb2's fresh bucket (sa's chat-cap math above stays exact)
+  const dmGhost = await emit(sb2, 'dm', { to: `never_${stamp}_x`, text: 'boo' })
+  check('the never-claimed handle refuses (no-such-paddy, W5 door)', !dmGhost.ok && dmGhost.why === 'no-such-paddy', JSON.stringify(dmGhost))
   const spam = await emit(sa, 'chat', { text: 'spam 6' })
   const spamRefused = await emit(sa, 'chat', { text: 'spam 7' })
   check('the burst fills the bucket then refuses HONESTLY (too-fast, never silent)', spam.ok === true && spamRefused.ok === false && spamRefused.why === 'too-fast')

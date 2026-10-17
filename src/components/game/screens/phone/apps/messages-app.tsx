@@ -24,7 +24,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
 import { useSocialStore } from '@/game/store/social-store'
 import { EMOTE_LIBRARY, sanitizeChat, type LiveIdentity } from '@/game/systems/live'
-import { useWireStore, wireEnsure, wireSendChat, wireSendEmote, wireOpenDm, wireSendDm } from '@/game/systems/wire'
+import { useWireStore, wireEnsure, wireSendChat, wireSendEmote, wireOpenDm, wireSendDm, wireSendInvite } from '@/game/systems/wire'
+import { socialNetDms } from '@/game/systems/socialnet'
 
 type Tab = 'wire' | 'dms'
 
@@ -37,6 +38,9 @@ const WIRE_CAP = 120
 /** module-scope DM dedupe — survives StrictMode's dev double-mount, so one
  * wire DM lands exactly once no matter how many times effects re-run */
 const dmSeenSeq = new Set<number>()
+/** W5 — DM history fetch: one fetch per thread per session (idempotent,
+ * StrictMode-proof); the server's LiveEvent rows are the thread's truth. */
+const historyLoaded = new Set<string>()
 
 function absorbWire(events: WireEvent[], me: string): number {
   let fresh = 0
@@ -93,6 +97,8 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
   const unread = useSocialStore((s) => s.unread)
   const sendDm = useSocialStore((s) => s.sendDm)
   const receiveDm = useSocialStore((s) => s.receiveDm)
+  const receiveHangout = useSocialStore((s) => s.receiveHangout)
+  const absorbServerDms = useSocialStore((s) => s.absorbServerDms)
   const markDmRead = useSocialStore((s) => s.markDmRead)
 
   const claimed = account.linked && !!account.token
@@ -137,24 +143,58 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
     if (wire?.events?.length) absorbWire(wire.events as WireEvent[], me ?? '')
   }, [wire, me])
 
-  // absorb whatever the LIVE SOCKET carried (the fast lane) + live DM delivery.
-  // No setState here — the wireFeed subscription itself is the render driver;
-  // the rows memo below re-derives on every feed change (absorbWire is
-  // seq-deduped, so re-running it is always harmless).
+  // absorb whatever the LIVE SOCKET carried (the fast lane) + live DM/hangout
+  // delivery. No setState here — the wireFeed subscription itself is the
+  // render driver; the rows memo below re-derives on every feed change
+  // (absorbWire is seq-deduped, so re-running it is always harmless).
   useEffect(() => {
     if (!wireFeed.length) return
     for (const e of wireFeed) {
-      if (e.kind === 'dm' && e.actor !== me && e.payload?.to === me && !dmSeenSeq.has(e.seq)) {
+      if (e.actor === me) continue
+      if (e.kind === 'dm' && e.payload?.to === me && !dmSeenSeq.has(e.seq)) {
         dmSeenSeq.add(e.seq)
         receiveDm(e.actor, typeof e.payload.text === 'string' ? e.payload.text : '')
+      } else if (e.kind === 'hangout' && e.payload?.to === me && !dmSeenSeq.has(e.seq)) {
+        // W5 — the hangout postcard renders LIVE in the open thread
+        dmSeenSeq.add(e.seq)
+        receiveHangout(e.actor, typeof e.payload.street === 'string' ? e.payload.street : 'home')
       }
     }
-  }, [wireFeed, me, receiveDm])
+  }, [wireFeed, me, receiveDm, receiveHangout])
 
   // join the DM room when a thread opens — both online paddies receive live
   useEffect(() => {
     if (openDm && wireLive) wireOpenDm(openDm)
   }, [openDm, wireLive])
+
+  // W5 — THE HISTORY LAW: opening a thread pulls the SERVER rows (the ONE
+  // LiveEvent table) once per session. The device copy stays; overlaps die
+  // on the 60s window dedupe inside absorbServerDms' caller below.
+  useEffect(() => {
+    if (!openDm || !claimed || historyLoaded.has(openDm)) return
+    historyLoaded.add(openDm)
+    void socialNetDms(openDm).then((res) => {
+      if (!res.ok || !res.events?.length) return
+      const existing = useSocialStore.getState().dms[openDm] ?? []
+      const fresh = res.events.filter((r) => {
+        // dedupe: a wire-delivered word already has a device row — same side,
+        // same text, inside a 60s window means the SAME word. Hangout rows
+        // compare by their shaped text ('wan hangout for <street>').
+        const expected = r.kind === 'hangout'
+          ? `wan hangout for ${typeof r.payload?.street === 'string' ? r.payload.street : 'home'}`
+          : (typeof r.payload?.text === 'string' ? r.payload.text : '')
+        return !existing.some(
+          (m) => m.text === expected &&
+            (r.actor === me ? m.from === 'me' : m.from === r.actor) &&
+            Math.abs(('ts' in r ? Number(r.ts) : Date.now()) - m.ts) < 60_000,
+        )
+      })
+      absorbServerDms(
+        openDm,
+        fresh.map((r) => ({ ...r, actor: r.actor === me ? 'me' : r.actor })),
+      )
+    })
+  }, [openDm, claimed, me, absorbServerDms])
 
   const wireRows = useMemo(() => {
     if (wireFeed.length) absorbWire(wireFeed as WireEvent[], me ?? '')
@@ -216,8 +256,21 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
         </button>
         <div className="flex items-center justify-between rounded-2xl border border-black/[0.05] bg-white px-3 py-2">
           <p className="text-[13px] font-extrabold">@{openDm}</p>
-          <span className="rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
-            on this device{wireLive ? ' + live wire' : ''}
+          <span className="flex items-center gap-1.5">
+            <button
+              data-testid="messages-invite"
+              onClick={async () => {
+                const street = useGameStore.getState().world?.currentLocation ?? 'home'
+                const res = await wireSendInvite(openDm, street)
+                setNotice(res.ok ? `🎮 Hangout invite fly reach @${openDm}.` : res.why === 'wire-down' ? 'The wire dey down — invites need the live wire.' : res.why === 'paddies-only' ? 'Minors invite paddies only — na the law.' : 'The invite no gree.')
+              }}
+              className="lko-press rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--lko-gold-deep)]"
+            >
+              🎮 Invite
+            </button>
+            <span className="rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
+              on this device{wireLive ? ' + live wire' : ''}
+            </span>
           </span>
         </div>
         <div className="flex max-h-[300px] min-h-[160px] flex-col gap-1.5 overflow-y-auto rounded-2xl bg-white/70 p-2.5">
@@ -226,14 +279,36 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
               The thread dey quiet. Talk first.
             </p>
           )}
-          {thread.map((m) => (
-            <div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-1.5 ${m.from === 'me' ? 'self-end bg-[var(--lko-green)] text-white' : 'self-start bg-black/[0.05]'}`}>
-              <p className="text-[12px] font-semibold leading-snug break-words">{m.text}</p>
-              <p className={`mt-0.5 text-right text-[8.5px] font-bold ${m.from === 'me' ? 'text-white/70' : 'text-[var(--lko-ink-soft)]'}`}>
-                {new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
-          ))}
+          {thread.map((m) =>
+            m.kind === 'hangout' ? (
+              <div key={m.id} className={`max-w-[90%] rounded-2xl px-3 py-2 ${m.from === 'me' ? 'self-end bg-[var(--lko-green)]/90 text-white' : 'self-start border border-[var(--lko-gold)]/30 bg-[var(--lko-gold-soft)]'}`}>
+                <p className="text-[12px] font-extrabold">🎮 {m.from === 'me' ? 'You wan hangout' : `@${m.from} wan hangout`} — {m.street}</p>
+                {m.from !== 'me' && (
+                  <button
+                    onClick={() => {
+                      // THE HONEST JOIN: the postcard law verifies SIGNED codes,
+                      // so an invite assists the REAL journey — the ferry door
+                      // rules the water (fare, energy); dry roads stay waka.
+                      useGameStore.getState().takeFerry(m.street ?? '')
+                    }}
+                    className="lko-press mt-1.5 rounded-full bg-white px-3 py-1 text-[10px] font-extrabold text-[var(--lko-gold-deep)]"
+                  >
+                    Waka go meet dem
+                  </button>
+                )}
+                <p className={`mt-0.5 text-right text-[8.5px] font-bold ${m.from === 'me' ? 'text-white/70' : 'text-[var(--lko-ink-soft)]'}`}>
+                  {new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            ) : (
+              <div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-1.5 ${m.from === 'me' ? 'self-end bg-[var(--lko-green)] text-white' : 'self-start bg-black/[0.05]'}`}>
+                <p className="text-[12px] font-semibold leading-snug break-words">{m.text}</p>
+                <p className={`mt-0.5 text-right text-[8.5px] font-bold ${m.from === 'me' ? 'text-white/70' : 'text-[var(--lko-ink-soft)]'}`}>
+                  {new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            ),
+          )}
         </div>
         {isBlocked ? (
           <p className="rounded-xl bg-[#fdecea] px-3 py-2 text-[11px] font-bold text-[#a63d33]">
@@ -251,18 +326,29 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
             />
             <button
               data-testid="messages-dm-send"
-              onClick={() => {
+              onClick={async () => {
                 if (!draft.trim()) {
                   setNotice('Empty message no dey fly.')
                   return
                 }
-                const res = sendDm(openDm, draft)
-                if (res.ok) {
-                  // the DEVICE truth landed; when the wire lives, the words ALSO
-                  // fly to the paddy sub-second (the server door runs the laws)
-                  if (wireLive) void wireSendDm(openDm, draft)
-                  setDraft('')
-                } else setNotice(res.why === 'too-long' ? 'Too long — 280 max.' : 'Empty message no dey fly.')
+                const text = draft
+                // THE LANE LAW FOR DMs (W5): the server doors rule the words —
+                // live wire first, the relay 'dm' door when it's down; only a
+                // FULLY offline nation keeps the words as device truth alone.
+                const res = wireLive
+                  ? await wireSendDm(openDm, text)
+                  : await useGameStore.getState().liveAction('dm', { to: openDm, text })
+                const laneDown = !wireLive && (res.why === 'offline' || res.why === 'unclaimed' || res.why === 'relay no gree')
+                if (res.ok || laneDown) {
+                  const r = sendDm(openDm, text)
+                  if (r.ok) setDraft('')
+                  setNotice(res.ok ? null : laneDown ? 'Both lanes down — the word wait on this device.' : null)
+                } else {
+                  setNotice(res.why === 'blocked' ? `@${openDm} block you — the mic dey dark.`
+                    : res.why === 'paddies-only' ? 'Minors DM paddies only — add dem for Connect first.'
+                    : res.why === 'no-such-paddy' ? 'Nobody claim that name.'
+                    : 'The door no gree — check the word.')
+                }
               }}
               className="lko-press rounded-xl bg-[var(--lko-green)] px-4 py-2 text-[12px] font-extrabold text-white"
             >
@@ -395,4 +481,9 @@ const WHY_LABEL: Record<string, string> = {
   'wire-down': 'The wire drop — the relay lane don take over.',
   'wire-slow': 'The wire slow — try again small.',
   'bad-emote': 'That emote no dey the lexicon.',
+  'no-such-paddy': 'Nobody claim that name yet.',
+  'they-blocked-you': 'Dem block you — the door no open.',
+  'you-blocked-them': 'You block dem — unblock first.',
+  'paddies-only': 'Minors DM paddies only — na the law.',
+  blocked: 'Dem block you — the mic dey dark.',
 }

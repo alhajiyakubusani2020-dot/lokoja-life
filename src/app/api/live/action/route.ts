@@ -19,8 +19,16 @@ import {
   ajoIdFor, ajoRoundReady, ajoNextBeneficiary, ajoPanicCheck, ajoCourtFine, AJO_MAX_MEMBERS,
   type AjoCircle,
 } from '@/game/systems/live'
+import {
+  requestVerdict, acceptVerdict, reportVerdict, dmChannel, dmVerdict,
+} from '@/game/systems/socialgraph'
 
 const CHAIN_SEED = 'lko-assoc-chain-seed'
+
+/** Prisma row → the pure law's edge shape (the state narrows at the door). */
+function edgeOf(r: { ownerHandle: string; peerHandle: string; state: string; requestedBy: string } | null) {
+  return r ? { ...r, state: r.state as 'pending' | 'friend' | 'blocked' } : null
+}
 
 type Json = Record<string, unknown>
 
@@ -417,6 +425,146 @@ export async function POST(req: Request) {
         circle: row.id, defaulter: panic.defaulter, fine: fine.fine, repHit: fine.repHit,
       })
       return NextResponse.json({ ok: true, defaulter: panic.defaulter, fine })
+    }
+
+    /* ------------------- W5 THE CONNECT — the relay lane --------------------- */
+    // The SAME FriendRow rows, the SAME pure laws (systems/socialgraph) —
+    // this door carries the graph when the live wire is down (N10: two
+    // lanes, one nation, nothing hard-crashes).
+
+    if (action === 'social-list') {
+      const rows = await db.friendRow.findMany({ where: { ownerHandle: account.handle } })
+      const friends: { handle: string; since: number }[] = []
+      const inReqs: { handle: string; ts: number }[] = []
+      const outReqs: { handle: string; ts: number }[] = []
+      const blocked: string[] = []
+      for (const r of rows) {
+        const ts = r.updatedAt.getTime()
+        if (r.state === 'friend') friends.push({ handle: r.peerHandle, since: ts })
+        else if (r.state === 'pending') {
+          if (r.requestedBy === account.handle) outReqs.push({ handle: r.peerHandle, ts })
+          else inReqs.push({ handle: r.peerHandle, ts })
+        } else if (r.state === 'blocked') blocked.push(r.peerHandle)
+      }
+      return NextResponse.json({ ok: true, graph: { friends, inReqs, outReqs, blocked } })
+    }
+
+    if (action === 'social-add') {
+      const other = str(p.handle, 16).trim()
+      const edgeAB = await db.friendRow.findUnique({ where: { ownerHandle_peerHandle: { ownerHandle: account.handle, peerHandle: other } } })
+      const edgeBA = await db.friendRow.findUnique({ where: { ownerHandle_peerHandle: { ownerHandle: other, peerHandle: account.handle } } })
+      const verdict = requestVerdict(account.handle, other, edgeOf(edgeAB), edgeOf(edgeBA))
+      if (!verdict.ok) return NextResponse.json({ ok: false, why: verdict.why }, { status: 400 })
+      const target = await db.account.findUnique({ where: { handle: other }, select: { id: true } })
+      if (!target) return NextResponse.json({ ok: false, why: 'no-such-paddy' }, { status: 404 })
+      const state = verdict.kind === 'mutual' ? 'friend' : 'pending'
+      await db.$transaction([
+        db.friendRow.upsert({
+          where: { ownerHandle_peerHandle: { ownerHandle: account.handle, peerHandle: other } },
+          create: { ownerHandle: account.handle, peerHandle: other, state, requestedBy: verdict.kind === 'mutual' ? other : account.handle },
+          update: { state, requestedBy: verdict.kind === 'mutual' ? other : account.handle },
+        }),
+        db.friendRow.upsert({
+          where: { ownerHandle_peerHandle: { ownerHandle: other, peerHandle: account.handle } },
+          create: { ownerHandle: other, peerHandle: account.handle, state, requestedBy: verdict.kind === 'mutual' ? other : account.handle },
+          update: { state, requestedBy: verdict.kind === 'mutual' ? other : account.handle },
+        }),
+      ])
+      return NextResponse.json({ ok: true, state })
+    }
+
+    if (action === 'social-accept') {
+      const other = str(p.handle, 16).trim()
+      const edgeBA = await db.friendRow.findUnique({ where: { ownerHandle_peerHandle: { ownerHandle: account.handle, peerHandle: other } } })
+      const edgeAB = await db.friendRow.findUnique({ where: { ownerHandle_peerHandle: { ownerHandle: other, peerHandle: account.handle } } })
+      const verdict = acceptVerdict(account.handle, other, edgeOf(edgeBA), edgeOf(edgeAB))
+      if (!verdict.ok) return NextResponse.json({ ok: false, why: verdict.why }, { status: 400 })
+      await db.$transaction([
+        db.friendRow.upsert({
+          where: { ownerHandle_peerHandle: { ownerHandle: account.handle, peerHandle: other } },
+          create: { ownerHandle: account.handle, peerHandle: other, state: 'friend', requestedBy: other },
+          update: { state: 'friend', requestedBy: other },
+        }),
+        db.friendRow.upsert({
+          where: { ownerHandle_peerHandle: { ownerHandle: other, peerHandle: account.handle } },
+          create: { ownerHandle: other, peerHandle: account.handle, state: 'friend', requestedBy: other },
+          update: { state: 'friend', requestedBy: other },
+        }),
+      ])
+      return NextResponse.json({ ok: true, state: 'friend' })
+    }
+
+    if (action === 'social-decline' || action === 'social-remove') {
+      const other = str(p.handle, 16).trim()
+      await db.$transaction([
+        db.friendRow.deleteMany({ where: { ownerHandle: account.handle, peerHandle: other } }),
+        db.friendRow.deleteMany({ where: { ownerHandle: other, peerHandle: account.handle } }),
+      ])
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'social-block') {
+      const other = str(p.handle, 16).trim()
+      if (!other || other === account.handle) return NextResponse.json({ ok: false, why: 'bad-handle' }, { status: 400 })
+      await db.$transaction([
+        db.friendRow.upsert({
+          where: { ownerHandle_peerHandle: { ownerHandle: account.handle, peerHandle: other } },
+          create: { ownerHandle: account.handle, peerHandle: other, state: 'blocked', requestedBy: account.handle },
+          update: { state: 'blocked', requestedBy: account.handle },
+        }),
+        db.friendRow.deleteMany({ where: { ownerHandle: other, peerHandle: account.handle } }),
+      ])
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'social-unblock') {
+      const other = str(p.handle, 16).trim()
+      await db.friendRow.deleteMany({ where: { ownerHandle: account.handle, peerHandle: other, state: 'blocked' } })
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'social-report') {
+      const verdict = reportVerdict(str(p.handle, 16).trim(), str(p.reason, 24) || 'other')
+      if (!verdict.ok) return NextResponse.json({ ok: false, why: verdict.why }, { status: 400 })
+      await db.reportRow.create({ data: { byHandle: account.handle, targetHandle: str(p.handle, 16).trim(), reason: verdict.reason ?? 'other' } })
+      return NextResponse.json({ ok: true })
+    }
+
+    if (action === 'social-dms') {
+      const other = str(p.with, 16).trim()
+      if (!other) return NextResponse.json({ ok: false, why: 'bad-handle' }, { status: 400 })
+      const since = int(p.since) || 0
+      const chan = dmChannel(account.handle, other)
+      const rows = await db.liveEvent.findMany({
+        where: { channel: chan, seq: { gt: since }, kind: { in: ['dm', 'hangout'] } },
+        orderBy: { seq: 'asc' },
+        take: 100,
+      })
+      return NextResponse.json({
+        ok: true,
+        events: rows.map((e) => ({ seq: e.seq, kind: e.kind, channel: e.channel, actor: e.actor, band: e.band, payload: JSON.parse(e.payload || '{}'), ts: e.createdAt.getTime() })),
+      })
+    }
+
+    if (action === 'dm') {
+      // W5 — the relay lane's DM door: the SAME laws, the SAME LiveEvent
+      // rows. A wire-down nation still carries person-to-person words.
+      const to = str(p.to, 16).trim()
+      if (!to || to === account.handle) return NextResponse.json({ ok: false, why: 'bad-handle' }, { status: 400 })
+      const edgeToMe = await db.friendRow.findUnique({ where: { ownerHandle_peerHandle: { ownerHandle: to, peerHandle: account.handle } } })
+      const edgeMeTo = await db.friendRow.findUnique({ where: { ownerHandle_peerHandle: { ownerHandle: account.handle, peerHandle: to } } })
+      const dmCheck = dmVerdict(identity.band, edgeOf(edgeToMe), edgeOf(edgeMeTo))
+      if (!dmCheck.ok) return NextResponse.json({ ok: false, why: dmCheck.why }, { status: 403 })
+      const target = await db.account.findUnique({ where: { handle: to }, select: { id: true } })
+      if (!target) return NextResponse.json({ ok: false, why: 'no-such-paddy' }, { status: 404 })
+      const verdict = sanitizeChat(identity, str(p.text, 400))
+      if (!verdict.ok) return NextResponse.json({ ok: false, why: verdict.why }, { status: 400 })
+      // NOTE: validateEvent is the M17 PUBLIC-broadcast law (its channel
+      // regex rejects dm: pairs by design) — the wire's dm door never runs
+      // it, and this door stays an exact mirror of the wire door: the tier
+      // laws, the walls, then the honest persist. Nothing dodged.
+      const created = await broadcast('dm', dmChannel(account.handle, to), account.handle, identity.band, { to, text: verdict.text, stripped: verdict.stripped ?? false })
+      return NextResponse.json({ ok: true, seq: created.seq, text: verdict.text, stripped: verdict.stripped ?? false })
     }
 
     return NextResponse.json({ ok: false, why: 'unknown-action' }, { status: 400 })
