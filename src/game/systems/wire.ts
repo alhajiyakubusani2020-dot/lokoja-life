@@ -179,6 +179,11 @@ export function wireEnsure(
     if (p && typeof p.type === 'string') for (const fn of socialPushFns) fn(p)
   })
 
+  // W6: the ledger push lane — a receipt for MY wallet (the receiver's door)
+  s.on('wire:ledger', (r: WireLedgerReceipt) => {
+    if (r && typeof r.idemKey === 'string') for (const fn of ledgerFns) fn(r)
+  })
+
   s.on('wire:roster', (r: { scope?: string; roster?: WireRosterRow[] }) => {
     if (r?.roster) useWireStore.setState({ roster: r.roster })
   })
@@ -254,6 +259,28 @@ export function wireOnSocial(fn: SocialPushFn): () => void {
   }
 }
 
+/* ── W6: the ledger push lane — the receiver's wallet learns instantly ── */
+export type WireLedgerReceipt = {
+  idemKey: string
+  ledgerId: number
+  kind: string
+  from: string
+  to: string
+  amount: number
+  hash: string
+  ts: number
+}
+
+type LedgerFn = (r: WireLedgerReceipt) => void
+const ledgerFns = new Set<LedgerFn>()
+
+export function wireOnLedger(fn: LedgerFn): () => void {
+  ledgerFns.add(fn)
+  return () => {
+    ledgerFns.delete(fn)
+  }
+}
+
 function emitAck(ev: string, body: Record<string, unknown>): Promise<WireSendResult> {
   return wireEmitAck(ev, body) as Promise<WireSendResult>
 }
@@ -281,4 +308,32 @@ export function wireSendDm(toHandle: string, text: string): Promise<WireSendResu
 /** W5: the hangout postcard — invite a paddy to your street. */
 export function wireSendInvite(toHandle: string, street: string): Promise<WireSendResult> {
   return emitAck('social:invite', { to: toHandle, street })
+}
+
+/* ── W6: the purse doors (the acks carry the receipt + the fresh balance) ── */
+
+export type WalletAck = {
+  ok: boolean
+  why?: string
+  balance?: number
+  transferredToday?: number
+  recent?: WireLedgerReceipt[]
+  receipt?: WireLedgerReceipt
+  replayed?: boolean
+}
+
+export function wireWalletState(): Promise<WalletAck> {
+  return wireEmitAck('wallet', {}) as Promise<WalletAck>
+}
+
+export function wireWalletDeposit(amount: number, idemKey: string): Promise<WalletAck> {
+  return wireEmitAck('wallet:deposit', { amount, idemKey }) as Promise<WalletAck>
+}
+
+export function wireWalletWithdraw(amount: number, pin: string, idemKey: string): Promise<WalletAck> {
+  return wireEmitAck('wallet:withdraw', { amount, pin, idemKey }) as Promise<WalletAck>
+}
+
+export function wireWalletTransfer(to: string, amount: number, pin: string, idemKey: string, note?: string): Promise<WalletAck> {
+  return wireEmitAck('wallet:transfer', { to, amount, pin, idemKey, note }) as Promise<WalletAck>
 }

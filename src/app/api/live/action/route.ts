@@ -9,6 +9,8 @@
  * trusted to any single client, but it rolls no dice and keeps no clock.
  */
 import { NextResponse } from 'next/server'
+import { scryptSync, timingSafeEqual } from 'node:crypto'
+import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import {
   canLive, sanitizeChat, emoteById, validateEvent,
@@ -22,6 +24,9 @@ import {
 import {
   requestVerdict, acceptVerdict, reportVerdict, dmChannel, dmVerdict,
 } from '@/game/systems/socialgraph'
+import {
+  transferVerdict, depositVerdict, chainLink, receiptOf, dayStartMs, LEDGER_SEED,
+} from '@/game/systems/ledger'
 
 const CHAIN_SEED = 'lko-assoc-chain-seed'
 
@@ -330,7 +335,15 @@ export async function POST(req: Request) {
 
     /* ------------------------------ ajo / esusu -------------------------------- */
     if (action === 'ajos') {
-      const rows = await db.ajoRow.findMany({ where: { status: { not: 'closed' } }, take: 24 })
+      // THE BOARD LAW: newest circles first (a board anyone can read), and
+      // an optional id filter so a caller can pin ONE circle — the take-24
+      // window never hides a circle from the party asking for it by name.
+      const idFilter = str(p.ajoId, 64)
+      const rows = await db.ajoRow.findMany({
+        where: { status: { not: 'closed' }, ...(idFilter ? { id: idFilter } : {}) },
+        orderBy: { updatedAt: 'desc' },
+        take: 24,
+      })
       return NextResponse.json({ ok: true, circles: rows.map((r) => { const c = rowToCircle(r); return { id: c.id, name: c.name, contribution: c.contribution, members: c.order.length, round: c.round, pot: c.pot, status: c.status } }) })
     }
 
@@ -565,6 +578,100 @@ export async function POST(req: Request) {
       // laws, the walls, then the honest persist. Nothing dodged.
       const created = await broadcast('dm', dmChannel(account.handle, to), account.handle, identity.band, { to, text: verdict.text, stripped: verdict.stripped ?? false })
       return NextResponse.json({ ok: true, seq: created.seq, text: verdict.text, stripped: verdict.stripped ?? false })
+    }
+
+    /* ------------------- W6 THE LEDGER — the relay lane ---------------------- */
+    // The SAME WalletRow/LedgerRow rows, the SAME pure laws — the purse
+    // survives a dead wire (N10). The PIN law and the minor block hold HERE
+    // exactly as at the wire door. The idemKey UNIQUE index is the
+    // double-spend killer on this lane too: a P2002 replay returns the
+    // SAME receipt and moves NOTHING twice.
+
+    if (action === 'wallet') {
+      if (identity.band !== 'adult') return NextResponse.json({ ok: false, why: 'minors-no-money' }, { status: 403 })
+      const w = await db.walletRow.findUnique({ where: { handle: account.handle } })
+      const recent = await db.ledgerRow.findMany({
+        where: { OR: [{ fromHandle: account.handle }, { toHandle: account.handle }] },
+        orderBy: { id: 'desc' },
+        take: 8,
+      })
+      const transferredToday = await db.ledgerRow.aggregate({
+        _sum: { amount: true },
+        where: { fromHandle: account.handle, kind: 'transfer', createdAt: { gte: new Date(dayStartMs()) } },
+      })
+      return NextResponse.json({ ok: true, balance: w?.balance ?? 0, transferredToday: transferredToday._sum.amount ?? 0, recent: recent.map((r) => receiptOf(r)) })
+    }
+
+    if (action === 'wallet-deposit' || action === 'wallet-withdraw' || action === 'wallet-transfer') {
+      if (identity.band !== 'adult') return NextResponse.json({ ok: false, why: 'minors-no-money' }, { status: 403 })
+      const kind = action === 'wallet-deposit' ? 'deposit' : action === 'wallet-withdraw' ? 'withdraw' : 'transfer'
+      const amount = int(p.amount)
+      const idemKey = str(p.idemKey, 80)
+      if (!idemKey) return NextResponse.json({ ok: false, why: 'bad-idem' }, { status: 400 })
+      if (kind !== 'deposit') {
+        // THE PIN LAW — the spend sides answer to the REAL PIN
+        const pin = typeof p.pin === 'string' ? p.pin : ''
+        if (!/^[0-9]{4,8}$/.test(pin)) return NextResponse.json({ ok: false, why: 'bad-pin' }, { status: 403 })
+        const h = scryptSync(pin, account.salt, 32)
+        const stored = Buffer.from(account.pinHash, 'hex')
+        if (h.length !== stored.length || !timingSafeEqual(h, stored)) return NextResponse.json({ ok: false, why: 'bad-pin' }, { status: 403 })
+      }
+      const to = kind === 'transfer' ? str(p.to, 16).trim() : account.handle
+      if (kind === 'transfer') {
+        if (!to || to === account.handle) return NextResponse.json({ ok: false, why: to === account.handle ? 'self' : 'bad-handle' }, { status: 400 })
+        const target = await db.account.findUnique({ where: { handle: to }, select: { ageBand: true } })
+        if (!target) return NextResponse.json({ ok: false, why: 'no-such-paddy' }, { status: 404 })
+        if (target.ageBand !== 'adult') return NextResponse.json({ ok: false, why: 'minors-collect-nothing' }, { status: 403 })
+      }
+      try {
+        const result = await db.$transaction(async (tx) => {
+          // THE IDEMPOTENCY FIRST — a replayed key moves nothing
+          const existing = await tx.ledgerRow.findUnique({ where: { idemKey } })
+          if (existing) return { receipt: receiptOf(existing), replayed: true }
+          const wMe = await tx.walletRow.findUnique({ where: { handle: account.handle } })
+          const purse = wMe?.balance ?? 0
+          const transferredToday = kind === 'transfer'
+            ? (await tx.ledgerRow.aggregate({ _sum: { amount: true }, where: { fromHandle: account.handle, kind: 'transfer', createdAt: { gte: new Date(dayStartMs()) } } }))._sum.amount ?? 0
+            : 0
+          const verdict = kind === 'deposit'
+            ? depositVerdict({ band: identity.band, amount })
+            : transferVerdict({ band: identity.band, to: kind === 'transfer' ? to : undefined, from: account.handle, amount, purse, transferredToday })
+          if (!verdict.ok) throw new Error(verdict.why ?? 'refused')
+          const tail = (await tx.ledgerRow.findFirst({ orderBy: { id: 'desc' }, select: { chainHash: true } }))?.chainHash ?? LEDGER_SEED
+          const ts = Date.now()
+          const hash = chainLink(tail, { idemKey, from: account.handle, to, amount, kind, ts })
+          if (kind === 'deposit') {
+            await tx.walletRow.upsert({ where: { handle: account.handle }, create: { handle: account.handle, balance: amount }, update: { balance: { increment: amount }, version: { increment: 1 } } })
+          } else if (kind === 'withdraw') {
+            await tx.walletRow.update({ where: { handle: account.handle }, data: { balance: { decrement: amount }, version: { increment: 1 } } })
+          } else {
+            await tx.walletRow.upsert({ where: { handle: account.handle }, create: { handle: account.handle, balance: -amount }, update: { balance: { decrement: amount }, version: { increment: 1 } } })
+            await tx.walletRow.upsert({ where: { handle: to }, create: { handle: to, balance: amount }, update: { balance: { increment: amount }, version: { increment: 1 } } })
+          }
+          // THE FORTRESS LAW: the row stores the SAME ts the hash used —
+          // Prisma's own now() would drift a millisecond and fork the chain
+          const row = await tx.ledgerRow.create({ data: { fromHandle: account.handle, toHandle: to, amount, kind, idemKey, chainHash: hash, note: str(p.note, 80), createdAt: new Date(ts) } })
+          // THE RECEIPT LAW (relay lane): the receiver's LiveEvent row —
+          // channel-scoped to them; the sync's privacy filter shows it alone
+          if (kind === 'transfer') {
+            await tx.liveEvent.create({ data: { kind: 'ledger', channel: `ledger:${to}`, actor: account.handle, band: identity.band, payload: JSON.stringify({ ledgerId: row.id, kind, from: account.handle, amount, hash: hash.slice(0, 16), ts }) } })
+          }
+          return { receipt: receiptOf(row), replayed: false }
+        })
+        const wAfter = await db.walletRow.findUnique({ where: { handle: account.handle } })
+        return NextResponse.json({ ok: true, receipt: result.receipt, replayed: result.replayed, balance: wAfter?.balance ?? 0 })
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          // the UNIQUE backstop — same receipt, zero movement
+          const existing = await db.ledgerRow.findUnique({ where: { idemKey } })
+          if (existing) {
+            const wAfter = await db.walletRow.findUnique({ where: { handle: account.handle } })
+            return NextResponse.json({ ok: true, receipt: receiptOf(existing), replayed: true, balance: wAfter?.balance ?? 0 })
+          }
+        }
+        const why = e instanceof Error ? e.message : 'ledger no gree'
+        return NextResponse.json({ ok: false, why: why === 'refused' ? 'refused' : why }, { status: 400 })
+      }
     }
 
     return NextResponse.json({ ok: false, why: 'unknown-action' }, { status: 400 })

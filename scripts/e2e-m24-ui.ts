@@ -144,15 +144,19 @@ const run = async (): Promise<void> => {
   await page.waitForTimeout(500)
   await snap(page, 'connect-paddies')
 
-  /* 09 — wallet: the real outgoing engine + the receipt (hard) */
-  await step('open Wallet and send to Musa', async () => {
+  /* 09 — wallet: THE W6 AMENDMENT — the purse face. The old beat drove the
+   * device-only send flow; the nation purse replaced it (top-up → receipt).
+   * The honest outcome depends on the walker's pocket; both are witnessed. */
+  await step('open Wallet and top up the purse', async () => {
     await page.getByRole('button', { name: 'Back' }).first().click({ timeout: 6_000 })
     await page.getByText('Wallet', { exact: true }).first().click({ timeout: 8_000 })
-    await page.waitForSelector('[data-testid="wallet-who"]', { timeout: 10_000 })
-    await page.getByText('Musa', { exact: true }).first().click({ timeout: 8_000 })
+    await page.waitForSelector('[data-testid="wallet-home"]', { timeout: 10_000 })
+    await page.getByTestId('wallet-topup').click({ timeout: 8_000 })
+    await page.waitForSelector('[data-testid="wallet-amount"]', { timeout: 10_000 })
+    await page.getByTestId('wallet-amount-next').click({ timeout: 8_000 })
     await page.getByTestId('wallet-confirm').click({ timeout: 8_000 })
-    await page.getByTestId('wallet-receipt').waitFor({ timeout: 8_000 }).catch(async () => {
-      const broke = await page.getByText('you no carry').first().isVisible().catch(() => false)
+    await page.getByTestId('wallet-receipt').waitFor({ timeout: 10_000 }).catch(async () => {
+      const broke = await page.getByText('no carry').first().isVisible().catch(() => false)
       if (!broke) throw new Error('neither the receipt nor the honest broke notice appeared')
       console.log('  (honest broke notice shown — pocket too light, receipt skipped)')
     })

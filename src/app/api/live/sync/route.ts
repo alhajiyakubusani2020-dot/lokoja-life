@@ -40,9 +40,16 @@ export async function POST(req: Request) {
       update: { handle: account.handle, band: account.ageBand, street, status },
     })
 
-    // the nation's new wire since the cursor (capped — thin doors), own events never echo
+    // the nation's new wire since the cursor (capped — thin doors), own events never echo.
+    // THE LEDGER PRIVACY LAW (W6): a transfer receipt's LiveEvent row is
+    // channel-scoped to its receiver (ledger:<handle>) — the sync shows it
+    // to that person ALONE. Nobody else's money news ever lands here.
     const events = await db.liveEvent.findMany({
-      where: { seq: { gt: since }, actor: { not: account.handle } },
+      where: {
+        seq: { gt: since },
+        actor: { not: account.handle },
+        OR: [{ channel: { not: { startsWith: 'ledger:' } } }, { channel: `ledger:${account.handle}` }],
+      },
       orderBy: { seq: 'asc' },
       take: 120,
     })

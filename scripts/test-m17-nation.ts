@@ -394,7 +394,7 @@ section('the REAL HTTP pass — two nations walk the wire (live relay on :3000)'
   check('A pays in (the pot grows)', pay1.status === 200 && pay1.data.pot === 1000)
   const pay2 = await act(tb, 'ajo-pay', { ajoId, day: 42 })
   check('B pays in — the ladder completes and pays the first name', pay2.status === 200 && pay2.data.paidOut === A && pay2.data.payout === 2000)
-  const board = await act(tb, 'ajos')
+  const board = await act(tb, 'ajos', { ajoId })
   const mine = (board.data.circles as { id: string; round: number; pot: number }[] | undefined)?.find((c) => c.id === ajoId)
   check('the board reads round 2 with an empty pot', mine?.round === 2 && mine?.pot === 0)
 
@@ -407,7 +407,7 @@ section('the REAL HTTP pass — two nations walk the wire (live relay on :3000)'
   const court = await act(ta, 'ajo-court', { ajoId, day: panicDay })
   check('THE COURT GUARANTEE: past grace the court convicts the defaulter', court.status === 200 && court.data.ok === true && court.data.defaulter === B)
   check('the fine is 1.5× the contribution', (court.data.fine as { fine: number }).fine === 1500 && (court.data.fine as { repHit: number }).repHit === 5)
-  const afterCourt = await act(tb, 'ajos')
+  const afterCourt = await act(tb, 'ajos', { ajoId })
   const after = (afterCourt.data.circles as { id: string; round: number }[] | undefined)?.find((c) => c.id === ajoId)
   check('the round STILL paid (round 3 opens, the ladder holds)', after?.round === 3)
 

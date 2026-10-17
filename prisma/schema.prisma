@@ -170,3 +170,30 @@ model ReportRow {
   status       String   @default("open")
   createdAt    DateTime @default(now())
 }
+
+/// M24 W6 THE LEDGER — the nation's purse, SERVER truth. One row per
+/// account; the balance is the ONLY thing P2P transfers draw from, so
+/// every naira that moves person-to-person passes the server door
+/// (N8: ₦500 moves exactly once). version is the optimistic lock.
+model WalletRow {
+  handle    String   @id
+  balance   Int      @default(0)
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+/// M24 W6 — the fortress book: append-only, idemKey UNIQUE (a replay
+/// returns the SAME receipt and moves NOTHING twice), chainHash linking
+/// every row to the last (tamper-evident end to end). createdAt is
+/// INTEGER epoch-ms (the Prisma SQLite DateTime law from W4).
+model LedgerRow {
+  id         Int      @id @default(autoincrement())
+  fromHandle String
+  toHandle   String
+  amount     Int
+  kind       String
+  idemKey    String   @unique
+  chainHash  String
+  note       String   @default("")
+  createdAt  DateTime @default(now())
+}
