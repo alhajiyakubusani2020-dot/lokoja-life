@@ -306,6 +306,20 @@ export function resetWalkedMeters() {
 /** the player's last known world position + facing (HUD/minimap read this) */
 export const playerPos = { x: 0, z: 0, heading: 0 }
 
+/**
+ * M23 E2E — the teleport REQUEST the walker consumes on its next frame.
+ * Writing playerPos alone is a lie the next reportPlayerPos overwrites;
+ * the real walker (Actors' useFrame) picks this up and moves ITS state,
+ * then reports the new truth. Gated by the e2e=1 hook surface.
+ */
+export const e2eTeleport = { x: 0, z: 0, pending: false }
+
+export function requestE2eTeleport(x: number, z: number): void {
+  e2eTeleport.x = x
+  e2eTeleport.z = z
+  e2eTeleport.pending = true
+}
+
 export function reportPlayerPos(x: number, z: number, heading = playerPos.heading) {
   playerPos.x = x
   playerPos.z = z

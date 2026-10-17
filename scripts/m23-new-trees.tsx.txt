@@ -1,0 +1,113 @@
+/* -------------- trees — M23 W2: THE GREEN (the species guild) ---------------- */
+
+/**
+ * The species-true Kogi guild — one instanced draw call per species. Every
+ * tree is a merged, vertex-coloured geometry (flora-species.ts: neem/mango/
+ * cashew/shea/oilpalm/raffia/plantain/iroko/baobab/acacia, each with its
+ * real silhouette) placed by the clearance-probe engine (flora.ts) under
+ * M22-grade laws against the real roads, kerbs, zebras, lamps, parked bays,
+ * stalls, buildings, anchors, schools and water. The shared material wraps
+ * the W2 flora shader: per-instance wind sway computed in the vertex shader
+ * (phase derived from each instance's own world position — zero CPU, no
+ * per-frame matrix writes) and the M6 weather reaching the leaves through
+ * the shared floraLive uniforms (harmattan golds the crowns, the rain
+ * family deepens them lush; the leaf mask keeps the gold off the wood).
+ */
+
+/** one species = one InstancedMesh over the cached merged geometry */
+function SpeciesMesh({ sp, list, mat, seed }: { sp: SpeciesId; list: TreeInstance[]; mat: THREE.Material; seed: number }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const geo = useMemo(() => buildSpeciesGeometry(sp), [sp])
+  useEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const p = new THREE.Vector3()
+    const sc = new THREE.Vector3()
+    const c = new THREE.Color()
+    list.forEach((t, i) => {
+      e.set(0, t.rot, 0)
+      q.setFromEuler(e)
+      p.set(t.x, t.y, t.z)
+      sc.set(t.s, t.s, t.s)
+      m.compose(p, q, sc)
+      mesh.setMatrixAt(i, m)
+      // per-instance character, decided once: a gray jitter with a warm
+      // lean on the tone-2 trees — the same tree species reads slightly
+      // different across the town, exactly like a real streetscape
+      const g = 0.88 + hash1(seed + i * 3.71) * 0.22
+      const warm = t.tone === 2 ? 1.045 : 1
+      c.setRGB(g * warm, g, g * 0.96)
+      mesh.setColorAt(i, c)
+    })
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  }, [list, seed])
+  if (list.length === 0) return null
+  return <instancedMesh ref={ref} args={[geo, mat, list.length]} castShadow />
+}
+
+/** school compound trees (schools.ts plants its own) join the guild:
+ *  the shade rows read as mango, the gate palms as raffia — same
+ *  geometries, same wind, same weather as the town around them. */
+const SCHOOL_SPECIES_MAP: Record<string, SpeciesId> = {
+  tree: 'mango',
+  palm: 'raffia',
+  acacia: 'acacia',
+  baobab: 'baobab',
+}
+
+function FloraTrees() {
+  // the ONE tree material — vertex colours carry the species palette,
+  // the flora shader carries the wind (amp 0.16) and the weather
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 })
+    applyFloraShader(m, 0.16)
+    return m
+  }, [])
+  useEffect(() => () => mat.dispose(), [mat])
+
+  // the guild + the school compounds' own trees, merged per species
+  const lists = useMemo(() => {
+    const out: Record<SpeciesId, TreeInstance[]> = {
+      neem: [...FLORA_TREES.neem],
+      mango: [...FLORA_TREES.mango],
+      cashew: [...FLORA_TREES.cashew],
+      shea: [...FLORA_TREES.shea],
+      oilpalm: [...FLORA_TREES.oilpalm],
+      raffia: [...FLORA_TREES.raffia],
+      plantain: [...FLORA_TREES.plantain],
+      iroko: [...FLORA_TREES.iroko],
+      baobab: [...FLORA_TREES.baobab],
+      acacia: [...FLORA_TREES.acacia],
+    }
+    let si = 0
+    for (const t of SCHOOL_TREES) {
+      const sp = SCHOOL_SPECIES_MAP[t.kind] ?? 'mango'
+      out[sp].push({
+        x: t.x,
+        z: t.z,
+        y: t.y,
+        s: t.scale,
+        rot: hash1(9100 + si * 1.37) * Math.PI * 2,
+        tone: t.tone % 3,
+      })
+      si++
+    }
+    return out
+  }, [])
+
+  // the flora clock — the ONE per-frame writer; its shared uniforms drive
+  // the grass in WorldTerrain too (see flora-shader.ts)
+  useFrame((_, dt) => stepFlora(dt))
+
+  return (
+    <group>
+      {SPECIES_IDS.map((sp, i) => (
+        <SpeciesMesh key={sp} sp={sp} list={lists[sp]} mat={mat} seed={8100 + i * 97} />
+      ))}
+    </group>
+  )
+}

@@ -23,7 +23,7 @@ import { MapIcon, PinIcon } from '../icons'
 import { audio } from '@/game/systems/audio'
 import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
-import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen } from './controls'
+import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen, requestE2eTeleport } from './controls'
 import { music, moodForTimeOfDay } from '@/game/systems/music'
 import { extrasLive } from '@/game/systems/extras'
 import { PATTI_SECRETS } from '@/game/systems/patti'
@@ -188,6 +188,10 @@ export function WorldTab({
     ;(window as unknown as { __lkl: unknown }).__lkl = {
       travel: (id: string) => useGameStore.getState().travel(id, 'walk'),
       pos: () => ({ ...playerPos }),
+      /** M23 E2E — teleport the walker to real coordinates (the flora
+       *  witness stands next to individual trees; at 1-2 fps headless
+       *  capture, walking 40u is not an option) */
+      tp: (x: number, z: number) => requestE2eTeleport(x, z),
       stick: (x: number, y: number) => setJoystick(x, y),
       frozen: () => isInputFrozen(),
       doors: () => ALL_DOORS.map((d) => ({ id: d.interiorId, x: d.x, z: d.z })),

@@ -32,6 +32,8 @@ import {
 } from '@/game/world3d/layout'
 import { hash1, mergeGeoms, makeGroundGrainTexture, roadTextures } from '@/game/world3d/terrainArt'
 import { KERB_RUNS, ZEBRAS } from '@/game/world3d/roads'
+import { GRASS_TUFTS } from '@/game/world3d/flora' // W2 — the 10k savanna
+import { applyFloraShader } from './flora-shader' // W2 — shared wind + weather
 import { atmoLive } from './atmosphere' // M19 — the flood veil reads the live weather
 
 function smoothstep(a: number, b: number, t: number): number {
@@ -823,11 +825,15 @@ function Bridges() {
 
 /**
  * A tuft of `blades` crossed, tapered blades with a slight bend — reads as
- * grass from any angle instead of flat paper shards.
+ * grass from any angle instead of flat paper shards. The W2 attributes ride
+ * along: aSway = the tip-ward wind weight (0 rooted, 1 at the tip) and
+ * aLeaf = 1 (the weather-gold mask — grass IS leaf, harmattan owns it).
  */
 function tuftGeometry(blades: number, w: number, h: number, bend: number): THREE.BufferGeometry {
   const pos: number[] = []
   const idx: number[] = []
+  const sway: number[] = []
+  const leaf: number[] = []
   for (let bI = 0; bI < blades; bI++) {
     const a = (bI / blades) * Math.PI
     const cos = Math.cos(a)
@@ -840,20 +846,31 @@ function tuftGeometry(blades: number, w: number, h: number, bend: number): THREE
       [w * 0.45 + bend * 0.35, h * 0.55, bend * 0.28],
       [bend, h, bend * 0.55],
     ]
-    for (const [vx, vy, vz] of v) pos.push(vx * cos - vz * sin, vy, vx * sin + vz * cos)
+    for (const [vx, vy, vz] of v) {
+      pos.push(vx * cos - vz * sin, vy, vx * sin + vz * cos)
+      sway.push(Math.min(1, (vy / h) * (vy / h) * 1.4)) // quadratic tip-ward
+      leaf.push(1)
+    }
     idx.push(base, base + 1, base + 3, base, base + 3, base + 2, base + 2, base + 3, base + 4)
   }
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('aSway', new THREE.Float32BufferAttribute(sway, 1))
+  g.setAttribute('aLeaf', new THREE.Float32BufferAttribute(leaf, 1))
   g.setIndex(idx)
   g.computeVertexNormals()
   return g
 }
 
 /**
- * Savanna ground cover — two InstancedMeshes (two tuft variants) with
- * per-instance colour from the layout's moisture gradient + deterministic
- * hue jitter. No shadows, no per-frame work: 3.2k tufts, 2 draw calls.
+ * Savanna ground cover — W2: 10,000 tufts (was 3.2k) placed by flora.ts's
+ * law engine (off tarmac AND shoulders via roadGap, above the waterline
+ * with the sink judged, out of the river, off the anchor plazas), split
+ * over two InstancedMeshes with per-instance colour from the moisture
+ * gradient + deterministic hue jitter. The shared flora shader gives every
+ * blade its own tip-ward sway (phase from the instance position — zero
+ * CPU) and hands the M6 weather the whole field: harmattan golds it, the
+ * rains deepen it. No shadows (the old law), 2 draw calls.
  */
 function Grass() {
   const refA = useRef<THREE.InstancedMesh>(null)
@@ -865,14 +882,17 @@ function Grass() {
       roughness: 1,
       metalness: 0,
     })
+    applyFloraShader(mat, 0.26) // W2 — the field breathes with the trees
     return {
       geoA: tuftGeometry(2, 0.22, 1.3, 0.34), // tall crossed pair
       geoB: tuftGeometry(3, 0.17, 0.95, 0.5), // shorter three-blade star
       mat,
-      countA: Math.ceil(GRASS.length / 2),
-      countB: Math.floor(GRASS.length / 2),
+      countA: Math.ceil(GRASS_TUFTS.length / 2),
+      countB: Math.floor(GRASS_TUFTS.length / 2),
     }
   }, [])
+
+  useEffect(() => () => mat.dispose(), [mat])
 
   useEffect(() => {
     const meshA = refA.current
@@ -885,15 +905,9 @@ function Grass() {
     const sc = new THREE.Vector3()
     const p = new THREE.Vector3()
     const color = new THREE.Color()
-    const hide = new THREE.Matrix4().makeScale(0, 0, 0)
-    GRASS.forEach((g, i) => {
+    GRASS_TUFTS.forEach((g, i) => {
       const mesh = meshes[i % 2]
       const k = Math.floor(i / 2)
-      // no tufts ON the tarmac (road shoulders keep their dry grass)
-      if (roadDistance(g.x, g.z) < 3.4) {
-        mesh.setMatrixAt(k, hide)
-        return
-      }
       // deterministic per-tuft jitter — yaw, lean, stretch, hue
       e.set(
         (hash1(i * 3.7 + 1.3) - 0.5) * 0.3,
@@ -902,10 +916,10 @@ function Grass() {
       )
       q.setFromEuler(e)
       // modest cap — savanna tufts, not thorn bushes (keeps night silhouettes soft)
-      const s = Math.min(g.scale, 1.15) * 0.74
+      const s = Math.min(g.s, 1.15) * 0.74
       const sy = s * (0.85 + hash1(i * 5.1) * 0.4)
       sc.set(s, sy, s)
-      p.set(g.x, g.y + 0.02, g.z)
+      p.set(g.x, g.y, g.z)
       m.compose(p, q, sc)
       mesh.setMatrixAt(k, m)
       color.set(GRASS_TONES[g.tone])

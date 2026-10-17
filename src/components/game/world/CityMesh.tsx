@@ -35,10 +35,14 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import {
-  ACACIA_TONES, ANCHORS, ANCHOR_BY_ID, BAOBAB_TONES, BUILDINGS, CIVIC_CAMPUS, heightAt, LAMPS, makeRng, PALM_TONES,
+  ANCHORS, ANCHOR_BY_ID, BUILDINGS, CIVIC_CAMPUS, heightAt, LAMPS, makeRng,
   POINTS_OF_INTEREST, ROCKS, ROCK_TONES, ROOF_TONES,
-  RIVERS, STALLS, STALL_TONES, TREE_TONES, TREES, WALL_TONES, WATER_Y, type BuildingDef, type LampDef, type WorldAnchor,
+  RIVERS, STALLS, STALL_TONES, WALL_TONES, WATER_Y, type BuildingDef, type LampDef, type WorldAnchor,
 } from '@/game/world3d/layout'
+import { FLORA_TREES } from '@/game/world3d/flora'
+import { buildSpeciesGeometry } from '@/game/world3d/flora-species'
+import { SPECIES_IDS, type SpeciesId, type TreeInstance } from '@/game/world3d/flora-types'
+import { applyFloraShader, stepFlora } from './flora-shader'
 import { hash1, mergeGeoms } from '@/game/world3d/terrainArt'
 import { ALL_DOORS, SCHOOL_TREES } from '@/game/world3d/schools'
 import { atmoLive } from './atmosphere'
@@ -761,252 +765,116 @@ function Stalls() {
   )
 }
 
-/* ---------------------------------- trees ------------------------------------ */
-
-/** one drooping palm frond: a curved ribbon that arcs out and hangs */
-function makeFrondGeometry(): THREE.BufferGeometry {
-  const STEPS = 6
-  const pos: number[] = []
-  const idx: number[] = []
-  for (let i = 0; i <= STEPS; i++) {
-    const x = (i / STEPS) * 2.3
-    const y = -(x * x) * 0.3
-    const w = 0.24 * (1 - (i / STEPS) * 0.72)
-    pos.push(x, y, -w, x, y, w)
-  }
-  for (let i = 0; i < STEPS; i++) {
-    const a = i * 2
-    idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3)
-  }
-  const g = new THREE.BufferGeometry()
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-  g.computeVertexNormals()
-  g.setIndex(idx)
-  return g
-}
+/* -------------- trees — M23 W2: THE GREEN (the species guild) ---------------- */
 
 /**
- * The savanna tree guild, rendered as four instanced families:
- *  • broadleaf neem/mango (layered flat-shaded canopies, some dry-season gold)
- *  • riverine palms (segmented curved trunks, radial arched fronds, coconuts)
- *  • acacias (tall slim trunk + the flat-topped umbrella canopy)
- *  • baobab giants (bottle trunk + sparse branch-blob crown)
- * Plus the Rocks() boulders of Patti. All instanced per part.
+ * The species-true Kogi guild — one instanced draw call per species. Every
+ * tree is a merged, vertex-coloured geometry (flora-species.ts: neem/mango/
+ * cashew/shea/oilpalm/raffia/plantain/iroko/baobab/acacia, each with its
+ * real silhouette) placed by the clearance-probe engine (flora.ts) under
+ * M22-grade laws against the real roads, kerbs, zebras, lamps, parked bays,
+ * stalls, buildings, anchors, schools and water. The shared material wraps
+ * the W2 flora shader: per-instance wind sway computed in the vertex shader
+ * (phase derived from each instance's own world position — zero CPU, no
+ * per-frame matrix writes) and the M6 weather reaching the leaves through
+ * the shared floraLive uniforms (harmattan golds the crowns, the rain
+ * family deepens them lush; the leaf mask keeps the gold off the wood).
  */
-function Trees() {
-  // Stage 7 — compound trees (mango/neem rows + gate palms) join the scatter
-  const ALL_TREE_DEFS = useMemo(() => [...TREES, ...SCHOOL_TREES], [])
-  const palms = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'palm'), [ALL_TREE_DEFS])
-  const trees = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'tree'), [ALL_TREE_DEFS])
-  const acacias = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'acacia'), [ALL_TREE_DEFS])
-  const baobabs = useMemo(() => ALL_TREE_DEFS.filter((t) => t.kind === 'baobab'), [ALL_TREE_DEFS])
 
-  // per-tree character, decided once by the seeded RNG
-  const treeVars = useMemo(() => {
-    const rng = makeRng(77007)
-    return trees.map(() => ({
-      lean: (rng() - 0.5) * 0.2,
-      yaw: rng() * Math.PI * 2,
-      gold: rng() < 0.2,
-    }))
-  }, [trees])
-  const palmVars = useMemo(() => {
-    const rng = makeRng(88011)
-    return palms.map(() => ({
-      yaw: rng() * Math.PI * 2,
-      lean: 0.3 + rng() * 0.7,
-      frondJit: rng() * 0.4,
-    }))
-  }, [palms])
-  const acaciaVars = useMemo(() => {
-    const rng = makeRng(91007)
-    return acacias.map(() => ({
-      lean: (rng() - 0.5) * 0.12,
-      yaw: rng() * Math.PI * 2,
-    }))
-  }, [acacias])
-  const baobabVars = useMemo(() => {
-    const rng = makeRng(92013)
-    return baobabs.map(() => ({
-      lean: (rng() - 0.5) * 0.08,
-      yaw: rng() * Math.PI * 2,
-    }))
-  }, [baobabs])
+/** one species = one InstancedMesh over the cached merged geometry */
+function SpeciesMesh({ sp, list, mat, seed }: { sp: SpeciesId; list: TreeInstance[]; mat: THREE.Material; seed: number }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const geo = useMemo(() => buildSpeciesGeometry(sp), [sp])
+  useEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const p = new THREE.Vector3()
+    const sc = new THREE.Vector3()
+    const c = new THREE.Color()
+    list.forEach((t, i) => {
+      e.set(0, t.rot, 0)
+      q.setFromEuler(e)
+      p.set(t.x, t.y, t.z)
+      sc.set(t.s, t.s, t.s)
+      m.compose(p, q, sc)
+      mesh.setMatrixAt(i, m)
+      // per-instance character, decided once: a gray jitter with a warm
+      // lean on the tone-2 trees — the same tree species reads slightly
+      // different across the town, exactly like a real streetscape
+      const g = 0.88 + hash1(seed + i * 3.71) * 0.22
+      const warm = t.tone === 2 ? 1.045 : 1
+      c.setRGB(g * warm, g, g * 0.96)
+      mesh.setColorAt(i, c)
+    })
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  }, [list, seed])
+  if (list.length === 0) return null
+  return <instancedMesh ref={ref} args={[geo, mat, list.length]} castShadow />
+}
 
-  const GOLD_REF = useMemo(() => new THREE.Color('#c09a3e'), [])
-  const frondGeo = useMemo(() => makeFrondGeometry(), [])
-  useEffect(() => () => frondGeo.dispose(), [frondGeo])
-  const UP = useMemo(() => new THREE.Vector3(0, 1, 0), [])
+/** school compound trees (schools.ts plants its own) join the guild:
+ *  the shade rows read as mango, the gate palms as raffia — same
+ *  geometries, same wind, same weather as the town around them. */
+const SCHOOL_SPECIES_MAP: Record<string, SpeciesId> = {
+  tree: 'mango',
+  palm: 'raffia',
+  acacia: 'acacia',
+  baobab: 'baobab',
+}
+
+function FloraTrees() {
+  // the ONE tree material — vertex colours carry the species palette,
+  // the flora shader carries the wind (amp 0.16) and the weather
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 })
+    applyFloraShader(m, 0.16)
+    return m
+  }, [])
+  useEffect(() => () => mat.dispose(), [mat])
+
+  // the guild + the school compounds' own trees, merged per species
+  const lists = useMemo(() => {
+    const out: Record<SpeciesId, TreeInstance[]> = {
+      neem: [...FLORA_TREES.neem],
+      mango: [...FLORA_TREES.mango],
+      cashew: [...FLORA_TREES.cashew],
+      shea: [...FLORA_TREES.shea],
+      oilpalm: [...FLORA_TREES.oilpalm],
+      raffia: [...FLORA_TREES.raffia],
+      plantain: [...FLORA_TREES.plantain],
+      iroko: [...FLORA_TREES.iroko],
+      baobab: [...FLORA_TREES.baobab],
+      acacia: [...FLORA_TREES.acacia],
+    }
+    let si = 0
+    for (const t of SCHOOL_TREES) {
+      const sp = SCHOOL_SPECIES_MAP[t.kind] ?? 'mango'
+      out[sp].push({
+        x: t.x,
+        z: t.z,
+        y: t.y,
+        s: t.scale,
+        rot: hash1(9100 + si * 1.37) * Math.PI * 2,
+        tone: t.tone % 3,
+      })
+      si++
+    }
+    return out
+  }, [])
+
+  // the flora clock — the ONE per-frame writer; its shared uniforms drive
+  // the grass in WorldTerrain too (see flora-shader.ts)
+  useFrame((_, dt) => stepFlora(dt))
 
   return (
     <group>
-      {/* --- broadleaf trunks --- */}
-      <InstancedGroup count={trees.length} castShadow setup={(i, m) => {
-        const t = trees[i]
-        const v = treeVars[i]
-        m.position.set(t.x, t.y + 1.15 * t.scale - 0.08, t.z)
-        m.rotation.set(v.lean * 0.4, v.yaw, v.lean * 0.5)
-        m.scale.set(t.scale, t.scale * 1.05, t.scale)
-      }}>
-        <cylinderGeometry args={[0.13, 0.26, 2.6, 5]} />
-        <meshStandardMaterial color="#63452a" roughness={1} flatShading />
-      </InstancedGroup>
-
-      {/* --- broadleaf canopies: 2-3 flat-shaded blobs per tree --- */}
-      <InstancedGroup count={trees.length * 3} castShadow setup={(i, m, color) => {
-        const t = trees[Math.floor(i / 3)]
-        const v = treeVars[Math.floor(i / 3)]
-        const blob = i % 3
-        const s = t.scale
-        if (blob === 0) {
-          m.position.set(t.x, t.y + 3.2 * s, t.z)
-          m.rotation.set(v.lean * 0.6, v.yaw, v.lean)
-          m.scale.set(s * 1.55, s * 1.3, s * 1.55)
-        } else {
-          const ang = v.yaw + blob * 2.5
-          const r = 0.75 * s * (blob === 1 ? 1 : 0.8)
-          m.position.set(t.x + Math.cos(ang) * r, t.y + (2.5 + blob * 0.42) * s, t.z + Math.sin(ang) * r)
-          m.rotation.set(blob * 1.1, v.yaw * 1.3, blob * 0.7)
-          m.scale.setScalar(s * (blob === 1 ? 1.0 : 0.82))
-        }
-        color.set(TREE_TONES[t.tone % TREE_TONES.length])
-        if (blob > 0) color.multiplyScalar(0.86)
-        if (v.gold) color.lerp(GOLD_REF, 0.55)
-      }}>
-        <icosahedronGeometry args={[1, 1]} />
-        <meshStandardMaterial roughness={0.95} flatShading />
-      </InstancedGroup>
-
-      {/* --- palm trunks: 4 stacked segments walking out along the lean --- */}
-      <InstancedGroup count={palms.length * 4} castShadow setup={(i, m) => {
-        const t = palms[Math.floor(i / 4)]
-        const v = palmVars[Math.floor(i / 4)]
-        const k = i % 4
-        const drift = k * k * 0.1 * v.lean * t.scale
-        m.rotation.set(k * 0.09 * v.lean, v.yaw, 0, 'YXZ')
-        m.position.set(
-          t.x + Math.sin(v.yaw) * drift,
-          t.y + (0.42 + k * 0.86) * t.scale,
-          t.z + Math.cos(v.yaw) * drift,
-        )
-        m.scale.set(t.scale, t.scale, t.scale)
-      }}>
-        <cylinderGeometry args={[0.09, 0.14, 0.95, 5]} />
-        <meshStandardMaterial color="#8a6a48" roughness={1} flatShading />
-      </InstancedGroup>
-
-      {/* --- palm fronds: 7 arched blades radiating from the crown --- */}
-      <InstancedGroup count={palms.length * 7} castShadow setup={(i, m, color) => {
-        const t = palms[Math.floor(i / 7)]
-        const v = palmVars[Math.floor(i / 7)]
-        const f = i % 7
-        const drift = 9 * 0.1 * v.lean * t.scale
-        const yaw = f * ((Math.PI * 2) / 7) + v.frondJit
-        const lift = 0.18 + ((f * 5 + Math.floor(i / 7)) % 3) * 0.2
-        const qYaw = new THREE.Quaternion().setFromAxisAngle(UP, yaw)
-        const qLift = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), lift)
-        m.quaternion.multiplyQuaternions(qYaw, qLift)
-        m.position.set(
-          t.x + Math.sin(v.yaw) * drift,
-          t.y + (3.62 + (f % 2) * 0.1) * t.scale,
-          t.z + Math.cos(v.yaw) * drift,
-        )
-        m.scale.setScalar(t.scale * (0.92 + (f % 3) * 0.06))
-        color.set(PALM_TONES[t.tone % PALM_TONES.length]).multiplyScalar(0.92 + (f % 2) * 0.12)
-      }}>
-        <primitive object={frondGeo} attach="geometry" />
-        <meshStandardMaterial roughness={0.9} flatShading side={THREE.DoubleSide} />
-      </InstancedGroup>
-
-      {/* --- coconut clusters at the crowns --- */}
-      <InstancedGroup count={palms.length * 3} castShadow setup={(i, m) => {
-        const t = palms[Math.floor(i / 3)]
-        const v = palmVars[Math.floor(i / 3)]
-        const k = i % 3
-        const drift = 9 * 0.1 * v.lean * t.scale
-        const ang = k * 2.1 + v.yaw
-        m.position.set(
-          t.x + Math.sin(v.yaw) * drift + Math.cos(ang) * 0.18 * t.scale,
-          t.y + 3.5 * t.scale,
-          t.z + Math.cos(v.yaw) * drift + Math.sin(ang) * 0.18 * t.scale,
-        )
-        m.scale.setScalar(t.scale * (0.85 + (k % 2) * 0.3))
-      }}>
-        <sphereGeometry args={[0.14, 6, 5]} />
-        <meshStandardMaterial color="#6e5222" roughness={1} />
-      </InstancedGroup>
-
-      {/* --- acacia trunks: tall and slim, reaching for the umbrella --- */}
-      <InstancedGroup count={acacias.length} castShadow setup={(i, m) => {
-        const t = acacias[i]
-        const v = acaciaVars[i]
-        m.position.set(t.x, t.y + 1.4 * t.scale - 0.08, t.z)
-        m.rotation.set(v.lean * 0.4, v.yaw, v.lean * 0.5)
-        m.scale.set(t.scale, t.scale * 1.25, t.scale)
-      }}>
-        <cylinderGeometry args={[0.1, 0.24, 2.9, 5]} />
-        <meshStandardMaterial color="#6a5136" roughness={1} flatShading />
-      </InstancedGroup>
-
-      {/* --- acacia canopies: the flat-topped umbrella, two stacked discs --- */}
-      <InstancedGroup count={acacias.length * 2} castShadow setup={(i, m, color) => {
-        const t = acacias[Math.floor(i / 2)]
-        const v = acaciaVars[Math.floor(i / 2)]
-        const layer = i % 2
-        const s = t.scale
-        if (layer === 0) {
-          m.position.set(t.x, t.y + 3.35 * s, t.z)
-          m.rotation.set(v.lean * 0.3, v.yaw, v.lean * 0.4)
-          m.scale.set(s * 2.3, s * 0.52, s * 2.3)
-        } else {
-          m.position.set(
-            t.x + Math.cos(v.yaw) * 0.6 * s,
-            t.y + 3.85 * s,
-            t.z + Math.sin(v.yaw) * 0.6 * s,
-          )
-          m.rotation.set(v.lean * 0.6, v.yaw * 1.7, v.lean * 0.8)
-          m.scale.set(s * 1.3, s * 0.36, s * 1.3)
-        }
-        color.set(ACACIA_TONES[t.tone % ACACIA_TONES.length])
-        if (layer === 1) color.multiplyScalar(0.88)
-      }}>
-        <icosahedronGeometry args={[1, 1]} />
-        <meshStandardMaterial roughness={0.95} flatShading />
-      </InstancedGroup>
-
-      {/* --- baobab bottles: the massive water-holding trunk --- */}
-      <InstancedGroup count={baobabs.length} castShadow setup={(i, m) => {
-        const t = baobabs[i]
-        const v = baobabVars[i]
-        m.position.set(t.x, t.y + 1.55 * t.scale - 0.08, t.z)
-        m.rotation.set(v.lean * 0.3, v.yaw, v.lean * 0.4)
-        m.scale.set(t.scale, t.scale, t.scale)
-      }}>
-        <cylinderGeometry args={[0.3, 0.8, 3.2, 7]} />
-        <meshStandardMaterial color="#7a6248" roughness={1} flatShading />
-      </InstancedGroup>
-
-      {/* --- baobab crowns: a sparse burst of branch-blobs on stubby arms --- */}
-      <InstancedGroup count={baobabs.length * 5} castShadow setup={(i, m, color) => {
-        const t = baobabs[Math.floor(i / 5)]
-        const v = baobabVars[Math.floor(i / 5)]
-        const k = i % 5
-        const s = t.scale
-        const ang = v.yaw + k * 2.51
-        const rad = k === 0 ? 0 : (0.6 + (k % 3) * 0.32) * s
-        m.position.set(
-          t.x + Math.cos(ang) * rad,
-          t.y + (3.1 + (k === 0 ? 0.55 : (k % 2) * 0.9)) * s,
-          t.z + Math.sin(ang) * rad,
-        )
-        m.rotation.set(k * 1.3, v.yaw + k, k * 0.7)
-        m.scale.setScalar(s * (k === 0 ? 0.8 : 0.46 + (k % 3) * 0.13))
-        color.set(BAOBAB_TONES[t.tone % BAOBAB_TONES.length])
-        if (k > 2) color.multiplyScalar(0.9)
-      }}>
-        <icosahedronGeometry args={[1, 1]} />
-        <meshStandardMaterial roughness={1} flatShading />
-      </InstancedGroup>
+      {SPECIES_IDS.map((sp, i) => (
+        <SpeciesMesh key={sp} sp={sp} list={lists[sp]} mat={mat} seed={8100 + i * 97} />
+      ))}
     </group>
   )
 }
@@ -2537,7 +2405,7 @@ export function CityMesh() {
       <UtilityLines />
       <StreetProps />
       <Stalls />
-      <Trees />
+      <FloraTrees />
       <Rocks />
       <Lamps />
       <AnchorStructures />

@@ -36,7 +36,7 @@ import { walkRigFor } from '@/game/systems/wardrobe' // M19 — the equipped wal
 import { useGameStore } from '@/game/store/useGameStore'
 import {
   addWalkDistance, consumeLook, consumeZoom, getCamMode, isInputFrozen, MOVE, playerPos,
-  readMoveInput, reportPlayerPos, CAM_RIG,
+  readMoveInput, reportPlayerPos, CAM_RIG, e2eTeleport,
 } from './controls'
 import { HumanRig, MidRig, type RigColors } from './HumanRig'
 
@@ -180,13 +180,16 @@ export function PlayerController({
     const g = group.current
     if (!g) return
 
-    // debug teleport (E2E)
-    if (s.teleport) {
-      s.x = s.teleport.x
-      s.z = s.teleport.z
+    // debug teleport (E2E) — the NODE_ENV bridge's request, or the
+    // e2e=1 production witness request (M23 flora witness)
+    const tpReq = e2eTeleport.pending ? e2eTeleport : s.teleport
+    if (tpReq) {
+      s.x = tpReq.x
+      s.z = tpReq.z
       s.vx = 0
       s.vz = 0
       s.teleport = null
+      e2eTeleport.pending = false
     }
 
     const frozen = isInputFrozen()
