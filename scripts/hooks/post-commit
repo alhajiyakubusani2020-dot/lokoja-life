@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# THE FILE SHIELD post-commit hook — runs after EVERY commit.
+# Non-blocking by law: a commit can never fail because of the shield.
+bash /home/z/my-project/scripts/backup.sh incr >/dev/null 2>&1 || true
+exit 0

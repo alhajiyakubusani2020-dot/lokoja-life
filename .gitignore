@@ -53,3 +53,9 @@ server.log
 # Skills directory
 /skills/tool-results/
 tool-results/
+
+# THE FILE SHIELD (backups live outside git, so a repo accident can't eat them)
+/.backups/
+/download/backups/
+# temp bundle from shield testing
+lkl-test.bundle
