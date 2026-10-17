@@ -73,6 +73,22 @@ SQLite (Prisma) — Accounts, CloudSaves, ProfileRow, WalletRow+LedgerRow,
 
 ### 3.1 Transport decision (my pick + the honest alternatives)
 
+> **W4 AMENDMENT (shipped, honest):** the environment's gateway law routes
+> sockets through Caddy by the `XTransformPort` query on :81 — a raw
+> Bun-native WS on :3010 would be unreachable through that door. W4 shipped
+> as **socket.io 4.8.4 in a mini-service (`mini-services/nation-wire`,
+> port 3003)** behind the gateway. EVERY law below carries over unchanged:
+> bearer-token auth at the door (verified against the REAL Account table
+> via bun:sqlite), the M17 law vault IMPORTED verbatim (zero copies),
+> the seq-cursor, the 12s polling lane kept as the degraded fallback, and
+> the One-Nation law (wire words land in the SAME LiveEvent rows the relay
+> reads — proven by the m24-wire suite's cross-lane law). Two new laws the
+> build taught: Prisma's SQLite DateTime is INTEGER epoch-ms (the wire must
+> write the same shape or Prisma's reads die), and the service dies loud on
+> SIGTERM (a graceful close on open websockets makes a zombie the client
+> can't detect). The m24-wire suite (34 laws) + the two-walker gateway
+> witness pin all of it.
+
 | Option | Verdict |
 |---|---|
 | **Bun native WebSocket (CHOSEN)** | Zero new deps; Bun's built-in pub/sub per topic; the repo is already Bun-lawful; one sibling process `server/realtime.ts` on :3010. Next 16 route handlers cannot hold a raw WS upgrade — a sibling process is the honest path. |

@@ -59,3 +59,7 @@ tool-results/
 /download/backups/
 # temp bundle from shield testing
 lkl-test.bundle
+
+# SQLite WAL sidecars (transient — the wire runs the db in WAL mode)
+db/custom.db-shm
+db/custom.db-wal

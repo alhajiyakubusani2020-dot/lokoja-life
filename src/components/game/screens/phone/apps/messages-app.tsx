@@ -4,12 +4,15 @@
  * LOKOJA LIFE — M24-UI: MESSAGES (the nation wire + honest DMs)
  * --------------------------------------------------------------
  * Two channels, two truths, both labeled:
- *  - THE NATION WIRE: the REAL relay (kind chat/emote on channel global,
- *    carried by liveSync's 12s heartbeat — the same wire LiveApp rides).
+ *  - THE NATION WIRE: the REAL relay (kind chat/emote on channel global).
+ *    W4: the LIVE SOCKET carries it now — sub-second through the
+ *    nation-wire service — and the honest ~12s relay heartbeat stays as
+ *    the DEGRADED fallback lane (nothing thrown away). The face labels
+ *    which lane is speaking, always.
  *    Session-scoped buffer: the wire shows what flies while you watch.
  *  - THE DMs: person-to-person threads from the social store — honest
- *    DEVICE truth (labeled on every thread) until the W4 server wire
- *    carries them with history.
+ *    DEVICE truth, and when both paddies stand on the live wire the
+ *    words ALSO fly sub-second through the wire door (labeled per thread).
  *
  * THE TIER LAW rides at the mic exactly like LiveApp: a kid's keyboard
  * IS the emote grid; teens feel the word wall; adults lose their links
@@ -21,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
 import { useSocialStore } from '@/game/store/social-store'
 import { EMOTE_LIBRARY, sanitizeChat, type LiveIdentity } from '@/game/systems/live'
+import { useWireStore, wireEnsure, wireSendChat, wireSendEmote, wireOpenDm, wireSendDm } from '@/game/systems/wire'
 
 type Tab = 'wire' | 'dms'
 
@@ -30,6 +34,9 @@ interface WireEvent { seq: number; kind: string; actor: string; payload: Record<
 const wireBuffer: { key: string; actor: string; text: string; glyph?: string; ts: number }[] = []
 let wireHighSeq = 0
 const WIRE_CAP = 120
+/** module-scope DM dedupe — survives StrictMode's dev double-mount, so one
+ * wire DM lands exactly once no matter how many times effects re-run */
+const dmSeenSeq = new Set<number>()
 
 function absorbWire(events: WireEvent[], me: string): number {
   let fresh = 0
@@ -59,12 +66,26 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
   const [notice, setNotice] = useState<string | null>(null)
   const [wireTick, forceTick] = useState(0)
 
+  // THE DEEP-LINK LAW (render-phase derivation, React's blessed pattern — no
+  // effect, no loop): when Connect hands us a handle, the thread OPENS —
+  // tapping Message on a paddy must never land on the wrong tab.
+  const [lastLinked, setLastLinked] = useState<string | null | undefined>(undefined)
+  if (openDm !== lastLinked) {
+    setLastLinked(openDm)
+    if (openDm) setTab('dms')
+  }
+
   const account = useGameStore((s) => s.account)
   const live = useGameStore((s) => s.live)
   const wire = useGameStore((s) => s.liveWire)
   const liveSync = useGameStore((s) => s.liveSync)
   const liveSendChat = useGameStore((s) => s.liveSendChat)
   const liveSendEmote = useGameStore((s) => s.liveSendEmote)
+
+  // THE WIRE — the live socket lane (W4)
+  const wireState = useWireStore((s) => s.state)
+  const wireFeed = useWireStore((s) => s.feed)
+  const wireLive = wireState === 'live'
 
   const friends = useSocialStore((s) => s.friends)
   const blocked = useSocialStore((s) => s.blocked)
@@ -88,9 +109,18 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
   // deep-link: Connect opens a thread through the controlled openDm prop —
   // no effect, no render-phase setState (the house deep-link law).
 
-  // the same 12s heartbeat the whole nation rides
+  // THE WIRE LANE — connect once, refresh presence, re-handshake on token rotation
   useEffect(() => {
-    if (!claimed || tab !== 'wire') return
+    wireEnsure(
+      () => useGameStore.getState().account.token ?? null,
+      () => ({ street: useGameStore.getState().world?.currentLocation ?? 'home', status: 'hustling' }),
+    )
+  }, [claimed, account.token])
+
+  // the same 12s heartbeat the whole nation rides — THE DEGRADED LANE:
+  // when the live socket carries the wire, the polling stands down (N5)
+  useEffect(() => {
+    if (!claimed || tab !== 'wire' || wireLive) return
     let alive = true
     const beat = async () => {
       const res = await liveSync()
@@ -100,14 +130,36 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
     const t0 = setTimeout(() => { void beat() }, 0)
     const t = setInterval(() => { void beat() }, 12_000)
     return () => { alive = false; clearTimeout(t0); clearInterval(t) }
-  }, [claimed, tab, liveSync])
+  }, [claimed, tab, liveSync, wireLive])
 
-  // absorb whatever the last sync carried
+  // absorb whatever the last sync carried (the relay lane)
   useEffect(() => {
     if (wire?.events?.length) absorbWire(wire.events as WireEvent[], me ?? '')
   }, [wire, me])
 
-  const wireRows = useMemo(() => [...wireBuffer].reverse(), [wire, wireTick])
+  // absorb whatever the LIVE SOCKET carried (the fast lane) + live DM delivery.
+  // No setState here — the wireFeed subscription itself is the render driver;
+  // the rows memo below re-derives on every feed change (absorbWire is
+  // seq-deduped, so re-running it is always harmless).
+  useEffect(() => {
+    if (!wireFeed.length) return
+    for (const e of wireFeed) {
+      if (e.kind === 'dm' && e.actor !== me && e.payload?.to === me && !dmSeenSeq.has(e.seq)) {
+        dmSeenSeq.add(e.seq)
+        receiveDm(e.actor, typeof e.payload.text === 'string' ? e.payload.text : '')
+      }
+    }
+  }, [wireFeed, me, receiveDm])
+
+  // join the DM room when a thread opens — both online paddies receive live
+  useEffect(() => {
+    if (openDm && wireLive) wireOpenDm(openDm)
+  }, [openDm, wireLive])
+
+  const wireRows = useMemo(() => {
+    if (wireFeed.length) absorbWire(wireFeed as WireEvent[], me ?? '')
+    return [...wireBuffer].reverse()
+  }, [wireFeed, wire, me, wireTick])
 
   const dmHandles = useMemo(() => {
     const set = new Set<string>([...friends, ...Object.keys(dms)])
@@ -123,9 +175,10 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
       setNotice(WHY_LABEL[check.why ?? ''] ?? 'The mic no gree — check am.')
       return
     }
-    const res = await liveSendChat(draft, 'global')
+    // THE LANE LAW: the live socket when it lives, the honest relay when it doesn't
+    const res = wireLive ? await wireSendChat(draft, 'global') : await liveSendChat(draft, 'global')
     if (!res.ok) {
-      setNotice(WHY_LABEL[res.why ?? ''] ?? 'The relay no gree — try again.')
+      setNotice(WHY_LABEL[res.why ?? ''] ?? (wireLive ? 'The wire no gree — try again.' : 'The relay no gree — try again.'))
       return
     }
     setDraft('')
@@ -133,7 +186,7 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
   }
 
   const sendEmote = async (id: string) => {
-    const res = await liveSendEmote(id, 'global')
+    const res = wireLive ? await wireSendEmote(id, 'global') : await liveSendEmote(id, 'global')
     if (!res.ok) setNotice(WHY_LABEL[res.why ?? ''] ?? 'Emote no fly.')
   }
 
@@ -164,7 +217,7 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
         <div className="flex items-center justify-between rounded-2xl border border-black/[0.05] bg-white px-3 py-2">
           <p className="text-[13px] font-extrabold">@{openDm}</p>
           <span className="rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
-            on this device · wire dey come (W4)
+            on this device{wireLive ? ' + live wire' : ''}
           </span>
         </div>
         <div className="flex max-h-[300px] min-h-[160px] flex-col gap-1.5 overflow-y-auto rounded-2xl bg-white/70 p-2.5">
@@ -199,9 +252,17 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
             <button
               data-testid="messages-dm-send"
               onClick={() => {
+                if (!draft.trim()) {
+                  setNotice('Empty message no dey fly.')
+                  return
+                }
                 const res = sendDm(openDm, draft)
-                if (res.ok) setDraft('')
-                else setNotice(res.why === 'too-long' ? 'Too long — 280 max.' : 'Empty message no dey fly.')
+                if (res.ok) {
+                  // the DEVICE truth landed; when the wire lives, the words ALSO
+                  // fly to the paddy sub-second (the server door runs the laws)
+                  if (wireLive) void wireSendDm(openDm, draft)
+                  setDraft('')
+                } else setNotice(res.why === 'too-long' ? 'Too long — 280 max.' : 'Empty message no dey fly.')
               }}
               className="lko-press rounded-xl bg-[var(--lko-green)] px-4 py-2 text-[12px] font-extrabold text-white"
             >
@@ -231,8 +292,10 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
 
       {tab === 'wire' && (
         <div data-testid="messages-wire">
-          <p className="px-1 pb-1 text-[10px] font-bold text-[var(--lko-ink-soft)]">
-            Relay lane — messages land ~12s. The live socket (W4) go make am instant.
+          <p className="px-1 pb-1 text-[10px] font-bold text-[var(--lko-ink-soft)]" data-testid="messages-lane">
+            {wireLive
+              ? 'Live wire — messages land instant. The ~12s relay stands as fallback.'
+              : 'Relay lane — messages land ~12s. The live wire takes over when it connects.'}
           </p>
           <div className="flex max-h-[300px] min-h-[180px] flex-col gap-1.5 overflow-y-auto rounded-2xl bg-white/70 p-2.5">
             {wireRows.length === 0 && (
@@ -328,4 +391,8 @@ const WHY_LABEL: Record<string, string> = {
   'no-links-ever': 'No links, no numbers, no wallet address — the wire no carry am.',
   'too-long': 'Too long — trim am down.',
   'empty': 'Empty message no dey fly.',
+  'too-fast': 'Easy o — the wire dey cap speed. Wait small make e reset.',
+  'wire-down': 'The wire drop — the relay lane don take over.',
+  'wire-slow': 'The wire slow — try again small.',
+  'bad-emote': 'That emote no dey the lexicon.',
 }

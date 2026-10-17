@@ -6,16 +6,20 @@
  * Paddies (friends), requests (in/out), find people (the REAL live
  * roster first, then street suggestions), and the block wall —
  * rendered from the social store's DEVICE truth (labeled honestly).
- * The W5 server wave swaps the transport; these shapes stay.
+ * W4: the roster rides the LIVE WIRE when it connects (instant presence,
+ * the join/leave truth as it happens) and falls back to the ~12s relay
+ * heartbeat when the socket is down — the face labels which lane.
+ * The W5 server wave swaps the FRIEND transport; these shapes stay.
  *
  * THE BLOCK LAW is visible here: blocked handles vanish from DMs,
  * calls and finds, and the wall lists them with an unblock door.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NPCS } from '@/game/data/npcs'
 import { useGameStore } from '@/game/store/useGameStore'
 import { useSocialStore } from '@/game/store/social-store'
+import { useWireStore, wireEnsure } from '@/game/systems/wire'
 
 type Tab = 'paddies' | 'requests' | 'find'
 
@@ -26,6 +30,17 @@ export function ConnectApp({ onOpenDm }: { onOpenDm: (handle: string) => void })
 
   const account = useGameStore((s) => s.account)
   const wire = useGameStore((s) => s.liveWire)
+
+  // THE WIRE — live roster lane (W4): instant presence when the socket lives
+  const wireState = useWireStore((s) => s.state)
+  const wireRoster = useWireStore((s) => s.roster)
+  const wireLive = wireState === 'live'
+  useEffect(() => {
+    wireEnsure(
+      () => useGameStore.getState().account.token ?? null,
+      () => ({ street: useGameStore.getState().world?.currentLocation ?? 'home', status: 'hustling' }),
+    )
+  }, [account.linked, account.token])
 
   const friends = useSocialStore((s) => s.friends)
   const requests = useSocialStore((s) => s.requests)
@@ -38,7 +53,8 @@ export function ConnectApp({ onOpenDm }: { onOpenDm: (handle: string) => void })
   const unblockHandle = useSocialStore((s) => s.unblockHandle)
 
   const me = account.handle
-  const online = (wire?.roster ?? []).map((r) => r.handle).filter((h) => h && h !== me && !blocked.includes(h) && !friends.includes(h))
+  const rosterRows = wireLive ? wireRoster : (wire?.roster ?? [])
+  const online = rosterRows.map((r) => r.handle).filter((h) => h && h !== me && !blocked.includes(h) && !friends.includes(h))
   const inReqs = requests.filter((r) => r.dir === 'in')
   const outReqs = requests.filter((r) => r.dir === 'out')
   const suggestions = NPCS.slice(0, 6).filter((n) => !friends.includes(n.name) && !blocked.includes(n.name))
@@ -66,8 +82,10 @@ export function ConnectApp({ onOpenDm }: { onOpenDm: (handle: string) => void })
           </button>
         ))}
       </div>
-      <p className="px-1 text-[9.5px] font-bold text-[var(--lko-ink-soft)]">
-        Paddies dey on this device for now — the W5 server wave go sync dem everywhere.
+      <p className="px-1 text-[9.5px] font-bold text-[var(--lko-ink-soft)]" data-testid="connect-lane">
+        {wireLive
+          ? '● Roster rides the LIVE WIRE — presence as e happen. Paddies stay on this device till W5.'
+          : 'Roster rides the ~12s relay heartbeat. Paddies dey on this device for now — the W5 server wave go sync dem everywhere.'}
       </p>
 
       {tab === 'paddies' && (
@@ -134,7 +152,9 @@ export function ConnectApp({ onOpenDm }: { onOpenDm: (handle: string) => void })
 
           {online.length > 0 && (
             <>
-              <p className="px-1 pt-1 text-[10px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">Online now (the real roster)</p>
+              <p className="px-1 pt-1 text-[10px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">
+                Online now ({wireLive ? 'live wire' : 'relay'})
+              </p>
               {online.map((h) => (
                 <div key={h} className="flex items-center justify-between rounded-2xl border border-black/[0.05] bg-white px-3 py-2.5">
                   <span className="text-[12.5px] font-extrabold">@{h} <span className="text-[9.5px] font-black text-[var(--lko-green-deep)]">● online</span></span>
