@@ -433,6 +433,18 @@ export function getDriveSpeed(): number {
   return driveSpeed
 }
 
+/**
+ * W4 — THE SPEEDOMETER CONVERSION. The world's furniture scale is
+ * 1 real metre ≈ 0.55 u (the 5.5 u NEPA pole ≈ 10 m — the W1 law), so
+ * u/s → m/s is ÷0.55, and km/h is ×3.6: one factor, 6.5455…
+ * A danfo at its 8.2 u/s top speed reads a true 54 km/h.
+ */
+export const KMH_PER_U = 3.6 / 0.55
+
+export function speedToKmh(speed: number): number {
+  return speed * KMH_PER_U
+}
+
 export function getDriveStartedAt(): number {
   return driveStartedAt
 }

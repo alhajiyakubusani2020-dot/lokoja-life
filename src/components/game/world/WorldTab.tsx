@@ -23,7 +23,7 @@ import { MapIcon, PinIcon } from '../icons'
 import { audio } from '@/game/systems/audio'
 import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
-import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen, requestE2eTeleport } from './controls'
+import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen, requestE2eTeleport, setDriveActive, reportDriveSpeed } from './controls'
 import { music, moodForTimeOfDay } from '@/game/systems/music'
 import { extrasLive } from '@/game/systems/extras'
 import { PATTI_SECRETS } from '@/game/systems/patti'
@@ -221,6 +221,13 @@ export function WorldTab({
       forceWeather: (w: string) => {
         const s = useGameStore.getState()
         if (s.world) useGameStore.setState({ world: { ...s.world, weather: w as import('@/game/types').Weather } })
+      },
+      forceDrive: (on: boolean, speed?: number) => {
+        // W4 E2E — feeds the REAL HUD pipeline (the same setDriveActive /
+        // reportDriveSpeed the DriveSystem calls). Never mutates player cash
+        // or world state; lets the speedo cluster be witnessed headless.
+        setDriveActive(on, 'danfo')
+        reportDriveSpeed(on ? (speed ?? 5.2) : 0)
       },
       /** M8 E2E — the live chaos slice (outage / pool / scarcity bookkeeping) */
       chaos: () => {

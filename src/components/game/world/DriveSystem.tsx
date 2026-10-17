@@ -35,6 +35,7 @@ import {
   buildPlayerRig, findPlayerVehicleSpot, headlightConeMaterial, type SpawnSpot, type VehicleRig,
 } from '@/game/world3d/vehicles'
 import { heightAt, roadDistance } from '@/game/world3d/layout'
+import { bumpHeightAt, BUMP_AMPLITUDE } from '@/game/world3d/junctions' // W3 — the school humps
 import { bridgeDeckY, cameraObstructionT, resolvePosition } from '@/game/world3d/collision'
 import { useGameStore } from '@/game/store/useGameStore'
 import {
@@ -64,6 +65,19 @@ function applyFov(cam: THREE.PerspectiveCamera, fov: number): void {
 
 /** per-family presentation tuning (mirrors the Traffic feel table) */
 const WHEEL_R: Record<VehicleModel, number> = { okada: 0.33, keke: 0.34, taxi: 0.34, danfo: 0.38 }
+/**
+ * W3 — THE ACKERMANN GEOMETRY: wheelbase L and track width w per model
+ * (measured off the rigs: danfo axles ±1.35 track ±0.86, sedan ±1.28/±0.8).
+ * The inner/outer front-wheel angles follow the real law
+ *   cot(δo) − cot(δi) = w/L
+ * via δ = atan(L / (R ∓ w/2)) — algebraically exact for the turn radius R.
+ */
+const ACKERMANN: Record<VehicleModel, { L: number; w: number }> = {
+  okada: { L: 1.35, w: 0 },
+  keke: { L: 1.55, w: 0 },
+  taxi: { L: 2.56, w: 1.6 },
+  danfo: { L: 2.7, w: 1.72 },
+}
 const ROLL_GAIN: Record<VehicleModel, number> = { okada: 3.4, keke: 0.55, taxi: 0.24, danfo: 0.15 }
 const MAX_ROLL: Record<VehicleModel, number> = { okada: 0.4, keke: 0.09, taxi: 0.05, danfo: 0.04 }
 const LEAN_SIGN: Record<VehicleModel, number> = { okada: -1, keke: 1, taxi: 1, danfo: 1 }
@@ -450,6 +464,30 @@ export function DriveSystem({
       const turnRate = steer * 1.55 * def.handling * steerAuth * (d.speed < -0.05 ? -1 : 1)
       d.yaw += turnRate * dt
 
+      // ---- W3 THE ACKERMANN LAW — the front wheels get their REAL angles:
+      // the turn radius R = |speed / yawRate|, then δi = atan(L/(R − w/2))
+      // and δo = atan(L/(R + w/2)) — cot(δo) − cot(δi) = w/L exactly. Zero
+      // allocations; a few trig calls per frame on a driven rig only.
+      const dims = ACKERMANN[d.model]
+      const yawRate = turnRate
+      const turnR = Math.abs(yawRate) > 1e-4 ? Math.abs(d.speed / yawRate) : Infinity
+      const sTurn = yawRate >= 0 ? 1 : -1 // yaw+ = a left turn → left wheel inner
+      if (rig.frontWheels.length >= 2) {
+        const Ri = Math.max(0.55, turnR - dims.w / 2)
+        const Ro = Math.max(0.55, turnR + dims.w / 2)
+        const dInner = Math.atan(dims.L / Ri)
+        const dOuter = Math.atan(dims.L / Ro)
+        // frontWheels build order: [left (−x), right (+x)]
+        rig.frontWheels[0].rotation.y = sTurn * dInner
+        rig.frontWheels[1].rotation.y = sTurn * dOuter
+      }
+      if (rig.steer) {
+        // the fork vehicles (okada/keke) steer the whole fork by the
+        // bicycle-model angle δ = atan(L / R)
+        const dFork = Math.atan(dims.L / Math.max(0.55, turnR))
+        rig.steer.rotation.y = THREE.MathUtils.clamp(sTurn * dFork, -0.55, 0.55)
+      }
+
       // ---- integrate + reuse the building/river/rim resolver ----
       const fx = Math.sin(d.yaw)
       const fz = Math.cos(d.yaw)
@@ -467,15 +505,19 @@ export function DriveSystem({
 
       if (d.speed !== 0) addDriveMeters(Math.abs(d.speed) * dt)
 
-      // ---- visuals: ground, wheels, lean, steer fork ----
+      // ---- visuals: ground, bumps, wheels, lean ----
       const groundY = bridgeDeckY(d.x, d.z) ?? heightAt(d.x, d.z)
-      rig.group.position.set(d.x, groundY, d.z)
+      // W3 THE SCHOOL-BUMP LAW — the body rides the true sinusoid: lift by
+      // the shared profile and shed a little speed on the throat (a real
+      // hump slows the car; painted-only lies don't)
+      const bump = bumpHeightAt(d.x, d.z)
+      rig.group.position.set(d.x, groundY + bump, d.z)
+      if (bump > 0.002) d.speed *= Math.max(0, 1 - 1.6 * dt * (bump / BUMP_AMPLITUDE))
       rig.group.rotation.y = d.yaw
       const wr = WHEEL_R[d.model]
       for (const w of rig.wheels) w.rotation.x += (d.speed * dt) / wr
       const rollTarget = THREE.MathUtils.clamp(LEAN_SIGN[d.model] * turnRate * ROLL_GAIN[d.model], -MAX_ROLL[d.model], MAX_ROLL[d.model])
       rig.bank.rotation.z += (rollTarget - rig.bank.rotation.z) * Math.min(1, dt * 6)
-      if (rig.steer) rig.steer.rotation.y = THREE.MathUtils.clamp(turnRate * 0.35, -0.3, 0.3)
 
       // ---- seat protocol: rig hidden, vehicle position published ----
       setDriveSeat({ x: d.x, y: groundY, z: d.z, yaw: d.yaw, hide: true })

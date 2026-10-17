@@ -55,6 +55,7 @@ import {
 } from '@/game/world3d/props'
 import { STREET_PLATES } from '@/game/world3d/plates'
 import { catenaryA } from '@/game/world3d/catenary'
+import { DANFO_STOPS, lightPhaseAt, TRAFFIC_LIGHTS } from '@/game/world3d/junctions' // W3 — the junction hardware
 
 /* ----------------------------- shared textures ------------------------------ */
 
@@ -1351,6 +1352,247 @@ function StreetPlates() {
   )
 }
 
+/* ------------------------------ traffic lights ------------------------------ */
+
+/**
+ * W3 — THE SIGNALS. One mast per top junction mouth, three unlit lamp
+ * discs (red / amber / green, vertical — the Nigerian head). The phase
+ * comes from THE PHASE LAW (junctions.ts: green 12s → amber 3s → red
+ * 15s, position-hashed offset per junction) evaluated on a running world
+ * clock. Instance colours are rewritten ONLY when a light changes phase
+ * — between changes the loop does 12 comparisons and nothing else.
+ */
+const LAMP_ON = { red: '#ff4432', amber: '#ffb324', green: '#3ce05a' }
+const LAMP_OFF = { red: '#3a1512', amber: '#392c10', green: '#123a18' }
+const LAMP_ORDER: ('red' | 'amber' | 'green')[] = ['red', 'amber', 'green']
+const LAMP_Y = [3.24, 2.96, 2.68] // vertical head: red top, amber, green
+const SCRATCH_COLOR = { red: new THREE.Color(), amber: new THREE.Color(), green: new THREE.Color() }
+
+function TrafficLights() {
+  const clock = useRef(0)
+  const lampRefs = useRef<(THREE.InstancedMesh | null)[]>([null, null, null])
+  const lastPhase = useRef<number[]>(TRAFFIC_LIGHTS.map(() => -1))
+  const didSetup = useRef(false)
+
+  const mastGeo = useMemo(() => {
+    // mast pole + head box, one merged unit per light (instanced)
+    const parts: THREE.BufferGeometry[] = []
+    const pole = new THREE.CylinderGeometry(0.07, 0.1, 3.6, 6)
+    pole.translate(0, 1.8, 0)
+    parts.push(pole)
+    const head = new THREE.BoxGeometry(0.3, 0.92, 0.2)
+    head.translate(0.16, 2.95, 0) // the head hangs on the road side of the mast
+    parts.push(head)
+    return mergeGeoms(parts)
+  }, [])
+  useEffect(() => () => mastGeo?.dispose(), [mastGeo])
+
+  useFrame((_, dt) => {
+    clock.current += Math.min(dt, 0.1)
+    if (!lampRefs.current[0]) return
+    // lamp positions: each light's three discs sit on the head face —
+    // set once on the first live frame (the refs live only in this loop)
+    if (!didSetup.current) {
+      didSetup.current = true
+      const o = new THREE.Object3D()
+      for (let k = 0; k < 3; k++) {
+        const mesh = lampRefs.current[k]
+        if (!mesh) continue
+        for (let i = 0; i < TRAFFIC_LIGHTS.length; i++) {
+          const l = TRAFFIC_LIGHTS[i]
+          const cos = Math.cos(l.rotY)
+          const sin = Math.sin(l.rotY)
+          // local head coords (0.16 side, 0.14 face) → world via the rotY frame
+          o.position.set(
+            l.x + 0.16 * cos + 0.14 * sin,
+            l.y + LAMP_Y[k],
+            l.z - 0.16 * sin + 0.14 * cos,
+          )
+          o.updateMatrix()
+          mesh.setMatrixAt(i, o.matrix)
+        }
+        mesh.instanceMatrix.needsUpdate = true
+      }
+    }
+    let dirty = false
+    for (let i = 0; i < TRAFFIC_LIGHTS.length; i++) {
+      const ph = lightPhaseAt(TRAFFIC_LIGHTS[i].offset, clock.current)
+      const code = ph === 'green' ? 2 : ph === 'amber' ? 1 : 0
+      if (lastPhase.current[i] === code) continue
+      lastPhase.current[i] = code
+      dirty = true
+      // lamp k is ON iff k === the active phase's code
+      for (let k = 0; k < 3; k++) {
+        const mesh = lampRefs.current[k]
+        if (!mesh) continue
+        const kind = LAMP_ORDER[k]
+        SCRATCH_COLOR[kind].set(k === code ? LAMP_ON[kind] : LAMP_OFF[kind])
+        mesh.setColorAt(i, SCRATCH_COLOR[kind])
+      }
+    }
+    if (dirty) {
+      for (const mesh of lampRefs.current) {
+        if (!mesh) continue
+        const ic = mesh.instanceColor
+        if (ic) ic.needsUpdate = true
+      }
+    }
+  })
+
+  if (!TRAFFIC_LIGHTS.length) return null
+  return (
+    <group>
+      <InstancedGroup count={TRAFFIC_LIGHTS.length} castShadow setup={(i, m) => {
+        const l = TRAFFIC_LIGHTS[i]
+        m.position.set(l.x, l.y, l.z)
+        m.rotation.set(0, l.rotY, 0)
+        m.scale.set(1, 1, 1)
+      }}>
+        <primitive object={mastGeo} attach="geometry" />
+        <meshStandardMaterial color="#3a4046" roughness={0.7} metalness={0.35} />
+      </InstancedGroup>
+      {/* the three lamp rows — unlit discs, colour = state */}
+      {LAMP_ORDER.map((kind, k) => (
+        <instancedMesh
+          key={kind}
+          ref={(mesh: THREE.InstancedMesh | null) => { lampRefs.current[k] = mesh }}
+          args={[undefined, undefined, TRAFFIC_LIGHTS.length]}
+          frustumCulled={false}
+        >
+          <sphereGeometry args={[0.075, 8, 8]} />
+          <meshBasicMaterial />
+        </instancedMesh>
+      ))}
+    </group>
+  )
+}
+
+/* ------------------------------- danfo stops -------------------------------- */
+
+/**
+ * W3 — THE DANFO STOPS: yellow shelter (4 posts + striped roof + bench)
+ * and a painted "DANFO STOP" board at the transit bays. Shelter boxes
+ * merge to ONE draw call; the boards share one canvas texture; posts are
+ * instanced.
+ */
+function DanfoStops() {
+  const built = useMemo(() => {
+    if (!DANFO_STOPS.length) return null
+    const shelter: THREE.BufferGeometry[] = []
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const p = new THREE.Vector3()
+    const s = new THREE.Vector3(1, 1, 1)
+    const box = (w: number, h: number, d: number): THREE.BoxGeometry => new THREE.BoxGeometry(w, h, d)
+    for (const st of DANFO_STOPS) {
+      e.set(0, st.rotY, 0)
+      q.setFromEuler(e)
+      // roof: yellow slab with a dark under-stripe
+      p.set(st.x, st.y + 2.16, st.z)
+      m.compose(p, q, s)
+      const roof = box(2.7, 0.09, 1.25)
+      roof.applyMatrix4(m)
+      shelter.push(roof)
+      p.set(st.x, st.y + 2.02, st.z)
+      m.compose(p, q, s)
+      const stripe = box(2.7, 0.07, 1.25)
+      stripe.applyMatrix4(m)
+      shelter.push(stripe)
+      // bench across the back
+      const bx2 = st.x - Math.sin(st.rotY) * 0.42
+      const bz2 = st.z - Math.cos(st.rotY) * 0.42
+      p.set(bx2, st.y + 0.45, bz2)
+      m.compose(p, q, s)
+      const bench = box(2.2, 0.09, 0.4)
+      bench.applyMatrix4(m)
+      shelter.push(bench)
+      p.set(bx2, st.y + 0.24, bz2)
+      m.compose(p, q, s)
+      const benchFront = box(2.2, 0.42, 0.09)
+      benchFront.applyMatrix4(m)
+      shelter.push(benchFront)
+    }
+    // THE BOARD — one shared canvas, all stops read from it
+    const canvas = document.createElement('canvas')
+    canvas.width = 256
+    canvas.height = 96
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#e2b33c'
+    ctx.fillRect(0, 0, 256, 96)
+    ctx.strokeStyle = '#1c2b4a'
+    ctx.lineWidth = 6
+    ctx.strokeRect(4, 4, 248, 88)
+    ctx.fillStyle = '#1c2b4a'
+    ctx.font = '800 30px "Outfit", "Segoe UI", Arial, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('DANFO STOP', 128, 50)
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.anisotropy = 4
+    tex.colorSpace = THREE.SRGBColorSpace
+    const boards: THREE.BufferGeometry[] = []
+    for (const st of DANFO_STOPS) {
+      const g = new THREE.PlaneGeometry(1.5, 0.56)
+      const facing = st.rotY + Math.PI // faces the carriageway
+      e.set(0, facing, 0)
+      q.setFromEuler(e)
+      p.set(st.x, st.y + 1.62, st.z)
+      m.compose(p, q, s)
+      g.applyMatrix4(m)
+      boards.push(g)
+    }
+    return {
+      shelter: mergeGeoms(shelter),
+      boards: mergeGeoms(boards),
+      tex,
+      count: DANFO_STOPS.length,
+    }
+  }, [])
+  useEffect(() => {
+    if (!built) return
+    return () => {
+      built.shelter.dispose()
+      built.boards.dispose()
+      built.tex.dispose()
+    }
+  }, [built])
+  if (!built) return null
+  return (
+    <group>
+      <mesh geometry={built.shelter} castShadow receiveShadow>
+        <meshStandardMaterial color="#e2b33c" roughness={0.75} metalness={0.05} />
+      </mesh>
+      <mesh geometry={built.boards} castShadow>
+        <meshStandardMaterial map={built.tex} roughness={0.6} side={THREE.DoubleSide} />
+      </mesh>
+      <InstancedGroup count={built.count * 5} castShadow setup={(i, mat) => {
+        const st = DANFO_STOPS[Math.floor(i / 5)]
+        const k = i % 5
+        // 4 shelter posts (corners of the 2.7×1.25 slab) + 1 board post
+        if (k < 4) {
+          const sx2 = (k % 2 === 0 ? -1 : 1) * 1.2
+          const sz2 = (k < 2 ? -0.5 : 0.5)
+          mat.position.set(
+            st.x + Math.sin(st.rotY) * sz2 + -Math.cos(st.rotY) * sx2,
+            st.y + 1.05,
+            st.z + Math.cos(st.rotY) * sz2 + Math.sin(st.rotY) * sx2,
+          )
+        } else {
+          const bx2 = st.x - Math.sin(st.rotY) * 1.55
+          const bz2 = st.z - Math.cos(st.rotY) * 1.55
+          mat.position.set(bx2, st.y + 0.8, bz2)
+        }
+        mat.rotation.set(0, 0, 0)
+        mat.scale.set(1, 1, 1)
+      }}>
+        <cylinderGeometry args={[0.045, 0.055, 2.1, 6]} />
+        <meshStandardMaterial color="#4a4f55" roughness={0.6} metalness={0.4} />
+      </InstancedGroup>
+    </group>
+  )
+}
+
 /* ------------------------------ street furniture ------------------------------ */
 
 /** road signs, keke-stop shelters, market crates, tire stacks, water drums */
@@ -1587,19 +1829,64 @@ function PattiTower(a: WorldAnchor) {
 }
 
 function JunctionRoundabout(a: WorldAnchor) {
+  // W3 — THE CIRCULATORY LAW: a real annulus carriageway (ring 3.0–5.0)
+  // with a kerbed planted island, and YIELD LINES — three white dashes
+  // fanned at each of the four entries, angled against the flow. The old
+  // stub was a flat disc with a signpost; a roundabout without yield
+  // lines is a decoration, not a junction.
+  const yieldGeo = useMemo(() => {
+    const dashes: THREE.BufferGeometry[] = []
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const p = new THREE.Vector3()
+    const s = new THREE.Vector3(1, 1, 1)
+    for (let qy = 0; qy < 4; qy++) {
+      const ang = qy * Math.PI / 2 + 0.4
+      for (let d = 0; d < 3; d++) {
+        const r = 5.5 + d * 0.62
+        p.set(Math.sin(ang) * r, 0.215, Math.cos(ang) * r)
+        e.set(-Math.PI / 2, ang + Math.PI / 2 + 0.5, 0)
+        q.setFromEuler(e)
+        m.compose(p, q, s)
+        const dash = new THREE.PlaneGeometry(0.62, 0.13)
+        dash.applyMatrix4(m)
+        dashes.push(dash)
+      }
+    }
+    return mergeGeoms(dashes)
+  }, [])
+  useEffect(() => () => yieldGeo?.dispose(), [yieldGeo])
   return (
     <group position={[a.x, a.y, a.z]}>
-      <mesh position={[0, 0.1, 0]} receiveShadow>
-        <cylinderGeometry args={[4.4, 4.7, 0.22, 18]} />
-        <meshStandardMaterial color="#9aa06a" roughness={1} />
+      {/* the circulatory carriageway — rides ABOVE the road ribbons */}
+      <mesh position={[0, 0.2, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <ringGeometry args={[3.0, 5.0, 30]} />
+        <meshStandardMaterial color="#43464a" roughness={0.96} />
       </mesh>
-      {/* signpost with three arms */}
-      <mesh position={[0, 1.9, 0]}>
+      {/* the kerb ring */}
+      <mesh position={[0, 0.245, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <ringGeometry args={[2.72, 3.0, 30]} />
+        <meshStandardMaterial color="#b3ad9f" roughness={0.95} />
+      </mesh>
+      {/* the planted island */}
+      <mesh position={[0, 0.3, 0]} receiveShadow>
+        <cylinderGeometry args={[2.72, 2.8, 0.34, 30]} />
+        <meshStandardMaterial color="#7d8f4e" roughness={1} />
+      </mesh>
+      {/* the yield lines — one merged draw call */}
+      {yieldGeo && (
+        <mesh geometry={yieldGeo} receiveShadow>
+          <meshStandardMaterial color="#ddd8c4" roughness={0.85} polygonOffset polygonOffsetFactor={-2} />
+        </mesh>
+      )}
+      {/* signpost with three arms (the landmark's own landmark) */}
+      <mesh position={[0, 1.9, 0]} castShadow>
         <cylinderGeometry args={[0.09, 0.11, 3.8, 6]} />
         <meshStandardMaterial color="#4a5248" roughness={0.8} />
       </mesh>
       {[0.4, 1.9, 3.3].map((y, i) => (
-        <mesh key={i} position={[0.55, y, 0]} rotation={[0, i * 2.1, 0]}>
+        <mesh key={i} position={[0.55, y, 0]} rotation={[0, i * 2.1, 0]} castShadow>
           <boxGeometry args={[1.1, 0.3, 0.08]} />
           <meshStandardMaterial color={['#e8a317', '#1b7a43', '#c4562a'][i]} roughness={0.7} />
         </mesh>
@@ -2507,6 +2794,8 @@ export function CityMesh() {
       <CompoundLife />
       <UtilityLines />
       <StreetPlates />
+      <TrafficLights />
+      <DanfoStops />
       <StreetProps />
       <Stalls />
       <FloraTrees />

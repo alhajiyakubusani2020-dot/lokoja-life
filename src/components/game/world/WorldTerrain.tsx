@@ -33,6 +33,7 @@ import {
 import { hash1, mergeGeoms, makeGroundGrainTexture, roadTextures } from '@/game/world3d/terrainArt'
 import { KERB_RUNS, ZEBRAS } from '@/game/world3d/roads'
 import { DRAIN_SEGS, DRAIN_PITS, DRAIN_CULVERTS } from '@/game/world3d/drains' // W1 — the corridor law
+import { BUMP_HALF_LEN, SPEED_BUMPS, bumpProfile } from '@/game/world3d/junctions' // W3 — the school humps
 import { GRASS_TUFTS } from '@/game/world3d/flora' // W2 — the 10k savanna
 import { applyFloraShader } from './flora-shader' // W2 — shared wind + weather
 import { atmoLive } from './atmosphere' // M19 — the flood veil reads the live weather
@@ -1210,6 +1211,83 @@ function Drains() {
   )
 }
 
+/* ------------------------------- speed bumps -------------------------------- */
+
+/**
+ * W3 — THE SCHOOL HUMPS. Each SPEED_BUMPS entry is extruded from the
+ * shared cos² profile (bumpProfile — the ONE truth the DriveSystem rides
+ * and the suite verifies): 9 slices across the throat, merged into one
+ * draw call, with two painted white bands on the shoulders of the hump.
+ * A hump you can see and feel — not a painted lie.
+ */
+function SpeedBumps() {
+  const built = useMemo(() => {
+    if (!SPEED_BUMPS.length) return null
+    const SLICES = 9
+    const humps: THREE.BufferGeometry[] = []
+    const paint: THREE.BufferGeometry[] = []
+    for (const b of SPEED_BUMPS) {
+      const cos = Math.cos(b.rotY)
+      const sin = Math.sin(b.rotY)
+      // the hump surface: a grid of SLICES along the road, full width across
+      const verts: number[] = []
+      const idx: number[] = []
+      const halfW = b.half
+      for (let i = 0; i <= SLICES; i++) {
+        const u = -1 + (2 * i) / SLICES
+        const along = u * BUMP_HALF_LEN
+        const h = bumpProfile(u)
+        for (const across of [-halfW, halfW]) {
+          const wx = b.x + sin * along + -cos * across
+          const wz = b.z + cos * along + sin * across
+          verts.push(wx, b.y + h + 0.012, wz)
+        }
+      }
+      for (let i = 0; i < SLICES; i++) {
+        const a0 = i * 2
+        idx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2)
+      }
+      const g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+      g.setIndex(idx)
+      g.computeVertexNormals()
+      humps.push(g)
+      // painted bands on the hump shoulders (u = ±0.55..±0.8)
+      for (const band of [-0.8, -0.55, 0.55, 0.8]) {
+        const g2 = new THREE.PlaneGeometry(halfW * 2 - 0.3, 0.34)
+        g2.rotateX(-Math.PI / 2)
+        g2.rotateY(b.rotY)
+        const along = band * BUMP_HALF_LEN
+        const h = bumpProfile(band)
+        g2.translate(b.x + sin * along, b.y + h + 0.024, b.z + cos * along)
+        paint.push(g2)
+      }
+    }
+    return {
+      humps: mergeGeoms(humps),
+      paint: mergeGeoms(paint),
+    }
+  }, [])
+  useEffect(() => {
+    if (!built) return
+    return () => {
+      built.humps.dispose()
+      built.paint.dispose()
+    }
+  }, [built])
+  if (!built) return null
+  return (
+    <group>
+      <mesh geometry={built.humps} receiveShadow>
+        <meshStandardMaterial color="#5b5147" roughness={0.95} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={built.paint} receiveShadow>
+        <meshStandardMaterial color="#e8e3d2" roughness={0.8} polygonOffset polygonOffsetFactor={-2} />
+      </mesh>
+    </group>
+  )
+}
+
 /* ---------------------------------- export ---------------------------------- */
 
 export function WorldTerrain() {
@@ -1223,6 +1301,7 @@ export function WorldTerrain() {
       <Kerbs />
       <Zebras />
       <Drains />
+      <SpeedBumps />
       <Bridges />
     </group>
   )

@@ -200,4 +200,26 @@ export function plateStats(): PlateStats {
   }
 }
 
+/**
+ * W4 — THE BANNER PROXIMITY LAW: the named street whose plate the player
+ * is passing, nearest within maxDist (or null). Pure — the HUD polls it,
+ * the suite verifies it.
+ */
+export function nearestPlate(
+  x: number,
+  z: number,
+  maxDist: number,
+): { plate: StreetPlate; dist: number } | null {
+  let best = maxDist
+  let hit: StreetPlate | null = null
+  for (const p of STREET_PLATES) {
+    const d = Math.hypot(p.x - x, p.z - z)
+    if (d < best) {
+      best = d
+      hit = p
+    }
+  }
+  return hit ? { plate: hit, dist: best } : null
+}
+
 export const PLATE_NAME_MAX = NAME_MAX

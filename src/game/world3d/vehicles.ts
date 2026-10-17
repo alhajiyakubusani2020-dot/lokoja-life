@@ -558,9 +558,20 @@ export function buildDanfo(parked = false): VehicleRig {
     put(bank, tl, sx * 0.78, 1.05, -2.125)
   }
 
-  // wheels
+  // wheels — THE FRONT AXLE IS STEERABLE: each front wheel rides in a yaw
+  // pivot so the DriveSystem can lay the true Ackermann angles on it
   for (const sx of [-1, 1]) {
-    for (const z of [1.35, -1.35]) {
+    const w = buildWheel(0.38, 0.22)
+    const pivot = new THREE.Group()
+    pivot.position.set(sx * 0.86, 0.38, 1.35)
+    w.position.set(0, 0, 0)
+    pivot.add(w)
+    bank.add(pivot)
+    rig.wheels.push(w)
+    rig.frontWheels.push(pivot)
+  }
+  for (const sx of [-1, 1]) {
+    for (const z of [-1.35]) {
       const w = buildWheel(0.38, 0.22)
       w.position.set(sx * 0.86, 0.38, z)
       bank.add(w)
@@ -622,9 +633,19 @@ export function buildSedan(variant: SedanVariant, parked = false): VehicleRig {
     put(bank, tl, sx * 0.55, 0.68, -1.965)
   }
 
-  // wheels — two hubbed axles
+  // wheels — front axle steerable (Ackermann pivots, same as the danfo)
   for (const sx of [-1, 1]) {
-    for (const z of [1.28, -1.28]) {
+    const w = buildWheel(0.34, 0.2)
+    const pivot = new THREE.Group()
+    pivot.position.set(sx * 0.8, 0.34, 1.28)
+    w.position.set(0, 0, 0)
+    pivot.add(w)
+    bank.add(pivot)
+    rig.wheels.push(w)
+    rig.frontWheels.push(pivot)
+  }
+  for (const sx of [-1, 1]) {
+    for (const z of [-1.28]) {
       const w = buildWheel(0.34, 0.2)
       w.position.set(sx * 0.8, 0.34, z)
       bank.add(w)
@@ -707,13 +728,16 @@ export function buildLorry(parked = false): VehicleRig {
     put(bank, tl, sx * 0.7, 0.98, -2.545)
   }
 
-  // wheels — steerable front axle pair + twin rear axles (6 total)
+  // wheels — steerable front axle pair (Ackermann pivots) + twin rear axles (6 total)
   for (const sx of [-1, 1]) {
     const w = buildWheel(0.4, 0.24)
-    w.position.set(sx * 0.85, 0.4, 1.35)
-    bank.add(w)
+    const pivot = new THREE.Group()
+    pivot.position.set(sx * 0.85, 0.4, 1.35)
+    w.position.set(0, 0, 0)
+    pivot.add(w)
+    bank.add(pivot)
     rig.wheels.push(w)
-    rig.frontWheels.push(w)
+    rig.frontWheels.push(pivot)
   }
   for (const sx of [-1, 1]) {
     for (const z of [-1.1, -1.9]) {
