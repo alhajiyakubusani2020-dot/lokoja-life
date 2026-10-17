@@ -1261,3 +1261,13 @@ Work Log:
 
 Stage Summary:
 - M23 W4 SHIPPED — the world UI closes the loop: the speedometer makes the drive legible (true km/h off the real velocity pipeline), the banners make the city legible (the real street names you enter), the photo frame makes the memories frameable. All four waves of M23 now stand: W1 corridor (e90b448), W2 green (9849a51, skipped-done), W3 junctions (8e94c45), W4 world UI — each committed behind its own law suite + battery + SILK gates + eyeballed witness.
+---
+Task ID: M23-CLOSE
+Agent: Super Z (parent)
+Task: the final chain audit before reporting M23 complete.
+
+Work Log:
+- GIT FORENSIC FINDING (surfaced, not buried): the W3 commit appeared as 8e94c45 at commit time but the chain now reads f2bdadd — the reflog shows `commit (amend)` swept THREE W4 helper files (WorldTab.tsx's forceDrive hook, controls.ts's speedToKmh, plates.ts's nearestPlate) + db/custom.db into the W3 commit. Verified byte-complete: f2bdadd carries 28 files (all W3 work + the helpers), b536376 (W4) carries the HudOverlay work + w4 suite + e2e + 6 shots, full chain 9849a51→HEAD = 57 files / 3,329 insertions with NOTHING lost. The only imperfection: the W3 commit MESSAGE doesn't name the three helper files riding inside it — the W4 message describes them. Recorded as-is per the sincerity law; no history surgery.
+
+Stage Summary:
+- M23 THE LIVING STREETS is COMPLETE: W1 corridor e90b448 (drains/culverts/catenary/plates, 46/46), W2 green 9849a51 (pre-existing, skipped honestly), W3 junctions f2bdadd (signals/roundabout/humps/Ackermann/stops, 38/38), W4 world UI b536376 (speedo/banners/photo frame, 26/26). Four law suites, 110 new laws total; battery 32/32 suites green at every commit; SILK six gates green at every commit (final: 2.53s / 338KB / 14ms / 32MB / 1.7MB / 0 errors); 25+ fresh-context E2E shots across the four waves, every one eyeballed, every miss retaken or recorded.
