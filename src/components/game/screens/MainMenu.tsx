@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { GraphicsPicker } from './GraphicsPicker'
+import { MenuAuthSheet } from './MenuAuthSheet'
 
 function PlayMark({ className }: { className?: string }) {
   return (
@@ -49,6 +50,7 @@ export function MainMenu() {
   const resetGame = useMenuStore((s) => s.resetGame)
 
   const [tipIndex, setTipIndex] = useState(0)
+  const [authOpen, setAuthOpen] = useState(false)
 
   // rotate the loading tips gently
   useEffect(() => {
@@ -79,11 +81,21 @@ export function MainMenu() {
 
       {/* ---- content ---- */}
       <div className="relative z-10 flex min-h-dvh flex-col">
-        {/* top row — place badge */}
-        <div className="flex items-center gap-2 px-5 pt-[max(env(safe-area-inset-top),0.9rem)]">
+        {/* top row — place badge + THE LIVE RIBBON (the city dey go multiplayer) */}
+        <div className="flex items-center justify-between gap-2 px-5 pt-[max(env(safe-area-inset-top),0.9rem)]">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white/95 backdrop-blur-sm">
             <PinIcon size={13} className="text-[#ffd88a]" />
             Lokoja • Kogi State • Nigeria
+          </span>
+          <span
+            data-testid="menu-live-ribbon"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#ffd88a]/30 bg-black/30 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#ffd88a] backdrop-blur-sm"
+          >
+            <span className="relative flex h-2 w-2" aria-hidden>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ffd88a] opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#ffd88a]" />
+            </span>
+            The city dey go live
           </span>
         </div>
 
@@ -124,6 +136,15 @@ export function MainMenu() {
             </p>
           </div>
 
+          {/* the honest stat chips — everything below na real count from the city */}
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {['21 phone apps', '32 real locations', '10,000-soul nation sim', 'the live wire dey come'].map((chip) => (
+              <span key={chip} className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-extrabold text-white/85 backdrop-blur-sm">
+                {chip}
+              </span>
+            ))}
+          </div>
+
           {/* actions */}
           <div className="mt-5 flex w-full flex-col gap-2.5">
             <button
@@ -146,6 +167,17 @@ export function MainMenu() {
               className="lko-press flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border border-white/25 bg-white/12 text-base font-extrabold tracking-wide text-white backdrop-blur-sm disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-white/40"
             >
               Continue your life
+            </button>
+
+            <button
+              data-testid="menu-auth-open"
+              onClick={() => {
+                audio.play('click')
+                setAuthOpen(true)
+              }}
+              className="lko-press flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border border-[#ffd88a]/40 bg-[#ffd88a]/15 text-base font-extrabold tracking-wide text-[#ffd88a] backdrop-blur-sm"
+            >
+              🔑 Log in / Sign up — claim your name
             </button>
 
             {/* settings — subordinate text action */}
@@ -205,6 +237,8 @@ export function MainMenu() {
           </p>
         </div>
       </div>
+
+      {authOpen && <MenuAuthSheet onClose={() => setAuthOpen(false)} />}
     </div>
   )
 }

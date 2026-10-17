@@ -29,6 +29,7 @@ import { MoneyPop, Shockwave } from '../Juice'
 import { MapScreen } from './MapScreen'
 import { WorkScreen } from './WorkScreen'
 import { PhoneScreen } from './PhoneScreen'
+import { WorldPhoneLayer } from './WorldPhoneLayer'
 import {  PlaceIcon,
   TimeIcon,
   WeatherIcon,
@@ -816,6 +817,10 @@ export function Dashboard() {
           }}
         />
       )}
+
+      {/* M24-UI — the diegetic phone layer: needs rail + FAB + calls, ABOVE the living world.
+          Pure DOM — imports no 3D module, unmounts nothing. */}
+      {tab === 'world' && <WorldPhoneLayer onOpenWork={() => switchTab('work')} />}
 
       {tab !== 'world' && (
         <>

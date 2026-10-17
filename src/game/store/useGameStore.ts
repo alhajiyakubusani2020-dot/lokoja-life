@@ -1316,7 +1316,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       japa: freshJapaState(),
       goals: freshGoalState(),
       onboarding: freshOnboardingState(),
-      account: freshAccountState(),
+      // M24-UI — THE IDENTITY SURVIVES THE NEW LIFE: a claim made on the
+      // landing rides into the game (the M9 identity IS the player, not
+      // the save). An unclaimed start stays unclaimed, exactly as before;
+      // resetGame keeps its full wipe — that one is the honest delete.
+      account: get().account.linked ? get().account : freshAccountState(),
       shield: freshShieldState(),
       fortress: freshFortressState(),
       cityPulse: freshPulseState(),

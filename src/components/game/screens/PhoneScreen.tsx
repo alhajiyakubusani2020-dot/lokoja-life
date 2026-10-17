@@ -47,6 +47,12 @@ import PattiApp from './phone/apps/patti-app'
 import StoryApp from './phone/apps/story-app'
 import WhotApp from './phone/apps/whot-app'
 import { LiveApp } from './phone/LiveApp'
+import { MessagesApp } from './phone/apps/messages-app'
+import { CallsApp } from './phone/apps/calls-app'
+import { ConnectApp } from './phone/apps/connect-app'
+import { WalletApp } from './phone/apps/wallet-app'
+import { ProfileApp } from './phone/apps/profile-app'
+import { useSocialStore } from '@/game/store/social-store'
 import { ForgeApp } from './phone/ForgeApp'
 import { NationApp } from './phone/NationApp'
 import { GraphicsPicker } from './GraphicsPicker'
@@ -60,6 +66,7 @@ import {
   MapIcon,
   PlaceIcon,
   SaveIcon,
+  ProfileIcon,
   SmartIcon,
   SunriseIcon,
   SettingsIcon,
@@ -69,7 +76,7 @@ import {
   TargetIcon,
 } from '../icons'
 
-type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse' | 'live' | 'forge' | 'nation' | 'wardrobe' | 'garage' | 'houses' | 'health' | 'school' | 'career' | 'contacts' | 'patti' | 'story' | 'whot'
+type PhoneApp = 'grid' | 'chats' | 'bank' | 'hustle' | 'civic' | 'biz' | 'settings' | 'shield' | 'pulse' | 'live' | 'forge' | 'nation' | 'wardrobe' | 'garage' | 'houses' | 'health' | 'school' | 'career' | 'contacts' | 'patti' | 'story' | 'whot' | 'messages' | 'calls' | 'connect' | 'wallet' | 'profile'
 
 /** M15 — a banner can deep-link the handset straight into an app (one-shot). */
 let phoneDeepLink: PhoneApp | null = null
@@ -787,7 +794,7 @@ function ShieldApp() {
   )
 }
 
-export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
+export function PhoneScreen({ onOpenWork, variant = 'tab' }: { onOpenWork?: () => void; variant?: 'tab' | 'overlay' }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const civic = useGameStore((s) => s.civic)
@@ -815,6 +822,18 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     setApp('grid')
   }
 
+  /* M24-UI — the social faces' live sub-labels + the Connect→DM deep link */
+  const dmUnread = useSocialStore((s) => Object.values(s.unread).reduce((a, b) => a + b, 0))
+  const callPhase = useSocialStore((s) => s.call.phase)
+  const socialFriends = useSocialStore((s) => s.friends)
+  const [openDmHandle, setOpenDmHandle] = useState<string | null>(null)
+  const openDmWith = (handle: string) => {
+    audio.play('click')
+    setOpenDmHandle(handle)
+    setOpenNpc(null)
+    setApp('messages')
+  }
+
   const paddyCount = NPCS.filter((n) => tierFor(relationshipFor(player.relationships, n.id).familiarity) !== 'stranger').length
 
   const apps: AppDef[] = [
@@ -838,6 +857,42 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
       sub: 'Roster · Live · Union · Ajo',
       tint: 'bg-[var(--lko-river-soft)] text-[var(--lko-river)]',
       icon: SocialIcon,
+    },
+    // ---- M24-UI: the social faces (messages / calls / connect / wallet / profile) ----
+    {
+      key: 'messages',
+      label: 'Messages',
+      sub: dmUnread > 0 ? `${dmUnread} unread DM${dmUnread === 1 ? '' : 's'}` : 'Nation wire + DMs',
+      tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]',
+      icon: SocialIcon,
+    },
+    {
+      key: 'calls',
+      label: 'Calls',
+      sub: callPhase !== 'idle' ? 'Call dey go…' : 'Voice · video faces',
+      tint: 'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]',
+      icon: SmartIcon,
+    },
+    {
+      key: 'connect',
+      label: 'Connect',
+      sub: `${socialFriends.length} paddy${socialFriends.length === 1 ? '' : 's'} · requests`,
+      tint: 'bg-[var(--lko-river-soft)] text-[var(--lko-river)]',
+      icon: SocialIcon,
+    },
+    {
+      key: 'wallet',
+      label: 'Wallet',
+      sub: 'Send am — real ledger out',
+      tint: 'bg-[var(--lko-gold-soft)] text-[var(--lko-gold-deep)]',
+      icon: BankIcon,
+    },
+    {
+      key: 'profile',
+      label: 'Profile',
+      sub: 'The face the street go see',
+      tint: 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]',
+      icon: ProfileIcon,
     },
     {
       key: 'forge',
@@ -990,15 +1045,23 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
     patti: 'Mt Patti',
     story: 'Confluence Path',
     whot: 'Whot!',
+    messages: 'Messages',
+    calls: 'Calls',
+    connect: 'Connect',
+    wallet: 'Wallet',
+    profile: 'Profile',
   }
 
   return (
-    <div className="flex justify-center px-4 pt-3 sm:pt-4" aria-label="Your phone">
+    <div
+      className={variant === 'overlay' ? 'flex justify-center' : 'flex justify-center px-4 pt-3 sm:pt-4'}
+      aria-label="Your phone"
+    >
       <div className="w-full max-w-[380px]">
         {/* bezel */}
         <div className="rounded-[2.7rem] bg-[#1a1e18] p-[7px] shadow-[var(--lko-shadow-lg)]">
           {/* screen */}
-          <div className="relative flex h-[clamp(560px,calc(100dvh-15rem),740px)] flex-col overflow-hidden rounded-[2.25rem] bg-[var(--lko-cream)]">
+          <div className="relative flex h-[clamp(540px,calc(100dvh-11rem),740px)] flex-col overflow-hidden rounded-[2.25rem] bg-[var(--lko-cream)]">
             {/* status bar */}
             <div className="relative z-10 flex shrink-0 items-center justify-between px-5 pb-1 pt-2.5">
               <span className="lko-num text-[11px] font-extrabold text-[var(--lko-ink)]">
@@ -1061,6 +1124,11 @@ export function PhoneScreen({ onOpenWork }: { onOpenWork?: () => void }) {
                   {app === 'story' && <StoryApp />}
                   {app === 'whot' && <WhotApp />}
                   {app === 'live' && <LiveApp />}
+                  {app === 'messages' && <MessagesApp openDm={openDmHandle} onOpenDmChange={setOpenDmHandle} />}
+                  {app === 'calls' && <CallsApp />}
+                  {app === 'connect' && <ConnectApp onOpenDm={openDmWith} />}
+                  {app === 'wallet' && <WalletApp />}
+                  {app === 'profile' && <ProfileApp />}
                   {app === 'forge' && <ForgeApp />}
                   {app === 'nation' && <NationApp />}
                   {app === 'settings' && <SettingsApp />}
