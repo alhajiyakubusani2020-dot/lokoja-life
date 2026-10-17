@@ -1285,3 +1285,19 @@ Work Log:
 
 Stage Summary:
 - M24 PLAN DELIVERED, NOTHING CODED: MULTIPLAYER_PLAN.md committed (docs-only commit — zero src/ changes, battery untouched). The plan closes all ten gaps in ten ship-alone waves and reuses what M9/M13/M14/M17/M20/M21 already built right. Awaiting the user's "go" — then W0 starts with the same discipline as M23.
+---
+Task ID: M24-PLAN-V2
+Agent: Super Z (parent, solo — planning only, still ZERO code)
+Task: the user's six upgrade orders — "they can actually drive cars by theirselves if they wish, their friends can enter with them, real world stuffs, customize somethings, everything in the world (your phone and everything), they will have to login/signup and fill in their details — upgrade the plans."
+
+Work Log:
+- INTEGRATED all six orders into MULTIPLAYER_PLAN.md as §2.5 (the six v2 orders) + four new architecture sections (3.8 vehicles, 3.9 diegetic world, 3.10 register) + the register/wheels waves.
+- VEHICLES (§3.8): VehicleRow server-persisted (owner/model/paint/plate/fuel/condition/pos/heading — your car stays where you parked it); 12–15Hz sync ONLY while moving on the car's street topic; constant-velocity dead-reckoning between updates; the per-model speed clamp REUSES the M23-W4 speedometer law (danfo 54 km/h server-side); per-model seat anchors; THE HIJACK LAW (board = stopped + consent); passengers' position events pause while carried; car interior = its own voice zone; fuel burns per honest distance, bought with server money; hump wear repaired at the garage through the ledger.
+- DIEGETIC LAW (§3.9): after entry the 3D canvas NEVER unmounts — phone/map/dashboard re-target as overlay layers; CharacterCreation + register stay boot-time; new gate N11 (overlay open ≤ +3ms/frame).
+- REGISTER (§3.10): mandatory claim + profile details (display name, birthday→honest age band, avatar look, bio; contact stays nullable per M13); ProfileRow; the avatar look feeds the W2 remote-avatar renderer; THE GUEST LAW AMENDED: 60-second locked preview from Patti, then the register wall (recorded as a law amendment, not a silent change).
+- SAFETY EXTENSION: kids ride shotgun, never drive online — the shared-world wheel is adult-hands law, server-enforced (added to §7).
+- REWAVED 10 → 13 waves: W0 SEAMS → W1 REGISTER → W2 BODIES (+wardrobe-on-body) → W3 WORLD NEVER BLINKS → W4 WIRE → W5 CONNECT → W6 LEDGER (+fuel/repair) → W7 VOICE → W8 FACE → W9 STAGE → W10 WHEELS → W11 TABLES → W12 PROOF (bots walk AND drive). New gates N11 (diegetic) + N12 (vehicle: true top speed clamp, stopped+consent boarding, money moves exactly once). Fixed all five stale wave-number cross-references (media W6→W8, streaming W7→W9, moderation W3/W9→W5/W12, LiveKit W6+→W8+).
+- RISKS +2 (§8): the diegetic refactor ships as its OWN wave, never mixed into a network wave; vehicle sync is the new bandwidth hog — dead-reckoning + AOI + 12Hz-while-moving keep it inside N5, and the W12 bots DRIVE to prove it.
+
+Stage Summary:
+- M24 PLAN V2 COMMITTED, still ZERO code: the plan now carries the user's six orders — self-drive + passengers (W10), real-world loops (fuel/repair/market runs, W6+W10), customization others SEE (wardrobe on body W2, paint + plate W10), the diegetic world (W3), the mandatory register with profile details (W1, guest law amended honestly). Thirteen ship-alone waves, twelve NET gates, M13 wall extended to the wheel. Awaiting "go" for W0.
