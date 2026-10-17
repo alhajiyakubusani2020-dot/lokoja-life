@@ -1271,3 +1271,17 @@ Work Log:
 
 Stage Summary:
 - M23 THE LIVING STREETS is COMPLETE: W1 corridor e90b448 (drains/culverts/catenary/plates, 46/46), W2 green 9849a51 (pre-existing, skipped honestly), W3 junctions f2bdadd (signals/roundabout/humps/Ackermann/stops, 38/38), W4 world UI b536376 (speedo/banners/photo frame, 26/26). Four law suites, 110 new laws total; battery 32/32 suites green at every commit; SILK six gates green at every commit (final: 2.53s / 338KB / 14ms / 32MB / 1.7MB / 0 errors); 25+ fresh-context E2E shots across the four waves, every one eyeballed, every miss retaken or recorded.
+---
+Task ID: M24-PLAN
+Agent: Super Z (parent, solo — planning only, ZERO code per the user's order)
+Task: "upgrade the whole app to become ready for multiplayer… calls, video calls, chat, connect, send money, stream… don't code yet, just the upgraded plan, and close all gap."
+
+Work Log:
+- DISK FORENSICS FIRST (the sincerity law): HEAD 4ae7557 (a db/custom.db binary-drift commit only — recorded), tree clean, M23 COMPLETE on chain (9849a51 w2 → e90b448 w1 → f2bdadd w3 → b536376 w4 → 0397cd7 close audit).
+- AUDITED the existing multiplayer substrate by reading it, not assuming: prisma/schema.prisma (Account scrypt+ageBand+parent PIN, CloudSave+HMAC, LivePresence TTL 90s, LiveEvent seq-cursor, TradeRow, AjoRow, AssociationRow two-key, StreamRow); /api/live/sync route (heartbeat upsert + cursor events + roster); src/game/systems/live.ts (the M17 pure law vault: tiered chat sanitize, voiceAllowed, trade/ajo/court verdicts, crowdMult, link-strip regexes); useGameStore liveSync (client-side money settlement — the big honest finding); LiveApp.tsx:91 = setInterval 12_000 — the real cadence of today's "live".
+- rg-VERIFIED the absence: zero WebSocket / socket.io / RTCPeerConnection / webrtc / EventSource / colyseus / livekit anywhere in src/; package.json carries no realtime lib. Ten gaps enumerated from evidence, not vibes.
+- WROTE MULTIPLAYER_PLAN.md (repo root, beside ROADMAP.md): M24 "THE REAL NATION" — verified audit table, the ten gaps, target architecture (Bun.serve native WS sibling process :3010 + Bun pub/sub topics; WebRTC mesh + coturn TURN; LiveKit OSS at W6 for group/stage; server-authoritative WalletRow+LedgerRow with idemKey + fortress chainHash; bodies via 10Hz AOI street topics + HumanRig remote rendering; real Whot tables running the EXISTING deterministic engine server-side), ten M24 waves W0..W9 each shipping alone behind the full closure, ten NET gates (N1..N10) beside SILK, safety/NDPR/CBN honesty clauses (in-game naira only, forever), honest risks (deploy proxy = the one infra unknown), veto-able defaults.
+- KEY ARCHITECTURE DECISIONS ARGUED IN THE DOC: Bun-native WS chosen over socket.io/Colyseus (zero deps, Bun pub/sub built-in, the repo's laws stay); the 12s polling lane is KEPT as the degraded fallback (nothing thrown away); the M17 law vault carries over verbatim and is re-enforced at the server door; money authority moves client→server (the one true architectural migration).
+
+Stage Summary:
+- M24 PLAN DELIVERED, NOTHING CODED: MULTIPLAYER_PLAN.md committed (docs-only commit — zero src/ changes, battery untouched). The plan closes all ten gaps in ten ship-alone waves and reuses what M9/M13/M14/M17/M20/M21 already built right. Awaiting the user's "go" — then W0 starts with the same discipline as M23.
