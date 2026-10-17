@@ -53,6 +53,8 @@ import {
   ANTENNAS, AWNINGS, AWNING_TONES, BARRELS, BASKETS, CLOTH_TONES, CRATES, GATE_LEAVES, LAUNDRY_LINES,
   ROAD_SIGNS, SHELTERS, SHOP_NAMES, SIGNBOARDS, TIRES, UTILITY_POLES, WALL_SEGMENTS, WATER_TANKS, WIRE_SPANS,
 } from '@/game/world3d/props'
+import { STREET_PLATES } from '@/game/world3d/plates'
+import { catenaryA } from '@/game/world3d/catenary'
 
 /* ----------------------------- shared textures ------------------------------ */
 
@@ -1197,12 +1199,16 @@ function UtilityLines() {
       const px = -dz / len
       const pz = dx / len
       for (const off of [-0.55, 0.55]) {
+        // THE WIRE IS THE TRUE CATENARY — sampled per span, zero per-frame cost
+        const L = len
+        const a = catenaryA(L, s.sag)
+        const endCosh = Math.cosh(L / (2 * a))
         let prevX = s.ax + px * off
         let prevY = s.ay
         let prevZ = s.az + pz * off
         for (let k = 1; k <= SAMPLES; k++) {
           const t = k / SAMPLES
-          const dip = s.sag * 4 * t * (1 - t)
+          const dip = a * endCosh - a * Math.cosh(((t - 0.5) * L) / a)
           const cx = s.ax + dx * t + px * off
           const cy = s.ay + (s.by - s.ay) * t - dip
           const cz = s.az + dz * t + pz * off
@@ -1244,6 +1250,103 @@ function UtilityLines() {
       <lineSegments geometry={wireGeo}>
         <lineBasicMaterial color="#22262a" transparent opacity={0.75} />
       </lineSegments>
+    </group>
+  )
+}
+
+/* ------------------------------ street plates ------------------------------- */
+
+/**
+ * THE STREET NAME PLATES (W1) — blue municipal plates at the junction
+ * mouths of the real-named OSM streets (Lugard Road, Ibb way…). ONE
+ * canvas atlas carries every unique name (power-of-two rows); each plate
+ * plane picks its slot through remapped UVs, so the whole fleet of plates
+ * is ONE merged draw call. Posts are instanced. Names render exactly as
+ * the survey spelled them, uppercased the way Nigerian plates are.
+ */
+function StreetPlates() {
+  const built = useMemo(() => {
+    if (!STREET_PLATES.length) return null
+    const names = [...new Set(STREET_PLATES.map((p) => p.name.toUpperCase()))]
+    const W = 512
+    const ROW = 48
+    const rows = names.length
+    const H = Math.max(64, 2 ** Math.ceil(Math.log2(rows * ROW)))
+    const canvas = document.createElement('canvas')
+    canvas.width = W
+    canvas.height = H
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#14418f' // municipal steel blue
+    ctx.fillRect(0, 0, W, H)
+    ctx.strokeStyle = '#e9e5d8'
+    ctx.lineWidth = 3
+    ctx.font = '700 30px "Outfit", "Segoe UI", Arial, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const slotOf = new Map<string, number>()
+    names.forEach((name, i) => {
+      const y = i * ROW
+      ctx.strokeRect(5, y + 5, W - 10, ROW - 10)
+      ctx.fillStyle = '#f4f1e6'
+      ctx.fillText(name, W / 2, y + ROW / 2 + 1, W - 24)
+      slotOf.set(name, i)
+    })
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.anisotropy = 4
+    tex.colorSpace = THREE.SRGBColorSpace
+    // merged plate planes with atlas UVs
+    const planes: THREE.BufferGeometry[] = []
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const p = new THREE.Vector3()
+    const uvAttr = (g: THREE.BufferGeometry, i: number): void => {
+      const v0 = 1 - ((i + 1) * ROW) / H
+      const v1 = 1 - (i * ROW) / H
+      const uv = g.getAttribute('uv') as THREE.BufferAttribute
+      // plane uv rows: (0,1) (1,1) (0,0) (1,0) — remap v
+      uv.setXY(0, 0, v1)
+      uv.setXY(1, 1, v1)
+      uv.setXY(2, 0, v0)
+      uv.setXY(3, 1, v0)
+    }
+    for (const pl of STREET_PLATES) {
+      const slot = slotOf.get(pl.name.toUpperCase())
+      if (slot === undefined) continue
+      const g = new THREE.PlaneGeometry(1.9, 0.44)
+      uvAttr(g, slot)
+      e.set(0, pl.rotY, 0)
+      q.setFromEuler(e)
+      p.set(pl.x, pl.y + 1.52, pl.z)
+      m.compose(p, q, new THREE.Vector3(1, 1, 1))
+      g.applyMatrix4(m)
+      planes.push(g)
+    }
+    const plateGeo = planes.length ? mergeGeoms(planes) : null
+    return { tex, plateGeo, count: STREET_PLATES.length }
+  }, [])
+  useEffect(() => {
+    if (!built) return
+    return () => {
+      built.tex.dispose()
+      built.plateGeo?.dispose()
+    }
+  }, [built])
+  if (!built || !built.plateGeo) return null
+  return (
+    <group>
+      <mesh geometry={built.plateGeo} castShadow>
+        <meshStandardMaterial map={built.tex} roughness={0.55} metalness={0.05} side={THREE.DoubleSide} />
+      </mesh>
+      <InstancedGroup count={built.count} castShadow setup={(i, mat) => {
+        const pl = STREET_PLATES[i]
+        mat.position.set(pl.x, pl.y + 0.72, pl.z)
+        mat.rotation.set(0, 0, 0)
+        mat.scale.set(1, 1, 1)
+      }}>
+        <cylinderGeometry args={[0.035, 0.05, 1.5, 6]} />
+        <meshStandardMaterial color="#5a6166" roughness={0.7} metalness={0.4} />
+      </InstancedGroup>
     </group>
   )
 }
@@ -2403,6 +2506,7 @@ export function CityMesh() {
       <RooftopClutter />
       <CompoundLife />
       <UtilityLines />
+      <StreetPlates />
       <StreetProps />
       <Stalls />
       <FloraTrees />

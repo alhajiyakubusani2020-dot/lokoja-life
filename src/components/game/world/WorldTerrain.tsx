@@ -32,6 +32,7 @@ import {
 } from '@/game/world3d/layout'
 import { hash1, mergeGeoms, makeGroundGrainTexture, roadTextures } from '@/game/world3d/terrainArt'
 import { KERB_RUNS, ZEBRAS } from '@/game/world3d/roads'
+import { DRAIN_SEGS, DRAIN_PITS, DRAIN_CULVERTS } from '@/game/world3d/drains' // W1 — the corridor law
 import { GRASS_TUFTS } from '@/game/world3d/flora' // W2 — the 10k savanna
 import { applyFloraShader } from './flora-shader' // W2 — shared wind + weather
 import { atmoLive } from './atmosphere' // M19 — the flood veil reads the live weather
@@ -1068,6 +1069,147 @@ function Zebras() {
   )
 }
 
+/* --------------------------------- drains ------------------------------------ */
+
+/**
+ * W1 — THE OPEN U-DRAINS. Every DRAIN_SEGS segment becomes a concrete
+ * U-channel piece: floor slab + two walls riding heightAt at both ends
+ * (the kerb's drape pattern), invert from the 1:100 gravity law. Covers:
+ * zebra footpath slabs + catch-pit grates. Culverts: a deck slab spanning
+ * the channel where a side road crosses, with wing-wall headwalls at the
+ * downstream mouth. Three merged draw calls total: channels, covers,
+ * culverts. No per-frame work — the network is module-scope data.
+ */
+function Drains() {
+  const built = useMemo(() => {
+    const channel: THREE.BufferGeometry[] = []
+    const covers: THREE.BufferGeometry[] = []
+    const culverts: THREE.BufferGeometry[] = []
+    const m = new THREE.Matrix4()
+    const q = new THREE.Quaternion()
+    const e = new THREE.Euler()
+    const p = new THREE.Vector3()
+    const s = new THREE.Vector3(1, 1, 1)
+    const box = (w: number, h: number, d: number): THREE.BoxGeometry => new THREE.BoxGeometry(w, h, d)
+    for (const seg of DRAIN_SEGS) {
+      const dx = seg.bx - seg.ax
+      const dz = seg.bz - seg.az
+      const len = Math.hypot(dx, dz)
+      if (len < 0.25 || len > 6) continue // data guarantee: one 4u sample per segment
+      const mx = (seg.ax + seg.bx) / 2
+      const mz = (seg.az + seg.bz) / 2
+      const ySurf = (seg.ay + seg.by) / 2
+      const yInv = (seg.fa + seg.fb) / 2
+      const yaw = Math.atan2(dx, dz)
+      e.set(0, yaw, 0)
+      q.setFromEuler(e)
+      // floor slab: 0.6 wide, sits at the invert
+      p.set(mx, yInv + 0.03, mz)
+      m.compose(p, q, s)
+      const floor = box(0.6, 0.08, len + 0.06)
+      floor.applyMatrix4(m)
+      channel.push(floor)
+      // walls: 0.1 thick, from the invert up to just proud of the surface
+      const wallH = Math.max(0.32, ySurf + 0.05 - yInv)
+      for (const side of [-1, 1]) {
+        p.set(mx - Math.cos(yaw) * 0.25 * side, yInv + wallH / 2 - 0.02, mz + Math.sin(yaw) * 0.25 * side)
+        m.compose(p, q, s)
+        const wall = box(0.1, wallH, len + 0.06)
+        wall.applyMatrix4(m)
+        channel.push(wall)
+      }
+      if (seg.cover === 1) {
+        // zebra footpath slab — slightly proud, worn white face
+        p.set(mx, ySurf + 0.075, mz)
+        m.compose(p, q, s)
+        const slab = box(0.78, 0.07, 1.5)
+        slab.applyMatrix4(m)
+        covers.push(slab)
+      } else if (seg.cover === 2) {
+        // catch-pit grate at the segment's end — the invert resets there
+        p.set(seg.bx, seg.by + 0.02, seg.bz)
+        m.compose(p, q, s)
+        const grate = box(0.6, 0.05, 0.7)
+        grate.applyMatrix4(m)
+        covers.push(grate)
+      }
+    }
+    // catch-pit rims (concrete collar around each grate) + culverts
+    for (const pit of DRAIN_PITS) {
+      p.set(pit.x, pit.y + 0.045, pit.z)
+      e.set(0, pit.rotY, 0)
+      q.setFromEuler(e)
+      m.compose(p, q, s)
+      const rim = box(0.86, 0.055, 0.96)
+      rim.applyMatrix4(m)
+      covers.push(rim)
+    }
+    for (const c of DRAIN_CULVERTS) {
+      e.set(0, c.rotY + Math.PI / 2, 0)
+      q.setFromEuler(e)
+      // deck slab spanning the channel under the crossing road — deck
+      // length = the recorded crossing span; a zebra-covered deck wears a
+      // proud pedestrian slab in the covers set instead
+      if (c.covered === 1) {
+        p.set(c.x, c.y + 0.075, c.z)
+        m.compose(p, q, s)
+        const deck = box(0.9, 0.07, c.span + 0.4)
+        deck.applyMatrix4(m)
+        covers.push(deck)
+      } else {
+        p.set(c.x, c.y + 0.06, c.z)
+        m.compose(p, q, s)
+        const deck = box(1.15, 0.12, c.span)
+        deck.applyMatrix4(m)
+        culverts.push(deck)
+      }
+      // wing-wall headwalls: two angled cheeks at the outlet mouth
+      for (const wing of [-1, 1]) {
+        p.set(c.x + Math.sin(c.rotY) * 1.5 - Math.cos(c.rotY) * 0.42 * wing,
+          c.y + 0.16,
+          c.z + Math.cos(c.rotY) * 1.5 + Math.sin(c.rotY) * 0.42 * wing)
+        m.compose(p, q, s)
+        const head = box(0.14, 0.42, 0.7)
+        head.applyMatrix4(m)
+        culverts.push(head)
+      }
+    }
+    return {
+      channel: channel.length ? mergeGeoms(channel) : null,
+      covers: covers.length ? mergeGeoms(covers) : null,
+      culverts: culverts.length ? mergeGeoms(culverts) : null,
+    }
+  }, [])
+  useEffect(() => {
+    if (!built) return
+    return () => {
+      built.channel?.dispose()
+      built.covers?.dispose()
+      built.culverts?.dispose()
+    }
+  }, [built])
+  if (!built) return null
+  return (
+    <group>
+      {built.channel && (
+        <mesh geometry={built.channel} castShadow receiveShadow>
+          <meshStandardMaterial color="#9d9789" roughness={0.98} metalness={0} />
+        </mesh>
+      )}
+      {built.covers && (
+        <mesh geometry={built.covers} castShadow receiveShadow>
+          <meshStandardMaterial color="#b9b3a5" roughness={0.9} metalness={0.05} />
+        </mesh>
+      )}
+      {built.culverts && (
+        <mesh geometry={built.culverts} castShadow receiveShadow>
+          <meshStandardMaterial color="#a8a294" roughness={0.95} metalness={0} />
+        </mesh>
+      )}
+    </group>
+  )
+}
+
 /* ---------------------------------- export ---------------------------------- */
 
 export function WorldTerrain() {
@@ -1080,6 +1222,7 @@ export function WorldTerrain() {
       <Roads />
       <Kerbs />
       <Zebras />
+      <Drains />
       <Bridges />
     </group>
   )

@@ -20,15 +20,19 @@ import {
   ANCHOR_BY_ID,
   BUILDINGS,
   DOORS,
+  LAMPS,
   POINTS_OF_INTEREST,
   ROADS,
+  ROAD_RENDER_W,
   STALLS,
+  WATER_Y,
   heightAt,
   inCivicCampus,
   inSchoolYard,
   makeRng,
   riverInfo,
   roadDistance,
+  roadGap,
   WALK_BOUND,
 } from '@/game/world3d/layout'
 
@@ -286,7 +290,27 @@ export const ANTENNAS: AntennaDef[] = []
  * DERIVATION (runs once at import — deterministic, seeded, in-order)
  * ========================================================================== */
 
-/* ---- 1. utility poles + wire spans along the real major roads ---- */
+/* ---- 1. utility poles + wire spans along the real major roads ----
+ *
+ * W1 — THE NEPA SKYLINE, REBUILT. The old derivation died in the dense
+ * fabric: its centreline law (roadDistance < 2.4 from EVERY road) is
+ * unsatisfiable beside parallel streets, so the whole grid produced only
+ * ~15 poles and 3 wires — measured, not assumed. The rebuilt laws are
+ * EDGE-based and give the pole a small lateral search so it steps back
+ * when the verge is blocked (real poles do):
+ *
+ *   SPAN LAW — real NEPA distribution runs keep 35–45 m between poles;
+ *   at this world's furniture scale (the 5.5 u pole ≈ 10 m real, i.e.
+ *   1 m ≈ 0.55 u) the walk is a 21 u pitch = 38 furniture-m, dead centre.
+ *   Wires chain consecutive survivors; a junction gap > 33.6 u drops the
+ *   span (the honest break — no wire across a junction mouth).
+ *
+ *   VERGE LADDER — the pole stands beyond the kerb (0.34) and the W1
+ *   U-drain band (0.875–1.425): tarmac | kerb | drain | POLE | trees.
+ *   Its roadGap ≥ 0.7 (edge law), dry ground, outside fenced yards,
+ *   clear of buildings 0.6, ≥ 9 u from any other pole, ≥ 0.5 from a
+ *   lamp pole (no pole-in-pole doubles).
+ */
 {
   const rng = makeRng(41001)
   let roadIdx = 0
@@ -294,44 +318,65 @@ export const ANTENNAS: AntennaDef[] = []
     if (!road.major) continue
     roadIdx++
     const side = roadIdx % 2 === 0 ? 1 : -1
+    const half = (ROAD_RENDER_W[road.cls] ?? 2.2) / 2
     const chain: PoleDef[] = []
+    // walk the arc at the exact pitch — spans stay at the span law
+    let next = 10 // skip the first 10u (junction mouths cluster at ends)
+    let walked = 0
     for (let i = 0; i < road.pts.length - 1; i++) {
       const ax = road.pts[i][0]
       const az = road.pts[i][1]
       const bx = road.pts[i + 1][0]
       const bz = road.pts[i + 1][1]
       const segLen = Math.hypot(bx - ax, bz - az)
+      if (segLen < 1e-9) continue
       const dirX = (bx - ax) / segLen
       const dirZ = (bz - az) / segLen
-      const steps = Math.max(1, Math.floor(segLen / 13))
-      for (let s = 0; s < steps; s++) {
-        if (UTILITY_POLES.length >= 110) break
-        const t = (s + 0.5) / steps
+      while (next <= walked + segLen) {
+        if (UTILITY_POLES.length >= 150) break
+        const t = (next - walked) / segLen
         const cx = ax + (bx - ax) * t
         const cz = az + (bz - az) * t
-        // roadside offset, perpendicular to the road
-        const x = cx + dirZ * side * 3.9
-        const z = cz - dirX * side * 3.9
-        if (!clearOfWater(x, z, 5)) continue
-        if (roadDistance(x, z) < 2.4) continue
-        if (inSchoolYard(x, z) || inCivicCampus(x, z)) continue // no poles inside school compounds / the civic campus
-        if (!clearOfBuildings(x, z, 0.8)) continue
-        if (Math.hypot(x, z) > WALK_BOUND - 24) continue
-        const y = heightAt(x, z)
-        if (y < 0) continue
-        // avoid stacking poles at junctions where roads meet
-        if (UTILITY_POLES.some((p) => Math.hypot(p.x - x, p.z - z) < 9)) continue
-        const pole: PoleDef = { x, z, y, rotY: Math.atan2(dirX, dirZ) }
-        UTILITY_POLES.push(pole)
-        chain.push(pole)
+        // THE SITING SEARCH — real poles dodge what the verge holds:
+        // first the verge line, then step back from the road, then nudge
+        // along the street (a junction mouth shifts the pole, it never
+        // stands on tarmac). First valid spot wins, deterministically.
+        let placed: PoleDef | null = null
+        for (const nudge of [0, 3, -3, 6]) {
+          const tt = Math.max(0, Math.min(1, t + nudge / segLen))
+          const nx2 = ax + (bx - ax) * tt
+          const nz2 = az + (bz - az) * tt
+          for (const back of [0, 0.6, 1.2, 1.8, 2.5]) {
+            const off = half + 2.0 + back
+            const x = nx2 + dirZ * side * off
+            const z = nz2 - dirX * side * off
+            if (heightAt(x, z) < 0) continue
+            if (heightAt(x, z) <= WATER_Y + 0.15) continue
+            if (roadGap(x, z) < 0.7) continue // edge law — never on any tarmac
+            if (inSchoolYard(x, z) || inCivicCampus(x, z)) continue
+            if (Math.hypot(x, z) > WALK_BOUND - 12) continue
+            if (!clearOfBuildings(x, z, 0.6)) continue
+            if (UTILITY_POLES.some((p) => Math.hypot(p.x - x, p.z - z) < 9)) continue
+            if (LAMPS.some((l) => Math.hypot(l.x - x, l.z - z) < 0.5)) continue
+            placed = { x, z, y: heightAt(x, z), rotY: Math.atan2(dirX, dirZ) }
+            break
+          }
+          if (placed) break
+        }
+        if (placed) {
+          UTILITY_POLES.push(placed)
+          chain.push(placed)
+        }
+        next += 21
       }
+      walked += segLen
     }
-    // sagging wires between consecutive poles of the same road
+    // the catenary wires between consecutive poles of the same road
     for (let i = 0; i < chain.length - 1; i++) {
       const a = chain[i]
       const b = chain[i + 1]
       const len = Math.hypot(b.x - a.x, b.z - a.z)
-      if (len > 24) continue // gap in the chain (junction skip) — no wire
+      if (len > 33.6) continue // junction gap — no wire (1.6 × the pitch)
       WIRE_SPANS.push({
         ax: a.x, ay: a.y + 5.35, az: a.z,
         bx: b.x, by: b.y + 5.35, bz: b.z,
