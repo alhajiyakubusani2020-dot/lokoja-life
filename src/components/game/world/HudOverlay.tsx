@@ -42,8 +42,9 @@ import {
   attachControls, consumeInteract, cycleCamMode, freezeInput, getCamMode, getDriveModel,
   getDriveSpeed, getDriveStartedAt, getNearVehicle, getTutProgress, getWalkedMeters, isDriveActive,
   isPhotoMode, playerPos, queueInteract, requestEnterVehicle, requestParkVehicle, resetTutProgress,
-  resetWalkedMeters, setJoystick, setPhotoMode, setSprint, togglePhotoMode, CAM_MODES,
+  resetWalkedMeters, setJoystick, setPhotoMode, setSprint, speedToKmh, togglePhotoMode, CAM_MODES,
 } from './controls'
+import { nearestPlate } from '@/game/world3d/plates' // W4 — the banner law
 
 const TRANSPORT_ICON: Record<TransportId, (p: { size?: number }) => React.ReactNode> = {
   walk: (p) => <WalkIcon {...p} />,
@@ -307,7 +308,25 @@ export function HudOverlay({
   const [nearShop, setNearShop] = useState(false)
   const nearShopRef = useRef(false)
 
+  /* W4 — THE SPEEDOMETER: ref-driven (the poll law forbids a setState per
+   * frame) — the km/h text, needle transform and gear chip write straight
+   * to the DOM only when the rounded value changes. */
+  const speedoRef = useRef<HTMLDivElement>(null)
+  const speedoNumRef = useRef<HTMLSpanElement>(null)
+  const speedoNeedleRef = useRef<HTMLDivElement>(null)
+  const speedoGearRef = useRef<HTMLSpanElement>(null)
+  const lastKmhRef = useRef(-999)
+  /* W4 — THE JUNCTION BANNERS: entering a real OSM-named street (the W1
+   * plates) raises a banner — once per crossing, deduped 24s per name. */
+  const [banner, setBanner] = useState<{ name: string; at: number } | null>(null)
+  const bannerShownAtRef = useRef(new Map<string, number>())
+  const lastPlateNameRef = useRef<string | null>(null)
+
   // INC 4 — interior mode: refs so the rAF poll can read them without re-subscribing
+  const travellingRef = useRef(isTravelling)
+  useEffect(() => {
+    travellingRef.current = isTravelling
+  }, [isTravelling])
   const interiorRef = useRef<InteriorDef | null>(interior)
   const hotspotRef = useRef<string | null>(hotspot)
   useEffect(() => {
@@ -551,6 +570,42 @@ export function HudOverlay({
         driveUiRef.current = dui
         setDriveUi(dui)
       }
+      /* W4 — the speedo writes: DOM only, only when the km/h tick changes */
+      if (!driveUiRef.current.driving && lastKmhRef.current !== -999) lastKmhRef.current = -999
+      if (speedoRef.current) {
+        const kmh = Math.round(speedToKmh(driving ? getDriveSpeed() : 0))
+        if (kmh !== lastKmhRef.current) {
+          lastKmhRef.current = kmh
+          if (speedoNumRef.current) speedoNumRef.current.textContent = String(kmh)
+          if (speedoGearRef.current) speedoGearRef.current.textContent = getDriveSpeed() < -0.05 ? 'R' : 'D'
+          if (speedoNeedleRef.current) {
+            const frac = Math.max(0, Math.min(1, kmh / 80))
+            speedoNeedleRef.current.style.transform = `rotate(${-120 + frac * 240}deg)`
+          }
+        }
+      }
+      /* W4 — the banner law: nearest named-artery plate within 7u raises
+       * ENTERING <NAME>, once per crossing, deduped 24s per name */
+      if (!isPhotoMode() && panelRef.current.kind === 'none' && !travellingRef.current) {
+        const near = nearestPlate(playerPos.x, playerPos.z, 7)
+        const now = performance.now()
+        if (near && near.plate.name !== lastPlateNameRef.current) {
+          const shownAt = bannerShownAtRef.current.get(near.plate.name) ?? -1e9
+          if (now - shownAt > 24_000) {
+            bannerShownAtRef.current.set(near.plate.name, now)
+            lastPlateNameRef.current = near.plate.name
+            setBanner({ name: near.plate.name, at: now })
+          } else {
+            lastPlateNameRef.current = near.plate.name
+          }
+        } else if (!near && lastPlateNameRef.current) {
+          lastPlateNameRef.current = null // left the mouth — the next street may speak
+        }
+        if (banner && now - banner.at > 2800) setBanner(null)
+      } else if (banner) {
+        setBanner(null)
+      }
+
       const shopA = ANCHOR_BY_ID['transport-area']
       const shopNow =
         !driving && !!shopA && Math.hypot(shopA.x - playerPos.x, shopA.z - playerPos.z) < SHOP_RADIUS
@@ -816,6 +871,70 @@ export function HudOverlay({
             <PinIcon size={14} className="text-[#ffd88a]" />
             Now entering {arrival}
           </p>
+        </div>
+      )}
+
+      {/* ---------- W4 — THE SPEEDOMETER (ref-driven, no per-frame setState) ---------- */}
+      {driveUi.driving && !photo && (
+        <div ref={speedoRef} className="pointer-events-none absolute right-4 z-10" style={{ bottom: touchMode ? '17rem' : '6.75rem' }}>
+          <div className="relative flex h-24 w-24 items-end justify-center rounded-full border-2 border-[#ffd88a]/55 bg-black/65 shadow-[var(--lko-shadow-lg)] backdrop-blur-md">
+            {/* gauge ticks */}
+            {[-120, -60, 0, 60, 120].map((deg) => (
+              <div
+                key={deg}
+                className="absolute bottom-1/2 left-1/2 h-[42px] w-px origin-bottom bg-white/25"
+                style={{ transform: `translateX(-50%) rotate(${deg}deg)` }}
+              />
+            ))}
+            {/* the needle — rotation written by the poll */}
+            <div
+              ref={speedoNeedleRef}
+              className="absolute bottom-1/2 left-1/2 h-9 w-[3px] origin-bottom rounded-full bg-[#ff5040]"
+              style={{ transform: 'translateX(-50%) rotate(-120deg)' }}
+            />
+            <div className="relative mb-3 flex flex-col items-center">
+              <span ref={speedoNumRef} className="text-[26px] font-black leading-none text-white">0</span>
+              <span className="mt-0.5 text-[8.5px] font-black tracking-[0.18em] text-white/70">KM/H</span>
+            </div>
+            <span
+              ref={speedoGearRef}
+              className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[10px] font-black text-[#ffd88a]"
+            >
+              D
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- W4 — THE PHOTO FRAME: thirds grid + postcard mark ---------- */}
+      {photo && (
+        <div className="pointer-events-none absolute inset-0 z-10">
+          <div className="absolute inset-y-0 left-1/3 w-px bg-white/20" />
+          <div className="absolute inset-y-0 left-2/3 w-px bg-white/20" />
+          <div className="absolute inset-x-0 top-1/3 h-px bg-white/20" />
+          <div className="absolute inset-x-0 top-2/3 h-px bg-white/20" />
+          {/* framing corners */}
+          {['left-3 top-3 border-l-2 border-t-2', 'right-3 top-3 border-r-2 border-t-2', 'bottom-3 left-3 border-b-2 border-l-2', 'bottom-3 right-3 border-b-2 border-r-2'].map((pos) => (
+            <div key={pos} className={`absolute h-7 w-7 border-white/70 ${pos}`} />
+          ))}
+          <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/50 px-4 py-1.5 backdrop-blur-md">
+            <span className="text-[10px] font-black tracking-[0.3em] text-white/90">LOKOJA LIFE</span>
+            <span className="h-1 w-1 rounded-full bg-[#e8a317]" />
+            <span className="text-[10px] font-bold capitalize text-white/70">{world.timeOfDay} · {world.weather.replace('night-', '')}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- W4 — THE JUNCTION BANNER: entering a named street ---------- */}
+      {banner && !isPhotoMode() && (
+        <div className="pointer-events-none absolute inset-x-0 top-[4.6rem] flex justify-center px-4">
+          <div
+            key={banner.name}
+            className="lko-pop flex flex-col items-center rounded-2xl border border-[#ffd88a]/45 bg-black/60 px-6 py-2.5 text-center shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+          >
+            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#ffd88a]">Now entering</span>
+            <span className="text-[17px] font-black uppercase tracking-wide text-white">{banner.name}</span>
+          </div>
         </div>
       )}
 

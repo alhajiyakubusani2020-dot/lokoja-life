@@ -1380,8 +1380,8 @@ function TrafficLights() {
     const pole = new THREE.CylinderGeometry(0.07, 0.1, 3.6, 6)
     pole.translate(0, 1.8, 0)
     parts.push(pole)
-    const head = new THREE.BoxGeometry(0.3, 0.92, 0.2)
-    head.translate(0.16, 2.95, 0) // the head hangs on the road side of the mast
+    const head = new THREE.BoxGeometry(0.38, 1.0, 0.22)
+    head.translate(0.18, 2.95, 0) // the head hangs on the road side of the mast
     parts.push(head)
     return mergeGeoms(parts)
   }, [])
@@ -1459,7 +1459,7 @@ function TrafficLights() {
           args={[undefined, undefined, TRAFFIC_LIGHTS.length]}
           frustumCulled={false}
         >
-          <sphereGeometry args={[0.075, 8, 8]} />
+          <sphereGeometry args={[0.12, 10, 10]} />
           <meshBasicMaterial />
         </instancedMesh>
       ))}
