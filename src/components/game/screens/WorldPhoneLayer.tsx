@@ -86,6 +86,15 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
   const [now, setNow] = useState(Date.now())
   const [claimOpen, setClaimOpen] = useState(false)
 
+  // W3 — ONE PHONE: the dashboard's in-world faces (Home sheet's phone
+  // button, deep-links) wake THIS handset with 'lko:phone-open'. The phone
+  // never forks into a copy — the FAB and the event ring the same sheet.
+  useEffect(() => {
+    const open = () => setOverlayOpen(true)
+    window.addEventListener('lko:phone-open', open)
+    return () => window.removeEventListener('lko:phone-open', open)
+  }, [])
+
   // W1 — THE PREVIEW CLOCK: an unlinked walker's 60 seconds start at
   // world entry (the store guards: linked → no-op, twice → no-op).
   useEffect(() => {

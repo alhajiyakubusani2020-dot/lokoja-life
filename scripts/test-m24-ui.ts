@@ -145,7 +145,7 @@ console.log('\n--- M24-UI.5 THE DIEGETIC LAW (the world never unmounts, zero 3D 
   check('the demo ring is LABELED in the banner itself', layer.includes('demo ring'))
   check('the FAB carries the unread dot', layer.includes('world-phone-unread'))
   const dash = read('src/components/game/screens/Dashboard.tsx')
-  check('the layer mounts ONLY beside the world tab (never replacing it)', dash.includes("tab === 'world' && <WorldPhoneLayer"))
+  check('the layer mounts ONLY beside the entered world (W3: the street never blinks, the layer never leaves)', dash.includes('worldEntered && <WorldPhoneLayer'))
   check('the world tab itself is untouched by this wave', dash.includes('<WorldTab'))
   check('the ring pulse animation exists in the design system', read('src/app/globals.css').includes('lko-ring-pulse'))
 }

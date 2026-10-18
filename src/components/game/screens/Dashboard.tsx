@@ -12,7 +12,7 @@
  * is untouched — only the visual layer was redesigned.
  */
 
-import { useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import nextDynamic from 'next/dynamic'
 import { Avatar } from '../Avatar'
 import { NeedsBar } from '../NeedsBar'
@@ -52,6 +52,7 @@ import {  PlaceIcon,
   WorldIcon,
 } from '../icons'
 import { audio } from '@/game/systems/audio'
+import { OVERLAY_LABELS, overlayVerdict, type OverlayTab } from '@/game/systems/diegetic'
 import { verifyChain } from '@/game/systems/fortress'
 import { currentTask } from '@/game/systems/story' // M19 — the story's live task
 import { GraphicsPicker } from './GraphicsPicker'
@@ -756,6 +757,91 @@ function ProfileTab() {
   )
 }
 
+/* ------------------------ the world overlay sheet (W3) ---------------------- */
+
+/**
+ * W3 THE WORLD NEVER BLINKS — the sheet that carries the dashboard's own
+ * tabs ABOVE the living street. The canvas is NEVER touched: a translucent
+ * scrim (black/40 — NO backdrop blur: a software blur over the animating
+ * canvas re-rasterizes the whole viewport every frame, the N11 gate's
+ * worst enemy), a cream panel, and one honest close. The street keeps
+ * living behind it (the no-pause law).
+ *
+ * THE MEMO WALL (the N11 gate taught this): the Dashboard re-renders every
+ * second (the needs rail's heartbeat). WITHOUT the boundary, that cascade
+ * re-rendered the whole MapScreen SVG every second — +91.7ms/frame at the
+ * witness. The sheet is memoized and renders its own content from the
+ * `tab` prop: a Dashboard tick NEVER touches the sheet's subtree, and the
+ * faces inside read the store directly (they stay live on their own).
+ */
+function WorldOverlaySheetImpl({
+  tab,
+  label,
+  focusLocationId,
+  onClose,
+  onOpenWork,
+  onGoToMap,
+  onFocusHandled,
+  onBackToStreet,
+  onOpenPhone,
+}: {
+  tab: OverlayTab
+  label: string
+  focusLocationId?: string | null
+  onClose: () => void
+  onOpenWork: () => void
+  onGoToMap: (locationId: string) => void
+  onFocusHandled: () => void
+  onBackToStreet: () => void
+  onOpenPhone: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[44] flex items-end justify-center bg-black/40 [transform:translateZ(0)] sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      onClick={onClose}
+    >
+      <div
+        data-testid="world-overlay-sheet"
+        className="lko-fade flex max-h-[86dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-black/[0.08] bg-[var(--lko-surface)] shadow-[0_-10px_28px_-12px_rgba(27,34,24,0.45)] [transform:translateZ(0)] sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex shrink-0 items-center gap-2 border-b border-black/[0.06] bg-[var(--lko-surface)] px-4 py-3">
+          <p className="lko-display flex-1 truncate text-[15px] leading-tight">{label}</p>
+          <button
+            data-testid="overlay-close"
+            onClick={() => {
+              audio.play('click')
+              onClose()
+            }}
+            className="lko-press flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full bg-[var(--lko-green)] px-3.5 text-[12px] font-extrabold text-white"
+          >
+            Back to the street
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [contain:layout_paint]">
+          {tab === 'home' && <HomeTab onExploreWorld={onBackToStreet} onOpenPhone={onOpenPhone} />}
+          {tab === 'map' && (
+            <MapTab
+              focusLocationId={focusLocationId}
+              onFocusHandled={onFocusHandled}
+              onOpenWork={onOpenWork}
+            />
+          )}
+          {tab === 'work' && <WorkTab onGoToMap={onGoToMap} />}
+          {tab === 'phone' && <PhoneScreen variant="overlay" onOpenWork={onOpenWork} />}
+          {tab === 'bag' && <BagTab />}
+          {tab === 'profile' && <ProfileTab />}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const WorldOverlaySheet = memo(WorldOverlaySheetImpl)
+
 /* -------------------------------- dashboard -------------------------------- */
 
 export function Dashboard() {
@@ -768,6 +854,10 @@ export function Dashboard() {
   const [focusLoc, setFocusLoc] = useState<string | null>(null)
   /** remount key so tab switches replay the gentle fade */
   const [tabTick, setTabTick] = useState(0)
+  /** W3 — THE WORLD NEVER BLINKS: entered once, mounted until the Main menu */
+  const [worldEntered, setWorldEntered] = useState(false)
+  /** W3 — the overlay sheet above the living street (null = the street itself) */
+  const [overlay, setOverlay] = useState<OverlayTab | null>(null)
 
   /* SILK II — the world chunk warms in the first idle window after the
    * dashboard paints (never fights first paint; on-demand if the player
@@ -779,10 +869,57 @@ export function Dashboard() {
   const xpNeeded = xpToNextLevel(player.level)
   const tier = reputationTier(player.reputation)
 
-  const switchTab = (next: TabKey) => {
-    setTab(next)
-    setTabTick((t) => t + 1)
-  }
+  /* W3 — THE DIEGETIC MACHINE: one verdict (systems/diegetic.ts) rules both
+   * worlds. Pre-entry: the legacy tab machine (cheap dashboard first, the
+   * heavy 3D on demand — the SILK gates' knowledge). After entry: the street
+   * NEVER unmounts — every tab is a sheet above the living world, and only
+   * the Main menu (returnToMenu, via the Profile tab) ends the session.
+   * Stable via useCallback — the sheet's memo wall depends on it. */
+  const switchTab = useCallback(
+    (next: TabKey) => {
+      const verdict = overlayVerdict(next, worldEntered)
+      if (verdict.fullscreen) {
+        setTab(next)
+        if (next === 'world') setWorldEntered(true)
+        setTabTick((t) => t + 1)
+        return
+      }
+      // in-world: the sheet is the only change — the street keeps living
+      setOverlay(verdict.overlay)
+    },
+    [worldEntered],
+  )
+
+  /* W3 — the phone stays THE phone: in-world, the Home sheet's phone button
+   * wakes the diegetic handset (WorldPhoneLayer's own sheet), never a copy.
+   * EVERY handler is stable (useCallback) — the memo wall only works if the
+   * sheet's props never change when a Dashboard tick fires. */
+  const closeOverlay = useCallback(() => setOverlay(null), [])
+  const openPhoneInWorld = useCallback(() => {
+    setOverlay(null)
+    window.dispatchEvent(new CustomEvent('lko:phone-open'))
+  }, [])
+  const backToStreet = closeOverlay
+  const focusHandled = useCallback(() => setFocusLoc(null), [])
+  const overlayOpenWork = useCallback(() => switchTab('work'), [switchTab])
+  const overlayGoToMap = useCallback(
+    (locId: string) => {
+      setFocusLoc(locId)
+      switchTab('map')
+    },
+    [switchTab],
+  )
+
+  /* W3 — the witness hook (the forceDrive precedent): behind ?e2e=1 the REAL
+   * switchTab is reachable by the e2e script. No new UI path — the same code
+   * the thumb runs. Rebound every render so the closures stay fresh. */
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('e2e')) return
+    ;(window as unknown as { __lkoDash?: unknown }).__lkoDash = {
+      open: (t: string) => switchTab(t as TabKey),
+      state: () => ({ tab, worldEntered, overlay }),
+    }
+  })
 
   return (
     <div className="lko-root min-h-dvh">
@@ -806,8 +943,9 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* the 3D world is a fullscreen mode — it replaces the page chrome */}
-      {tab === 'world' && (
+      {/* W3 — THE LIVING WORLD: mounted from the moment of entry until the
+          Main menu. Tab switches open SHEETS above it; it never blinks. */}
+      {worldEntered && (
         <WorldTab
           onExit={() => switchTab('home')}
           onOpenWork={() => switchTab('work')}
@@ -820,9 +958,25 @@ export function Dashboard() {
 
       {/* M24-UI — the diegetic phone layer: needs rail + FAB + calls, ABOVE the living world.
           Pure DOM — imports no 3D module, unmounts nothing. */}
-      {tab === 'world' && <WorldPhoneLayer onOpenWork={() => switchTab('work')} />}
+      {worldEntered && <WorldPhoneLayer onOpenWork={() => switchTab('work')} />}
 
-      {tab !== 'world' && (
+      {/* W3 — the dashboard's own tabs, as sheets ABOVE the living street. */}
+      {worldEntered && overlay && (
+        <WorldOverlaySheet
+          key={overlay}
+          tab={overlay}
+          label={OVERLAY_LABELS[overlay]}
+          focusLocationId={focusLoc}
+          onClose={closeOverlay}
+          onOpenWork={overlayOpenWork}
+          onGoToMap={overlayGoToMap}
+          onFocusHandled={focusHandled}
+          onBackToStreet={backToStreet}
+          onOpenPhone={openPhoneInWorld}
+        />
+      )}
+
+      {!worldEntered && (
         <>
           {/* HUD header — one compact strip, no heavy card stack */}
           <header className="mx-auto w-full max-w-md px-4 pt-3 sm:max-w-3xl sm:px-6">
