@@ -99,6 +99,16 @@ import {
   type VoiceCallWhy,
 } from '../../src/game/systems/voice'
 
+// THE BODIES LAWS — W2, same verbatim doctrine (zero copies)
+import {
+  posOk,
+  bodyRelayOk,
+  joinVerdict,
+  bodyLook,
+  POS_TICK_MS,
+} from '../../src/game/systems/bodies'
+import { DEFAULT_LOOK_JSON } from '../../src/game/systems/profile'
+
 const PORT = Number(process.env.WIRE_PORT ?? 3003)
 const DB_PATH = process.env.WIRE_DB ?? '/home/z/my-project/db/custom.db'
 const RESUME_CAP = 100
@@ -113,6 +123,9 @@ const CAPS = {
   // W7 — signaling is bursty (a connection burst releases a fist of ICE
   // envelopes at once); the cap stays generous but the wire stays thin.
   call: { n: 24, ms: 10_000 },
+  // W2 — the 10Hz body cadence (POS_TICK_MS=100) + a burst headroom of one
+  // full second; the cap is data, the cadence law lives in bodies.ts.
+  pos: { n: Math.ceil((1000 / POS_TICK_MS) * 2.4), ms: 1_000 },
 } as const
 
 const DM_HISTORY_CAP = 100
@@ -240,9 +253,62 @@ interface WirePresence {
   voiceOn: boolean // W7 — the M17 opt-in rides the presence row
   ts: number
   sid: string // the socket that owns this presence — the sweep's truth
+  // W2 — THE BODIES: the walker's moment + the face the body wears.
+  // Positions are EPHEMERAL (the bodies.ts law): memory only, never a row.
+  x: number
+  z: number
+  hd: number
+  mv: boolean
+  hasPos: boolean
+  displayName: string
+  look: string // the validated avatarLook JSON (the REAL vocab only)
+}
+
+/** THE BODY'S FACE — the REAL ProfileRow at the door (the W1 register law's
+ *  own disk). A walker with no row yet (pre-W1) carries the honest default
+ *  look + their handle as the name; the first PATCH upgrades the body. */
+function profileOf(handle: string): { displayName: string; look: string } {
+  try {
+    const r = db
+      .query('SELECT displayName, avatarLook FROM ProfileRow WHERE handle = ? LIMIT 1')
+      .get(handle) as { displayName: string; avatarLook: string } | undefined
+    if (r) {
+      const look = bodyLook(r.avatarLook)
+      return { displayName: r.displayName, look: look ? JSON.stringify(look) : DEFAULT_LOOK_JSON }
+    }
+  } catch {
+    /* the face row is best-effort — the body still walks */
+  }
+  return { displayName: handle, look: DEFAULT_LOOK_JSON }
+}
+
+function freshPresence(handle: string, band: LiveBand, street: string, status: string, voiceOn: boolean, sid: string): WirePresence {
+  const face = profileOf(handle)
+  const lm = lastMoment.get(handle)
+  return {
+    handle,
+    band,
+    street,
+    status,
+    voiceOn,
+    ts: Date.now(),
+    sid,
+    x: lm?.x ?? 0,
+    z: lm?.z ?? 0,
+    hd: lm?.hd ?? 0,
+    mv: false,
+    hasPos: !!lm,
+    displayName: face.displayName,
+    look: face.look,
+  }
 }
 
 const presence = new Map<string, WirePresence>() // handle -> record (one walker, one row)
+
+/** THE LAST MOMENT — a body's final honest position, kept so a reconnecting
+ *  walker STANDS where they last stood instead of blinking to (0,0). Memory
+ *  only (the ephemeral law): three numbers per claimed walker, no rows. */
+const lastMoment = new Map<string, { x: number; z: number; hd: number }>()
 
 function sweepPresence(io: Server): boolean {
   const now = Date.now()
@@ -268,7 +334,34 @@ function sweepPresence(io: Server): boolean {
 function rosterFor(street?: string) {
   return [...presence.values()]
     .filter((p) => (street ? p.street === street : true))
-    .map(({ handle, band, street: st, status, voiceOn, ts }) => ({ handle, band, street: st, status, voiceOn, ts }))
+    .map(({ handle, band, street: st, status, voiceOn, ts, x, z, hd, mv, hasPos, displayName, look }) => ({
+      handle,
+      band,
+      street: st,
+      status,
+      voiceOn,
+      ts,
+      // W2 — the body rides the roster: one push seeds the face, the moment
+      // and the name; the pos lane only ever carries the DELTAS after it.
+      ...(hasPos ? { x, z, hd, mv } : {}),
+      displayName,
+      look,
+    }))
+}
+
+/** THE BODY RELAY — a mover's moment to one same-street neighbour, the
+ *  BLOCK WALL checked PER RECIPIENT (a blocked pair shares NO positions,
+ *  either direction — the M17 wall walks in space). Memory only: no row,
+ *  no replay, no history — the ephemeral law. */
+function relayPos(io: Server, from: WirePresence): void {
+  const payload = { h: from.handle, x: from.x, z: from.z, hd: from.hd, mv: from.mv }
+  for (const p of presence.values()) {
+    if (p.handle === from.handle || p.street !== from.street || !p.sid) continue
+    if (!bodyRelayOk(
+      edgeGet(from.handle, p.handle)?.state === 'blocked' || edgeGet(p.handle, from.handle)?.state === 'blocked',
+    )) continue
+    io.to(p.sid).emit('wire:pos', payload)
+  }
 }
 
 /* ─────────────── W7 the call registry (memory — the relay doctrine) ───────────────
@@ -588,23 +681,25 @@ io.on('connection', (socket) => {
   socket.join('wire:global')
   socket.emit('wire:welcome', { ok: true, you: identity, head: headSeq(), t: Date.now() })
 
-  /* ── hello: the street claim (presence + street room) ── */
+  /* ── hello: the street claim (presence + street room + THE BODY) ── */
   socket.on('hello', (raw: unknown, ack?: (r: unknown) => void) => {
-    const body = (raw ?? {}) as { street?: string; status?: string; voiceOn?: boolean }
+    const body = (raw ?? {}) as { street?: string; status?: string; voiceOn?: boolean; x?: unknown; z?: unknown; hd?: unknown }
     currentStreet = typeof body.street === 'string' ? body.street.slice(0, 48) : 'home'
     const status = typeof body.status === 'string' ? body.status.slice(0, 24) : 'chilling'
     const voiceOn = body.voiceOn === true // W7 — the M17 opt-in rides presence
     if (claimed) {
       socket.join(`wire:street:${currentStreet}`)
-      presence.set(identity.handle!, {
-        handle: identity.handle!,
-        band: identity.band,
-        street: currentStreet,
-        status,
-        voiceOn,
-        ts: Date.now(),
-        sid: socket.id,
-      })
+      const prev = presence.get(identity.handle!)
+      const p = freshPresence(identity.handle!, identity.band, currentStreet, status, voiceOn, socket.id)
+      // a re-hello (reconnect) keeps the body's last honest moment
+      if (prev && prev.hasPos) {
+        p.x = prev.x
+        p.z = prev.z
+        p.hd = prev.hd
+        p.mv = false
+        p.hasPos = true
+      }
+      presence.set(identity.handle!, p)
       broadcastRoster(io)
     }
     ack?.({ ok: true, street: currentStreet, roster: rosterFor(claimed ? currentStreet : undefined) })
@@ -631,18 +726,55 @@ io.on('connection', (socket) => {
       p.ts = Date.now()
       p.sid = socket.id
     } else {
-      presence.set(identity.handle!, {
-        handle: identity.handle!,
-        band: identity.band,
-        street: currentStreet,
-        status,
-        voiceOn,
-        ts: Date.now(),
-        sid: socket.id,
-      })
+      presence.set(identity.handle!, freshPresence(identity.handle!, identity.band, currentStreet, status, voiceOn, socket.id))
     }
     broadcastRoster(io)
     ack?.({ ok: true, street: currentStreet })
+  })
+
+  /* ── W2 THE POS DOOR — the body's moment at 10Hz. THE EPHEMERALITY LAW:
+   * memory only, never a row; THE POS LAW at the door (bad-pos refuses);
+   * THE BLOCK WALL per recipient in the relay. A guest broadcasts NOTHING
+   * (guest-mic-dark — the spectate law: guests watch, never walk). ── */
+  socket.on('pos', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('pos')) return ack?.({ ok: false, why: 'too-fast' })
+    if (!posOk(raw)) return ack?.({ ok: false, why: 'bad-pos' })
+    const p = presence.get(identity.handle!)
+    if (!p) return ack?.({ ok: false, why: 'no-street' })
+    p.x = raw.x
+    p.z = raw.z
+    p.hd = raw.hd
+    p.mv = raw.mv
+    p.hasPos = true
+    p.ts = Date.now()
+    lastMoment.set(identity.handle!, { x: raw.x, z: raw.z, hd: raw.hd })
+    relayPos(io, p)
+    ack?.({ ok: true })
+  })
+
+  /* ── W2 THE WHERE DOOR — the join-teleport law. Where does my paddy
+   * STAND right now? THE JOIN WALL (bodies.ts verbatim): blocked never,
+   * minors reach accepted paddies only, guests stay dark, and a walker
+   * who is not on the wire is honestly 'not-around'. ── */
+  socket.on('where', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('social')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { handle?: string }
+    const target = socialNorm(body.handle)
+    if (!target) return ack?.({ ok: false, why: 'bad-handle' })
+    const t = presence.get(target) ?? null
+    const blockedEitherWay = edgeGet(identity.handle!, target)?.state === 'blocked' || edgeGet(target, identity.handle!)?.state === 'blocked'
+    const verdict = joinVerdict({
+      myBand: identity.band,
+      blockedEitherWay,
+      edgeStateMine: edgeGet(identity.handle!, target)?.state ?? null,
+      edgeStateTheirs: edgeGet(target, identity.handle!)?.state ?? null,
+      targetPresent: !!t,
+      self: target === identity.handle,
+    })
+    if (!verdict.ok) return ack?.({ ok: false, why: verdict.why })
+    ack?.({ ok: true, street: t!.street, x: t!.x, z: t!.z, hd: t!.hd, hasPos: t!.hasPos, displayName: t!.displayName })
   })
 
   /* ── chat: the tier laws computed HERE, at the server door ── */
@@ -1196,6 +1328,8 @@ io.on('connection', (socket) => {
     const mine = callOfHandle(identity.handle ?? '')
     if (mine && (!p || p.sid === socket.id)) endCall(io, mine, 'hangup', 'system')
     if (claimed && p && p.sid === socket.id) {
+      // THE LAST MOMENT survives the goodbye — the re-hello law reads it
+      if (p.hasPos) lastMoment.set(identity.handle!, { x: p.x, z: p.z, hd: p.hd })
       presence.delete(identity.handle!)
       broadcastRoster(io)
     }

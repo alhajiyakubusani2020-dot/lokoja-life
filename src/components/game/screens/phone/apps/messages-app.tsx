@@ -26,6 +26,7 @@ import { useSocialStore } from '@/game/store/social-store'
 import { EMOTE_LIBRARY, sanitizeChat, type LiveIdentity } from '@/game/systems/live'
 import { useWireStore, wireEnsure, wireSendChat, wireSendEmote, wireOpenDm, wireSendDm, wireSendInvite } from '@/game/systems/wire'
 import { socialNetDms } from '@/game/systems/socialnet'
+import { remoteJoin, remoteNetInit } from '@/game/systems/remotenet'
 
 type Tab = 'wire' | 'dms'
 
@@ -121,6 +122,8 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
       () => useGameStore.getState().account.token ?? null,
       () => ({ street: useGameStore.getState().world?.currentLocation ?? 'home', status: 'hustling' }),
     )
+    // W2 — the bodies' lanes (idempotent): the join law needs the where door
+    remoteNetInit()
   }, [claimed, account.token])
 
   // the same 12s heartbeat the whole nation rides — THE DEGRADED LANE:
@@ -285,11 +288,27 @@ export function MessagesApp({ openDm, onOpenDmChange }: { openDm: string | null;
                 <p className="text-[12px] font-extrabold">🎮 {m.from === 'me' ? 'You wan hangout' : `@${m.from} wan hangout`} — {m.street}</p>
                 {m.from !== 'me' && (
                   <button
-                    onClick={() => {
-                      // THE HONEST JOIN: the postcard law verifies SIGNED codes,
-                      // so an invite assists the REAL journey — the ferry door
-                      // rules the water (fare, energy); dry roads stay waka.
-                      useGameStore.getState().takeFerry(m.street ?? '')
+                    data-testid="messages-join"
+                    onClick={async () => {
+                      // THE W2 JOIN LAW: if the paddy STANDS on the wire right
+                      // now, the where door teleports my body beside theirs —
+                      // real co-presence, no ferry. A paddy who is not around
+                      // keeps the honest journey (the ferry door rules the
+                      // water — fare, energy; dry roads stay waka).
+                      const j = await remoteJoin(openDm)
+                      if (j.ok) {
+                        setNotice(`🎮 You don land beside @${j.displayName ?? openDm} for ${j.street}.`)
+                      } else if (j.why === 'not-around') {
+                        useGameStore.getState().takeFerry(m.street ?? '')
+                      } else if (j.why === 'paddies-only') {
+                        setNotice('Minors waka reach accepted paddies only — na the law.')
+                      } else if (j.why === 'blocked') {
+                        setNotice('The block wall stand — no join dey pass am.')
+                      } else if (j.why === 'guest-mic-dark') {
+                        setNotice('Claim your name first — the join na for citizens.')
+                      } else {
+                        setNotice('The join no gree — check the wire.')
+                      }
                     }}
                     className="lko-press mt-1.5 rounded-full bg-white px-3 py-1 text-[10px] font-extrabold text-[var(--lko-gold-deep)]"
                   >

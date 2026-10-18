@@ -21,6 +21,7 @@ import { WorldTerrain } from './WorldTerrain'
 import { CityMesh } from './CityMesh'
 import { SchoolMesh } from './SchoolMesh'
 import { Birds, Npcs, PlayerController, Rain, SmokeWisps, Traffic } from './Actors'
+import { RemoteWalkers } from './RemoteWalkers'
 import { DriveSystem } from './DriveSystem'
 import { PolishLayer } from './polish'
 import { setPerfRenderer, readFrameStats } from '@/game/systems/perfProbe'
@@ -558,6 +559,9 @@ export function WorldScene({
       />
       <Npcs timeOfDay={timeOfDay} onGist={onGist} />
       <Traffic timeOfDay={timeOfDay} />
+      {/* M24 W2 — THE BODIES: real claimed walkers as real bodies (additive
+          layer; the roster seeds the face, the 10Hz lane walks the body) */}
+      <RemoteWalkers />
       <Rain weather={weather} />
       {/* M6 — the food strip turns after dark: night-market bulbs */}
       <NightMarketGlow timeOfDay={timeOfDay} />

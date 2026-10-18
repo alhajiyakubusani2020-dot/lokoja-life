@@ -50,6 +50,13 @@ export interface WireRosterRow {
   status: string
   voiceOn?: boolean // W7 — the M17 opt-in rides the roster
   ts: number
+  // W2 — the body rides the roster (one push seeds the face + the moment)
+  displayName?: string
+  look?: string // the validated avatarLook JSON
+  x?: number
+  z?: number
+  hd?: number
+  mv?: boolean
 }
 
 interface WireStore {
@@ -206,6 +213,14 @@ export function wireEnsure(
     }
   })
 
+  // W2: the body lane — a same-street walker's 10Hz moment (ephemeral,
+  // memory-only; remotenet owns the buffers)
+  s.on('wire:pos', (p: WirePosPush) => {
+    if (p && typeof p.h === 'string' && typeof p.x === 'number' && typeof p.z === 'number') {
+      for (const fn of posFns) fn(p)
+    }
+  })
+
   s.on('wire:roster', (r: { scope?: string; roster?: WireRosterRow[] }) => {
     if (r?.roster) useWireStore.setState({ roster: r.roster })
   })
@@ -356,6 +371,39 @@ export function wireOnPv(fn: PvFn): () => void {
   return () => {
     pvFns.delete(fn)
   }
+}
+
+/* ── W2: the body lanes — the 10Hz moment in, the pos tick out. ── */
+
+export type WirePosPush = { h: string; x: number; z: number; hd: number; mv: boolean }
+
+type PosFn = (p: WirePosPush) => void
+const posFns = new Set<PosFn>()
+
+export function wireOnPos(fn: PosFn): () => void {
+  posFns.add(fn)
+  return () => {
+    posFns.delete(fn)
+  }
+}
+
+/** THE POS TICK — fire-and-forget at the 10Hz cadence (an ack per tick
+ *  would double the wire for zero honesty; the door's refusals matter only
+ *  to a sender misbehaving, and the cap's 'too-fast' is felt as a pause). */
+export function wireSendPos(p: { x: number; z: number; hd: number; mv: boolean }): void {
+  if (socket?.connected) socket.emit('pos', p)
+}
+
+/** THE WHERE DOOR — where does my paddy stand this second? */
+export function wireWhere(handle: string): Promise<WireSendResult & { street?: string; x?: number; z?: number; hd?: number; hasPos?: boolean; displayName?: string }> {
+  return wireEmitAck('where', { handle }) as Promise<WireSendResult & { street?: string; x?: number; z?: number; hd?: number; hasPos?: boolean; displayName?: string }>
+}
+
+/** THE STREET MOVE — the join law landed me beside my paddy; my presence
+ *  follows (the next hello/presence carries it; the server's own cap paces). */
+export function wireSetStreet(street: string): void {
+  presence = { ...presence, street: street.slice(0, 48) || 'home' }
+  wirePresence()
 }
 
 /** THE CALL SENDERS — thin doors over the raw ack; voicenet owns the
