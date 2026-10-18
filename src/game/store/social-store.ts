@@ -74,11 +74,27 @@ function savePersist(p: SocialPersist): void {
   try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(p)) } catch { /* the flag is honest — storage may refuse */ }
 }
 
+/** W8 — the camera media slice. The PURE machine never sees a MediaStream
+ *  (the headless-safe law); this slice is the browser's picture truth and
+ *  it dies with the call. */
+export interface CamMedia {
+  local: boolean
+  remote: boolean
+  localStream: MediaStream | null
+  remoteStream: MediaStream | null
+}
+
+function freshCam(): CamMedia {
+  return { local: false, remote: false, localStream: null, remoteStream: null }
+}
+
 interface SocialStore extends SocialPersist {
   call: CallState
   /** W7 — is the CURRENT ring the labeled demo door's (e2e/dev) or a
    *  REAL wire ring? The banner labels it; a demo never touches the mic. */
   callDemo: boolean
+  /** W8 — the camera truth (the faces read; voicenet writes) */
+  cam: CamMedia
   overlayOpen: boolean
   pendingDm: string | null
 
@@ -119,6 +135,10 @@ interface SocialStore extends SocialPersist {
   endFromWire: (why: CallEndWhy) => void
   clearEnded: () => void
 
+  /* the camera (W8 — voicenet is the only writer; the faces read) */
+  setCamLocal: (on: boolean, stream: MediaStream | null) => void
+  setCamRemote: (on: boolean, stream: MediaStream | null) => void
+
   /* the diegetic layer */
   setOverlayOpen: (open: boolean) => void
 }
@@ -142,6 +162,7 @@ export const useSocialStore = create<SocialStore>((set, get) => {
     ...loadPersist(),
     call: freshCallState(),
     callDemo: false,
+    cam: freshCam(),
     overlayOpen: false,
     pendingDm: null,
 
@@ -261,18 +282,18 @@ export const useSocialStore = create<SocialStore>((set, get) => {
     dial: (peer, video) => {
       const verdict = dialCall(get().call, peer, video, Date.now())
       if (!verdict.ok) return { ok: false, why: verdict.why }
-      set({ call: withRingClock(verdict.next, Date.now()) })
+      set({ call: withRingClock(verdict.next, Date.now()), cam: freshCam() })
       return { ok: true }
     },
     incomingDemoCall: (peer, video) => {
       const verdict = receiveCall(get().call, peer, video, Date.now())
       if (!verdict.ok) return
-      set({ call: withRingClock(verdict.next, Date.now()), callDemo: true })
+      set({ call: withRingClock(verdict.next, Date.now()), callDemo: true, cam: freshCam() })
     },
     incomingWireCall: (peer, video) => {
       const verdict = receiveCall(get().call, peer, video, Date.now())
       if (!verdict.ok) return
-      set({ call: withRingClock(verdict.next, Date.now()), callDemo: false })
+      set({ call: withRingClock(verdict.next, Date.now()), callDemo: false, cam: freshCam() })
     },
     answer: () => {
       const verdict = answerCall(get().call, Date.now())
@@ -296,8 +317,11 @@ export const useSocialStore = create<SocialStore>((set, get) => {
       if (verdict.ok) set({ call: verdict.next })
     },
     clearEnded: () => {
-      if (get().call.phase === 'ended') set({ call: freshCallState(), callDemo: false })
+      if (get().call.phase === 'ended') set({ call: freshCallState(), callDemo: false, cam: freshCam() })
     },
+
+    setCamLocal: (on, stream) => set({ cam: { ...get().cam, local: on, localStream: stream } }),
+    setCamRemote: (on, stream) => set({ cam: { ...get().cam, remote: on, remoteStream: stream } }),
 
     setOverlayOpen: (open) => set({ overlayOpen: open }),
   }

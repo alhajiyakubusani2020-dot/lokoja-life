@@ -70,12 +70,44 @@ function ensureMic(): Promise<MediaStream> {
   return micPromise
 }
 
-function releaseMicIfIdle(): void {
-  // the walkie and the call share one stream; only a truly idle mic stops
+/* ───────────────────── W8: the shared camera ───────────────────── */
+
+let camStream: MediaStream | null = null
+let camPromise: Promise<MediaStream | null> | null = null
+
+/** THE CAMERA LAW — asked only when a VIDEO call needs it, only at
+ *  accept/answer (the thumb is the gesture). A refusal NEVER kills the
+ *  call: it resolves null — the audio-only fallback, a voice call is
+ *  the floor (THE CAMERA FALLBACK LAW). The walkie never asks — the
+ *  street stays audio (heat honesty). */
+function ensureCam(): Promise<MediaStream | null> {
+  if (camStream) return Promise.resolve(camStream)
+  if (!camPromise) {
+    camPromise = navigator.mediaDevices
+      .getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false })
+      .then((s) => {
+        camStream = s
+        return s
+      })
+      .catch(() => {
+        camPromise = null // the honest null — a later call may ask again
+        return null
+      })
+  }
+  return camPromise
+}
+
+function releaseMediaIfIdle(): void {
+  // the walkie and the call share one mic; the camera is call-only
   if (micStream && !currentCall && pvConns.size === 0) {
     for (const t of micStream.getTracks()) t.stop()
     micStream = null
     micPromise = null
+  }
+  if (camStream && !currentCall) {
+    for (const t of camStream.getTracks()) t.stop()
+    camStream = null
+    camPromise = null
   }
 }
 
@@ -130,6 +162,7 @@ function closeConnResources(conn: CallConn): void {
   }
   conn.remoteAudio.pause()
   conn.remoteAudio.srcObject = null
+  useSocialStore.getState().setCamRemote(false, null)
 }
 
 /** THE ONE ENDING — idempotent by construction. */
@@ -143,7 +176,8 @@ function endLocalCall(why: 'hangup' | 'declined' | 'missed' | 'no-answer' | 'bus
   }
   if (conn) closeConnResources(conn)
   useSocialStore.getState().endFromWire(why)
-  releaseMicIfIdle()
+  useSocialStore.getState().setCamLocal(false, null)
+  releaseMediaIfIdle()
 }
 
 function hookCallPc(conn: CallConn): void {
@@ -166,6 +200,11 @@ function hookCallPc(conn: CallConn): void {
            the retry lives on the next track event */
       })
     }
+    // W8 — the remote PICTURE: a video track on the same negotiated
+    // m-line lands here; the face reads the stream from the store
+    if (ev.track.kind === 'video' && stream) {
+      useSocialStore.getState().setCamRemote(true, stream)
+    }
   }
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'failed') endLocalCall('hangup') // the media wire died — both sides learn
@@ -184,7 +223,9 @@ async function drainIce(conn: CallConn): Promise<void> {
   }
 }
 
-/** CALLER: the accept push landed — mic, pc, offer, send. */
+/** CALLER: the accept push landed — mic, (cam if the dial wished video),
+ *  pc, offer, send. THE FACE LAW: the video m-line is born HERE or not
+ *  at all — no renegotiation ever. */
 async function callerAfterAccepted(callId: string): Promise<void> {
   if (!currentCall || currentCall.callId !== callId || currentCall.pc) return
   let stream: MediaStream
@@ -195,17 +236,33 @@ async function callerAfterAccepted(callId: string): Promise<void> {
     return
   }
   if (!currentCall || currentCall.callId !== callId) return // ended while asking
+  // THE CAMERA FALLBACK LAW: a shy camera downgrades to voice, never ends
+  let cam: MediaStream | null = null
+  if (currentCall.video) cam = await ensureCam()
+  if (!currentCall || currentCall.callId !== callId) return // ended while asking
   const pc = makePc(currentCall.iceServers)
   currentCall.pc = pc
   hookCallPc(currentCall)
   for (const t of stream.getAudioTracks()) pc.addTrack(t, stream)
-  const offer = await pc.createOffer({ offerToReceiveAudio: true })
+  if (cam) {
+    for (const t of cam.getVideoTracks()) pc.addTrack(t, cam)
+    useSocialStore.getState().setCamLocal(true, cam)
+  }
+  const offer = await pc.createOffer(currentCall.video ? { offerToReceiveAudio: true, offerToReceiveVideo: true } : { offerToReceiveAudio: true })
   await pc.setLocalDescription(offer)
   const r = await wireCallSend('call:offer', { callId, sdp: pc.localDescription?.sdp ?? '' })
-  if (!r.ok && currentCall && currentCall.callId === callId) endLocalCall('hangup')
+  if (!r.ok && currentCall && currentCall.callId === callId) {
+    endLocalCall('hangup')
+    return
+  }
+  // the camera truth rides AFTER the offer (the door's connecting state) —
+  // the other ear learns 'dark' honestly, never a black lie
+  void wireCallSend('call:cam', { callId, on: !!cam })
 }
 
-/** CALLEE: the offer landed after my thumb — remote, answer, send. */
+/** CALLEE: the offer landed after my thumb — remote, answer, send.
+ *  W8: a video ring asks the camera here (the thumb IS the gesture);
+ *  a refusal answers audio-only and says so on the cam lane. */
 async function calleeOnOffer(callId: string, sdp: string): Promise<void> {
   if (!currentCall || currentCall.callId !== callId) return
   if (!currentCall.pc) {
@@ -217,10 +274,17 @@ async function calleeOnOffer(callId: string, sdp: string): Promise<void> {
       return
     }
     if (!currentCall || currentCall.callId !== callId) return
+    let cam: MediaStream | null = null
+    if (currentCall.video) cam = await ensureCam()
+    if (!currentCall || currentCall.callId !== callId) return
     const pc = makePc(currentCall.iceServers)
     currentCall.pc = pc
     hookCallPc(currentCall)
     for (const t of stream.getAudioTracks()) pc.addTrack(t, stream)
+    if (cam) {
+      for (const t of cam.getVideoTracks()) pc.addTrack(t, cam)
+      useSocialStore.getState().setCamLocal(true, cam)
+    }
   }
   const pc = currentCall.pc
   if (!pc) return
@@ -230,6 +294,10 @@ async function calleeOnOffer(callId: string, sdp: string): Promise<void> {
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
     await wireCallSend('call:answer', { callId, sdp: pc.localDescription?.sdp ?? '' })
+    // the camera truth rides AFTER the answer ack — the caller's face
+    // reads an honest chip, never a black lie
+    const st = useSocialStore.getState()
+    void wireCallSend('call:cam', { callId, on: st.cam.local })
     await drainIce(currentCall)
   } catch {
     endLocalCall('hangup')
@@ -298,6 +366,16 @@ async function onCallPush(p: WireCallPush): Promise<void> {
         } else {
           currentCall.pendingIce.push(init) // THE ICE QUEUE LAW
         }
+      }
+      break
+    }
+    case 'cam': {
+      // W8 — the other ear's camera truth. THE STREAM-SURVIVAL LAW: an
+      // ON never evicts the picture it announces (the push may land
+      // after the track event — socket order); only an OFF drops it.
+      if (currentCall && currentCall.callId === p.callId) {
+        const keep = p.on === true ? useSocialStore.getState().cam.remoteStream : null
+        useSocialStore.getState().setCamRemote(p.on === true, keep)
       }
       break
     }
@@ -424,6 +502,20 @@ export function voiceToggleMute(): void {
   useSocialStore.getState().toggleMute()
   const muted = useSocialStore.getState().call.muted
   if (micStream) for (const t of micStream.getAudioTracks()) t.enabled = !muted
+}
+
+/** W8 — THE PICTURE MUTE: flips my camera's track and tells the other
+ *  ear the truth. THE FACE LAW: only a call BORN video (and holding a
+ *  live camera) toggles — a call born audio stays audio until redial. */
+export function voiceToggleCam(): void {
+  const conn = currentCall
+  if (!conn || !conn.video || !camStream) return
+  const track = camStream.getVideoTracks()[0]
+  if (!track) return
+  const next = !track.enabled
+  track.enabled = next
+  useSocialStore.getState().setCamLocal(next, camStream)
+  void wireCallSend('call:cam', { callId: conn.callId, on: next })
 }
 
 /* ─────────────────── the proximity voice (street walkie) ─────────────────── */
@@ -560,7 +652,7 @@ function pvDrop(handle: string): void {
   }
   conn.remoteAudio.pause()
   conn.remoteAudio.srcObject = null
-  releaseMicIfIdle()
+  releaseMediaIfIdle()
 }
 
 async function pvTeardown(): Promise<void> {
@@ -570,7 +662,7 @@ async function pvTeardown(): Promise<void> {
   }
   pvActive = false
   for (const h of [...pvConns.keys()]) pvDrop(h)
-  releaseMicIfIdle()
+  releaseMediaIfIdle()
 }
 
 /** THE PROXIMITY SYNC — call whenever the walkie's inputs change: the
@@ -666,7 +758,8 @@ export function voiceInit(): void {
       const conn = currentCall
       currentCall = null
       closeConnResources(conn)
-      releaseMicIfIdle()
+      useSocialStore.getState().setCamLocal(false, null)
+      releaseMediaIfIdle()
     }
   })
 
@@ -691,6 +784,7 @@ export function voiceInit(): void {
         ? {
             callId: currentCall.callId,
             peer: currentCall.peer,
+            video: currentCall.video,
             pc: currentCall.pc?.connectionState ?? 'none',
             gathering: currentCall.pc?.iceGatheringState ?? 'none',
             iceSent: currentCall.iceSent,
@@ -701,6 +795,8 @@ export function voiceInit(): void {
             lastIceGot: currentCall.lastIceGot,
             signal: currentCall.signal || currentCall.pc?.signalingState,
             remoteSet: currentCall.remoteSet,
+            camLocal: useSocialStore.getState().cam.local,
+            camRemote: useSocialStore.getState().cam.remote,
           }
         : null,
     pv: () => [...pvConns.keys()],
@@ -721,9 +817,11 @@ export function voiceInit(): void {
       }
       return out
     },
-    stats: async (): Promise<{ rx: number; tx: number }> => {
+    stats: async (): Promise<{ rx: number; tx: number; vrx: number; vtx: number }> => {
       let rx = 0
       let tx = 0
+      let vrx = 0
+      let vtx = 0
       const pcs: RTCPeerConnection[] = []
       if (currentCall?.pc) pcs.push(currentCall.pc)
       for (const c of pvConns.values()) pcs.push(c.pc)
@@ -738,9 +836,11 @@ export function voiceInit(): void {
           }
           if (r.type === 'inbound-rtp' && r.kind === 'audio' && typeof r.bytesReceived === 'number') rx += r.bytesReceived
           if (r.type === 'outbound-rtp' && r.kind === 'audio' && typeof r.bytesSent === 'number') tx += r.bytesSent
+          if (r.type === 'inbound-rtp' && r.kind === 'video' && typeof r.bytesReceived === 'number') vrx += r.bytesReceived
+          if (r.type === 'outbound-rtp' && r.kind === 'video' && typeof r.bytesSent === 'number') vtx += r.bytesSent
         })
       }
-      return { rx, tx }
+      return { rx, tx, vrx, vtx }
     },
   }
 }

@@ -310,6 +310,8 @@ export type WireCallPush = {
   callId?: string
   from?: string
   video?: boolean
+  /** W8 — the camera-state envelope ('cam' push): the other ear's truth */
+  on?: boolean
   sdp?: string
   candidate?: { candidate: string; sdpMid?: string; sdpMLineIndex?: number }
   why?: string
@@ -362,7 +364,7 @@ export function wireCallRing(to: string, video: boolean): Promise<WireSendResult
   return wireEmitAck('call:ring', { to, video }) as Promise<WireSendResult & { callId?: string }>
 }
 
-export function wireCallSend(ev: 'call:accept' | 'call:decline' | 'call:hangup' | 'call:offer' | 'call:answer' | 'call:ice' | 'voice:join' | 'voice:leave' | 'pv:offer' | 'pv:answer' | 'pv:ice', body: Record<string, unknown>): Promise<WireSendResult & { iceServers?: { urls: string }[]; peers?: string[]; street?: string }> {
+export function wireCallSend(ev: 'call:accept' | 'call:decline' | 'call:hangup' | 'call:offer' | 'call:answer' | 'call:ice' | 'call:cam' | 'voice:join' | 'voice:leave' | 'pv:offer' | 'pv:answer' | 'pv:ice', body: Record<string, unknown>): Promise<WireSendResult & { iceServers?: { urls: string }[]; peers?: string[]; street?: string }> {
   return wireEmitAck(ev, body) as Promise<WireSendResult & { iceServers?: { urls: string }[]; peers?: string[]; street?: string }>
 }
 

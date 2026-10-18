@@ -26,14 +26,15 @@
  *    no-mic — the recents list never invents a why.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NPCS } from '@/game/data/npcs'
 import { callSeconds } from '@/game/systems/callflow'
+import { getDeviceProfile } from '@/game/systems/device'
 import { useGameStore } from '@/game/store/useGameStore'
 import { useSocialStore } from '@/game/store/social-store'
 import { useWireStore, wireEnsure } from '@/game/systems/wire'
 import {
-  voiceAnswer, voiceDecline, voiceDial, voiceHangup, voiceInit, voiceSetHandleProvider, voiceToggleMute,
+  voiceAnswer, voiceDecline, voiceDial, voiceHangup, voiceInit, voiceSetHandleProvider, voiceToggleCam, voiceToggleMute,
 } from '@/game/systems/voicenet'
 
 type Tab = 'people' | 'recents'
@@ -54,6 +55,20 @@ function fmtSecs(n: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+/** W8 — a live picture on a <video>. Muted on PURPOSE: the audio flies
+ *  through the engine's remoteAudio element; a second unmuted element
+ *  would double every voice. */
+function VideoTile({ stream, testid, className }: { stream: MediaStream | null; testid: string; className: string }) {
+  const ref = useRef<HTMLVideoElement | null>(null)
+  useEffect(() => {
+    if (ref.current && ref.current.srcObject !== stream) {
+      ref.current.srcObject = stream
+      void ref.current.play().catch(() => {})
+    }
+  }, [stream])
+  return <video ref={ref} autoPlay playsInline muted data-testid={testid} className={className} />
+}
+
 export function CallsApp() {
   const [tab, setTab] = useState<Tab>('people')
   const [target, setTarget] = useState<string | null>(null)
@@ -69,12 +84,16 @@ export function CallsApp() {
 
   const call = useSocialStore((s) => s.call)
   const callDemo = useSocialStore((s) => s.callDemo)
+  const cam = useSocialStore((s) => s.cam)
   const answerStore = useSocialStore((s) => s.answer)
   const declineStore = useSocialStore((s) => s.decline)
   const tickCall = useSocialStore((s) => s.tickCall)
   const clearEnded = useSocialStore((s) => s.clearEnded)
   const friends = useSocialStore((s) => s.friends)
   const blocked = useSocialStore((s) => s.blocked)
+  // W8 — the heat honesty: a low device sleeps video by default
+  const tier = getDeviceProfile().effective
+  const videoOkTier = tier !== 'low'
 
   // THE TIMEOUT LAW heartbeat: a 1s tick while a ring is alive
   useEffect(() => {
@@ -130,18 +149,35 @@ export function CallsApp() {
         ) : (
           <>
             <div className="flex flex-1 flex-col items-center justify-center gap-3 py-8 text-center">
-              <span className={`relative flex h-24 w-24 items-center justify-center rounded-full bg-[var(--lko-green-soft)] text-4xl ${call.phase !== 'active' ? 'lko-ring-pulse' : ''}`} aria-hidden>
-                {call.video ? '📹' : '📞'}
-              </span>
               <p className="lko-display text-[18px]">@{call.peer}</p>
               <p className="text-[12px] font-extrabold tabular-nums text-[var(--lko-ink-soft)]" data-testid="calls-status">
                 {call.phase === 'dialing' && 'Dey ring…'}
                 {call.phase === 'ringing' && (call.outgoing ? 'Dey ring…' : 'Incoming call')}
                 {call.phase === 'active' && fmtSecs(secs)}
               </p>
-              <span className="rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]">
-                {call.video ? 'video · the camera wire na W8' : callDemo ? 'demo · no mic, no wire' : 'live voice · peer-to-peer'}
+              <span className="rounded-full bg-[var(--lko-gold-soft)] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-[var(--lko-gold-deep)]" data-testid="calls-chip">
+                {callDemo ? `${call.video ? 'video' : 'voice'} · demo ring — labeled, no mic` : call.video ? 'live video · peer-to-peer' : 'live voice · peer-to-peer'}
               </span>
+              {call.phase === 'active' && call.video && (
+                cam.remote ? (
+                  <div className="relative mt-1 w-full overflow-hidden rounded-2xl bg-black shadow-[0_10px_30px_-12px_rgba(0,0,0,0.5)]" data-testid="calls-video-stage">
+                    <VideoTile stream={cam.remoteStream} testid="calls-video-remote" className="aspect-[4/3] w-full object-cover" />
+                    {cam.local && (
+                      <div className="absolute bottom-2 right-2 w-20 overflow-hidden rounded-lg border border-white/40 shadow-md sm:w-24">
+                        <VideoTile stream={cam.localStream} testid="calls-video-pip" className="aspect-[4/3] w-full object-cover" />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-1 flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-2xl bg-black/[0.06]" data-testid="calls-video-dark">
+                    <span className="text-3xl" aria-hidden>📹</span>
+                    <p className="text-[11px] font-extrabold text-[var(--lko-ink-soft)]">
+                      {cam.local ? 'Their camera dark — audio only' : 'Your camera dark — audio only'}
+                    </p>
+                    <p className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">The call dey live — the voice na the floor, the face na wish.</p>
+                  </div>
+                )
+              )}
             </div>
             {call.phase === 'active' ? (
               <div className="flex items-center justify-center gap-3 pb-3" data-testid="calls-active-controls">
@@ -153,6 +189,17 @@ export function CallsApp() {
                 >
                   {call.muted ? '🔇' : '🎤'}
                 </button>
+                {call.video && !callDemo && (
+                  <button
+                    data-testid="calls-cam-toggle"
+                    onClick={() => voiceToggleCam()}
+                    aria-pressed={cam.local}
+                    aria-label={cam.local ? 'Camera off' : 'Camera on'}
+                    className={`lko-press flex h-13 w-13 items-center justify-center rounded-full p-3.5 text-xl ${cam.local ? 'bg-black/[0.06]' : 'bg-[var(--lko-ink)] text-white'}`}
+                  >
+                    {cam.local ? '📹' : '🚫'}
+                  </button>
+                )}
                 <button
                   data-testid="calls-hangup"
                   onClick={() => { if (callDemo) useSocialStore.getState().hangup(); else void voiceHangup() }}
@@ -262,7 +309,11 @@ export function CallsApp() {
                     </button>
                   </div>
                   <p className="mt-1.5 text-[9.5px] font-bold text-[var(--lko-ink-soft)]">
-                    {wireLive ? 'The real wire dey ring — na dem ear go pick am, peer-to-peer.' : 'The wire rest small — reconnect go make the ring real.'}
+                    {wireLive
+                      ? videoOkTier
+                        ? 'The real wire dey ring — voice and face, peer-to-peer.'
+                        : 'This device dey rest small — video dey burn heat and data; the voice na the default.'
+                      : 'The wire rest small — reconnect go make the ring real.'}
                   </p>
                 </>
               ) : (

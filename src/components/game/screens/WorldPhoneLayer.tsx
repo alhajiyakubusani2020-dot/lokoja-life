@@ -30,7 +30,7 @@
  *    No real player ever gets a fake caller.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FOOD } from '@/game/data/config'
 import { formatNaira } from '@/game/systems/progression'
 import { callSeconds } from '@/game/systems/callflow'
@@ -41,6 +41,19 @@ import { pvSync, voiceAnswer, voiceDecline, voiceHangup, voiceInit, voiceSetHand
 import { PhoneIcon } from '../icons'
 import { PhoneScreen } from './PhoneScreen'
 
+/** W8 — the face above the world. Muted on PURPOSE: the voice flies
+ *  through the engine's remoteAudio; a second unmuted element doubles it. */
+function WorldVideoTile({ stream, testid, className }: { stream: MediaStream | null; testid: string; className: string }) {
+  const ref = useRef<HTMLVideoElement | null>(null)
+  useEffect(() => {
+    if (ref.current && ref.current.srcObject !== stream) {
+      ref.current.srcObject = stream
+      void ref.current.play().catch(() => {})
+    }
+  }, [stream])
+  return <video ref={ref} autoPlay playsInline muted data-testid={testid} className={className} />
+}
+
 export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
   const eatMeal = useGameStore((s) => s.eatMeal)
   const hunger = useGameStore((s) => Math.round(s.player?.needs.hunger ?? 100))
@@ -49,6 +62,7 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
 
   const call = useSocialStore((s) => s.call)
   const callDemo = useSocialStore((s) => s.callDemo)
+  const cam = useSocialStore((s) => s.cam)
   const answer = useSocialStore((s) => s.answer)
   const decline = useSocialStore((s) => s.decline)
   const hangupStore = useSocialStore((s) => s.hangup)
@@ -202,10 +216,23 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
       {call.phase === 'active' && !overlayOpen && call.peer && (
         <div data-testid="call-pill" className="fixed bottom-[72px] left-3 z-30">
           <div className="flex items-center gap-2 rounded-full bg-[#1a1e18]/95 px-3 py-2 text-white shadow-lg backdrop-blur-sm">
-            <span className="lko-ring-pulse flex h-6 w-6 items-center justify-center rounded-full bg-[var(--lko-green)] text-[11px]" aria-hidden>📞</span>
+            <span className="lko-ring-pulse flex h-6 w-6 items-center justify-center rounded-full bg-[var(--lko-green)] text-[11px]" aria-hidden>{call.video ? '📹' : '📞'}</span>
             <span className="text-[11px] font-extrabold">@{call.peer}</span>
             <span className="lko-num text-[11px] font-extrabold tabular-nums text-white/80">{fmt(callSeconds(call, now))}</span>
             <button onClick={() => { if (callDemo) hangupStore(); else void voiceHangup() }} aria-label="Hang up" className="lko-press flex h-7 w-7 items-center justify-center rounded-full bg-[#d64541] text-[11px]">✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* ---- W8: THE FLOATING FACE — an active video call shows the
+           picture above the living street (the diegetic law: the phone
+           lives IN the world; the 3D never unmounts beneath it) ---- */}
+      {call.phase === 'active' && call.video && cam.remote && !overlayOpen && (
+        <div data-testid="world-video-face" className="fixed bottom-[124px] right-3 z-30 w-40 overflow-hidden rounded-2xl border border-white/30 bg-black shadow-[0_14px_36px_-12px_rgba(0,0,0,0.55)] sm:w-48">
+          <WorldVideoTile stream={cam.remoteStream} testid="world-video-remote" className="aspect-[3/4] w-full object-cover" />
+          <div className="flex items-center justify-between bg-[#1a1e18]/95 px-2 py-1.5">
+            <span className="text-[9.5px] font-extrabold text-white">@{call.peer} · live video</span>
+            <span className="lko-num text-[9.5px] font-extrabold tabular-nums text-white/80">{fmt(callSeconds(call, now))}</span>
           </div>
         </div>
       )}

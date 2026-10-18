@@ -37,6 +37,26 @@
  *  - THE MESH LAW: the proximity voice mesh is capped (PV_MESH_MAX) —
  *    a browser builds ≤4 peer connections for street voice, the heat
  *    and battery honesty of the plan.
+ *
+ * W8 — THE CAMERA LAWS:
+ *  - THE CAMERA STATE LAW: a camera is a SIGNALING truth, not media on
+ *    the wire. The 'cam' envelope carries { callId, on } and the wire
+ *    relays it to the OTHER EAR ALONE (the same privacy eye that shows
+ *    a ring to its two parties). The wire never sees a picture frame.
+ *  - THE FACE LAW: video is negotiated AT THE RING — the offer that
+ *    carries a video m-line was born from a video dial; a call born
+ *    audio stays audio until redial (no renegotiation, structurally).
+ *    A mid-call camera toggle mutes the PICTURE (track.enabled), it
+ *    never re-opens the negotiation.
+ *  - THE CAMERA FALLBACK LAW: a camera that refuses (permission, no
+ *    device, low tier) NEVER kills the call — a voice call is the
+ *    floor. The refusing ear says so on the cam lane; the other ear
+ *    shows an honest chip, never a black lie.
+ *  - THE STREAM-SURVIVAL LAW: an 'on:true' cam push never evicts the
+ *    picture it announces (the push can land after the track event —
+ *    the socket's order is honest but the track is the media); only an
+ *    'on:false' drops the frame. The face shows the picture, the chip
+ *    shows the truth — neither clobbers the other.
  */
 
 import type { LiveBand } from './live'
@@ -183,6 +203,7 @@ export type WireCallPush =
   | { type: 'offer'; callId: string; sdp: string }
   | { type: 'answer'; callId: string; sdp: string }
   | { type: 'ice'; callId: string; candidate: { candidate: string } }
+  | { type: 'cam'; callId: string; on: boolean }
   | { type: 'ended'; callId: string; why: VoiceCallWhy }
 
 export function wireCallPushOk(p: unknown): p is WireCallPush {
@@ -199,6 +220,8 @@ export function wireCallPushOk(p: unknown): p is WireCallPush {
       return sdpOk(q.sdp)
     case 'ice':
       return iceOk(q.candidate)
+    case 'cam':
+      return typeof q.on === 'boolean'
     case 'ended':
       return endWhyOk(q.why)
     default:

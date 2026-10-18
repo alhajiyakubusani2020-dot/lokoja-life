@@ -1100,6 +1100,25 @@ io.on('connection', (socket) => {
     ack?.({ ok: true })
   })
 
+  /* ── W8 THE CAMERA STATE — the face's signaling truth. THE CAMERA
+   * STATE LAW: the camera is announced, never relayed as media — the
+   * wire checks the boolean seal and pushes it to the OTHER EAR ALONE
+   * (a stranger never learns a stranger's camera). The refusal truth
+   * rides it too: a camera that never opened is said, not faked. ── */
+  socket.on('call:cam', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { callId?: string; on?: unknown }
+    const c = callIdOk(body.callId) ? calls.get(body.callId) : undefined
+    if (!c) return ack?.({ ok: false, why: 'no-call' })
+    if (c.from !== identity.handle && c.to !== identity.handle) return ack?.({ ok: false, why: 'not-yours' })
+    if (c.state !== 'connecting' && c.state !== 'active') return ack?.({ ok: false, why: 'not-connecting' })
+    if (typeof body.on !== 'boolean') return ack?.({ ok: false, why: 'bad-cam' })
+    const other = c.from === identity.handle ? c.to : c.from
+    pushCall(io, other, { type: 'cam', callId: c.callId, on: body.on })
+    ack?.({ ok: true })
+  })
+
   /* ── W7 THE PROXIMITY VOICE — the street walkie (the M17 law verbatim:
    * adults, opt-in, same street). The mesh is the CLIENT's (≤4 peers);
    * the door only admits lawful walkers and relays lawful envelopes. ── */
