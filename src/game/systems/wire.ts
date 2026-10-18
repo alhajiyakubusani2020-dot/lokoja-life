@@ -48,6 +48,7 @@ export interface WireRosterRow {
   band: string
   street: string
   status: string
+  voiceOn?: boolean // W7 — the M17 opt-in rides the roster
   ts: number
 }
 
@@ -184,6 +185,27 @@ export function wireEnsure(
     if (r && typeof r.idemKey === 'string') for (const fn of ledgerFns) fn(r)
   })
 
+  // W7: the call push lane — the ring, the accept, the sealed envelopes, the end
+  s.on('wire:call', (p: unknown) => {
+    if (p && typeof p === 'object' && typeof (p as { type?: unknown }).type === 'string') {
+      for (const fn of callFns) fn(p as WireCallPush)
+    }
+  })
+
+  // W7: the proximity voice lane — a street neighbour joined / left the walkie
+  s.on('wire:voice', (p: unknown) => {
+    if (p && typeof p === 'object' && typeof (p as { type?: unknown }).type === 'string') {
+      for (const fn of voiceFns) fn(p as WireVoicePush)
+    }
+  })
+
+  // W7: the walkie mesh lane — the street's sealed pv envelopes ride the person
+  s.on('wire:pv', (p: unknown) => {
+    if (p && typeof p === 'object' && typeof (p as { type?: unknown }).type === 'string') {
+      for (const fn of pvFns) fn(p as WirePvPush)
+    }
+  })
+
   s.on('wire:roster', (r: { scope?: string; roster?: WireRosterRow[] }) => {
     if (r?.roster) useWireStore.setState({ roster: r.roster })
   })
@@ -279,6 +301,69 @@ export function wireOnLedger(fn: LedgerFn): () => void {
   return () => {
     ledgerFns.delete(fn)
   }
+}
+
+/* ── W7: the call + proximity push lanes — voicenet registers the first
+ * listeners; the shapes are validated by the pure laws it imports. ── */
+export type WireCallPush = {
+  type: string
+  callId?: string
+  from?: string
+  video?: boolean
+  sdp?: string
+  candidate?: { candidate: string; sdpMid?: string; sdpMLineIndex?: number }
+  why?: string
+  [k: string]: unknown
+}
+
+type CallFn = (p: WireCallPush) => void
+const callFns = new Set<CallFn>()
+
+export function wireOnCall(fn: CallFn): () => void {
+  callFns.add(fn)
+  return () => {
+    callFns.delete(fn)
+  }
+}
+
+export type WireVoicePush = { type: string; handle?: string; street?: string; [k: string]: unknown }
+
+type VoiceFn = (p: WireVoicePush) => void
+const voiceFns = new Set<VoiceFn>()
+
+export function wireOnVoice(fn: VoiceFn): () => void {
+  voiceFns.add(fn)
+  return () => {
+    voiceFns.delete(fn)
+  }
+}
+
+export type WirePvPush = {
+  type: string
+  from?: string
+  sdp?: string
+  candidate?: { candidate: string; sdpMid?: string; sdpMLineIndex?: number }
+  [k: string]: unknown
+}
+
+type PvFn = (p: WirePvPush) => void
+const pvFns = new Set<PvFn>()
+
+export function wireOnPv(fn: PvFn): () => void {
+  pvFns.add(fn)
+  return () => {
+    pvFns.delete(fn)
+  }
+}
+
+/** THE CALL SENDERS — thin doors over the raw ack; voicenet owns the
+ * sequencing, these just name the server doors. */
+export function wireCallRing(to: string, video: boolean): Promise<WireSendResult & { callId?: string }> {
+  return wireEmitAck('call:ring', { to, video }) as Promise<WireSendResult & { callId?: string }>
+}
+
+export function wireCallSend(ev: 'call:accept' | 'call:decline' | 'call:hangup' | 'call:offer' | 'call:answer' | 'call:ice' | 'voice:join' | 'voice:leave' | 'pv:offer' | 'pv:answer' | 'pv:ice', body: Record<string, unknown>): Promise<WireSendResult & { iceServers?: { urls: string }[]; peers?: string[]; street?: string }> {
+  return wireEmitAck(ev, body) as Promise<WireSendResult & { iceServers?: { urls: string }[]; peers?: string[]; street?: string }>
 }
 
 function emitAck(ev: string, body: Record<string, unknown>): Promise<WireSendResult> {

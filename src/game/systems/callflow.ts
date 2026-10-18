@@ -16,11 +16,14 @@
  *  - THE VIDEO FLAG: video is a wish carried on the call, not media.
  *    The camera wire lands with the W8 wave; the UI says so.
  *  - THE ENDED TRUTH: every ended call carries WHY (hangup / declined /
- *    missed / no-answer / busy) — the recents list never invents one.
+ *    missed / no-answer / busy / no-mic) — the recents list never
+ *    invents one. 'no-mic' is LOCAL truth only: the wire carries the
+ *    five shared whys; a refused microphone ends my call and tells the
+ *    peer nothing but that it ended.
  */
 
 export type CallPhase = 'idle' | 'dialing' | 'ringing' | 'active' | 'ended'
-export type CallEndWhy = 'hangup' | 'declined' | 'missed' | 'no-answer' | 'busy'
+export type CallEndWhy = 'hangup' | 'declined' | 'missed' | 'no-answer' | 'busy' | 'no-mic'
 
 export interface CallState {
   phase: CallPhase
@@ -79,6 +82,13 @@ export function ringExpired(s: CallState, now: number): { ok: boolean; next: Cal
   const ringStart = s.startedAt ?? now
   if (now - ringStart < RING_TIMEOUT_MS) return { ok: false, next: s }
   return { ok: true, next: { ...s, phase: 'ended', endedAt: now, endedWhy: s.outgoing ? 'no-answer' : 'missed' } }
+}
+
+/** W7 — an ended truth that arrives from OUTSIDE (the wire's why).
+ *  The wire's shared whys map 1:1; 'no-mic' never crosses the wire. */
+export function endCallWith(s: CallState, why: CallEndWhy, now: number): { ok: boolean; next: CallState } {
+  if (s.phase === 'idle' || s.phase === 'ended') return { ok: false, next: s }
+  return { ok: true, next: { ...s, phase: 'ended', endedAt: now, endedWhy: why } }
 }
 
 /** mark the ring clock (the store sets it when a call enters ringing/dialing) */

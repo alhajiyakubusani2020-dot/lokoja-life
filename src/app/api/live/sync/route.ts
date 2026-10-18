@@ -44,7 +44,10 @@ export async function POST(req: Request) {
     // THE LEDGER PRIVACY LAW (W6): a transfer receipt's LiveEvent row is
     // channel-scoped to its receiver (ledger:<handle>) — the sync shows it
     // to that person ALONE. Nobody else's money news ever lands here.
-    const events = await db.liveEvent.findMany({
+    // THE CALL PRIVACY LAW (W7): a call's outcome row lives on the sorted
+    // pair channel (call:a|b) — the post-filter shows it to its TWO
+    // parties alone; a stranger's sync never hears a stranger's ring.
+    const rawEvents = await db.liveEvent.findMany({
       where: {
         seq: { gt: since },
         actor: { not: account.handle },
@@ -52,6 +55,11 @@ export async function POST(req: Request) {
       },
       orderBy: { seq: 'asc' },
       take: 120,
+    })
+    const events = rawEvents.filter((e) => {
+      if (!e.channel.startsWith('call:')) return true
+      const pair = e.channel.slice(5).split('|')
+      return pair.length === 2 && pair.includes(account.handle)
     })
 
     // the roster: every heartbeat inside the TTL window

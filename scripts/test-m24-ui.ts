@@ -164,7 +164,12 @@ console.log('\n--- M24-UI.6 THE AUTH DOOR LAW (one identity, the same doors) ---
 console.log('\n--- M24-UI.7 THE NO-FAKE-ANSWER LAW ---')
 {
   const calls = read('src/components/game/screens/phone/apps/calls-app.tsx')
-  check('the practice ring is labeled honestly (nobody answers by themself)', calls.includes('Practice ring'))
+  // W7 AMENDMENT (the law follows the truth, the W5 precedent): the
+  // practice ring became the REAL wire ring — the law now pins the
+  // no-fake-answer doctrine in the header AND the real-ring label.
+  check('the ring is labeled honestly (nobody answers by themself)', calls.includes('NO FAKE ANSWER') && calls.includes('The real wire dey ring'))
+  check('W7 — the dial doors route through the real voice engine (voicenet)', calls.includes('voiceDial') && calls.includes('voiceAnswer') && calls.includes('voiceHangup'))
+  check('W7 — the minor wall is visible on the call face', calls.includes('Voice na adult table'))
   check('the media truth is labeled on the call face (W7/W8 chips)', calls.includes('W7') && calls.includes('W8'))
   check('the timeout heartbeat drives the ring law', calls.includes('tickCall'))
   check('recents record the ended TRUTH, not an invention', calls.includes('pushRecent') && calls.includes('endedWhy'))

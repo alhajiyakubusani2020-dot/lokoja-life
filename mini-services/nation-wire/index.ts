@@ -85,6 +85,20 @@ import {
   type LedgerReceipt,
 } from '../../src/game/systems/ledger'
 
+// THE VOICE LAWS — W7, same verbatim doctrine (zero copies)
+import {
+  dialVerdict,
+  callChannel,
+  callChannelInvolves,
+  callIdOk,
+  endWhyOk,
+  sdpOk,
+  iceOk,
+  pvPeers,
+  pvRelayOk,
+  type VoiceCallWhy,
+} from '../../src/game/systems/voice'
+
 const PORT = Number(process.env.WIRE_PORT ?? 3003)
 const DB_PATH = process.env.WIRE_DB ?? '/home/z/my-project/db/custom.db'
 const RESUME_CAP = 100
@@ -96,6 +110,9 @@ const CAPS = {
   resume: { n: 1, ms: 1_000 },
   social: { n: 8, ms: 10_000 },
   wallet: { n: 4, ms: 10_000 },
+  // W7 — signaling is bursty (a connection burst releases a fist of ICE
+  // envelopes at once); the cap stays generous but the wire stays thin.
+  call: { n: 24, ms: 10_000 },
 } as const
 
 const DM_HISTORY_CAP = 100
@@ -205,6 +222,9 @@ function eventsSince(since: number, forHandle: string | null) {
     .filter((e) => {
       if (e.channel.startsWith('dm:')) return dmChannelInvolves(e.channel, forHandle ?? '')
       if (e.channel.startsWith('ledger:')) return e.channel === `ledger:${forHandle ?? ''}`
+      // W7 THE PRIVACY LAW grows an ear: a call's outcome row belongs to
+      // its TWO parties alone — a stranger's replay never rings of it
+      if (e.channel.startsWith('call:')) return callChannelInvolves(e.channel, forHandle ?? '')
       return true
     })
     .map((e) => ({ seq: Number(e.seq), kind: e.kind, channel: e.channel, actor: e.actor, band: e.band, payload: JSON.parse(e.payload || '{}') }))
@@ -217,6 +237,7 @@ interface WirePresence {
   band: LiveBand
   street: string
   status: string
+  voiceOn: boolean // W7 — the M17 opt-in rides the presence row
   ts: number
   sid: string // the socket that owns this presence — the sweep's truth
 }
@@ -236,6 +257,10 @@ function sweepPresence(io: Server): boolean {
     presence.delete(handle)
     changed = true
   }
+  // W7: a call whose phone vanished ends honestly — the survivor learns
+  for (const c of [...calls.values()]) {
+    if (!presence.has(c.from) || !presence.has(c.to)) endCall(io, c, 'hangup', 'system')
+  }
   if (changed) broadcastRoster(io)
   return changed
 }
@@ -243,7 +268,75 @@ function sweepPresence(io: Server): boolean {
 function rosterFor(street?: string) {
   return [...presence.values()]
     .filter((p) => (street ? p.street === street : true))
-    .map(({ handle, band, street: st, status, ts }) => ({ handle, band, street: st, status, ts }))
+    .map(({ handle, band, street: st, status, voiceOn, ts }) => ({ handle, band, street: st, status, voiceOn, ts }))
+}
+
+/* ─────────────── W7 the call registry (memory — the relay doctrine) ───────────────
+ * A call is TWO claimed walkers and a state line. No money, no truth of
+ * its own — the registry only remembers which envelopes belong to which
+ * phone so the laws can gate them. If the wire dies, the calls die with
+ * it (both phones see the socket drop — nothing phantom survives). */
+interface WireCall {
+  callId: string
+  from: string
+  to: string
+  video: boolean
+  state: 'ringing' | 'accepted' | 'connecting' | 'active'
+  startedAt: number
+}
+const calls = new Map<string, WireCall>()
+
+function callOfHandle(handle: string): WireCall | null {
+  for (const c of calls.values()) if (c.from === handle || c.to === handle) return c
+  return null
+}
+
+function pushCall(io: Server, toHandle: string, payload: Record<string, unknown>): void {
+  const p = presence.get(toHandle)
+  if (p?.sid) io.to(p.sid).emit('wire:call', payload) // rides the person
+}
+
+/** THE WALKIE LANE — the proximity envelopes ride their OWN lane: the
+ *  call lane stays pure (a dialed call is one phone, one state line);
+ *  the street mesh is many tiny envelopes with no registry at all. */
+function pushPv(io: Server, toHandle: string, payload: Record<string, unknown>): void {
+  const p = presence.get(toHandle)
+  if (p?.sid) io.to(p.sid).emit('wire:pv', payload) // rides the person
+}
+
+/** THE END TRUTH, per ear: the caller's no-answer IS the callee's missed
+ *  call. One outcome row lands on the sorted-pair call: channel — the
+ *  privacy filters (wire resume + the 12s sync) show it to the two
+ *  parties ALONE. */
+function endCall(io: Server, c: WireCall, why: VoiceCallWhy, ender: string): void {
+  calls.delete(c.callId)
+  const whyFor = (handle: string): VoiceCallWhy =>
+    handle === ender ? why : why === 'no-answer' ? 'missed' : why
+  pushCall(io, c.from, { type: 'ended', callId: c.callId, why: whyFor(c.from) })
+  pushCall(io, c.to, { type: 'ended', callId: c.callId, why: whyFor(c.to) })
+  const secs = c.state === 'active' ? Math.max(0, Math.floor((Date.now() - c.startedAt) / 1000)) : 0
+  persistEvent('call', callChannel(c.from, c.to), ender, 'adult', {
+    callId: c.callId, phase: 'ended', why, secs, from: c.from, to: c.to, video: c.video,
+  })
+}
+
+/* THE TURN SLOT: coturn is a DEPLOYMENT step (the W12 guide — nginx /rt
+ * proxy + coturn). The door hands every accepted call the freshest
+ * config; when the env is empty the nation still speaks over host/STUN
+ * candidates (LAN + open NAT), stated plainly — Nigeria's CGNAT pairs
+ * need TURN for real deploy, and the slot is waiting for the env. */
+function iceServersFor(): { urls: string; username?: string; credential?: string }[] {
+  const list: { urls: string; username?: string; credential?: string }[] = [
+    { urls: process.env.NATION_STUN_URL ?? 'stun:stun.l.google.com:19302' },
+  ]
+  if (process.env.NATION_TURN_URL) {
+    list.push({
+      urls: process.env.NATION_TURN_URL,
+      username: process.env.NATION_TURN_USER,
+      credential: process.env.NATION_TURN_PASS,
+    })
+  }
+  return list
 }
 
 function broadcastRoster(io: Server) {
@@ -445,7 +538,7 @@ const httpServer = createServer((req, res) => {
   // the health door for the witness + the gates
   if (req.url?.startsWith('/health')) {
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ ok: true, service: 'nation-wire', online: presence.size, head: headSeq(), t: Date.now() }))
+    res.end(JSON.stringify({ ok: true, service: 'nation-wire', online: presence.size, head: headSeq(), calls: calls.size, t: Date.now() }))
     return
   }
   res.writeHead(404)
@@ -497,9 +590,10 @@ io.on('connection', (socket) => {
 
   /* ── hello: the street claim (presence + street room) ── */
   socket.on('hello', (raw: unknown, ack?: (r: unknown) => void) => {
-    const body = (raw ?? {}) as { street?: string; status?: string }
+    const body = (raw ?? {}) as { street?: string; status?: string; voiceOn?: boolean }
     currentStreet = typeof body.street === 'string' ? body.street.slice(0, 48) : 'home'
     const status = typeof body.status === 'string' ? body.status.slice(0, 24) : 'chilling'
+    const voiceOn = body.voiceOn === true // W7 — the M17 opt-in rides presence
     if (claimed) {
       socket.join(`wire:street:${currentStreet}`)
       presence.set(identity.handle!, {
@@ -507,6 +601,7 @@ io.on('connection', (socket) => {
         band: identity.band,
         street: currentStreet,
         status,
+        voiceOn,
         ts: Date.now(),
         sid: socket.id,
       })
@@ -519,9 +614,10 @@ io.on('connection', (socket) => {
   socket.on('presence', (raw: unknown, ack?: (r: unknown) => void) => {
     if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
     if (!allow('presence')) return ack?.({ ok: false, why: 'too-fast' })
-    const body = (raw ?? {}) as { street?: string; status?: string }
+    const body = (raw ?? {}) as { street?: string; status?: string; voiceOn?: boolean }
     const nextStreet = typeof body.street === 'string' ? body.street.slice(0, 48) : currentStreet
     const status = typeof body.status === 'string' ? body.status.slice(0, 24) : 'chilling'
+    const voiceOn = body.voiceOn === true
     if (nextStreet !== currentStreet) {
       socket.leave(`wire:street:${currentStreet}`)
       socket.join(`wire:street:${nextStreet}`)
@@ -531,6 +627,7 @@ io.on('connection', (socket) => {
     if (p) {
       p.street = currentStreet
       p.status = status
+      p.voiceOn = voiceOn
       p.ts = Date.now()
       p.sid = socket.id
     } else {
@@ -539,6 +636,7 @@ io.on('connection', (socket) => {
         band: identity.band,
         street: currentStreet,
         status,
+        voiceOn,
         ts: Date.now(),
         sid: socket.id,
       })
@@ -895,11 +993,190 @@ io.on('connection', (socket) => {
     }
   })
 
+  /* ── W7 THE VOICE — the dialed call at the server door ──
+   * THE DIAL LAW (adults BOTH ends — a minor never places nor receives a
+   * voice call; the block wall; ghosts; offline; busy). THE ANSWER-IS-
+   * THE-OPT-IN LAW: a dialed ring is answered by a human thumb. THE
+   * RELAY DOCTRINE: this socket relays SEALED SDP/ICE envelopes and
+   * never simulates media — the audio flies peer-to-peer, the wire
+   * stays thin (N5). ── */
+  socket.on('call:ring', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { to?: string; video?: boolean }
+    const to = socialNorm(body.to)
+    const video = body.video === true
+    const verdict = dialVerdict({
+      callerBand: identity.band,
+      targetBand: accountBand(to),
+      targetExists: accountExists(to),
+      targetOnline: presence.has(to),
+      targetBusy: !!callOfHandle(to),
+      callerBusy: !!callOfHandle(identity.handle!),
+      blockedEitherWay: edgeGet(identity.handle!, to)?.state === 'blocked' || edgeGet(to, identity.handle!)?.state === 'blocked',
+      self: to === identity.handle,
+    })
+    if (!verdict.ok) return ack?.({ ok: false, why: verdict.why })
+    const callId = `c:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+    calls.set(callId, { callId, from: identity.handle!, to, video, state: 'ringing', startedAt: Date.now() })
+    pushCall(io, to, { type: 'ring', callId, from: identity.handle!, video })
+    ack?.({ ok: true, callId })
+  })
+
+  socket.on('call:accept', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { callId?: string }
+    const c = callIdOk(body.callId) ? calls.get(body.callId) : undefined
+    if (!c) return ack?.({ ok: false, why: 'no-call' })
+    if (c.to !== identity.handle) return ack?.({ ok: false, why: 'not-yours' })
+    if (c.state !== 'ringing') return ack?.({ ok: false, why: 'not-ringing' })
+    c.state = 'accepted'
+    pushCall(io, c.from, { type: 'accepted', callId: c.callId })
+    ack?.({ ok: true, iceServers: iceServersFor() })
+  })
+
+  socket.on('call:decline', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    const body = (raw ?? {}) as { callId?: string }
+    const c = callIdOk(body.callId) ? calls.get(body.callId) : undefined
+    if (!c) return ack?.({ ok: false, why: 'no-call' })
+    if (c.to !== identity.handle) return ack?.({ ok: false, why: 'not-yours' })
+    endCall(io, c, 'declined', identity.handle!)
+    ack?.({ ok: true })
+  })
+
+  socket.on('call:hangup', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    const body = (raw ?? {}) as { callId?: string; why?: string }
+    const c = callIdOk(body.callId) ? calls.get(body.callId) : undefined
+    if (!c) return ack?.({ ok: false, why: 'no-call' })
+    if (c.from !== identity.handle && c.to !== identity.handle) return ack?.({ ok: false, why: 'not-yours' })
+    const why = endWhyOk(body.why) ? body.why : 'hangup'
+    endCall(io, c, why, identity.handle!)
+    ack?.({ ok: true })
+  })
+
+  socket.on('call:offer', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { callId?: string; sdp?: string }
+    const c = callIdOk(body.callId) ? calls.get(body.callId) : undefined
+    if (!c) return ack?.({ ok: false, why: 'no-call' })
+    if (c.from !== identity.handle) return ack?.({ ok: false, why: 'not-yours' })
+    if (c.state !== 'accepted' && c.state !== 'connecting') return ack?.({ ok: false, why: 'not-accepted' })
+    if (!sdpOk(body.sdp)) return ack?.({ ok: false, why: 'bad-sdp' })
+    c.state = 'connecting'
+    pushCall(io, c.to, { type: 'offer', callId: c.callId, sdp: body.sdp })
+    ack?.({ ok: true })
+  })
+
+  socket.on('call:answer', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { callId?: string; sdp?: string }
+    const c = callIdOk(body.callId) ? calls.get(body.callId) : undefined
+    if (!c) return ack?.({ ok: false, why: 'no-call' })
+    if (c.to !== identity.handle) return ack?.({ ok: false, why: 'not-yours' })
+    if (c.state !== 'connecting') return ack?.({ ok: false, why: 'no-offer' })
+    if (!sdpOk(body.sdp)) return ack?.({ ok: false, why: 'bad-sdp' })
+    c.state = 'active'
+    c.startedAt = Date.now()
+    pushCall(io, c.from, { type: 'answer', callId: c.callId, sdp: body.sdp })
+    ack?.({ ok: true })
+  })
+
+  socket.on('call:ice', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { callId?: string; candidate?: unknown }
+    const c = callIdOk(body.callId) ? calls.get(body.callId) : undefined
+    if (!c) return ack?.({ ok: false, why: 'no-call' })
+    if (c.from !== identity.handle && c.to !== identity.handle) return ack?.({ ok: false, why: 'not-yours' })
+    if (c.state !== 'connecting' && c.state !== 'active') return ack?.({ ok: false, why: 'not-connecting' })
+    if (!iceOk(body.candidate)) return ack?.({ ok: false, why: 'bad-ice' })
+    const other = c.from === identity.handle ? c.to : c.from
+    pushCall(io, other, { type: 'ice', callId: c.callId, candidate: body.candidate })
+    ack?.({ ok: true })
+  })
+
+  /* ── W7 THE PROXIMITY VOICE — the street walkie (the M17 law verbatim:
+   * adults, opt-in, same street). The mesh is the CLIENT's (≤4 peers);
+   * the door only admits lawful walkers and relays lawful envelopes. ── */
+  socket.on('voice:join', (_raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (identity.band !== 'adult') return ack?.({ ok: false, why: 'minors-no-voice' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const me = presence.get(identity.handle!)
+    if (!me) return ack?.({ ok: false, why: 'no-street' })
+    me.voiceOn = true
+    socket.join(`voice:street:${me.street}`)
+    const peers = pvPeers(identity.handle!, me.street, [...presence.values()])
+    socket.to(`voice:street:${me.street}`).emit('wire:voice', { type: 'joined', handle: identity.handle!, street: me.street })
+    ack?.({ ok: true, street: me.street, peers })
+  })
+
+  socket.on('voice:leave', (_raw: unknown, ack?: (r: unknown) => void) => {
+    const me = presence.get(identity.handle!)
+    if (me && me.voiceOn) {
+      me.voiceOn = false
+      socket.leave(`voice:street:${me.street}`)
+      socket.to(`voice:street:${me.street}`).emit('wire:voice', { type: 'left', handle: identity.handle!, street: me.street })
+    }
+    ack?.({ ok: true })
+  })
+
+  socket.on('pv:offer', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (identity.band !== 'adult') return ack?.({ ok: false, why: 'minors-no-voice' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { to?: string; sdp?: string }
+    if (!sdpOk(body.sdp)) return ack?.({ ok: false, why: 'bad-sdp' })
+    const from = presence.get(identity.handle!) ?? null
+    const target = presence.get(socialNorm(body.to)) ?? null
+    if (!pvRelayOk(from, target)) return ack?.({ ok: false, why: 'voice-dark' })
+    pushPv(io, target!.handle, { type: 'pv-offer', from: identity.handle!, sdp: body.sdp })
+    ack?.({ ok: true })
+  })
+
+  socket.on('pv:answer', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (identity.band !== 'adult') return ack?.({ ok: false, why: 'minors-no-voice' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { to?: string; sdp?: string }
+    if (!sdpOk(body.sdp)) return ack?.({ ok: false, why: 'bad-sdp' })
+    const from = presence.get(identity.handle!) ?? null
+    const target = presence.get(socialNorm(body.to)) ?? null
+    if (!pvRelayOk(from, target)) return ack?.({ ok: false, why: 'voice-dark' })
+    pushPv(io, target!.handle, { type: 'pv-answer', from: identity.handle!, sdp: body.sdp })
+    ack?.({ ok: true })
+  })
+
+  socket.on('pv:ice', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { to?: string; candidate?: unknown }
+    if (!iceOk(body.candidate)) return ack?.({ ok: false, why: 'bad-ice' })
+    const from = presence.get(identity.handle!) ?? null
+    const target = presence.get(socialNorm(body.to)) ?? null
+    if (!pvRelayOk(from, target)) return ack?.({ ok: false, why: 'voice-dark' })
+    pushPv(io, target!.handle, { type: 'pv-ice', from: identity.handle!, candidate: body.candidate })
+    ack?.({ ok: true })
+  })
+
   /* ── latency witness ── */
   socket.on('ping', (_raw: unknown, ack?: (r: unknown) => void) => ack?.({ t: Date.now() }))
 
   socket.on('disconnect', () => {
-    if (claimed) {
+    // W7: my phone fell off the wire — my call ends honestly (the sweep
+    // is the backstop; this is the instant truth). THE FRESH-SID LAW: a
+    // reconnect races its own disconnect — the old socket's goodbye may
+    // land AFTER the successor's hello; it must never delete (or kill)
+    // what the successor now owns.
+    const p = presence.get(identity.handle ?? '')
+    const mine = callOfHandle(identity.handle ?? '')
+    if (mine && (!p || p.sid === socket.id)) endCall(io, mine, 'hangup', 'system')
+    if (claimed && p && p.sid === socket.id) {
       presence.delete(identity.handle!)
       broadcastRoster(io)
     }

@@ -21,8 +21,9 @@
 
 import { create } from 'zustand'
 import {
-  answerCall, declineCall, dialCall, freshCallState, hangupCall,
+  answerCall, declineCall, dialCall, endCallWith, freshCallState, hangupCall,
   receiveCall, ringExpired, setMuted, withRingClock,
+  type CallEndWhy,
   type CallState,
 } from '../systems/callflow'
 
@@ -75,6 +76,9 @@ function savePersist(p: SocialPersist): void {
 
 interface SocialStore extends SocialPersist {
   call: CallState
+  /** W7 — is the CURRENT ring the labeled demo door's (e2e/dev) or a
+   *  REAL wire ring? The banner labels it; a demo never touches the mic. */
+  callDemo: boolean
   overlayOpen: boolean
   pendingDm: string | null
 
@@ -102,11 +106,17 @@ interface SocialStore extends SocialPersist {
   /* the call (the callflow machine owns the laws; the store carries it) */
   dial: (peer: string, video: boolean) => { ok: boolean; why?: string }
   incomingDemoCall: (peer: string, video: boolean) => void
+  /** W7 — a REAL ring that arrived on the wire (the machine's busy law
+   *  still refuses; the caller learns 'busy'). */
+  incomingWireCall: (peer: string, video: boolean) => void
   answer: () => void
   decline: () => void
   hangup: () => void
   toggleMute: () => void
   tickCall: (now: number) => void
+  /** W7 — an ended truth that arrived FROM the wire (the peer hung up,
+   *  declined, the sweep cleaned a vanished phone). Idempotent. */
+  endFromWire: (why: CallEndWhy) => void
   clearEnded: () => void
 
   /* the diegetic layer */
@@ -131,6 +141,7 @@ export const useSocialStore = create<SocialStore>((set, get) => {
   return {
     ...loadPersist(),
     call: freshCallState(),
+    callDemo: false,
     overlayOpen: false,
     pendingDm: null,
 
@@ -256,7 +267,12 @@ export const useSocialStore = create<SocialStore>((set, get) => {
     incomingDemoCall: (peer, video) => {
       const verdict = receiveCall(get().call, peer, video, Date.now())
       if (!verdict.ok) return
-      set({ call: withRingClock(verdict.next, Date.now()) })
+      set({ call: withRingClock(verdict.next, Date.now()), callDemo: true })
+    },
+    incomingWireCall: (peer, video) => {
+      const verdict = receiveCall(get().call, peer, video, Date.now())
+      if (!verdict.ok) return
+      set({ call: withRingClock(verdict.next, Date.now()), callDemo: false })
     },
     answer: () => {
       const verdict = answerCall(get().call, Date.now())
@@ -275,8 +291,12 @@ export const useSocialStore = create<SocialStore>((set, get) => {
       const verdict = ringExpired(get().call, now)
       if (verdict.ok) set({ call: verdict.next })
     },
+    endFromWire: (why) => {
+      const verdict = endCallWith(get().call, why, Date.now())
+      if (verdict.ok) set({ call: verdict.next })
+    },
     clearEnded: () => {
-      if (get().call.phase === 'ended') set({ call: freshCallState() })
+      if (get().call.phase === 'ended') set({ call: freshCallState(), callDemo: false })
     },
 
     setOverlayOpen: (open) => set({ overlayOpen: open }),

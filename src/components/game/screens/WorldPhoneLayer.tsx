@@ -18,7 +18,14 @@
  *    the DM unread dot.
  *  - THE CALL BANNER: an incoming ring covers the world (z-50) with
  *    accept/decline; an active call lives as a pill with its timer.
- *  - THE DEMO DOOR (e2e/dev only): `__lkl.socialIncomingCall(peer, video)`
+ *    A REAL wire ring says LIVE WIRE; the labeled demo says demo.
+ *  - THE W7 WIRE: the real answer/decline/hangup doors route through
+ *    voicenet (the media plane); the demo door stays pure — a demo
+ *    never touches the microphone.
+ *  - THE STREET WALKIE (W7): the proximity voice sync rides here — the
+ *    voiceOn toggle, the band, the wire state and the call phase are
+ *    its four inputs; pvSync is idempotent, so the effect just re-runs.
+ *  - THE DEMO DOOR (e2e/dev only): `__lklSocial.incoming(peer, video)`
  *    fires a labeled demo ring so the UI is witnessable headless.
  *    No real player ever gets a fake caller.
  */
@@ -29,6 +36,8 @@ import { formatNaira } from '@/game/systems/progression'
 import { callSeconds } from '@/game/systems/callflow'
 import { useGameStore } from '@/game/store/useGameStore'
 import { useSocialStore } from '@/game/store/social-store'
+import { useWireStore } from '@/game/systems/wire'
+import { pvSync, voiceAnswer, voiceDecline, voiceHangup, voiceInit, voiceSetHandleProvider } from '@/game/systems/voicenet'
 import { PhoneIcon } from '../icons'
 import { PhoneScreen } from './PhoneScreen'
 
@@ -39,14 +48,19 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
   const mood = useGameStore((s) => Math.round(s.player?.needs.mood ?? 100))
 
   const call = useSocialStore((s) => s.call)
+  const callDemo = useSocialStore((s) => s.callDemo)
   const answer = useSocialStore((s) => s.answer)
   const decline = useSocialStore((s) => s.decline)
-  const hangup = useSocialStore((s) => s.hangup)
+  const hangupStore = useSocialStore((s) => s.hangup)
   const tickCall = useSocialStore((s) => s.tickCall)
   const incomingDemoCall = useSocialStore((s) => s.incomingDemoCall)
   const overlayOpen = useSocialStore((s) => s.overlayOpen)
   const setOverlayOpen = useSocialStore((s) => s.setOverlayOpen)
   const unread = useSocialStore((s) => s.unread)
+
+  const account = useGameStore((s) => s.account)
+  const voiceOn = useGameStore((s) => !!s.live?.voiceOn)
+  const wireState = useWireStore((s) => s.state)
 
   const [foodOpen, setFoodOpen] = useState(false)
   const [now, setNow] = useState(Date.now())
@@ -60,6 +74,19 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
     }, 1000)
     return () => clearInterval(t)
   }, [call.phase, tickCall])
+
+  // THE W7 WIRE — one boot: the push lanes, the ended watcher, the debug
+  // hook. Idempotent. The handle provider feeds the walkie's polite rule.
+  useEffect(() => {
+    voiceSetHandleProvider(() => useGameStore.getState().account.handle ?? null)
+    voiceInit()
+  }, [])
+
+  // THE STREET WALKIE SYNC — the inputs are the deps; pvSync is
+  // idempotent (join once, leave once, no chatter in between).
+  useEffect(() => {
+    void pvSync({ voiceOn, adult: account.ageBand === 'adult', wireLive: wireState === 'live' })
+  }, [voiceOn, account.ageBand, wireState, call.phase])
 
   // THE DEMO DOOR — e2e/dev only, honestly labeled in the banner itself.
   // It lives under its OWN namespace (`__lklSocial`) because the world's
@@ -160,12 +187,12 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-extrabold">@{call.peer}</span>
               <span className="block text-[10px] font-bold text-[var(--lko-ink-soft)]">
-                {call.video ? 'Video' : 'Voice'} call · demo ring — the wire dey come (W7)
+                {callDemo ? `${call.video ? 'Video' : 'Voice'} call · demo ring — labeled, no mic` : `${call.video ? 'Video' : 'Voice'} call · LIVE WIRE — the real ring`}
               </span>
             </span>
-            <button data-testid="call-banner-decline" onClick={decline} aria-label="Decline the call"
+            <button data-testid="call-banner-decline" onClick={() => { if (callDemo) decline(); else void voiceDecline() }} aria-label="Decline the call"
               className="lko-press flex h-10 w-10 items-center justify-center rounded-full bg-[#d64541] text-white">✕</button>
-            <button data-testid="call-banner-answer" onClick={answer} aria-label="Answer the call"
+            <button data-testid="call-banner-answer" onClick={() => { if (callDemo) answer(); else void voiceAnswer() }} aria-label="Answer the call"
               className="lko-press flex h-10 w-10 items-center justify-center rounded-full bg-[var(--lko-green)] text-white">✓</button>
           </div>
         </div>
@@ -178,7 +205,7 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
             <span className="lko-ring-pulse flex h-6 w-6 items-center justify-center rounded-full bg-[var(--lko-green)] text-[11px]" aria-hidden>📞</span>
             <span className="text-[11px] font-extrabold">@{call.peer}</span>
             <span className="lko-num text-[11px] font-extrabold tabular-nums text-white/80">{fmt(callSeconds(call, now))}</span>
-            <button onClick={hangup} aria-label="Hang up" className="lko-press flex h-7 w-7 items-center justify-center rounded-full bg-[#d64541] text-[11px]">✕</button>
+            <button onClick={() => { if (callDemo) hangupStore(); else void voiceHangup() }} aria-label="Hang up" className="lko-press flex h-7 w-7 items-center justify-center rounded-full bg-[#d64541] text-[11px]">✕</button>
           </div>
         </div>
       )}
