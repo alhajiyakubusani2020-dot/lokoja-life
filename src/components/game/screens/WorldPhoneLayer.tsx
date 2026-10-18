@@ -34,12 +34,16 @@ import { useEffect, useRef, useState } from 'react'
 import { FOOD } from '@/game/data/config'
 import { formatNaira } from '@/game/systems/progression'
 import { callSeconds } from '@/game/systems/callflow'
+import { previewState, GUEST_PREVIEW_MS } from '@/game/systems/profile'
+import { audio } from '@/game/systems/audio'
 import { useGameStore } from '@/game/store/useGameStore'
+import { useMenuStore } from '@/game/store/menu-store'
 import { useSocialStore } from '@/game/store/social-store'
 import { useWireStore } from '@/game/systems/wire'
 import { pvSync, voiceAnswer, voiceDecline, voiceHangup, voiceInit, voiceSetHandleProvider } from '@/game/systems/voicenet'
 import { PhoneIcon } from '../icons'
 import { PhoneScreen } from './PhoneScreen'
+import { MenuAuthSheet } from './MenuAuthSheet'
 
 /** W8 — the face above the world. Muted on PURPOSE: the voice flies
  *  through the engine's remoteAudio; a second unmuted element doubles it. */
@@ -73,11 +77,27 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
   const unread = useSocialStore((s) => s.unread)
 
   const account = useGameStore((s) => s.account)
+  const guestPreviewStartedAt = useGameStore((s) => s.guestPreviewStartedAt)
+  const markGuestPreview = useGameStore((s) => s.markGuestPreview)
   const voiceOn = useGameStore((s) => !!s.live?.voiceOn)
   const wireState = useWireStore((s) => s.state)
 
   const [foodOpen, setFoodOpen] = useState(false)
   const [now, setNow] = useState(Date.now())
+  const [claimOpen, setClaimOpen] = useState(false)
+
+  // W1 — THE PREVIEW CLOCK: an unlinked walker's 60 seconds start at
+  // world entry (the store guards: linked → no-op, twice → no-op).
+  useEffect(() => {
+    markGuestPreview()
+  }, [markGuestPreview])
+
+  // the preview heartbeat: one 1s tick while the clock runs unlinked
+  useEffect(() => {
+    if (account.linked || !guestPreviewStartedAt) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [account.linked, guestPreviewStartedAt])
 
   // the 1s heartbeats: the ring timeout law + the active call timer
   useEffect(() => {
@@ -108,19 +128,41 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
   // never collide, and this file still imports zero 3D modules.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const w = window as unknown as { __lklSocial?: { incoming: (peer: string, video: boolean) => void } }
-    w.__lklSocial = { incoming: (peer, video) => incomingDemoCall(peer, video) }
+    const w = window as unknown as { __lklSocial?: { incoming: (peer: string, video: boolean) => void; previewLeft: (ms: number) => void } }
+    w.__lklSocial = {
+      incoming: (peer, video) => incomingDemoCall(peer, video),
+      // W1 — the witness door: jump the preview clock honestly (the LAW
+      // itself is untouched — this only moves the started-at timestamp).
+      previewLeft: (ms) => {
+        const clamped = Math.max(0, Math.min(GUEST_PREVIEW_MS, ms))
+        useGameStore.setState({ guestPreviewStartedAt: Date.now() - (GUEST_PREVIEW_MS - clamped) })
+      },
+    }
     return () => { delete w.__lklSocial }
   }, [incomingDemoCall])
 
   const unreadTotal = Object.values(unread).reduce((a, b) => a + b, 0)
   const incoming = call.phase === 'ringing' && !call.outgoing
+  // W1 — the 60-second law, computed: the chip counts, the wall stands
+  const preview = previewState(guestPreviewStartedAt ?? 0, now)
+  const previewLive = !account.linked && !!guestPreviewStartedAt && !preview.expired
+  const wallUp = !account.linked && !!guestPreviewStartedAt && preview.expired && !claimOpen
 
   return (
     <>
       {/* ---- the right-edge rail (hidden while the phone overlay is up) ---- */}
       {!overlayOpen && (
         <div className="pointer-events-none fixed right-2.5 top-[52%] z-30 flex flex-col items-end gap-1.5">
+          {previewLive && (
+            <button
+              data-testid="preview-chip"
+              onClick={() => setClaimOpen(true)}
+              aria-label={`Guest preview — ${Math.ceil(preview.remainingMs / 1000)} seconds left. Tap to claim your name now.`}
+              className="lko-press pointer-events-auto flex items-center gap-1.5 rounded-full border border-[#ffd88a]/50 bg-[#1a1e18]/90 px-2.5 py-1.5 text-[11px] font-extrabold text-[#ffd88a] shadow-sm backdrop-blur-sm"
+            >
+              ⏳ {Math.ceil(preview.remainingMs / 1000)}s — claim your name
+            </button>
+          )}
           <button
             data-testid="hud-hunger"
             onClick={() => { setFoodOpen(true) }}
@@ -236,6 +278,50 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
           </div>
         </div>
       )}
+
+      {/* ---- W1: THE REGISTER WALL — the 60 seconds end, the door stands.
+           Not a dead end: claim (the in-world sheet — the life continues,
+           nothing lost) or back to the menu. The wall floats ABOVE the
+           living street; the 3D never unmounts beneath it. ---- */}
+      {wallUp && (
+        <div className="fixed inset-0 z-[47] flex items-end justify-center bg-black/55 backdrop-blur-[3px] sm:items-center" role="dialog" aria-modal aria-label="Your guest preview has ended">
+          <div data-testid="register-wall" className="lko-fade w-full max-w-md rounded-t-3xl border border-white/15 bg-[#0e1512]/95 p-5 text-white shadow-2xl backdrop-blur-xl sm:rounded-3xl">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#ffd88a]/15 text-2xl" aria-hidden>⏳</span>
+              <div className="min-w-0">
+                <h2 className="lko-display text-xl leading-tight">Your free look don finish</h2>
+                <p className="mt-0.5 text-[11.5px] font-semibold text-white/60">
+                  60 seconds preview done. Claim your name to keep walking — your hustle dey safe, nothing dey lost.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-[11.5px] font-semibold text-white/75">
+              <p className="flex items-center gap-2"><span aria-hidden>🪪</span> One name + one PIN — your save, your paddies and your pocket ride am.</p>
+              <p className="flex items-center gap-2"><span aria-hidden>😌</span> Design your face — wetin the street go see (W2 bodies go render am).</p>
+              <p className="flex items-center gap-2"><span aria-hidden>🛡️</span> Minors dey behind the family shield — we collect nothing.</p>
+            </div>
+            <button
+              type="button"
+              data-testid="wall-claim"
+              onClick={() => { audio.play('click'); setClaimOpen(true) }}
+              className="lko-press mt-4 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-[#ffd88a] text-[15px] font-extrabold tracking-wide text-[#123528] shadow-[0_10px_28px_-10px_rgba(255,216,138,0.5)]"
+            >
+              Claim your name — keep your life 🪪
+            </button>
+            <button
+              type="button"
+              data-testid="wall-menu"
+              onClick={() => { audio.play('click'); useMenuStore.getState().setScreen('menu') }}
+              className="lko-press mt-2 flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-white/20 bg-white/[0.06] text-[12.5px] font-extrabold text-white/80"
+            >
+              Back to the menu
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---- W1: the in-world claim sheet (the wall's honest door) ---- */}
+      {claimOpen && <MenuAuthSheet inWorld onClose={() => setClaimOpen(false)} />}
 
       {/* ---- THE DIEGETIC PHONE: overlay above the living world ---- */}
       {overlayOpen && (

@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server'
 import { randomBytes } from 'node:crypto'
 import { db } from '@/lib/db'
 import { verifyPin } from '../register/route'
+import { sanitizeProfilePublic } from '@/game/systems/profile'
 
 export async function POST(req: Request) {
   try {
@@ -28,9 +29,18 @@ export async function POST(req: Request) {
     const save = account.cloudSave ? (JSON.parse(account.cloudSave.data) as unknown) : null
     // M14 — the vault row's client signature rides back (the merge verifies)
     const sig = account.cloudSave?.sig ?? null
-    // M17 — the ACCOUNT ROW's band is the canonical tier law (the register
-    // stored it; a cloud-less account still answers to its true band)
-    return NextResponse.json({ ok: true, token, save, sig, band: account.ageBand })
+    // W1 — the face rides home: the returning player's profile comes
+    // with the token (null for pre-W1 names — honest absence, the
+    // profile face offers the device-truth fallback).
+    const profileRow = await db.profileRow.findUnique({ where: { accountId: account.id } })
+    return NextResponse.json({
+      ok: true,
+      token,
+      save,
+      sig,
+      band: account.ageBand,
+      profile: profileRow ? sanitizeProfilePublic(profileRow) : null,
+    })
   } catch {
     return NextResponse.json({ ok: false, why: 'The register no gree — try again.' }, { status: 500 })
   }

@@ -27,7 +27,7 @@ export type { AgeBand } from '../types'
 
 /** A fresh account line: an unlinked guest with the whole city to earn. */
 export function freshAccountState(): AccountState {
-  return { linked: false, handle: null, token: null, ageBand: null, gateGraceDay: 0 }
+  return { linked: false, handle: null, token: null, ageBand: null, gateGraceDay: 0, displayName: null, avatarLook: null, bio: null }
 }
 
 /** A fresh onboarding arc: nothing done, nothing rewarded. */

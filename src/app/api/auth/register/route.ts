@@ -12,6 +12,7 @@
 import { NextResponse } from 'next/server'
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { db } from '@/lib/db'
+import { profileVerdict, sanitizeProfilePublic } from '@/game/systems/profile'
 
 const HANDLE_RE = /^[a-zA-Z0-9_]{3,16}$/
 const PIN_RE = /^\d{4,8}$/
@@ -21,7 +22,16 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { handle?: string; contact?: string; pin?: string; ageBand?: string; parentPin?: string }
+    const body = (await req.json()) as {
+      handle?: string
+      contact?: string
+      pin?: string
+      ageBand?: string
+      parentPin?: string
+      displayName?: string
+      avatarLook?: string
+      bio?: string
+    }
     const handle = (body.handle ?? '').trim()
     const contact = (body.contact ?? '').trim()
     const pin = body.pin ?? ''
@@ -30,6 +40,15 @@ export async function POST(req: Request) {
 
     if (!HANDLE_RE.test(handle)) return NextResponse.json({ ok: false, why: 'Name must be 3–16 letters, numbers, underscore.' }, { status: 400 })
     if (!PIN_RE.test(pin)) return NextResponse.json({ ok: false, why: 'PIN must be 4–8 digits.' }, { status: 400 })
+
+    // W1 — THE FACE LAW: the claim carries the whole profile. The SAME
+    // pure verdict the sheet ran runs here — neither side can drift.
+    const profile = profileVerdict({
+      displayName: body.displayName ?? '',
+      avatarLook: body.avatarLook ?? '',
+      bio: body.bio ?? '',
+    })
+    if (!profile.ok) return NextResponse.json({ ok: false, why: profile.why }, { status: 400 })
 
     // M13 — the minor register law: parent PIN required, contact FORBIDDEN
     let parentPinHash: string | null = null
@@ -44,14 +63,17 @@ export async function POST(req: Request) {
       }
       parentSalt = randomBytes(16).toString('hex')
       parentPinHash = scryptSync(parentPin, parentSalt, 32).toString('hex')
-    } else {
+    } else if (contact) {
+      // W1 — the v2 register law: contact is OPTIONAL and nullable
+      // (validated-if-present, never demanded). The M13 minor shield
+      // never collects it; adults MAY leave a recovery line.
       if (!PHONE_RE.test(contact) && !EMAIL_RE.test(contact)) {
-        return NextResponse.json({ ok: false, why: 'Enter a phone number or an email.' }, { status: 400 })
+        return NextResponse.json({ ok: false, why: 'That phone/email no valid — or leave am empty.' }, { status: 400 })
       }
     }
 
     // minors have no contact — uniqueness rides the handle alone
-    const exists = await db.account.findFirst({ where: minor ? { handle } : { OR: [{ handle }, { contact }] } })
+    const exists = await db.account.findFirst({ where: minor || !contact ? { handle } : { OR: [{ handle }, { contact }] } })
     if (exists) {
       return NextResponse.json({ ok: false, why: exists.handle === handle ? 'That name don dey the register already — login instead.' : 'That phone/email don get an account — login instead.' }, { status: 409 })
     }
@@ -60,21 +82,45 @@ export async function POST(req: Request) {
     const pinHash = scryptSync(pin, salt, 32).toString('hex')
     const token = randomBytes(24).toString('hex')
 
-    await db.account.create({
-      data: {
-        handle,
-        // M13 — zero collection: the minor's contact never touches the disk
-        contact: minor ? null : contact,
-        pinHash,
-        salt,
-        ageBand,
-        parentPinHash,
-        parentSalt,
-        token,
-      },
-      select: { id: true, handle: true },
+    // W1 — THE BIRTH LAW: the identity and its face are born together.
+    // One transaction: if the profile row cannot exist, the account
+    // does not either — no faceless citizens on the street.
+    const created = await db.$transaction(async (tx) => {
+      const account = await tx.account.create({
+        data: {
+          handle,
+          // M13 — zero collection: the minor's contact never touches the disk
+          contact: minor ? null : contact || null,
+          pinHash,
+          salt,
+          ageBand,
+          parentPinHash,
+          parentSalt,
+          token,
+        },
+        select: { id: true, handle: true },
+      })
+      await tx.profileRow.create({
+        data: {
+          accountId: account.id,
+          handle: account.handle,
+          displayName: profile.displayName!,
+          avatarLook: JSON.stringify(profile.look),
+          bio: profile.bio ?? null,
+        },
+      })
+      return account
     })
-    return NextResponse.json({ ok: true, token })
+    return NextResponse.json({
+      ok: true,
+      token,
+      profile: sanitizeProfilePublic({
+        handle: created.handle,
+        displayName: profile.displayName!,
+        avatarLook: JSON.stringify(profile.look),
+        bio: profile.bio ?? null,
+      }),
+    })
   } catch (e) {
     console.error('[register] FAILED:', JSON.stringify({ name: (e as {name?:string})?.name, msg: (e as {message?:string})?.message, code: (e as {code?:string})?.code, stack: (e as Error)?.stack?.slice(0, 400) }))
     return NextResponse.json({ ok: false, why: 'The register no gree — try again.' }, { status: 500 })

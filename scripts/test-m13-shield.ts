@@ -406,7 +406,7 @@ section('the REAL HTTP pass — the register + the tier gate on the live API')
 
   const kidReg = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: `kid_${stamp}`, pin: '1234', ageBand: 'kid', parentPin: '998877' }),
+    body: JSON.stringify({ handle: `kid_${stamp}`, pin: '1234', ageBand: 'kid', parentPin: '998877', displayName: `kid_${stamp}`, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   const kidData = (await kidReg.json()) as { ok?: boolean; token?: string }
   check('a minor claims BEHIND the parent PIN', kidReg.ok && kidData.ok === true && !!kidData.token)
@@ -415,11 +415,11 @@ section('the REAL HTTP pass — the register + the tier gate on the live API')
   //   because the minor's contact never touched the disk —
   const kidReg2 = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: `kid2_${stamp}`, pin: '1234', ageBand: 'teen', parentPin: '112233', contact: 'shared@lokoja.ng' }),
+    body: JSON.stringify({ handle: `kid2_${stamp}`, pin: '1234', ageBand: 'teen', parentPin: '112233', contact: 'shared@lokoja.ng', displayName: `kid2_${stamp}`, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   const kidReg3 = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: `kid3_${stamp}`, pin: '1234', ageBand: 'kid', parentPin: '445566', contact: 'shared@lokoja.ng' }),
+    body: JSON.stringify({ handle: `kid3_${stamp}`, pin: '1234', ageBand: 'kid', parentPin: '445566', contact: 'shared@lokoja.ng', displayName: `kid3_${stamp}`, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   check('the minor contact is never stored (zero collection — no unique clash)',
     kidReg2.ok && kidReg3.ok)

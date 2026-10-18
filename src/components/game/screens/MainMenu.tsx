@@ -158,6 +158,15 @@ export function MainMenu() {
               START YOUR LIFE
             </button>
 
+            {/* W1 — THE HONEST PREVIEW LAW, said out loud: the walk is a
+                 60-second free look, the claim keeps it. No fine print. */}
+            <p
+              data-testid="menu-preview-note"
+              className="-mt-1 px-1 text-[10.5px] font-bold text-white/55"
+            >
+              60-second free look — claim a name to keep the life you build.
+            </p>
+
             <button
               onClick={() => {
                 audio.play('click')

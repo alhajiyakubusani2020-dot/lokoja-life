@@ -331,7 +331,7 @@ section('the REAL HTTP pass — the ballot box on the live relay')
   const stamp = Date.now().toString(36).slice(-6)
   const reg = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: `forge_${stamp}`, pin: '1234', contact: `forge_${stamp}@l.ng`, ageBand: 'adult' }),
+    body: JSON.stringify({ handle: `forge_${stamp}`, pin: '1234', contact: `forge_${stamp}@l.ng`, ageBand: 'adult', displayName: `forge_${stamp}`, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   const { token } = (await reg.json()) as { token?: string }
   check('the voter claims (the ballot checks identity)', typeof token === 'string' && !!token)

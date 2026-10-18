@@ -341,7 +341,7 @@ section('the REAL HTTP pass — the vault carries the signature')
   await new Promise((r) => setTimeout(r, 400))
   const reg = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: `fort_${stamp}`, contact: `fort_${stamp}@lokoja.ng`, pin: '4321', ageBand: 'adult' }),
+    body: JSON.stringify({ handle: `fort_${stamp}`, contact: `fort_${stamp}@lokoja.ng`, pin: '4321', ageBand: 'adult', displayName: `fort_${stamp}`, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   const regData = (await reg.json()) as { ok?: boolean; token?: string }
   check('the register claims a fortress name', reg.ok && !!regData.token)

@@ -404,7 +404,7 @@ if (!serverUp) {
   const adult = await jfetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: `m20a${stamp}`, contact: `m20a${stamp}@lokoja.test`, pin: '1234', ageBand: 'adult' }),
+    body: JSON.stringify({ handle: `m20a${stamp}`, contact: `m20a${stamp}@lokoja.test`, pin: '1234', ageBand: 'adult', displayName: `m20a${stamp}`, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   check('adult registers', adult.status === 200 && adult.body.ok === true)
   const adultToken = String(adult.body.token ?? '')
@@ -412,7 +412,7 @@ if (!serverUp) {
   const kid = await jfetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: `m20k${stamp}`, pin: '1234', ageBand: 'kid', parentPin: '998877' }),
+    body: JSON.stringify({ handle: `m20k${stamp}`, pin: '1234', ageBand: 'kid', parentPin: '998877', displayName: `m20k${stamp}`, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   check('a kid registers behind the parent shield', kid.status === 200 && kid.body.ok === true)
   const kidToken = String(kid.body.token ?? '')
@@ -468,7 +468,7 @@ if (!serverUp) {
   const ghost = await jfetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: `m20g${stamp}`, contact: `m20g${stamp}@lokoja.test`, pin: '1234', ageBand: 'adult' }),
+    body: JSON.stringify({ handle: `m20g${stamp}`, contact: `m20g${stamp}@lokoja.test`, pin: '1234', ageBand: 'adult', displayName: `m20g${stamp}`, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   const ghostToken = String(ghost.body.token ?? '')
   const noBase = await jfetch('/api/cloud/push', {

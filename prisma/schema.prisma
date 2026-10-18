@@ -197,3 +197,19 @@ model LedgerRow {
   note       String   @default("")
   createdAt  DateTime @default(now())
 }
+
+/// M24 W1 THE REGISTER — what the street sees. One row per account,
+/// created in the SAME transaction as the Account (the identity and
+/// its face are born together). avatarLook is the JSON of the REAL
+/// vocabularies in data/avatar.ts (validated by systems/profile.ts at
+/// every door) — the shape the W2 remote-body renderer will draw.
+/// The handle is copied here so roster joins never touch the auth row.
+model ProfileRow {
+  accountId   String   @id
+  handle      String   @unique
+  displayName String
+  avatarLook  String
+  bio         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

@@ -494,6 +494,11 @@ export interface AccountState {
   ageBand: 'kid' | 'teen' | 'adult' | null
   /** the in-game day the gate grace was granted ("Maybe later") */
   gateGraceDay: number
+  /** W1 — what the street sees: the ProfileRow mirror (server truth;
+   * avatarLook is the JSON of the REAL vocabularies from data/avatar.ts) */
+  displayName: string | null
+  avatarLook: string | null
+  bio: string | null
 }
 
 /* ------------------------------ M10 — calendar ------------------------------ */

@@ -80,6 +80,7 @@ const run = async (): Promise<void> => {
   })
   await snap(page, 'auth-sheet')
   await step('submit the claim → creation appears', async () => {
+    await page.getByTestId('auth-next').click({ timeout: 8_000 })   // W1 — step 2: the face
     await page.getByTestId('auth-submit').click({ timeout: 8_000 })
     try {
       await page.waitForSelector('text=Enter your name to start', { timeout: 20_000 })

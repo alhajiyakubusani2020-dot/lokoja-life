@@ -254,7 +254,7 @@ console.log('\nREAL STORE — buy → park → gig → ledger → done-gig → h
     useGameStore.setState({
       goals: { day: d0, ids: ['gig-run', 'eat-well', 'waka'], progress: { 'gig-run': 99, 'eat-well': 99, waka: 99 }, done: [true, true, true], streak: 0, lastDoneDay: d0 },
       onboarding: { done: ['travel', 'work', 'meal', 'earn'], rewarded: true },
-      account: { linked: true, handle: 'legacy_test', token: 'test-token', ageBand: 'adult', gateGraceDay: d0 },
+      account: { linked: true, handle: 'legacy_test', token: 'test-token', ageBand: 'adult', gateGraceDay: d0, displayName: null, avatarLook: null, bio: null },
     })
   }
   state().addMoney(300_000, { label: 'test funding', category: 'other' })

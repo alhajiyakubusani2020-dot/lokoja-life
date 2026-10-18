@@ -21,6 +21,7 @@ import { useState } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
 import { audio } from '@/game/systems/audio'
 import { validateHandle, validatePin, validateContact, ageBandForYear } from '@/game/systems/guest'
+import { DEFAULT_LOOK_JSON } from '@/game/systems/profile'
 
 const NOW_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 60 }, (_, i) => NOW_YEAR - 6 - i)
@@ -53,9 +54,24 @@ export function GuestGate() {
     setBusy(true)
     setWhy(null)
     try {
+      // W1 — THE BODY YOU BUILT IS THE FACE YOU CLAIM. A guest in the
+      // world already walked out of CharacterCreation: the claim adopts
+      // THAT look — no second picker, no divergence between the save
+      // and the street. (The landing sheet picks a look fresh — no body
+      // exists there yet.)
+      const look = useGameStore.getState().player?.avatar
       const res =
         mode === 'claim'
-          ? await registerAccount({ handle, contact, pin, birthYear: Number(birthYear), parentPin: minor ? parentPin : undefined })
+          ? await registerAccount({
+              handle,
+              contact,
+              pin,
+              birthYear: Number(birthYear),
+              parentPin: minor ? parentPin : undefined,
+              displayName: handle,
+              avatarLook: look ? JSON.stringify(look) : DEFAULT_LOOK_JSON,
+              bio: '',
+            })
           : await loginAccount({ handle, pin })
       if (!res.ok) {
         setWhy(res.why ?? 'E no gree — try again.')
@@ -140,7 +156,7 @@ export function GuestGate() {
                 <input
                   data-testid="gate-contact"
                   className="w-full rounded-xl border border-[var(--lko-line)] bg-white px-3 py-2.5 text-[13px] font-bold outline-none focus:border-[var(--lko-green)]"
-                  placeholder="Phone number or email (recovery)"
+                  placeholder="Phone or email — optional now, the recovery line"
                   value={contact}
                   onChange={(e) => setContact(e.target.value)}
                   autoComplete="tel"
@@ -200,7 +216,7 @@ export function GuestGate() {
         <button
           type="button"
           data-testid="guest-claim"
-          disabled={busy || handle.length < 3 || pin.length < 4 || (mode === 'claim' && (minor ? parentPin.length !== 6 : contact.length < 5))}
+          disabled={busy || handle.length < 3 || pin.length < 4 || (mode === 'claim' && minor && parentPin.length !== 6)}
           onClick={() => { audio.play('click'); void submit() }}
           aria-label={mode === 'claim' ? 'Claim my name — register' : 'Return to my name — login'}
           className="lko-press mt-3 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-[var(--lko-green)] text-[14px] font-extrabold text-white disabled:opacity-40"

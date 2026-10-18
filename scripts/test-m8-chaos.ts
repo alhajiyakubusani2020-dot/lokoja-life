@@ -383,7 +383,7 @@ console.log('\nREAL STORE PASS — bun runs the live Zustand store through the c
     s.startNewGame('Chaos Tester', 'male', DEFAULT_AVATAR)
     // the chaos tester rides on a linked account (the guest gate must not block the grid tour)
     useGameStore.setState({
-      account: { linked: true, handle: 'chaos_tester', token: 'test-token', ageBand: 'adult', gateGraceDay: 0 },
+      account: { linked: true, handle: 'chaos_tester', token: 'test-token', ageBand: 'adult', gateGraceDay: 0, displayName: null, avatarLook: null, bio: null },
       onboarding: { done: ['travel', 'work', 'meal', 'earn'], rewarded: true },
     })
 

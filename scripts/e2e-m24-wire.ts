@@ -85,6 +85,7 @@ async function walker(handle: string): Promise<{ page: Page; ctx: BrowserContext
   await page.getByTestId('auth-handle').fill(handle)
   await page.getByTestId('auth-pin').fill('2468')
   await page.getByTestId('auth-contact').fill(`${handle}_${Date.now() % 100000}@lokoja.life`)
+  await page.getByTestId('auth-next').click({ timeout: 10_000 })   // W1 — step 2: the face
   await page.getByTestId('auth-submit').click({ timeout: 10_000 })
   // the CREATION name input specifically (the auth sheet's inputs die here)
   await page.getByPlaceholder('Your name…').fill('Adaeze', { timeout: 15_000 })

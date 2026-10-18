@@ -378,14 +378,14 @@ console.log('\nREAL HTTP PASS — the city register + the cloud vault, live on :
   const reg = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle, contact: `${stamp}@lokoja.ng`, pin, ageBand: 'adult' }),
+    body: JSON.stringify({ handle, contact: `${stamp}@lokoja.ng`, pin, ageBand: 'adult', displayName: handle, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   const regData = (await reg.json()) as { ok?: boolean; token?: string; why?: string }
   check('the register claims the name (real API)', reg.ok && regData.ok === true && !!regData.token)
   const dupe = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle, contact: `${stamp}@lokoja.ng`, pin, ageBand: 'adult' }),
+    body: JSON.stringify({ handle, contact: `${stamp}@lokoja.ng`, pin, ageBand: 'adult', displayName: handle, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   check('a second claim of the same name is refused', dupe.status === 409)
 
@@ -394,7 +394,7 @@ console.log('\nREAL HTTP PASS — the city register + the cloud vault, live on :
   void gs1
   const store1 = useGameStore
   store1.getState().startNewGame('Cloud Ada', 'female', DEFAULT_AVATAR)
-  store1.setState({ account: { linked: true, handle, token: regData.token!, ageBand: 'adult', gateGraceDay: 0 } })
+  store1.setState({ account: { linked: true, handle, token: regData.token!, ageBand: 'adult', gateGraceDay: 0, displayName: null, avatarLook: null, bio: null } })
   store1.getState().addMoney(4300, { label: 'cloud seed', category: 'hustle' })
   store1.getState().saveNow()
   const saved = SaveSystem.load()!
@@ -429,7 +429,7 @@ console.log('\nREAL HTTP PASS — the city register + the cloud vault, live on :
   check('THE MERGE LAW (live): the cloud day beats the guest day, device becomes backup', verdict.winner === 'cloud' && verdict.backup !== null)
   // apply the verdict exactly as the store does
   useGameStore.setState({
-    account: { linked: true, handle, token: loginData.token!, ageBand: 'adult', gateGraceDay: 0 },
+    account: { linked: true, handle, token: loginData.token!, ageBand: 'adult', gateGraceDay: 0, displayName: null, avatarLook: null, bio: null },
     player: loginData.save!.player,
     world: loginData.save!.world,
     civic: loginData.save!.civic,

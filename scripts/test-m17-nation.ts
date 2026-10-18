@@ -288,7 +288,7 @@ section('the REAL HTTP pass — two nations walk the wire (live relay on :3000)'
   const reg = async (handle: string, pin: string) => {
     const res = await fetch(`${BASE}/api/auth/register`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ handle, pin, contact: `${handle}@lokoja.ng`, ageBand: 'adult' }),
+      body: JSON.stringify({ handle, pin, contact: `${handle}@lokoja.ng`, ageBand: 'adult', displayName: handle, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
     })
     return (await res.json()) as { ok?: boolean; token?: string; why?: string }
   }
@@ -317,7 +317,7 @@ section('the REAL HTTP pass — two nations walk the wire (live relay on :3000)'
   const T = `tobi_${stamp}`
   const rt = await fetch(`${BASE}/api/auth/register`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle: T, pin: '5678', ageBand: 'teen', parentPin: '998877' }),
+    body: JSON.stringify({ handle: T, pin: '5678', ageBand: 'teen', parentPin: '998877', displayName: T, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}' }),
   })
   const teen = (await rt.json()) as { ok?: boolean; token?: string }
   check('the teen claims behind the parent shield', teen.ok === true && typeof teen.token === 'string')

@@ -555,8 +555,13 @@ interface GameStore {
   /** M13 — the local tier gate: climb the band ladder with the parent's yes. */
   unlockTierLocal: (to: import('../types').AgeBand, parentPin: string) => boolean
   /** M9 — the Guest Loop: claim a name (register) or return (login) */
-  registerAccount: (input: { handle: string; contact: string; pin: string; birthYear: number; parentPin?: string }) => Promise<{ ok: boolean; why?: string }>
+  registerAccount: (input: { handle: string; contact: string; pin: string; birthYear: number; parentPin?: string; displayName: string; avatarLook: string; bio?: string }) => Promise<{ ok: boolean; why?: string }>
   loginAccount: (input: { handle: string; pin: string }) => Promise<{ ok: boolean; why?: string }>
+  /** W1 — the face edits itself: PATCH /api/profile, the server wins */
+  updateProfile: (input: { displayName?: string; avatarLook?: string; bio?: string }) => Promise<{ ok: boolean; why?: string }>
+  /** W1 — the 60-second guest preview clock (session-scope, never saved) */
+  guestPreviewStartedAt: number | null
+  markGuestPreview: () => void
   /** M9 — "Maybe later": the gate buys the rest of today, tomorrow it stands */
   acceptGateGrace: () => void
   /** M9 — close the gate modal without grace */
@@ -1199,6 +1204,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   goals: freshGoalState(),
   onboarding: freshOnboardingState(),
   account: freshAccountState(),
+  guestPreviewStartedAt: null,
   shield: freshShieldState(),
   fortress: freshFortressState(),
   gateOpen: false,
@@ -1364,7 +1370,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       japa: save.japa ?? freshJapaState(),
       goals: save.goals ?? freshGoalState(),
       onboarding: save.onboarding ?? freshOnboardingState(),
-      account: save.account ?? freshAccountState(),
+      account: save.account ? { ...freshAccountState(), ...save.account } : freshAccountState(),
       shield: save.shield ?? freshShieldState(),
       fortress: save.fortress ?? freshFortressState(),
       cityPulse: save.cityPulse ?? freshPulseState(),
@@ -4340,7 +4346,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (!vParent.ok) return { ok: false, why: vParent.why }
       parentPin = input.parentPin
       contact = '' // never stored for a minor — zero data collection
-    } else {
+    } else if (input.contact.trim()) {
+      // W1 — the v2 register law: contact optional, validated-if-present
       const vContact = validateContact(input.contact)
       if (!vContact.ok) return { ok: false, why: vContact.why }
     }
@@ -4348,16 +4355,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ handle: input.handle.trim(), contact, pin: input.pin, ageBand: band, parentPin }),
+        body: JSON.stringify({
+          handle: input.handle.trim(),
+          contact,
+          pin: input.pin,
+          ageBand: band,
+          parentPin,
+          // W1 — the whole face rides the claim: display name, look, bio
+          displayName: input.displayName,
+          avatarLook: input.avatarLook,
+          bio: input.bio ?? '',
+        }),
       })
-      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string }
+      const data = (await res.json()) as {
+        ok?: boolean
+        why?: string
+        token?: string
+        profile?: { handle: string; displayName: string; avatarLook: string; bio: string | null } | null
+      }
       if (!res.ok || !data.ok || !data.token) return { ok: false, why: data.why ?? 'The register no gree — try again.' }
       // the birth year is the law: the character's band syncs to it
       const p = get().player
       const changed = p && p.ageBand !== band
       if (p && changed) set({ player: { ...p, ageBand: band } })
       set({
-        account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: band, gateGraceDay: get().world?.day ?? 0 },
+        account: {
+          linked: true,
+          handle: input.handle.trim(),
+          token: data.token,
+          ageBand: band,
+          gateGraceDay: get().world?.day ?? 0,
+          // W1 — the ProfileRow mirror lands with the token (server truth)
+          displayName: data.profile?.displayName ?? null,
+          avatarLook: data.profile?.avatarLook ?? null,
+          bio: data.profile?.bio ?? null,
+        },
         gateOpen: false,
       })
       get().notify({ icon: '🪪', text: changed
@@ -4377,6 +4409,53 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
+  /**
+   * W1 — THE FACE EDITS ITSELF. PATCH /api/profile with the bearer;
+   * the server's verdict wins and the mirror lands in the account.
+   * Unlinked faces edit device-side through the creation flow — the
+   * street only sees claimed profiles.
+   */
+  updateProfile: async (input) => {
+    const acct = get().account
+    if (!acct.linked || !acct.token) return { ok: false, why: 'Claim your name first — the street sees claimed faces only.' }
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${acct.token}` },
+        body: JSON.stringify(input),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean
+        why?: string
+        profile?: { handle: string; displayName: string; avatarLook: string; bio: string | null } | null
+      }
+      if (!res.ok || !data.ok) return { ok: false, why: data.why ?? 'The register no gree — try again.' }
+      set({
+        account: {
+          ...get().account,
+          displayName: data.profile?.displayName ?? get().account.displayName,
+          avatarLook: data.profile?.avatarLook ?? get().account.avatarLook,
+          bio: data.profile?.bio ?? null,
+        },
+      })
+      get().notify({ icon: '🪪', text: 'Your face don update — the city go see am.', tone: 'good' })
+      return { ok: true }
+    } catch {
+      return { ok: false, why: 'Network no gree — check connection and try again.' }
+    }
+  },
+
+  /**
+   * W1 — THE PREVIEW CLOCK. Called once at world entry by the diegetic
+   * layer when the player walks UNLINKED; the second call is a no-op
+   * (the clock starts once, honestly). Session-scope — never saved.
+   */
+  markGuestPreview: () => {
+    if (get().account.linked) return
+    if (get().guestPreviewStartedAt) return
+    set({ guestPreviewStartedAt: Date.now() })
+  },
+
   /** M9 — return to a claimed name: the merge law decides, nothing is lost. */
   loginAccount: async (input) => {
     const vHandle = validateHandle(input.handle)
@@ -4389,7 +4468,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handle: input.handle.trim(), pin: input.pin }),
       })
-      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string; save?: import('../types').GameSave | null; band?: string | null }
+      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string; save?: import('../types').GameSave | null; band?: string | null; profile?: { handle: string; displayName: string; avatarLook: string; bio: string | null } | null }
       if (!res.ok || !data.ok || !data.token) return { ok: false, why: data.why ?? 'The register no gree — try again.' }
       const local = SaveSystem.load()
       const cloud = data.save ?? null
@@ -4405,7 +4484,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
           try { localStorage.setItem(BACKUP_KEY, backupPayload(loser)) } catch { /* storage full — the save itself still loads */ }
         }
         set({
-          account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: bandFromRegister ?? (cloud.player as unknown as { ageBand?: AccountState['ageBand'] }).ageBand ?? null, gateGraceDay: get().world?.day ?? 0 },
+          account: {
+            linked: true,
+            handle: input.handle.trim(),
+            token: data.token,
+            ageBand: bandFromRegister ?? (cloud.player as unknown as { ageBand?: AccountState['ageBand'] }).ageBand ?? null,
+            gateGraceDay: get().world?.day ?? 0,
+            // W1 — the face rides home (server truth; pre-W1 names stay null)
+            displayName: data.profile?.displayName ?? null,
+            avatarLook: data.profile?.avatarLook ?? null,
+            bio: data.profile?.bio ?? null,
+          },
           player: winner.player,
           world: winner.world,
           civic: winner.civic,
@@ -4432,7 +4521,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
         get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}! ${verdict.why}`, tone: 'good' })
       } else {
         set({
-          account: { linked: true, handle: input.handle.trim(), token: data.token, ageBand: bandFromRegister, gateGraceDay: get().world?.day ?? 0 },
+          account: {
+            linked: true,
+            handle: input.handle.trim(),
+            token: data.token,
+            ageBand: bandFromRegister,
+            gateGraceDay: get().world?.day ?? 0,
+            displayName: data.profile?.displayName ?? null,
+            avatarLook: data.profile?.avatarLook ?? null,
+            bio: data.profile?.bio ?? null,
+          },
           gateOpen: false,
         })
         get().notify({ icon: '🪪', text: `Welcome back, ${input.handle.trim()}!`, tone: 'good' })
