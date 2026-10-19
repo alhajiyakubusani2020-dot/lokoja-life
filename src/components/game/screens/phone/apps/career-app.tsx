@@ -11,6 +11,10 @@
  * gate. Read-only by design: shifts happen at the desks (workShift
  * lives at the Work tab and at the job's own location), this app shows
  * you WHICH door to walk through and what it still asks of you.
+ *
+ * M24-UI wave 2 — the face: terra-toned hero with the level ring, the
+ * XP bar tall, the skill tiles, the rep chip, the honest board. Every
+ * number, every testid, every honest law: unchanged.
  */
 
 import { useGameStore } from '@/game/store/useGameStore'
@@ -18,6 +22,7 @@ import { formatNaira, xpToNextLevel, skillCap, reputationTier, nextReputationTie
 import { JOBS, JOB_BY_ID } from '@/game/data/jobs'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { PROGRESSION } from '@/game/data/config'
+import { FaceHero, SectionLabel, StatusChip, MiniBar } from './app-face'
 
 export const APP_ID = 'career'
 export const APP_TITLE = 'Career'
@@ -37,30 +42,36 @@ export default function CareerApp() {
 
   return (
     <div className="flex h-full flex-col" aria-label={`${APP_TITLE} app`} data-testid="career-app">
-      <div className="px-4 pb-2 pt-1">
-        <h2 className="text-[15px] font-black text-[var(--lko-ink)]">Career</h2>
-        <p className="text-[10px] font-bold text-[var(--lko-ink-soft)]">The ladder no dey lie — every gate na the real table</p>
-      </div>
+      <FaceHero
+        id="career"
+        glyph="💼"
+        title="Career"
+        sub="The ladder no dey lie — every gate na the real table"
+        hue="terra"
+        right={
+          <span className="flex h-12 w-12 flex-col items-center justify-center rounded-full bg-white/15 backdrop-blur-sm" aria-hidden>
+            <span className="lko-num text-[14px] font-black leading-none">{player.level}</span>
+            <span className="mt-0.5 text-[6.5px] font-extrabold uppercase tracking-wider text-white/70">level</span>
+          </span>
+        }
+      />
 
-      <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-4">
+      <div className="mt-2 flex-1 space-y-2 overflow-y-auto px-4 pb-4">
         {/* the XP ladder */}
+        <SectionLabel>The Ladder</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5" data-testid="career-ladder">
           <div className="flex items-center justify-between">
-            <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">The Ladder</span>
-            <span className="text-[9px] font-bold text-[var(--lko-ink-soft)]">cap {PROGRESSION.maxLevel}</span>
+            <span className="lko-num text-[20px] font-black leading-none text-[var(--lko-terra)]" data-testid="career-level">L{player.level}</span>
+            <span className="text-[9px] font-bold text-[var(--lko-ink-soft)]">cap {PROGRESSION.maxLevel} · {player.xp}/{need} XP → L{player.level + 1}</span>
           </div>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <span className="text-[22px] font-black leading-none text-[var(--lko-green)]" data-testid="career-level">L{player.level}</span>
-            <span className="text-[10px] font-bold text-[var(--lko-ink-soft)]">{player.xp}/{need} XP → L{player.level + 1}</span>
-          </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/[0.05]">
-            <div className="h-full rounded-full bg-[var(--lko-green)]" style={{ width: `${pct}%` }} />
+          <div className="mt-2">
+            <MiniBar pct={pct} tone="terra" tall />
           </div>
           <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
             {(['hustle', 'smart', 'social'] as const).map((k) => (
               <div key={k} className="rounded-xl bg-black/[0.03] px-1 py-1.5" data-testid={`career-skill-${k}`}>
-                <div className="text-[12px] font-black text-[var(--lko-ink)]">{player.skills[k]}/{skillCap(player.level)}</div>
-                <div className="text-[8.5px] font-bold text-[var(--lko-ink-soft)]">{k} · cap at L{player.level}</div>
+                <div className="lko-num text-[12px] font-black text-[var(--lko-ink)]">{player.skills[k]}/{skillCap(player.level)}</div>
+                <div className="text-[8px] font-bold uppercase tracking-wide text-[var(--lko-ink-soft)]">{k} · cap L{player.level}</div>
               </div>
             ))}
           </div>
@@ -70,11 +81,14 @@ export default function CareerApp() {
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5" data-testid="career-job">
           <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Current Job</span>
           {job ? (
-            <div className="mt-1">
-              <p className="text-[11px] font-extrabold text-[var(--lko-ink)]">{job.emoji} {job.name}</p>
-              <p className="text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
-                {job.description} — base {formatNaira(job.basePay)}/shift, {job.energyCost}⚡, +{job.xpReward} XP, +{job.reputationReward} rep. Shifts dey {LOCATION_BY_ID[job.locationId]?.name ?? job.locationId}.
-              </p>
+            <div className="mt-1 flex items-start gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[16px]" aria-hidden>{job.emoji}</span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-extrabold text-[var(--lko-ink)]">{job.name}</p>
+                <p className="text-[10px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
+                  {job.description} — base {formatNaira(job.basePay)}/shift, {job.energyCost}⚡, +{job.xpReward} XP, +{job.reputationReward} rep. Shifts dey {LOCATION_BY_ID[job.locationId]?.name ?? job.locationId}.
+                </p>
+              </div>
             </div>
           ) : (
             <p className="mt-1 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]" data-testid="career-job-none">
@@ -87,7 +101,7 @@ export default function CareerApp() {
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5" data-testid="career-rep">
           <div className="flex items-center justify-between">
             <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Reputation</span>
-            <span className="rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[9px] font-black text-[var(--lko-gold-deep)]">{tier.name}</span>
+            <StatusChip tone="gold">{tier.name}</StatusChip>
           </div>
           <p className="mt-0.5 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
             {player.reputation} rep — {tier.title}.
@@ -96,8 +110,8 @@ export default function CareerApp() {
         </div>
 
         {/* the job board — real requirements, honest locks */}
+        <SectionLabel>Job Board</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
-          <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Job Board</span>
           <p className="text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">{JOBS.length} jobs — the desk requirements below na the data&apos;s own words.</p>
           <div className="mt-1.5 space-y-1.5">
             {sorted.map((j) => {
@@ -113,15 +127,13 @@ export default function CareerApp() {
               if (j.requirements.requiresDegree) reqs.push(education.graduated ? 'certificate ✓' : 'needs FUL certificate')
               const open = !lockedLevel && reqs.every((r) => r.endsWith('✓'))
               return (
-                <div key={j.id} className="rounded-xl bg-black/[0.03] px-2.5 py-2" data-testid={`career-jobrow-${j.id}`}>
+                <div key={j.id} className={`rounded-xl px-2.5 py-2 ${open ? 'bg-[var(--lko-green-soft)]/50' : 'bg-black/[0.03]'}`} data-testid={`career-jobrow-${j.id}`}>
                   <div className="flex items-center justify-between gap-2">
                     <p className="min-w-0 truncate text-[11px] font-extrabold text-[var(--lko-ink)]">
                       {j.emoji} {j.name}
                       {player.jobId === j.id ? ' · yours' : ''}
                     </p>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black ${open ? 'bg-[var(--lko-green-soft)] text-[var(--lko-green)]' : 'bg-black/[0.05] text-[var(--lko-ink-soft)]'}`}>
-                      {open ? 'QUALIFIES' : `L${j.unlockLevel}+`}
-                    </span>
+                    <StatusChip tone={open ? 'ok' : 'plain'}>{open ? 'QUALIFIES' : `L${j.unlockLevel}+`}</StatusChip>
                   </div>
                   <p className="mt-0.5 text-[9.5px] font-semibold text-[var(--lko-ink-soft)]">
                     {formatNaira(j.basePay)}/shift · {j.energyCost}⚡ · {LOCATION_BY_ID[j.locationId]?.shortName ?? j.locationId}

@@ -11,6 +11,11 @@
  *
  * EVERY number here is a real local fact — the dashboard invents
  * nothing, rounds nothing up, and goes quiet when the books are empty.
+ *
+ * M24-UI wave 2 — the face: an ink-toned hero (the ops mirror), the
+ * live nation as a three-tile strip, the crowd as district bars, the
+ * naira weather as its ledger. Every number, every testid, every
+ * honest law: unchanged.
  */
 
 import { useGameStore } from '@/game/store/useGameStore'
@@ -18,6 +23,7 @@ import { moderationScore, inflationTrend } from '@/game/systems/nation'
 import { readManifest } from '@/game/systems/flags'
 import type { FlagKey } from '@/game/systems/flags'
 import { useEffect, useState } from 'react'
+import { FaceHero, SectionLabel, StatusChip } from './apps/app-face'
 
 const WHY_LABELS: Record<string, string> = {
   'kid-text-refused': 'Kid mic (by law)',
@@ -60,28 +66,50 @@ export function NationApp() {
   return (
     <div className="flex h-full flex-col" data-testid="nation-app">
       <div className="px-4 pb-2 pt-1">
-        <h2 className="text-[15px] font-black text-[var(--lko-ink)]">Nation Dashboard</h2>
-        <p className="text-[10px] font-bold text-[var(--lko-ink-soft)]">
-          The city&apos;s honest mirror — numbers only, no wahala
-        </p>
+        <FaceHero
+          id="nation"
+          glyph="🪙"
+          title="Nation Dashboard"
+          sub="The city's honest mirror — numbers only, no wahala"
+          hue="ink"
+          wrap
+          right={
+            <StatusChip tone={snap ? 'ok' : nation.crowd.on ? 'warn' : 'plain'}>
+              <span data-testid="nation-crowd-path">
+                {snap ? (path === 'worker' ? 'worker thread' : 'main thread') : nation.crowd.on ? 'warming…' : 'asleep'}
+              </span>
+            </StatusChip>
+          }
+        />
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-4">
-        {/* THE CROWD — the worker's aggregate */}
-        <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="nation-crowd">
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">The Crowd</span>
-            <span
-              className="rounded-full px-2 py-0.5 text-[9px] font-black"
-              data-testid="nation-crowd-path"
-            >
-              {snap ? (path === 'worker' ? 'worker thread' : 'main thread') : nation.crowd.on ? 'warming…' : 'asleep'}
-            </span>
+        {/* THE LIVE NATION — health (the wire's own pulse, top of the mirror) */}
+        <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="nation-live">
+          <span className="text-[11px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">Live Nation</span>
+          <div className="mt-1.5 grid grid-cols-3 gap-1.5 text-center">
+            <div className="rounded-xl bg-[var(--lko-river-soft)] px-1 py-1.5">
+              <div className="lko-num text-[14px] font-black text-[var(--lko-river)]">{presence}</div>
+              <div className="text-[8.5px] font-bold text-[var(--lko-ink-soft)]">present</div>
+            </div>
+            <div className="rounded-xl bg-[var(--lko-green-soft)] px-1 py-1.5">
+              <div className="lko-num text-[14px] font-black text-[var(--lko-green-deep)]">{events}</div>
+              <div className="text-[8.5px] font-bold text-[var(--lko-ink-soft)]">events</div>
+            </div>
+            <div className="rounded-xl bg-[var(--lko-gold-soft)] px-1 py-1.5">
+              <div className="lko-num text-[14px] font-black text-[var(--lko-gold-deep)]">{liveStats ? liveStats.tradesDone + liveStats.chats : 0}</div>
+              <div className="text-[8.5px] font-bold text-[var(--lko-ink-soft)]">my moves</div>
+            </div>
           </div>
+        </div>
+
+        {/* THE CROWD — the worker's aggregate */}
+        <SectionLabel>The Crowd</SectionLabel>
+        <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="nation-crowd">
           {snap ? (
             <>
               <div className="mb-2 flex items-baseline gap-2">
-                <span className="text-[20px] font-black leading-none text-[var(--lko-green)]" data-testid="nation-crowd-total">
+                <span className="lko-num text-[20px] font-black leading-none text-[var(--lko-green-deep)]" data-testid="nation-crowd-total">
                   {snap.total.toLocaleString()}
                 </span>
                 <span className="text-[10px] font-bold text-[var(--lko-ink-soft)]">
@@ -124,9 +152,10 @@ export function NationApp() {
         </div>
 
         {/* THE NAIRA — the inflation ledger */}
+        <SectionLabel>Naira Weather</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="nation-inflation">
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">Naira Weather</span>
+            <span className="text-[10px] font-bold text-[var(--lko-ink)]">The day-roll ledger</span>
             {trend.rows > 0 && (
               <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${trend.hot ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`} data-testid="nation-inflation-trend">
                 avg ×{trend.avg.toFixed(2)}{trend.hot ? ' HOT' : ' calm'}
@@ -140,7 +169,7 @@ export function NationApp() {
           ) : (
             <div className="space-y-1">
               {nation.inflation.slice(-6).reverse().map((row) => (
-                <div key={row.day} className="flex items-center justify-between text-[10px] font-bold">
+                <div key={row.day} className="flex items-center justify-between rounded-lg bg-black/[0.02] px-2 py-1 text-[10px] font-bold">
                   <span className="text-[var(--lko-ink-soft)]">Day {row.day}</span>
                   <span className={row.mult >= 1.1 ? 'text-red-700' : row.mult <= 0.95 ? 'text-[var(--lko-river)]' : 'text-[var(--lko-ink)]'}>
                     ×{row.mult.toFixed(2)} {row.mult >= 1.12 ? '— prices dey bite' : row.mult >= 1.08 ? '— market hot' : row.mult <= 0.95 ? '— slow waka' : '— steady'}
@@ -152,9 +181,10 @@ export function NationApp() {
         </div>
 
         {/* THE MODERATION BOOK — counts only, the type carries no text */}
+        <SectionLabel>Moderation</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="nation-moderation">
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">Moderation</span>
+            <span className="text-[10px] font-bold text-[var(--lko-ink)]">The refusal counts</span>
             <span className="text-[9px] font-bold text-[var(--lko-ink-soft)]">{modTotal} refusals · words NEVER stored</span>
           </div>
           {modRows.length === 0 ? (
@@ -162,7 +192,7 @@ export function NationApp() {
           ) : (
             <div className="space-y-1">
               {modRows.map((row) => (
-                <div key={row.why} className="flex items-center justify-between text-[10px] font-bold" data-testid={`nation-mod-${row.why}`}>
+                <div key={row.why} className="flex items-center justify-between rounded-lg bg-black/[0.02] px-2 py-1 text-[10px] font-bold" data-testid={`nation-mod-${row.why}`}>
                   <span className="text-[var(--lko-ink-soft)]">{WHY_LABELS[row.why] ?? row.why}</span>
                   <span className="text-[var(--lko-ink)]">×{row.count}</span>
                 </div>
@@ -171,41 +201,22 @@ export function NationApp() {
           )}
         </div>
 
-        {/* THE LIVE NATION — health */}
-        <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="nation-live">
-          <span className="text-[11px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">Live Nation</span>
-          <div className="mt-1.5 grid grid-cols-3 gap-1.5 text-center">
-            <div className="rounded-xl bg-[var(--lko-river-soft)] px-1 py-1.5">
-              <div className="text-[14px] font-black text-[var(--lko-river)]">{presence}</div>
-              <div className="text-[8.5px] font-bold text-[var(--lko-ink-soft)]">present</div>
-            </div>
-            <div className="rounded-xl bg-[var(--lko-green-soft)] px-1 py-1.5">
-              <div className="text-[14px] font-black text-[var(--lko-green)]">{events}</div>
-              <div className="text-[8.5px] font-bold text-[var(--lko-ink-soft)]">events</div>
-            </div>
-            <div className="rounded-xl bg-[var(--lko-gold-soft)] px-1 py-1.5">
-              <div className="text-[14px] font-black text-[var(--lko-gold-deep)]">{liveStats ? liveStats.tradesDone + liveStats.chats : 0}</div>
-              <div className="text-[8.5px] font-bold text-[var(--lko-ink-soft)]">my moves</div>
-            </div>
-          </div>
-        </div>
-
         {/* THE FORGE — pack + last verdict */}
+        <SectionLabel>Forge</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="nation-forge">
-          <span className="text-[11px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">Forge</span>
           {lastForge ? (
-            <p className="mt-1 text-[10.5px] font-bold text-[var(--lko-ink)]" data-testid="nation-forge-last">
+            <p className="text-[10.5px] font-bold text-[var(--lko-ink)]" data-testid="nation-forge-last">
               {lastForge.verdict === 'shipped' ? '✅' : '🛑'} {lastForge.city} · QA {lastForge.qaScore}/100 · {lastForge.totalMinutes}min · day {lastForge.atDay}
             </p>
           ) : (
-            <p className="mt-1 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">The ledger is empty — run the forge.</p>
+            <p className="text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">The ledger is empty — run the forge.</p>
           )}
         </div>
 
         {/* THE OPS ROW — flags + telemetry + deploys */}
+        <SectionLabel>Ops</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="nation-ops">
-          <span className="text-[11px] font-black uppercase tracking-wide text-[var(--lko-ink-soft)]">Ops</span>
-          <div className="mt-1.5 space-y-1.5">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-[var(--lko-ink)]">Telemetry</span>
               <button

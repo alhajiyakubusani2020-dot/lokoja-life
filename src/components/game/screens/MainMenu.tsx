@@ -15,6 +15,8 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { audio } from '@/game/systems/audio'
 import { GAME_META } from '@/game/data/config'
+import { LOCATIONS } from '@/game/data/locations'
+import { NPCS } from '@/game/data/npcs'
 import { MENU_TIPS } from '@/game/data/flavor'
 import { useMenuStore } from '@/game/store/menu-store'
 import { PinIcon, SparkleIcon, SettingsIcon } from '../icons'
@@ -52,10 +54,28 @@ export function MainMenu() {
   const [tipIndex, setTipIndex] = useState(0)
   const [authOpen, setAuthOpen] = useState(false)
 
+  // M24-UI wave 2 — THE LIVE RIBBON'S TRUTH: the ribbon no longer claims
+  // the wire, it ASKS. One deferred fetch to the honest pass-through door;
+  // a quiet wire renders as a quiet wire, never as a promise.
+  const [wire, setWire] = useState<{ live: boolean; online: number } | null>(null)
+
   // rotate the loading tips gently
   useEffect(() => {
     const t = setInterval(() => setTipIndex((i) => (i + 1) % MENU_TIPS.length), 5000)
     return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    let dead = false
+    fetch('/api/wire-status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { live: boolean; online: number } | null) => {
+        if (!dead && d) setWire(d)
+      })
+      .catch(() => {})
+    return () => {
+      dead = true
+    }
   }, [])
 
   return (
@@ -89,13 +109,26 @@ export function MainMenu() {
           </span>
           <span
             data-testid="menu-live-ribbon"
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#ffd88a]/30 bg-black/30 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#ffd88a] backdrop-blur-sm"
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] backdrop-blur-sm ${wire?.live ? 'border-[#ffd88a]/30 bg-black/30 text-[#ffd88a]' : 'border-white/20 bg-black/25 text-white/70'}`}
           >
-            <span className="relative flex h-2 w-2" aria-hidden>
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ffd88a] opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#ffd88a]" />
-            </span>
-            The city dey go live
+            {wire === null ? (
+              'Checking the wire…'
+            ) : wire.live ? (
+              <>
+                <span className="relative flex h-2 w-2" aria-hidden>
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ffd88a] opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[#ffd88a]" />
+                </span>
+                {`The wire dey live · ${wire.online} on now`}
+              </>
+            ) : (
+              <>
+                <span className="relative flex h-2 w-2" aria-hidden>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-white/40" />
+                </span>
+                The wire dey quiet from here
+              </>
+            )}
           </span>
         </div>
 
@@ -136,9 +169,16 @@ export function MainMenu() {
             </p>
           </div>
 
-          {/* the honest stat chips — everything below na real count from the city */}
+          {/* the honest stat chips — real counts from the city's own data:
+              the app union's 26 faces (m21 registry law), the REAL location
+              table, and the crowd's 10,000-soul seed. Nothing stale. */}
           <div className="mt-4 flex flex-wrap gap-1.5">
-            {['21 phone apps', '32 real locations', '10,000-soul nation sim', 'the live wire dey come'].map((chip) => (
+            {[
+              '26 phone apps',
+              `${LOCATIONS.length} real locations`,
+              '10,000-soul nation sim',
+              `${NPCS.length} paddy dem to meet`,
+            ].map((chip) => (
               <span key={chip} className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-extrabold text-white/85 backdrop-blur-sm">
                 {chip}
               </span>

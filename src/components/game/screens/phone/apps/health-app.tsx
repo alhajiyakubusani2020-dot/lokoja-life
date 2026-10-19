@@ -12,6 +12,11 @@
  * no invented clinic, no fake medicine. The age-band card reads
  * AGE_LAW (systems/shield.ts) verbatim — the same table the whole
  * game reads. Read-only: the meters move where the meters move.
+ *
+ * M24-UI wave 2 — the face: the meters as big honest dials (pct bars
+ * with the number riding the row), the mend-card with the city's own
+ * data, the age law verbatim. Every number, every testid, every law:
+ * unchanged.
  */
 
 import { useGameStore } from '@/game/store/useGameStore'
@@ -20,16 +25,17 @@ import { FOODS } from '@/game/data/foods'
 import { LOCATIONS } from '@/game/data/locations'
 import { conditionSummary } from '@/game/systems/needs'
 import { AGE_LAW } from '@/game/systems/shield'
+import { FaceHero, SectionLabel, StatusChip, MiniBar } from './app-face'
 
 export const APP_ID = 'health'
 export const APP_TITLE = 'Health'
 export const APP_GLYPH = '🩺'
 
-const METERS: { key: 'health' | 'energy' | 'hunger' | 'mood'; label: string; emoji: string; tint: string }[] = [
-  { key: 'health', label: 'Health', emoji: '❤️', tint: 'bg-red-500' },
-  { key: 'energy', label: 'Energy', emoji: '⚡', tint: 'bg-[var(--lko-gold)]' },
-  { key: 'hunger', label: 'Belle (100 = full)', emoji: '🍲', tint: 'bg-[var(--lko-terra)]' },
-  { key: 'mood', label: 'Mood', emoji: '🙂', tint: 'bg-[var(--lko-green)]' },
+const METERS: { key: 'health' | 'energy' | 'hunger' | 'mood'; label: string; emoji: string; tone: 'red' | 'gold' | 'terra' | 'green' }[] = [
+  { key: 'health', label: 'Health', emoji: '❤️', tone: 'red' },
+  { key: 'energy', label: 'Energy', emoji: '⚡', tone: 'gold' },
+  { key: 'hunger', label: 'Belle (100 = full)', emoji: '🍲', tone: 'terra' },
+  { key: 'mood', label: 'Mood', emoji: '🙂', tone: 'green' },
 ]
 
 /** the need a location's REAL activities serve — derived, not invented */
@@ -59,17 +65,25 @@ export default function HealthApp() {
 
   return (
     <div className="flex h-full flex-col" aria-label={`${APP_TITLE} app`} data-testid="health-app">
-      <div className="px-4 pb-2 pt-1">
-        <h2 className="text-[15px] font-black text-[var(--lko-ink)]">Health</h2>
-        <p className={`text-[10px] font-bold ${summary.tone === 'bad' ? 'text-red-700' : summary.tone === 'good' ? 'text-[var(--lko-green)]' : 'text-[var(--lko-ink-soft)]'}`} data-testid="health-summary">
-          {summary.text}
-        </p>
-      </div>
+      <FaceHero
+        id="health"
+        glyph="🩺"
+        title="Health"
+        sub="The body book — four meters, the engine's own laws, no invented clinic"
+        hue="green"
+        right={
+          <span className="rounded-full bg-white/15 px-2 py-1 text-[9px] font-black backdrop-blur-sm">
+            {summary.tone === 'bad' ? '⚠ body' : summary.tone === 'good' ? '✓ body' : 'body'}
+          </span>
+        }
+      />
 
-      <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-4">
+      <div className="mt-2 flex-1 space-y-2 overflow-y-auto px-4 pb-4">
         {/* the four meters */}
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
-          <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">The Meters</span>
+          <p className={`text-[10px] font-bold ${summary.tone === 'bad' ? 'text-red-700' : summary.tone === 'good' ? 'text-[var(--lko-green-deep)]' : 'text-[var(--lko-ink-soft)]'}`} data-testid="health-summary">
+            {summary.text}
+          </p>
           <div className="mt-2 space-y-2.5">
             {METERS.map((m) => {
               const v = needs[m.key]
@@ -77,16 +91,16 @@ export default function HealthApp() {
                 <div key={m.key} data-testid={`health-meter-${m.key}`}>
                   <div className="flex items-center justify-between text-[10px] font-bold">
                     <span className="text-[var(--lko-ink)]">{m.emoji} {m.label}</span>
-                    <span className="text-[var(--lko-ink-soft)]">{Math.round(v)}/100</span>
+                    <span className="lko-num text-[var(--lko-ink-soft)]">{Math.round(v)}/100</span>
                   </div>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-black/[0.05]">
-                    <div className={`h-full rounded-full ${m.tint}`} style={{ width: `${Math.max(0, Math.min(100, v))}%` }} />
+                  <div className="mt-1">
+                    <MiniBar pct={v} tone={m.tone} tall />
                   </div>
                 </div>
               )
             })}
           </div>
-          <div className="mt-2 rounded-xl bg-[var(--lko-river-soft)] px-2.5 py-1.5">
+          <div className="mt-2.5 rounded-xl bg-[var(--lko-river-soft)] px-2.5 py-1.5">
             <p className="text-[9.5px] font-semibold leading-snug text-[var(--lko-ink-soft)]">
               The engine&apos;s honest laws: hunger ≤ {NEEDS.hungerCritical} drains mood −{NEEDS.hungryMoodDrain} per action;
               hunger 0 drains health −{NEEDS.starvingHealthDrain}; energy ≤ {NEEDS.energyCritical} blocks strenuous work.
@@ -97,9 +111,9 @@ export default function HealthApp() {
         </div>
 
         {/* where the body gets fixed — derived from the city's own data */}
+        <SectionLabel>Where Body Dey Mend</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
-          <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Where Body Dey Mend</span>
-          <div className="mt-1.5 space-y-1 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
+          <div className="space-y-1.5 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
             <p data-testid="health-hunger-spots">
               🍲 <span className="font-extrabold text-[var(--lko-ink)]">Hunger</span> — {hungerSpots.length > 0 ? hungerSpots.join(' · ') : 'the food tables'} serve am.
             </p>
@@ -113,11 +127,11 @@ export default function HealthApp() {
               ❤️ <span className="font-extrabold text-[var(--lko-ink)]">Health</span> — sleep patches +{NEEDS.rest.sleep.health}; the gym patch +{INTERIOR.gym.health} but bills −{Math.abs(INTERIOR.gym.energy)} energy.
             </p>
           </div>
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 space-y-1 border-t border-black/[0.05] pt-2">
             {topMeals.map((f) => (
-              <div key={f.id} className="flex items-center justify-between text-[10px] font-bold" data-testid={`health-food-${f.id}`}>
+              <div key={f.id} className="flex items-center justify-between rounded-lg bg-black/[0.02] px-2 py-1 text-[10px] font-bold" data-testid={`health-food-${f.id}`}>
                 <span className="truncate text-[var(--lko-ink-soft)]">{f.emoji} {f.name}</span>
-                <span className="shrink-0 text-[var(--lko-ink)]">+{f.hungerRestore} hunger · ₦{f.price.toLocaleString()}</span>
+                <span className="lko-num shrink-0 text-[var(--lko-ink)]">+{f.hungerRestore} hunger · ₦{f.price.toLocaleString()}</span>
               </div>
             ))}
           </div>
@@ -127,9 +141,7 @@ export default function HealthApp() {
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
           <div className="flex items-center justify-between">
             <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Your Age Law</span>
-            <span className="rounded-full bg-[var(--lko-gold-soft)] px-2 py-0.5 text-[9px] font-black uppercase text-[var(--lko-gold-deep)]" data-testid="health-band">
-              {player.ageBand}
-            </span>
+            <StatusChip tone="gold">{player.ageBand}</StatusChip>
           </div>
           <div className="mt-1.5 space-y-0.5 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]" data-testid="health-age-law">
             <p>crime road: {law.crime ? 'open (adult only by design)' : 'LOCKED — the shield no dey argue'}</p>

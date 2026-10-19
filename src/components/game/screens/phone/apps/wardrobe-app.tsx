@@ -12,6 +12,10 @@
  *   setAvatar (the appearance commit the 3D rig reads)
  * Every number here is a catalogue price or a save fact — nothing
  * is invented, the earned twins carry no price tag.
+ *
+ * M24-UI wave 2 — the face: gold-toned hero with the wearing chip,
+ * the cloth rows with wear/buy doors, the birthright six as chips.
+ * Every number, every testid, every law: unchanged.
  */
 
 import { useGameStore } from '@/game/store/useGameStore'
@@ -20,6 +24,7 @@ import { formatNaira } from '@/game/systems/progression'
 import { WALK_STYLES, PREMIUM_OUTFITS, WALK_BY_KEY, BASE_STYLE_KEYS, STREET_WALK } from '@/game/systems/wardrobe'
 import { AVATAR_CLOTHING_STYLES } from '@/game/data/avatar'
 import type { AvatarConfig } from '@/game/types'
+import { FaceHero, SectionLabel, StatusChip } from './app-face'
 
 export const APP_ID = 'wardrobe'
 export const APP_TITLE = 'Wardrobe'
@@ -37,34 +42,46 @@ export default function WardrobeApp() {
   const ownsWalk = (key: string) => key === STREET_WALK || wardrobe.ownedWalks.includes(key)
   const ownsOutfit = (key: string) => BASE_STYLE_KEYS.has(key) || wardrobe.ownedStyles.includes(key)
   const wearStyle = (key: string) => setAvatar({ ...player.avatar, clothingStyle: key } as AvatarConfig)
+  const wornOutfit = PREMIUM_OUTFITS.find((o) => player.avatar.clothingStyle === o.key)
 
   return (
     <div className="flex h-full flex-col" aria-label={`${APP_TITLE} app`} data-testid="wardrobe-app">
-      <div className="px-4 pb-2 pt-1">
-        <h2 className="text-[15px] font-black text-[var(--lko-ink)]">Wardrobe</h2>
-        <p className="text-[10px] font-bold text-[var(--lko-ink-soft)]">
-          The Bend-Down Select — same laws as the mirror at home
-        </p>
-      </div>
+      <FaceHero
+        id="wardrobe"
+        glyph="👕"
+        title="Wardrobe"
+        sub="The Bend-Down Select — same laws as the mirror at home"
+        hue="gold"
+        right={
+          <span className="rounded-full bg-white/15 px-2 py-1 text-[9px] font-black backdrop-blur-sm">
+            {wornOutfit ? wornOutfit.label : 'base cloth'}
+          </span>
+        }
+      />
 
-      <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-4">
+      <div className="mt-2 flex-1 space-y-2 overflow-y-auto px-4 pb-4">
         {/* the equipped walk */}
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5" data-testid="wardrobe-active">
-          <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Your Walk</span>
-          <p className="mt-1 text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">
-            {activeWalk ? `${activeWalk.label} — ${activeWalk.blurb}` : 'Street Walk'}
-          </p>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--lko-gold-soft)] text-[15px]" aria-hidden>🚶</span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-extrabold text-[var(--lko-ink)]">Your Walk — {activeWalk?.label ?? 'Street Walk'}</p>
+              <p className="text-[10px] font-semibold text-[var(--lko-ink-soft)]">
+                {activeWalk ? activeWalk.blurb : 'The Lokoja stride you were born with'}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* walk styles — real buy/equip doors */}
+        <SectionLabel>Walk Styles</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
-          <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Walk Styles</span>
-          <div className="mt-1.5 space-y-1.5">
+          <div className="mt-0.5 space-y-1.5">
             {WALK_STYLES.map((w) => {
               const owned = ownsWalk(w.key)
               const active = wardrobe.activeWalk === w.key
               return (
-                <div key={w.key} className="rounded-xl bg-black/[0.03] px-2.5 py-2" data-testid={`wardrobe-walk-${w.key}`}>
+                <div key={w.key} className={`rounded-xl px-2.5 py-2 ${active ? 'bg-[var(--lko-gold-soft)]/50' : 'bg-black/[0.03]'}`} data-testid={`wardrobe-walk-${w.key}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-[11px] font-extrabold text-[var(--lko-ink)]">
@@ -74,12 +91,12 @@ export default function WardrobeApp() {
                     </div>
                     {owned ? (
                       active ? (
-                        <span className="shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2 py-0.5 text-[9px] font-black text-[var(--lko-green)]">ON</span>
+                        <StatusChip tone="ok">ON</StatusChip>
                       ) : (
                         <button
                           type="button"
                           data-testid={`wardrobe-walk-equip-${w.key}`}
-                          className="lko-press shrink-0 rounded-lg bg-[var(--lko-green)] px-2.5 py-1 text-[9.5px] font-black text-white"
+                          className="lko-press shrink-0 rounded-lg bg-[var(--lko-green)] px-2.5 py-1.5 text-[9.5px] font-black text-white"
                           onClick={() => { audio.play('click'); void wardrobeEquipWalk(w.key) }}
                         >
                           WEAR
@@ -89,7 +106,7 @@ export default function WardrobeApp() {
                       <button
                         type="button"
                         data-testid={`wardrobe-walk-buy-${w.key}`}
-                        className="lko-press shrink-0 rounded-lg bg-[var(--lko-gold-deep)] px-2.5 py-1 text-[9.5px] font-black text-white"
+                        className="lko-press lko-num shrink-0 rounded-lg bg-[var(--lko-gold-deep)] px-2.5 py-1.5 text-[9.5px] font-black text-white"
                         onClick={() => { audio.play('click'); void wardrobeBuy('walk', w.key) }}
                       >
                         {formatNaira(w.price)}
@@ -103,15 +120,15 @@ export default function WardrobeApp() {
         </div>
 
         {/* premium outfits — the honest cloth states */}
+        <SectionLabel>Premium Outfits</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
-          <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Premium Outfits</span>
-          <div className="mt-1.5 space-y-1.5">
+          <div className="mt-0.5 space-y-1.5">
             {PREMIUM_OUTFITS.map((o) => {
               const owned = wardrobe.ownedStyles.includes(o.key)
               const worn = player.avatar.clothingStyle === o.key
               const earnedOnly = o.price <= 0
               return (
-                <div key={o.key} className="rounded-xl bg-black/[0.03] px-2.5 py-2" data-testid={`wardrobe-outfit-${o.key}`}>
+                <div key={o.key} className={`rounded-xl px-2.5 py-2 ${worn ? 'bg-[var(--lko-gold-soft)]/50' : 'bg-black/[0.03]'}`} data-testid={`wardrobe-outfit-${o.key}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-[11px] font-extrabold text-[var(--lko-ink)]">
@@ -123,24 +140,24 @@ export default function WardrobeApp() {
                     </div>
                     {owned ? (
                       worn ? (
-                        <span className="shrink-0 rounded-full bg-[var(--lko-green-soft)] px-2 py-0.5 text-[9px] font-black text-[var(--lko-green)]">ON</span>
+                        <StatusChip tone="ok">ON</StatusChip>
                       ) : (
                         <button
                           type="button"
                           data-testid={`wardrobe-outfit-wear-${o.key}`}
-                          className="lko-press shrink-0 rounded-lg bg-[var(--lko-green)] px-2.5 py-1 text-[9.5px] font-black text-white"
+                          className="lko-press shrink-0 rounded-lg bg-[var(--lko-green)] px-2.5 py-1.5 text-[9.5px] font-black text-white"
                           onClick={() => { audio.play('click'); wearStyle(o.key) }}
                         >
                           WEAR
                         </button>
                       )
                     ) : earnedOnly ? (
-                      <span className="shrink-0 rounded-full border border-black/[0.08] px-2.5 py-1 text-[9px] font-black text-[var(--lko-ink-soft)]">EARN IT</span>
+                      <StatusChip tone="plain">EARN IT</StatusChip>
                     ) : (
                       <button
                         type="button"
                         data-testid={`wardrobe-outfit-buy-${o.key}`}
-                        className="lko-press shrink-0 rounded-lg bg-[var(--lko-gold-deep)] px-2.5 py-1 text-[9.5px] font-black text-white"
+                        className="lko-press lko-num shrink-0 rounded-lg bg-[var(--lko-gold-deep)] px-2.5 py-1.5 text-[9.5px] font-black text-white"
                         onClick={() => { audio.play('click'); void wardrobeBuy('outfit', o.key) }}
                       >
                         {formatNaira(o.price)}
@@ -154,8 +171,8 @@ export default function WardrobeApp() {
         </div>
 
         {/* the birthright six */}
+        <SectionLabel>Base Styles</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3.5">
-          <span className="text-[13px] font-extrabold text-[var(--lko-ink)]">Base Styles</span>
           <p className="text-[10.5px] font-semibold text-[var(--lko-ink-soft)]">Owned by birth — wear any, no price tag.</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {AVATAR_CLOTHING_STYLES.filter((s) => BASE_STYLE_KEYS.has(s.key)).map((s) => {
@@ -165,7 +182,7 @@ export default function WardrobeApp() {
                   key={s.key}
                   type="button"
                   data-testid={`wardrobe-base-${s.key}`}
-                  className={`lko-press rounded-full px-2.5 py-1 text-[9.5px] font-black ${worn ? 'bg-[var(--lko-green)] text-white' : 'bg-black/[0.05] text-[var(--lko-ink)]'}`}
+                  className={`lko-press rounded-full px-3 py-1.5 text-[9.5px] font-black ${worn ? 'bg-[var(--lko-green)] text-white shadow-[var(--lko-shadow-sm)]' : 'bg-black/[0.05] text-[var(--lko-ink)]'}`}
                   onClick={() => { audio.play('click'); wearStyle(s.key) }}
                 >
                   {s.label}

@@ -12,6 +12,11 @@
  * Every naira of street credit moves through the store's share actions
  * (shareTeleport / sharePulseCard) — this UI never mints, never signs,
  * never pays. The cooldown and the ledger live in the store.
+ *
+ * M24-UI wave 2 — the face: a newspaper MASTHEAD (the green band, the
+ * unread count as its press stamp), the feed with icon chips, the
+ * spot card, the mailbox, the knowledge meter. Every number, every
+ * testid, every honest law: unchanged.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -20,6 +25,7 @@ import { pulseForDay, pulseUnread, cityKnowledge, freshPulseState, type PulseIte
 import { decodeTeleport, postcardFor, encodeTeleport } from '@/game/systems/teleport'
 import { formatNaira } from '@/game/systems/progression'
 import { PULSE } from '@/game/data/config'
+import { SectionLabel, MiniBar } from './apps/app-face'
 
 /* ------------------------------ the feed row ------------------------------- */
 
@@ -30,9 +36,9 @@ function FeedRow({ item, onShare, shared }: { item: PulseItem; onShare: () => vo
       className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[var(--lko-shadow-sm)]"
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[13px] font-extrabold leading-snug">
-          <span className="mr-1" aria-hidden>{item.icon}</span>
-          {item.headline}
+        <p className="flex min-w-0 items-start gap-2 text-[13px] font-extrabold leading-snug">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[var(--lko-green-soft)] text-[11px]" aria-hidden>{item.icon}</span>
+          <span className="min-w-0">{item.headline}</span>
         </p>
         <button
           data-testid={`pulse-share-${item.kind}`}
@@ -43,7 +49,7 @@ function FeedRow({ item, onShare, shared }: { item: PulseItem; onShare: () => vo
           Share
         </button>
       </div>
-      <p className="mt-1 text-[11px] font-semibold leading-snug text-[var(--lko-ink-soft)]">{item.body}</p>
+      <p className="mt-1 pl-8 text-[11px] font-semibold leading-snug text-[var(--lko-ink-soft)]">{item.body}</p>
       {shared && (
         <p className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[var(--lko-green)]">
           The street don hear — credit paid today
@@ -190,15 +196,20 @@ export function PulseApp() {
 
   return (
     <div className="space-y-3" data-testid="pulse-app">
-      {/* header */}
-      <div className="rounded-2xl bg-[var(--lko-green)] p-3 text-white">
-        <div className="flex items-center justify-between">
-          <p className="lko-display text-[15px]">📰 City Pulse</p>
-          <span data-testid="pulse-unread" className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-extrabold">
+      {/* THE MASTHEAD — the newspaper's face */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--lko-green-deep)] via-[var(--lko-green)] to-[#0b4a2a] p-3.5 text-white shadow-[var(--lko-shadow-md)]">
+        <svg viewBox="0 0 48 48" className="absolute -right-3 -top-3 h-20 w-20 opacity-[0.14]" aria-hidden>
+          <path d="M8 8 C 20 13 23 22 24 36" stroke="#fff" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <path d="M41 17 C 31 20 26 26 24 36" stroke="#fff" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <circle cx="24" cy="37.5" r="4" fill="#fff" />
+        </svg>
+        <div className="relative flex items-center justify-between">
+          <p className="lko-display text-[16px]">📰 City Pulse</p>
+          <span data-testid="pulse-unread" className="rounded-full bg-white/15 px-2 py-1 text-[10px] font-black backdrop-blur-sm">
             {unread > 0 ? `${unread} new` : 'all read'}
           </span>
         </div>
-        <p className="mt-0.5 text-[10.5px] font-semibold text-white/75">
+        <p className="relative mt-0.5 text-[10px] font-bold text-white/80">
           The city talk wetin e see — Day {world.day}, {items.length} headline{items.length === 1 ? '' : 's'}.
         </p>
       </div>
@@ -215,16 +226,17 @@ export function PulseApp() {
       </div>
 
       {/* MY SPOT — the signed postcard */}
+      <SectionLabel>My Spot</SectionLabel>
       <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[var(--lko-shadow-sm)]" data-testid="my-spot">
-        <p className="text-[13px] font-extrabold">📍 My Spot</p>
+        <p className="text-[13px] font-extrabold">📍 Sign where you stand</p>
         <p className="mt-0.5 text-[11px] font-semibold text-[var(--lko-ink-soft)]">
-          Sign where you stand — anyone wey open the link go land here, no fare.
+          Anyone wey open the link go land here, no fare.
         </p>
         <button
           data-testid="share-spot"
           disabled={spotBusy}
           onClick={shareSpot}
-          className="lko-press mt-2 w-full rounded-xl bg-[var(--lko-green)] px-3 py-2 text-[12px] font-extrabold text-white disabled:opacity-50"
+          className="lko-press mt-2 w-full rounded-xl bg-[var(--lko-green)] px-3 py-2.5 text-[12px] font-extrabold text-white shadow-[var(--lko-shadow-sm)] disabled:opacity-50"
         >
           {spotBusy ? 'Signing…' : `Share this spot${creditPaid ? ' (+credit done today)' : ` (+${PULSE.shareStreetCredit} rep)`}`}
         </button>
@@ -247,9 +259,7 @@ export function PulseApp() {
       {/* THE MAILBOX — postcards that landed here */}
       {(cityPulse?.arrivals.length ?? 0) > 0 && (
         <div className="space-y-2" data-testid="mailbox">
-          <p className="px-1 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[var(--lko-ink-soft)]">
-            The mailbox — who don call you
-          </p>
+          <SectionLabel>The mailbox — who don call you</SectionLabel>
           {[...(cityPulse?.arrivals ?? [])].reverse().slice(0, 3).map((code) => (
             <GhostCard key={code} code={code} mineName={player.name} />
           ))}
@@ -257,18 +267,16 @@ export function PulseApp() {
       )}
 
       {/* KNOW YOUR CITY */}
+      <SectionLabel>Know Your City</SectionLabel>
       <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-[var(--lko-shadow-sm)]" data-testid="know-city">
         <div className="flex items-center justify-between">
-          <p className="text-[13px] font-extrabold">🌍 Know Your City</p>
+          <p className="text-[13px] font-extrabold">🌍 The footprint meter</p>
           <span className="lko-num rounded-full bg-[var(--lko-river-soft)] px-2 py-0.5 text-[11px] font-extrabold text-[var(--lko-river)]">
             {knowledge.percent}%
           </span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/[0.06]">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[var(--lko-river)] to-[var(--lko-green)] transition-[width] duration-500"
-            style={{ width: `${knowledge.percent}%` }}
-          />
+        <div className="mt-2">
+          <MiniBar pct={knowledge.percent} tone="river" tall />
         </div>
         <p className="mt-1.5 text-[11px] font-extrabold text-[var(--lko-green-deep)]">
           You be {knowledge.grade} — {knowledge.checked}/{knowledge.total} roads don see your footprint.
@@ -287,12 +295,8 @@ export function PulseApp() {
       </div>
 
       {/* THE DAY CLIP */}
-      <div>
-        <p className="px-1 pb-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em] text-[var(--lko-ink-soft)]">
-          The Day Clip — screenshot for Status
-        </p>
-        <DayClip beats={beats} code={mySpot?.code ?? 'lkt1.share-your-spot'} />
-      </div>
+      <SectionLabel>The Day Clip — screenshot for Status</SectionLabel>
+      <DayClip beats={beats} code={mySpot?.code ?? 'lkt1.share-your-spot'} />
     </div>
   )
 }

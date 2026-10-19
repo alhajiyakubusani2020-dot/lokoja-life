@@ -11,11 +11,16 @@
  *
  * This UI never forges: the pipeline is pure law, the store records
  * the ledger, and the QA battery stands between every pack and ship.
+ *
+ * M24-UI wave 2 — the face: an ember-toned hero, the pipeline as a
+ * lit stage ladder, the ledger as a verdict list. Every number, every
+ * testid, every honest law: unchanged.
  */
 
 import { useEffect, useState } from 'react'
 import { useGameStore } from '@/game/store/useGameStore'
 import { PILOT_LADDER, PIPELINE, CITY_SLA_MINUTES, lokojaDefaultPack } from '@/game/systems/citypack'
+import { FaceHero, SectionLabel, StatusChip, LawNote } from './apps/app-face'
 
 export function ForgeApp() {
   const [running, setRunning] = useState(false)
@@ -65,15 +70,24 @@ export function ForgeApp() {
 
   return (
     <div className="flex h-full flex-col" data-testid="forge-app">
-      {/* header */}
       <div className="px-4 pb-2 pt-1">
-        <p className="text-[15px] font-black leading-tight">City Forge</p>
-        <p className="text-[10px] font-bold text-[var(--lko-ink-soft)]">A city na data — 3 hours, one pipeline, no program.</p>
+        <FaceHero
+          id="forge"
+          glyph="🏗️"
+          title="City Forge"
+          sub="A city na data — 3 hours, one pipeline, no program"
+          hue="ember"
+          right={
+            <span className="rounded-full bg-white/15 px-2 py-1 text-[9px] font-black backdrop-blur-sm">
+              SLA {CITY_SLA_MINUTES}m
+            </span>
+          }
+        />
       </div>
 
       {notice && <p className="mx-4 mb-2 rounded-xl bg-emerald-50 px-3 py-2 text-[11px] font-bold text-emerald-800" role="status">{notice}</p>}
 
-      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+      <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-4">
         {/* the home pack */}
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="forge-home-pack">
           <p className="text-[12px] font-black">🏗️ {pack.name} — {pack.version}</p>
@@ -84,7 +98,7 @@ export function ForgeApp() {
             data-testid="forge-run"
             onClick={() => { void run() }}
             disabled={running}
-            className="lko-press mt-2 w-full rounded-xl bg-[var(--lko-green)] py-2 text-[11px] font-black text-white disabled:opacity-50"
+            className="lko-press mt-2 w-full rounded-xl bg-[var(--lko-green)] py-2.5 text-[11px] font-black tracking-wide text-white shadow-[var(--lko-shadow-sm)] disabled:opacity-50"
           >
             {running ? 'The forge dey run…' : `Run the forge (the ${CITY_SLA_MINUTES}-min SLA)`}
           </button>
@@ -101,10 +115,12 @@ export function ForgeApp() {
 
         {/* the ledger */}
         {forge.ledger.length > 0 && (
+          <SectionLabel>The Forge Ledger</SectionLabel>
+        )}
+        {forge.ledger.length > 0 && (
           <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="forge-ledger">
-            <p className="text-[11px] font-black uppercase tracking-[0.08em] text-[var(--lko-ink-soft)]">The forge ledger</p>
             {forge.ledger.slice(-4).reverse().map((e, i) => (
-              <p key={i} className="mt-1 text-[11px] font-bold">
+              <p key={i} className="mt-1 rounded-lg bg-black/[0.02] px-2 py-1 text-[11px] font-bold first:mt-0">
                 {e.verdict === 'shipped' ? '✅' : '🚫'} {e.city} · {e.version} — QA {e.qaScore}/100 · {e.totalMinutes} min · Day {e.atDay}
               </p>
             ))}
@@ -112,14 +128,14 @@ export function ForgeApp() {
         )}
 
         {/* the pilot ladder */}
+        <SectionLabel>The Pilot Ladder</SectionLabel>
         <div className="rounded-2xl border border-black/[0.06] bg-white p-3" data-testid="forge-pilots">
-          <p className="text-[11px] font-black uppercase tracking-[0.08em] text-[var(--lko-ink-soft)]">The pilot ladder</p>
           {PILOT_LADDER.map((c) => {
             const votes = worldCounts[c.city] ?? 0
             return (
-              <div key={c.city} className="mt-1.5 flex items-center justify-between">
-                <div>
-                  <p className="text-[12px] font-extrabold">{c.name} <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">COL {c.colIndex}</span></p>
+              <div key={c.city} className="mt-1.5 flex items-center justify-between rounded-xl bg-black/[0.02] px-2.5 py-2 first:mt-0">
+                <div className="min-w-0">
+                  <p className="truncate text-[12px] font-extrabold">{c.name} <span className="text-[9.5px] font-bold text-[var(--lko-ink-soft)]">COL {c.colIndex}</span></p>
                   <p className="text-[9.5px] font-bold text-[var(--lko-ink-soft)] capitalize">{c.status}{votes > 0 ? ` · 🗳️ ${votes}` : ''}</p>
                 </div>
                 {c.status === 'voting' || c.status === 'queued' ? (
@@ -129,12 +145,12 @@ export function ForgeApp() {
                       const r = await forgeVote(c.city)
                       if (!r.ok) say(r.why === 'capped' ? 'Your vote card full (3 cities).' : 'You don vote this one before.')
                     }}
-                    className={`lko-press rounded-full px-2.5 py-1 text-[10px] font-extrabold ${forge.votes.mine.includes(c.city) ? 'bg-[var(--lko-green)] text-white' : 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'}`}
+                    className={`lko-press shrink-0 rounded-full px-3 py-1.5 text-[10px] font-extrabold ${forge.votes.mine.includes(c.city) ? 'bg-[var(--lko-green)] text-white' : 'bg-[var(--lko-green-soft)] text-[var(--lko-green-deep)]'}`}
                   >
                     {forge.votes.mine.includes(c.city) ? '✓ Voted' : 'Vote'}
                   </button>
                 ) : (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold text-amber-800">{c.status}</span>
+                  <StatusChip tone="gold">{c.status}</StatusChip>
                 )}
               </div>
             )
@@ -149,6 +165,10 @@ export function ForgeApp() {
           </p>
           {!account.linked && <p className="mt-1 text-[10px] font-extrabold text-[var(--lko-green-deep)]">Claim your name to vote — the ballot dey check identity.</p>}
         </div>
+
+        <LawNote>
+          The pipeline is pure law; the store records the ledger; the QA battery stands between every pack and ship. This UI never forges.
+        </LawNote>
       </div>
     </div>
   )
