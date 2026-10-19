@@ -407,6 +407,8 @@ interface GameStore {
   /** W10 — the wheels' face: repaint / re-plate a garage ride (the plate
    *  and paint LAWS validate — an invented colour or a bad plate refuses). */
   setVehicleStyle: (vehicleId: string, style: { paint?: string; plate?: string }) => boolean
+  /** W10-c — the tank/condition wear the disk's truth (wheelnet's readbacks + acks write here) */
+  patchVehicleMeters: (model: import('../types').VehicleModel, patch: { fuel?: number; condition?: number }) => void
   /** Wardrobe — change appearance (merges over DEFAULT_AVATAR). */
   setAvatar: (avatar: AvatarConfig) => void
   /** Gym workout — needs shift + one honest clock slot. */
@@ -1969,6 +1971,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
     haptics.fire('levelup')
     scheduleAutosave(get)
     return true
+  },
+
+  /* W10-c — THE METERS' ONE WRITER: the tank and the condition wear the
+   * disk's truth (the hello readback + the pump/garage acks write here;
+   * the pure burn math lives in wheels.ts). Additive fields — the save
+   * carries them without a version bump, exactly like paint did. */
+  patchVehicleMeters: (model, patch) => {
+    const player = get().player
+    if (!player) return
+    if (!player.vehicles.some((v) => v.model === model)) return
+    set({
+      player: {
+        ...player,
+        vehicles: player.vehicles.map((v) =>
+          v.model === model
+            ? {
+                ...v,
+                ...(patch.fuel !== undefined ? { fuel: patch.fuel } : {}),
+                ...(patch.condition !== undefined ? { condition: patch.condition } : {}),
+              }
+            : v,
+        ),
+      },
+    })
   },
 
   /* W10 — THE WHEELS' FACE: the garage paints and plates through the SAME

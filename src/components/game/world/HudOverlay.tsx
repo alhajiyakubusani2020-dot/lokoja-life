@@ -32,8 +32,10 @@ import { formatNaira } from '@/game/systems/progression'
 import { ambience } from '@/game/systems/ambience'
 import { audio } from '@/game/systems/audio'
 import {
-  boardableNear, wheelIsRiding, wheelRequestBoard, wheelRequestUnboard, wheelRequestSeats,
-} from '@/game/systems/wheelnet' // W10-b — the boarding chips read the net's own truth
+  boardableNear, wheelFuelEstimate, wheelIsRiding, wheelRequestBoard, wheelRequestRefuel,
+  wheelRequestSeats, wheelRequestUnboard,
+} from '@/game/systems/wheelnet' // W10-b/W10-c — the boarding chips + the tank read the net's own truth
+import { nearServiceSpot } from '@/game/systems/wheels'
 import { useWireStore } from '@/game/systems/wire'
 import { GaragePanel } from './GaragePanel'
 import { PerfChip } from './PerfChip'
@@ -259,9 +261,13 @@ interface DriveUi {
   boardable: { handle: string; name: string; model: VehicleModel; plate: string } | null
   /** W10-b — my own live car's standing consent (the seats toggle's truth) */
   seatsOpen: boolean | null
+  /** W10-c — I sit at a pump with the car (the chip's truth) */
+  nearPump: boolean
+  /** W10-c — the tank fraction the net last knew (null = not driving) */
+  fuel: number | null
 }
 
-const DRIVE_UI_IDLE: DriveUi = { driving: false, model: null, near: null, hints: false, riding: false, boardable: null, seatsOpen: null }
+const DRIVE_UI_IDLE: DriveUi = { driving: false, model: null, near: null, hints: false, riding: false, boardable: null, seatsOpen: null, nearPump: false, fuel: null }
 
 /** the motor park — the Vehicle Shop button lives within this radius */
 const SHOP_RADIUS = 28
@@ -318,6 +324,8 @@ export function HudOverlay({
   const [nearShop, setNearShop] = useState(false)
   const nearShopRef = useRef(false)
 
+  /* W10-c — the tank's gauge lives in the speedo's DOM block (ref-driven) */
+  const speedoFuelRef = useRef<HTMLSpanElement | null>(null)
   /* W4 — THE SPEEDOMETER: ref-driven (the poll law forbids a setState per
    * frame) — the km/h text, needle transform and gear chip write straight
    * to the DOM only when the rounded value changes. */
@@ -583,6 +591,8 @@ export function HudOverlay({
           ? { handle: boardable.handle, name: boardable.name, model: boardable.model, plate: boardable.plate }
           : null,
         seatsOpen,
+        nearPump: driving && nearServiceSpot('pump', playerPos.x, playerPos.z),
+        fuel: driving ? wheelFuelEstimate() : null,
       }
       const prevDui = driveUiRef.current
       if (
@@ -593,12 +603,25 @@ export function HudOverlay({
         prevDui.riding !== dui.riding ||
         prevDui.seatsOpen !== dui.seatsOpen ||
         prevDui.boardable?.handle !== dui.boardable?.handle ||
-        (dui.boardable && prevDui.boardable && prevDui.boardable.plate !== dui.boardable.plate)
+        (dui.boardable && prevDui.boardable && prevDui.boardable.plate !== dui.boardable.plate) ||
+        prevDui.nearPump !== dui.nearPump ||
+        prevDui.fuel !== dui.fuel
       ) {
         driveUiRef.current = dui
         setDriveUi(dui)
       }
       /* W4 — the speedo writes: DOM only, only when the km/h tick changes */
+      // W10-c — THE TANK'S GAUGE: DOM only, one write per 2% change
+      const fuelNow = wheelFuelEstimate()
+      if (speedoFuelRef.current) {
+        const pct = fuelNow === null ? '' : `${Math.max(0, Math.round(fuelNow * 100))}%`
+        if (speedoFuelRef.current.textContent !== pct) speedoFuelRef.current.textContent = pct
+        if (speedoFuelRef.current) {
+          const low = fuelNow !== null && fuelNow < 0.15
+          const nextColor = low ? '#ff5040' : '#7ee2a8'
+          if (speedoFuelRef.current.style.color !== nextColor) speedoFuelRef.current.style.color = nextColor
+        }
+      }
       if (!driveUiRef.current.driving && lastKmhRef.current !== -999) lastKmhRef.current = -999
       if (speedoRef.current) {
         const kmh = Math.round(speedToKmh(driving ? getDriveSpeed() : 0))
@@ -926,6 +949,7 @@ export function HudOverlay({
             <div className="relative mb-3 flex flex-col items-center">
               <span ref={speedoNumRef} className="text-[26px] font-black leading-none text-white">0</span>
               <span className="mt-0.5 text-[8.5px] font-black tracking-[0.18em] text-white/70">KM/H</span>
+              <span ref={speedoFuelRef} className="mt-0.5 text-[9px] font-black tracking-wider text-[#7ee2a8]">⛽</span>
             </div>
             <span
               ref={speedoGearRef}
@@ -988,6 +1012,7 @@ export function HudOverlay({
           style={{ bottom: touchMode ? '10.9rem' : '5.75rem' }}
         >
           <button
+            data-testid="garage-open-chip"
             onClick={() => {
               audio.play('click')
               setPanel({ kind: 'garage' })
@@ -1264,6 +1289,45 @@ export function HudOverlay({
           </button>
         </div>
       )}
+
+      {/* ---------- W10-c — THE PUMP CHIP: the stopped car buys fuel ---------- */}
+      {driveUi.driving &&
+        driveUi.nearPump &&
+        driveUi.fuel !== null &&
+        driveUi.fuel < 0.999 &&
+        panel.kind === 'none' &&
+        !photo && (
+          <div className="pointer-events-auto absolute bottom-[8.6rem] right-4">
+            <button
+              data-testid="refuel-chip"
+              onClick={async () => {
+                audio.play('click')
+                const model = getDriveModel()
+                const p = playerPos
+                if (!model) return
+                const r = await wheelRequestRefuel(model, 2000, p.x, p.z)
+                const notify = useGameStore.getState().notify
+                if (r.ok) {
+                  notify({ icon: '⛽', text: '₦2,000 fuel enter tank — the ledger don record am.', tone: 'good' })
+                } else {
+                  const why: Record<string, string> = {
+                    'minors-no-money': 'Minors no dey touch money.',
+                    'no-pump': 'No pump here — find the Motor Park.',
+                    'tank-full': 'The tank don full.',
+                    'too-small': '₦200 na the minimum.',
+                    'too-big': "₦20,000 na the pump's ceiling.",
+                    insufficient: 'Your wallet no carry am — fund am first.',
+                    'dry-tank': 'The tank don dry already.',
+                  }
+                  notify({ icon: '🚫', text: why[r.why ?? ''] ?? 'The pump no gree — try again.', tone: 'bad' })
+                }
+              }}
+              className="lko-press flex min-h-[40px] items-center gap-1.5 rounded-full border border-[#7ee2a8]/60 bg-[#146b3a]/85 px-3.5 text-[11.5px] font-extrabold text-[#eafff2] shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+            >
+              ⛽ Buy fuel ₦2,000
+            </button>
+          </div>
+        )}
 
       {/* ---------- bottom sheets ---------- */}
       {panel.kind !== 'none' && (

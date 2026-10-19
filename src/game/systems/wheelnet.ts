@@ -33,7 +33,7 @@
  */
 
 import { create } from 'zustand'
-import { CarBuffer, VEH_TICK_MS, carWorthSending, type CarSnap } from './wheels'
+import { CarBuffer, VEH_TICK_MS, carWorthSending, type CarSnap, FUEL_RANGE, DRY_TANK } from './wheels'
 import {
   wireOnCar,
   wireOnCarCrew,
@@ -45,6 +45,8 @@ import {
   wireSendVehicleBoard,
   wireSendVehicleUnboard,
   wireSendVehicleParkedQuery,
+  wireSendVehicleRefuel,
+  wireSendVehicleRepair,
   wireEnsure,
   useWireStore,
   type WireRosterRow,
@@ -482,8 +484,55 @@ export function wheelResetParkedQuery(): void {
 
 /* ──────────────────────────────── the sender ──────────────────────────────── */
 
-const counters = { hello: 0, sent: 0, park: 0, bye: 0, refused: 0, recv: 0, board: 0, unboard: 0, crew: 0, parked: 0 }
+const counters = { hello: 0, sent: 0, park: 0, bye: 0, refused: 0, recv: 0, board: 0, unboard: 0, crew: 0, parked: 0, refuel: 0, repair: 0, dry: 0 }
 let diskReadback: WireCarRow | null = null
+
+/* ───────── W10-c: THE TANK'S OWN MIRROR (the driver's honest gauge) ─────────
+ * The client burns the tank by the SAME law the wire runs, on the metres
+ * the client itself sends (a lawful car's metres and the clamp's agree);
+ * the hello readback + the pump/garage acks reconcile the DISK truth.
+ * The HUD reads this through the controls-style reader — DOM-only writes. */
+let fuelEstimate: number | null = null
+
+export function wheelFuelEstimate(): number | null {
+  return fuelEstimate
+}
+
+export function wheelIsDryTank(): boolean {
+  return fuelEstimate !== null && fuelEstimate < DRY_TANK
+}
+
+/** the store's own vehicle line wears the disk truth (the garage reads it) */
+function mirrorVehicleTruth(model: VehicleModel, patch: { fuel?: number; condition?: number }): void {
+  const s = useGameStore.getState()
+  if (!s.player) return
+  if (!s.player.vehicles.some((v) => v.model === model)) return
+  s.patchVehicleMeters(model, patch)
+}
+
+/** THE PUMP GESTURE — buy fuel through the REAL ledger; the ack's tank
+ *  is the new truth (the estimate AND the store AND the disk agree). */
+export async function wheelRequestRefuel(model: VehicleModel, amount: number, x: number, z: number): Promise<{ ok: boolean; why?: string; balance?: number }> {
+  const idemKey = `refuel-${myHandle ?? 'me'}-${model}-${Date.now()}-${Math.floor(Math.random() * 1e6).toString(36)}`
+  const r = await wireSendVehicleRefuel(model, amount, x, z, idemKey).catch(() => ({ ok: false, why: 'wire-down' }) as const)
+  if (!r.ok) return { ok: false, why: ('why' in r && r.why) || 'no-pump' }
+  counters.refuel++
+  if (typeof r.fuel === 'number') {
+    fuelEstimate = r.fuel
+    mirrorVehicleTruth(model, { fuel: r.fuel })
+  }
+  return { ok: true, balance: r.balance }
+}
+
+/** THE SERVICE GESTURE — the garage's full service through the ledger. */
+export async function wheelRequestRepair(model: VehicleModel, x: number, z: number): Promise<{ ok: boolean; why?: string; balance?: number }> {
+  const idemKey = `repair-${myHandle ?? 'me'}-${model}-${Date.now()}-${Math.floor(Math.random() * 1e6).toString(36)}`
+  const r = await wireSendVehicleRepair(model, x, z, idemKey).catch(() => ({ ok: false, why: 'wire-down' }) as const)
+  if (!r.ok) return { ok: false, why: ('why' in r && r.why) || 'no-garage' }
+  counters.repair++
+  if (typeof r.condition === 'number') mirrorVehicleTruth(model, { condition: r.condition })
+  return { ok: true, balance: r.balance }
+}
 
 let sendTimer: ReturnType<typeof setInterval> | null = null
 let carLive: { model: VehicleModel; plate: string; paint: string } | null = null
@@ -491,6 +540,7 @@ let lastTick: CarSnap | null = null
 let helloInFlight = false
 let helloSentAt = 0
 let refusedFor: VehicleModel | null = null
+let lastMetres = 0
 
 /**
  * bracket the 3D mount: my wheels speak only while I stand in the world.
@@ -510,6 +560,8 @@ export function wheelStartSending(): void {
   helloInFlight = false
   helloSentAt = 0
   refusedFor = null
+  fuelEstimate = null
+  lastMetres = 0
   sendTimer = setInterval(() => {
     if (sendTimer === null) return // stopped mid-flight (defensive)
     const { token } = useGameStore.getState().account
@@ -559,7 +611,12 @@ export function wheelStartSending(): void {
               return
             }
             // THE READBACK LAW: the door answered with the DISK truth
-            if (r.car) diskReadback = r.car
+            if (r.car) {
+              diskReadback = r.car
+              // W10-c — the tank + the wear reconcile from the disk
+              fuelEstimate = r.car.fuel
+              if (t.model) mirrorVehicleTruth(t.model, { fuel: r.car.fuel, condition: r.car.condition })
+            }
           })
           .catch(() => {
             helloInFlight = false
@@ -567,11 +624,25 @@ export function wheelStartSending(): void {
         return
       }
       if (carLive.model !== t.model) return // a mid-drive switch settles next tick
+      // W10-c — THE DRY-TANK COAST: at the dry line the sender reports the
+      // car STOPPED (the server's pos door refuses 'dry-tank' as the
+      // backstop; this is the client's own honesty — the engine is dead)
+      if (fuelEstimate !== null && fuelEstimate < DRY_TANK && mv) {
+        counters.dry++
+        return
+      }
       const next: CarSnap = { t: Date.now(), x: t.x, z: t.z, hd: t.hd, mv }
       if (carWorthSending(lastTick, next)) {
         wireSendCarPos({ x: next.x, z: next.z, hd: next.hd, mv: next.mv })
         counters.sent++
         if (!next.mv) counters.park++ // the ONE park tick
+        // W10-c — THE BURN: the same law the wire runs, on the metres I
+        // just reported (a lawful car's metres and the clamp's agree)
+        if (mv && fuelEstimate !== null) {
+          const range = FUEL_RANGE[carLive.model]
+          if (range) fuelEstimate = Math.max(0, fuelEstimate - lastMetres / range)
+        }
+        lastMetres = lastTick ? Math.hypot(next.x - lastTick.x, next.z - lastTick.z) : 0
         lastTick = next
       }
     } else {
@@ -582,6 +653,7 @@ export function wheelStartSending(): void {
         carLive = null
         lastTick = null
         refusedFor = null
+        fuelEstimate = null
         counters.bye++
       }
     }
@@ -597,6 +669,7 @@ export function wheelStopSending(): void {
     carLive = null
     lastTick = null
     refusedFor = null
+    fuelEstimate = null
     counters.bye++
   }
 }
@@ -616,6 +689,10 @@ export function wheelsWitness(): {
   unboard: number
   crew: number
   parked: number
+  refuel: number
+  repair: number
+  dry: number
+  fuel: () => number | null
   ride: () => MyRide | null
   riding: () => boolean
   crewHandles: () => string[] | null
@@ -636,6 +713,10 @@ export function wheelsWitness(): {
     unboard: counters.unboard,
     crew: counters.crew,
     parked: counters.parked,
+    refuel: counters.refuel,
+    repair: counters.repair,
+    dry: counters.dry,
+    fuel: () => fuelEstimate,
     ride: () => myRideState(),
     riding: () => myRide !== null,
     crewHandles: () => wheelCrewHandles(),

@@ -137,6 +137,12 @@ import {
   patchVerdict,
   plateOwnershipOk,
   parkedSeedsNear,
+  fuelAfterBurn,
+  conditionAfterWear,
+  DRY_TANK,
+  refuelVerdict,
+  repairVerdict,
+  nearServiceSpot,
   type ParkedSeed,
 } from '../../src/game/systems/wheels'
 
@@ -864,9 +870,13 @@ function ledgerTail(): string {
   return r?.chainHash ?? LEDGER_SEED
 }
 
+/** THE DAY CAP'S EYE — W9's letter made TRUE (the disk showed tips were
+ *  NOT counted): every SPEND kind rides the cap — transfer, tip, and now
+ *  (W10-c) the pump and the garage. A citizen cannot dodge the day cap
+ *  by buying fuel. */
 function dayTransferred(handle: string): number {
   const r = db
-    .query("SELECT COALESCE(SUM(amount), 0) AS s FROM LedgerRow WHERE fromHandle = ? AND kind = 'transfer' AND createdAt >= ?")
+    .query("SELECT COALESCE(SUM(amount), 0) AS s FROM LedgerRow WHERE fromHandle = ? AND kind IN ('transfer', 'tip', 'refuel', 'repair') AND createdAt >= ?")
     .get(handle, dayStartMs()) as { s: number | null }
   return Number(r.s ?? 0)
 }
@@ -885,7 +895,7 @@ function ledgerByIdem(idemKey: string): LedgerT | null {
 /** THE MOVE — atomic, idempotent, chained. Throws the refusal why, or
  * returns the receipt. A replayed idemKey returns the SAME row untouched. */
 const theMove = db.transaction((move: {
-  kind: 'deposit' | 'withdraw' | 'transfer'
+  kind: 'deposit' | 'withdraw' | 'transfer' | 'tip' | 'refuel' | 'repair'
   from: string
   to: string
   amount: number
@@ -905,6 +915,19 @@ const theMove = db.transaction((move: {
     return { idemKey: move.idemKey, ledgerId: Number(r.lastInsertRowid), kind: move.kind, from: move.from, to: move.to, amount: move.amount, hash, ts }
   }
   if (move.kind === 'withdraw') {
+    const w = walletGet(move.from)
+    if (w.balance < move.amount) throw 'insufficient'
+    db.query('UPDATE WalletRow SET balance = balance - ?, version = version + 1, updatedAt = ? WHERE handle = ?').run(move.amount, ts, move.from)
+    const hash = chainLink(ledgerTail(), { idemKey: move.idemKey, from: move.from, to: move.to, amount: move.amount, kind: move.kind, ts })
+    const r = db
+      .query('INSERT INTO LedgerRow (fromHandle, toHandle, amount, kind, idemKey, chainHash, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(move.from, move.to, move.amount, move.kind, move.idemKey, hash, move.note, ts)
+    return { idemKey: move.idemKey, ledgerId: Number(r.lastInsertRowid), kind: move.kind, from: move.from, to: move.to, amount: move.amount, hash, ts }
+  }
+  // W10-c — THE SPEND LEG: the pump and the garage DEBIT one purse and
+  // credit NOBODY (the sink's name rides the receipt's `to` — the city's
+  // own till is not a WalletRow, nothing phantom-mints).
+  if (move.kind === 'refuel' || move.kind === 'repair') {
     const w = walletGet(move.from)
     if (w.balance < move.amount) throw 'insufficient'
     db.query('UPDATE WalletRow SET balance = balance - ?, version = version + 1, updatedAt = ? WHERE handle = ?').run(move.amount, ts, move.from)
@@ -1146,6 +1169,11 @@ io.on('connection', (socket) => {
     if (!p || !p.car) return ack?.({ ok: false, why: 'no-car' })
     if (!posOk(raw)) return ack?.({ ok: false, why: 'bad-pos' })
     const now = Date.now()
+    // W10-c — THE DRY TANK: at the dry line the engine coughs — further
+    // motion refuses (the last lawful tick already burned to the floor).
+    if (p.car.fuel < DRY_TANK && raw.mv === true) {
+      return ack?.({ ok: false, why: 'dry-tank' })
+    }
     const wasMoving = p.car.mv
     const step = clampVehicleStep({ x: p.car.x, z: p.car.z, t: p.car.t }, { x: raw.x, z: raw.z }, p.car.model, now)
     p.car.x = step.x
@@ -1154,6 +1182,11 @@ io.on('connection', (socket) => {
     p.car.mv = raw.mv
     p.car.t = now
     p.car.odo += step.moved
+    // W10-c — THE BURN + THE WEAR: the CLAMPED metres burn the tank and
+    // wear the condition (a cheat's kilometres never burn fuel — the
+    // odometer's own law carries here). The park persists the row.
+    p.car.fuel = fuelAfterBurn(p.car.fuel, step.moved, p.car.model)
+    p.car.condition = conditionAfterWear(p.car.condition, step.moved)
     // THE PARK LAW: the move→stop transition persists the row ONCE
     if (isParkTransition(wasMoving, raw.mv)) vehiclePersist(p.car, identity.handle!)
     const payload = { h: identity.handle, model: p.car.model, plate: p.car.plate, paint: p.car.paint, x: p.car.x, z: p.car.z, hd: p.car.hd, mv: p.car.mv, seatsOpen: p.car.seatsOpen }
@@ -1320,6 +1353,71 @@ io.on('connection', (socket) => {
     const liveKeys = new Set<string>()
     for (const p of presence.values()) if (p.car) liveKeys.add(`${p.handle}\u0000${p.car.model}`)
     ack?.({ ok: true, parked: parkedSeedsNear(rows, x, z, liveKeys) })
+  })
+
+  /* ── W10-c THE PUMP DOOR — fuel is bought through the REAL ledger. THE
+   *   REFUEL VERDICT verbatim (adults only — minors' money walls hold,
+   *   the pump proximity is the WIRE's own eye on the claimed pos, the
+   *   tank-full and the amount laws), THE REPLAY LAW first (a lost ack
+   *   never pours twice), THE MOVE through the fortress chain (debit,
+   *   credit nobody), and the tank lands on the disk at once. ── */
+  socket.on('vehicle:refuel', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-dark' })
+    if (!allow('wallet')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { model?: unknown; amount?: unknown; x?: unknown; z?: unknown; idemKey?: unknown }
+    const p = presence.get(identity.handle!)
+    if (!p?.car || p.car.model !== body.model) return ack?.({ ok: false, why: 'no-car' })
+    const idemKey = typeof body.idemKey === 'string' ? body.idemKey.slice(0, 80) : ''
+    if (!idemKey) return ack?.({ ok: false, why: 'bad-idem' })
+    // THE REPLAY LAW FIRST — the same idemKey returns the SAME receipt,
+    // the tank never double-pours
+    const replayed = ledgerByIdem(idemKey)
+    if (replayed) {
+      return ack?.({ ok: true, replayed: true, fuel: p.car.fuel, receipt: receiptOf(replayed), balance: walletGet(identity.handle!).balance })
+    }
+    const atPump = nearServiceSpot('pump', Number(body.x), Number(body.z))
+    const v = refuelVerdict({ band: identity.band, model: p.car.model, fuel: p.car.fuel, amount: body.amount, atPump })
+    if (!v.ok) return ack?.(v)
+    try {
+      const receipt = theMove({ kind: 'refuel', from: identity.handle!, to: 'pump', amount: v.amount, idemKey, note: `${p.car.model} @ the pump` })
+      p.car.fuel = v.fuel
+      vehiclePersist(p.car, identity.handle!)
+      deliverTransferReceipt(io, receipt, identity.handle!)
+      ack?.({ ok: true, fuel: p.car.fuel, receipt, balance: walletGet(identity.handle!).balance })
+    } catch (why) {
+      ack?.({ ok: false, why: String(why) })
+    }
+  })
+
+  /* ── W10-c THE SERVICE DOOR — the garage repairs through the REAL
+   *   ledger. THE REPAIR VERDICT verbatim (the garage proximity is the
+   *   WIRE's own eye, the quote is the wear's own math), THE REPLAY LAW
+   *   first, THE MOVE (debit, credit nobody), and the condition lands
+   *   on the disk at once — the mechanic's books are the city's books. ── */
+  socket.on('vehicle:repair', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-dark' })
+    if (!allow('wallet')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { model?: unknown; x?: unknown; z?: unknown; idemKey?: unknown }
+    const p = presence.get(identity.handle!)
+    if (!p?.car || p.car.model !== body.model) return ack?.({ ok: false, why: 'no-car' })
+    const idemKey = typeof body.idemKey === 'string' ? body.idemKey.slice(0, 80) : ''
+    if (!idemKey) return ack?.({ ok: false, why: 'bad-idem' })
+    const replayed = ledgerByIdem(idemKey)
+    if (replayed) {
+      return ack?.({ ok: true, replayed: true, condition: p.car.condition, receipt: receiptOf(replayed), balance: walletGet(identity.handle!).balance })
+    }
+    const atGarage = nearServiceSpot('garage', Number(body.x), Number(body.z))
+    const v = repairVerdict({ band: identity.band, model: p.car.model, condition: p.car.condition, atGarage })
+    if (!v.ok) return ack?.(v)
+    try {
+      const receipt = theMove({ kind: 'repair', from: identity.handle!, to: 'garage', amount: v.amount, idemKey, note: `${p.car.model} full service` })
+      p.car.condition = v.condition
+      vehiclePersist(p.car, identity.handle!)
+      deliverTransferReceipt(io, receipt, identity.handle!)
+      ack?.({ ok: true, condition: p.car.condition, receipt, balance: walletGet(identity.handle!).balance })
+    } catch (why) {
+      ack?.({ ok: false, why: String(why) })
+    }
   })
 
   /* ── W2 THE WHERE DOOR — the join-teleport law. Where does my paddy

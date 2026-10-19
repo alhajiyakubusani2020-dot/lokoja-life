@@ -17,10 +17,11 @@ import { VEHICLES, VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import type { VehicleModel } from '@/game/types'
 import { formatNaira } from '@/game/systems/progression'
 import { resaleValue } from '@/game/systems/garage'
-import { PAINT_VOCAB } from '@/game/systems/wheels'
+import { PAINT_VOCAB, FULL_SERVICE, repairQuote, DRY_TANK } from '@/game/systems/wheels'
+import { wheelRequestRefuel, wheelRequestRepair } from '@/game/systems/wheelnet'
 import { audio } from '@/game/systems/audio'
 import { CheckIcon, CoinsIcon } from '../icons'
-import { requestEnterVehicle } from './controls'
+import { requestEnterVehicle, playerPos } from './controls'
 
 /** the swatch the paint key shows — the rigs' REAL tones (presentation
  *  mirror of world3d/vehicles.ts; the vocabulary itself is the law's) */
@@ -115,6 +116,87 @@ export function GaragePanel({ onClose }: { onClose: () => void }) {
               )
             })}
           </div>
+          {/* ---------- W10-c — THE PUMP + THE MECHANIC (fuel + service, the REAL ledger) ---------- */}
+          {owned.map((v) => {
+            const def = VEHICLE_BY_MODEL[v.model]
+            const fuel = typeof v.fuel === 'number' ? v.fuel : 1
+            const condition = typeof v.condition === 'number' ? v.condition : 1
+            const quote = repairQuote(v.model, condition)
+            const pct = (frac: number) => `${Math.max(0, Math.min(100, Math.round(frac * 100)))}%`
+            return (
+              <div key={`${v.id}-meters`} className="lko-card mt-1.5 p-2.5">
+                <p className="mb-1.5 text-[10.5px] font-extrabold uppercase tracking-wide text-[var(--lko-ink-soft)]">
+                  {def.short} — the tank + the mechanic
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="w-10 text-[10px] font-black text-[var(--lko-ink-soft)]">Fuel</span>
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-black/10">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: pct(fuel), background: fuel < DRY_TANK ? '#ff5040' : 'var(--lko-green)' }}
+                    />
+                  </div>
+                  <span className="lko-num w-9 text-right text-[10px] font-black">{pct(fuel)}</span>
+                  <button
+                    data-testid={`garage-fuel-${v.model}`}
+                    onClick={async () => {
+                      audio.play('click')
+                      const r = await wheelRequestRefuel(v.model, 2000, playerPos.x, playerPos.z)
+                      const notify = useGameStore.getState().notify
+                      if (r.ok) notify({ icon: '⛽', text: '₦2,000 fuel enter tank — the ledger don record am.', tone: 'good' })
+                      else {
+                        const why: Record<string, string> = {
+                          'no-pump': 'No pump here — the Motor Park holds the pumps.',
+                          'tank-full': 'The tank don full.',
+                          insufficient: 'Your wallet no carry am — fund am first.',
+                          'minors-no-money': 'Minors no dey touch money.',
+                        }
+                        notify({ icon: '🚫', text: why[r.why ?? ''] ?? 'The pump no gree.', tone: 'bad' })
+                      }
+                    }}
+                    className="lko-press flex h-8 shrink-0 items-center rounded-xl border border-[#7ee2a8]/50 bg-[#146b3a]/85 px-2.5 text-[10.5px] font-extrabold text-[#eafff2]"
+                  >
+                    ⛽ ₦2,000
+                  </button>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span className="w-10 text-[10px] font-black text-[var(--lko-ink-soft)]">Body</span>
+                  <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-black/10">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: pct(condition), background: condition < 0.3 ? '#ff5040' : '#e8a317' }}
+                    />
+                  </div>
+                  <span className="lko-num w-9 text-right text-[10px] font-black">{pct(condition)}</span>
+                  <button
+                    data-testid={`garage-service-${v.model}`}
+                    disabled={condition >= 0.999}
+                    onClick={async () => {
+                      audio.play('click')
+                      const r = await wheelRequestRepair(v.model, playerPos.x, playerPos.z)
+                      const notify = useGameStore.getState().notify
+                      if (r.ok) notify({ icon: '🔧', text: 'Full service done — the ledger don record am.', tone: 'good' })
+                      else {
+                        const why: Record<string, string> = {
+                          'no-garage': 'The mechanic dey the Motor Park.',
+                          'no-need': 'The body still sound — no service needed.',
+                          insufficient: 'Your wallet no carry am — fund am first.',
+                          'minors-no-money': 'Minors no dey touch money.',
+                        }
+                        notify({ icon: '🚫', text: why[r.why ?? ''] ?? 'The mechanic no gree.', tone: 'bad' })
+                      }
+                    }}
+                    className="lko-press flex h-8 shrink-0 items-center rounded-xl border border-[#ffd88a]/50 bg-[#e8a317]/90 px-2.5 text-[10.5px] font-extrabold text-[#3d2a00] disabled:opacity-40"
+                  >
+                    🔧 {formatNaira(quote)}
+                  </button>
+                </div>
+                <p className="mt-1 text-[9px] font-bold leading-tight text-[var(--lko-ink-soft)]">
+                  Full service {formatNaira(FULL_SERVICE[v.model] ?? 0)} · the metres you drive wear the body — the ledger pays once.
+                </p>
+              </div>
+            )
+          })}
           {/* ---------- W10 — THE WHEELS' FACE (paint + plate) ---------- */}
           {owned.map((v) => {
             const def = VEHICLE_BY_MODEL[v.model]

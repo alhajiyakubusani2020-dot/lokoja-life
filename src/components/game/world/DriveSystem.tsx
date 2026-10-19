@@ -43,7 +43,8 @@ import {
   reportDriveSpeed, reportNearVehicle, reportPlayerPos, playerPos, readMoveInput, resetDriveMeters,
   requestE2eTeleport, setDriveActive, setDriveSeat,
 } from './controls'
-import { myRideState, sampleCar } from '@/game/systems/wheelnet' // W10-b — the passenger seat
+import { myRideState, sampleCar, wheelIsDryTank } from '@/game/systems/wheelnet' // W10-b/W10-c — the passenger seat + the tank's truth
+import { DRY_TANK } from '@/game/systems/wheels'
 
 /* ------------------------------- feel constants ------------------------------- */
 
@@ -235,6 +236,8 @@ export function DriveSystem({
   // W10-b — the passenger seat: whose car I follow + where it last stood
   const rideRef = useRef<string | null>(null)
   const rideLastSample = useRef<{ x: number; z: number; hd: number } | null>(null)
+  // W10-c — the dry-tank notify rides once per dry spell
+  const dryNotified = useRef(false)
   const humRef = useRef<DriveHum | null>(null)
   const soundRef = useRef(soundOn)
   const scratch = useRef({
@@ -297,6 +300,12 @@ export function DriveSystem({
     const st = useGameStore.getState()
     if (!st.player || drive.current.active) return
     if (!st.player.vehicles.some((v) => v.model === model)) return
+    // W10-c — THE DRY TANK: a dry engine takes no key (the pump is the cure)
+    const mine = st.player.vehicles.find((v) => v.model === model)
+    if (mine && typeof mine.fuel === 'number' && mine.fuel < DRY_TANK) {
+      st.notify({ icon: '⛽', text: 'Tank dry — buy fuel at the Motor Park pump.', tone: 'bad' })
+      return
+    }
     const def = VEHICLE_BY_MODEL[model]
     if (!def) return
 
@@ -487,7 +496,16 @@ export function DriveSystem({
 
       // ---- input: same axes as walking (joystick wins, then WASD) ----
       const input = readMoveInput()
-      const throttle = input.y
+      // W10-c — THE DRY-TANK COAST: the engine dies at the dry line (the
+      // wire's pos door refuses further motion; the sender reports the
+      // car stopped — the tank's own truth, one notify, no spam)
+      const dry = wheelIsDryTank()
+      if (dry && !dryNotified.current) {
+        dryNotified.current = true
+        useGameStore.getState().notify({ icon: '⛽', text: 'Tank dry! The engine don die — find a pump.', tone: 'bad' })
+      }
+      if (!dry) dryNotified.current = false
+      const throttle = dry ? 0 : input.y
       const steer = input.x
 
       // ---- longitudinal: accel → top speed, grass cap, brake/reverse ----

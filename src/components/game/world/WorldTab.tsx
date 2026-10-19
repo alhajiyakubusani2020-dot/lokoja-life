@@ -25,10 +25,11 @@ import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
 import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen, requestE2eTeleport, setDriveActive, reportDriveSpeed, reportPlayerPos } from './controls'
 import {
-  boardableNear, myRideState, wheelCrewHandles, wheelIsRiding, wheelQueryParkedWhenLive, wheelRequestBoard,
-  wheelRequestSeats, wheelRequestUnboard, wheelsWitness,
-} from '@/game/systems/wheelnet' // W10-b — the boarding seams the witness reads
-import { useWireStore, wireSendVehicleParkedQuery } from '@/game/systems/wire'
+  boardableNear, myRideState, wheelCrewHandles, wheelFuelEstimate, wheelIsRiding, wheelQueryParkedWhenLive,
+  wheelRequestBoard, wheelRequestRefuel, wheelRequestRepair, wheelRequestSeats, wheelRequestUnboard,
+  wheelsWitness,
+} from '@/game/systems/wheelnet' // W10-b/W10-c — the boarding + tank seams the witness reads
+import { useWireStore, wireSendVehicleParkedQuery, wireWalletDeposit } from '@/game/systems/wire'
 import { generatePlate } from '@/game/data/vehicles'
 import { music, moodForTimeOfDay } from '@/game/systems/music'
 import { extrasLive } from '@/game/systems/extras'
@@ -301,6 +302,24 @@ export function WorldTab({
         return v ? st.setVehicleStyle(v.id, { plate }) : false
       },
       myPlate: (model: string) => useGameStore.getState().player?.vehicles.find((vv) => vv.model === model)?.plate ?? null,
+      /* ── W10-c E2E — the tank seams (the REAL ledger doors run; the
+       *   witness reads REALITY — the UI chips click their own testids) ── */
+      refuel: (amount: number) => {
+        const p = playerPos
+        const st = useGameStore.getState()
+        const model = st.player?.vehicles[0]?.model
+        return model ? wheelRequestRefuel(model, amount, p.x, p.z) : Promise.resolve({ ok: false, why: 'no-car' })
+      },
+      repair: () => {
+        const p = playerPos
+        const st = useGameStore.getState()
+        const model = st.player?.vehicles[0]?.model
+        return model ? wheelRequestRepair(model, p.x, p.z) : Promise.resolve({ ok: false, why: 'no-car' })
+      },
+      fuel: () => wheelFuelEstimate(),
+      /** W10-c E2E — the purse seam (the deposit door's own honest shortcut,
+       *  the grantRide class: the ECONOMY suites own the deposit laws) */
+      fund: (amount: number) => wireWalletDeposit(amount, `e2e-fund-${Date.now()}-${Math.floor(Math.random() * 1e6).toString(36)}`),
       /** M8 E2E — the live chaos slice (outage / pool / scarcity bookkeeping) */
       chaos: () => {
         const s = useGameStore.getState()

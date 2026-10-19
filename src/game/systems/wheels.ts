@@ -42,6 +42,7 @@
 
 import { posOk, bodyRelayOk, angleLerp, INTERP_DELAY_MS, MAX_EXTRAP_MS, type PosPayload } from './bodies'
 import { VEHICLE_BY_MODEL, type VehicleDef } from '../data/vehicles'
+import { LOCATIONS } from '../data/locations'
 
 export { posOk, bodyRelayOk } // the car pos IS a pos (4 finite fields + mv) — one law
 export type { PosPayload as CarPosPayload }
@@ -462,4 +463,121 @@ export function parkedSeedsNear(
       (a.x - x) * (a.x - x) + (a.z - z) * (a.z - z) - ((b.x - x) * (b.x - x) + (b.z - z) * (b.z - z)),
   )
   return near.slice(0, PARKED_SEED_CAP)
+}
+
+/* ─────────────── W10-c: THE FUEL LAWS (the pump and the garage) ─────────────── */
+
+/** THE MAP LAW — world3d/layout.ts's own math, replicated PURE so the
+ *  WIRE can run it (layout drags three.js; the wire never does). The
+ *  suite pins this constant against the real MAP_SCALE — drift is caught. */
+const WIRE_MAP_SCALE = 6.2 // (GEO_WORLD_HALF 310 × 2) / 100
+
+function spotOf(locId: string): { x: number; z: number } {
+  const l = LOCATIONS.find((L) => L.id === locId)
+  if (!l) return { x: 0, z: 0 }
+  return { x: (l.mapX - 50) * WIRE_MAP_SCALE, z: (l.mapY - 50) * WIRE_MAP_SCALE }
+}
+
+/** THE SERVICE SPOTS — the Motor Park is the city's fuel + service yard
+ *  (real practice: the pumps and the mechanics cluster at the park); the
+ *  Ganaja junction and Adankolo carry pumps for the other banks. The
+ *  garage (repair) is the Motor Park's own mechanic row. */
+export const SERVICE_SPOTS: Record<'pump' | 'garage', string[]> = {
+  pump: ['transport-area', 'ganaja-junction', 'adankolo'],
+  garage: ['transport-area'],
+}
+export const SERVICE_RADIUS = 26
+
+export function nearServiceSpot(kind: 'pump' | 'garage', x: number, z: number): boolean {
+  const spots = SERVICE_SPOTS[kind] ?? []
+  return spots.some((id) => {
+    const s = spotOf(id)
+    return Number.isFinite(x) && Number.isFinite(z) && (s.x - x) * (s.x - x) + (s.z - z) * (s.z - z) <= SERVICE_RADIUS * SERVICE_RADIUS
+  })
+}
+
+/** THE TANK LAW — a full tank's honest range in world units: the clamp's
+ *  metres burn it (a cheat's kilometres never burn fuel — the odometer's
+ *  own law carries here). A danfo hauls, an okada sips. */
+export const FUEL_RANGE: Record<string, number> = { okada: 2600, keke: 3400, taxi: 5200, danfo: 6800 }
+/** THE DRY TANK — at this fraction the engine coughs: the pos door
+ *  refuses further motion, the client's throttle dies with it. */
+export const DRY_TANK = 0.02
+
+export function fuelAfterBurn(fuel: number, metres: number, model: string): number {
+  const range = FUEL_RANGE[model]
+  if (!range || metres <= 0) return fuel
+  return Math.max(0, fuel - metres / range)
+}
+
+/** THE WEAR LAW — the condition wears with the HONEST odometer: a full
+ *  life is CONDITION_LIFE metres, then the garage earns its keep. */
+export const CONDITION_LIFE = 30_000
+
+export function conditionAfterWear(condition: number, metres: number): number {
+  if (metres <= 0) return condition
+  return Math.max(0, condition - metres / CONDITION_LIFE)
+}
+
+/** THE PUMP PRICE — the honest Nigerian street (post-subsidy, ~₦900/L).
+ *  The M8 scarcity surge keeps riding the CLIENT's travel-cost law until
+ *  the chaos clock moves server-side (the recorded honest limit). */
+export const PETROL_PRICE_PER_LITRE = 900
+export const TANK_LITRES: Record<string, number> = { okada: 8, keke: 12, taxi: 45, danfo: 60 }
+export const REFUEL_MIN = 200
+export const REFUEL_MAX = 20_000
+
+export interface RefuelInput {
+  band: Band
+  model: string
+  fuel: number
+  amount: unknown
+  atPump: boolean
+}
+
+export function refuelVerdict(
+  input: RefuelInput,
+): { ok: true; amount: number; fuel: number } | { ok: false; why: string } {
+  if (input.band === 'guest') return { ok: false, why: 'guest-dark' }
+  if (input.band !== 'adult') return { ok: false, why: 'minors-no-money' }
+  if (!FUEL_RANGE[input.model]) return { ok: false, why: 'bad-model' }
+  if (!input.atPump) return { ok: false, why: 'no-pump' }
+  if (input.fuel >= 0.999) return { ok: false, why: 'tank-full' }
+  const amount = Math.floor(Number(input.amount))
+  if (!Number.isFinite(amount) || amount < REFUEL_MIN) return { ok: false, why: 'too-small' }
+  if (amount > REFUEL_MAX) return { ok: false, why: 'too-big' }
+  const litres = amount / PETROL_PRICE_PER_LITRE
+  const fuel = Math.min(1, input.fuel + litres / (TANK_LITRES[input.model] ?? 40))
+  return { ok: true, amount, fuel }
+}
+
+/** THE SERVICE BOOK — a full service per model (the mechanic's ladder). */
+export const FULL_SERVICE: Record<string, number> = {
+  okada: 8_000,
+  keke: 14_000,
+  taxi: 24_000,
+  danfo: 32_000,
+}
+
+export function repairQuote(model: string, condition: number): number {
+  const full = FULL_SERVICE[model] ?? 20_000
+  return Math.max(0, Math.ceil((1 - condition) * full))
+}
+
+export interface RepairInput {
+  band: Band
+  model: string
+  condition: number
+  atGarage: boolean
+}
+
+export function repairVerdict(
+  input: RepairInput,
+): { ok: true; amount: number; condition: number } | { ok: false; why: string } {
+  if (input.band === 'guest') return { ok: false, why: 'guest-dark' }
+  if (input.band !== 'adult') return { ok: false, why: 'minors-no-money' }
+  if (!FULL_SERVICE[input.model]) return { ok: false, why: 'bad-model' }
+  if (!input.atGarage) return { ok: false, why: 'no-garage' }
+  if (input.condition >= 0.999) return { ok: false, why: 'no-need' }
+  return { ok: true, amount: repairQuote(input.model, input.condition), condition: 1 }
 }

@@ -613,6 +613,28 @@ export function wireSendVehicleParkedQuery(x: number, z: number): Promise<WireSe
   return wireEmitAck('vehicle:parked', { x, z }) as Promise<WireSendResult & { parked?: WireParkedRow[] }>
 }
 
+/* ── W10-c: the pump + the garage (the ledger's own doors) ── */
+
+export type SpendAck = WireSendResult & {
+  fuel?: number
+  condition?: number
+  balance?: number
+  replayed?: boolean
+  receipt?: WireLedgerReceipt
+}
+
+/** THE PUMP — buy fuel through the REAL ledger (the replay law rides the
+ *  idemKey; the ack carries the tank + the receipt + the fresh balance). */
+export function wireSendVehicleRefuel(model: string, amount: number, x: number, z: number, idemKey: string): Promise<SpendAck> {
+  return wireEmitAck('vehicle:refuel', { model, amount, x, z, idemKey }) as Promise<SpendAck>
+}
+
+/** THE GARAGE — full service through the REAL ledger (the quote is the
+ *  wear's own math at the server door). */
+export function wireSendVehicleRepair(model: string, x: number, z: number, idemKey: string): Promise<SpendAck> {
+  return wireEmitAck('vehicle:repair', { model, x, z, idemKey }) as Promise<SpendAck>
+}
+
 /** THE WHERE DOOR — where does my paddy stand this second? */
 export function wireWhere(handle: string): Promise<WireSendResult & { street?: string; x?: number; z?: number; hd?: number; hasPos?: boolean; displayName?: string }> {
   return wireEmitAck('where', { handle }) as Promise<WireSendResult & { street?: string; x?: number; z?: number; hd?: number; hasPos?: boolean; displayName?: string }>

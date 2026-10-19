@@ -237,6 +237,10 @@ export interface OwnedVehicle {
   paint?: string
   /** in-game day it was bought */
   boughtDay: number
+  /** W10-c — the tank fraction (0..1) as the disk last knew it */
+  fuel?: number
+  /** W10-c — the condition fraction (0..1) as the disk last knew it */
+  condition?: number
 }
 
 /** Familiarity track with one NPC (pure data — social logic lives in systems/social). */
