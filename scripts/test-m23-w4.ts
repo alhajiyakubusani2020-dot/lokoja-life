@@ -101,7 +101,10 @@ console.log('\n--- W4.3 THE PHOTO FRAME LAW ---')
 console.log('\n--- W4.4 THE WIRING LAW ---')
 {
   const wt = readFileSync('src/components/game/world/WorldTab.tsx', 'utf8')
-  check('the e2e drive hook feeds the REAL pipeline', wt.includes('setDriveActive(on, \'danfo\')') && wt.includes('reportDriveSpeed(on ? (speed ?? 5.2) : 0)'))
+  // W10 amendment: the model rides as an arg (defaults 'danfo', the W4
+  // law) — the SUBSTANCE stands: setDriveActive + reportDriveSpeed, never
+  // a direct HUD mutation.
+  check('the e2e drive hook feeds the REAL pipeline', wt.includes("setDriveActive(on, model ?? 'danfo')") && wt.includes('reportDriveSpeed(on ? (speed ?? 5.2) : 0)'))
   check('the hook stays behind the e2e gate', (() => {
     const idx = wt.indexOf('forceDrive')
     const gate = wt.lastIndexOf("e2e=1", idx)

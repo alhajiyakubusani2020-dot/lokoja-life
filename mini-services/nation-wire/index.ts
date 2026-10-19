@@ -125,6 +125,14 @@ import {
 } from '../../src/game/systems/bodies'
 import { DEFAULT_LOOK_JSON } from '../../src/game/systems/profile'
 
+// THE WHEELS LAWS — W10, same verbatim doctrine (zero copies)
+import {
+  carHelloVerdict,
+  clampVehicleStep,
+  isParkTransition,
+  VEH_TICK_MS,
+} from '../../src/game/systems/wheels'
+
 const PORT = Number(process.env.WIRE_PORT ?? 3003)
 const DB_PATH = process.env.WIRE_DB ?? '/home/z/my-project/db/custom.db'
 const RESUME_CAP = 100
@@ -142,6 +150,9 @@ const CAPS = {
   // W2 — the 10Hz body cadence (POS_TICK_MS=100) + a burst headroom of one
   // full second; the cap is data, the cadence law lives in bodies.ts.
   pos: { n: Math.ceil((1000 / POS_TICK_MS) * 2.4), ms: 1_000 },
+  // W10 — the 12Hz car cadence (VEH_TICK_MS=83) ONLY-WHILE-MOVING + the
+  // same burst headroom; the cap is data, the law lives in wheels.ts.
+  veh: { n: Math.ceil((1000 / VEH_TICK_MS) * 2.4), ms: 1_000 },
   // W9 — the stage: ingest/subscribe are single gestures; watch toggles
   // are the bursty one (a board click-around); chat rides the chat cap.
   stage: { n: 4, ms: 10_000 },
@@ -264,6 +275,24 @@ function eventsSince(since: number, forHandle: string | null) {
 
 /* ─────────────────────────── presence (memory + TTL) ───────────────────── */
 
+/* W10 — THE FLEET: the car a walker is driving right now (memory, like
+ * the body's moment; the DISK row is the park spot + fuel + odometer).
+ * The roster carries the seed (the face of the car + where it stands);
+ * the 12Hz wire:car lane carries only the deltas while it moves. */
+interface WireCar {
+  model: string
+  plate: string
+  paint: string
+  x: number
+  z: number
+  hd: number
+  mv: boolean
+  t: number // the last accepted tick's clock — THE N12 CLAMP's dt
+  odo: number // the honest odometer — CLAMPED metres only
+  fuel: number
+  condition: number
+}
+
 interface WirePresence {
   handle: string
   band: LiveBand
@@ -272,6 +301,7 @@ interface WirePresence {
   voiceOn: boolean // W7 — the M17 opt-in rides the presence row
   ts: number
   sid: string // the socket that owns this presence — the sweep's truth
+  car: WireCar | null // W10 — the car I'm driving (null = on foot)
   // W2 — THE BODIES: the walker's moment + the face the body wears.
   // Positions are EPHEMERAL (the bodies.ts law): memory only, never a row.
   x: number
@@ -319,6 +349,55 @@ function freshPresence(handle: string, band: LiveBand, street: string, status: s
     hasPos: !!lm,
     displayName: face.displayName,
     look: face.look,
+    car: null,
+  }
+}
+
+/* ─────────── W10 the fleet's disk truth (THE PARK LAW's row) ─────────── */
+
+/** the park row's readback — the fuel/odometer/park-spot the car was
+ *  born with (or last left behind). Best-effort: a row that cannot be
+ *  read never stops a drive from starting. */
+function vehicleRowOf(handle: string, model: string): {
+  plate: string
+  paint: string
+  fuel: number
+  condition: number
+  x: number
+  z: number
+  hd: number
+  odometer: number
+} | null {
+  try {
+    return (
+      (db
+        .query('SELECT plate, paint, fuel, condition, x, z, hd, odometer FROM VehicleRow WHERE handle = ? AND model = ? LIMIT 1')
+        .get(handle, model) as {
+        plate: string
+        paint: string
+        fuel: number
+        condition: number
+        x: number
+        z: number
+        hd: number
+        odometer: number
+      } | null) ?? null
+    )
+  } catch {
+    return null
+  }
+}
+
+/** THE PARK PERSIST — the upsert the hello/park/bye/disconnect all run.
+ *  The car stays where you stopped it, the odometer keeps its honest
+ *  metres, and (W10-c) the tank waits at the level it was left at. */
+function vehiclePersist(car: WireCar, handle: string): void {
+  try {
+    db.query(
+      'INSERT INTO VehicleRow (handle, model, plate, paint, fuel, condition, x, z, hd, odometer, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(handle, model) DO UPDATE SET plate = excluded.plate, paint = excluded.paint, fuel = excluded.fuel, condition = excluded.condition, x = excluded.x, z = excluded.z, hd = excluded.hd, odometer = excluded.odometer, updatedAt = excluded.updatedAt',
+    ).run(handle, car.model, car.plate, car.paint, car.fuel, car.condition, car.x, car.z, car.hd, car.odo, Date.now())
+  } catch {
+    /* the park is best-effort — the moment still relays */
   }
 }
 
@@ -353,7 +432,7 @@ function sweepPresence(io: Server): boolean {
 function rosterFor(street?: string) {
   return [...presence.values()]
     .filter((p) => (street ? p.street === street : true))
-    .map(({ handle, band, street: st, status, voiceOn, ts, x, z, hd, mv, hasPos, displayName, look }) => ({
+    .map(({ handle, band, street: st, status, voiceOn, ts, x, z, hd, mv, hasPos, displayName, look, car }) => ({
       handle,
       band,
       street: st,
@@ -365,6 +444,9 @@ function rosterFor(street?: string) {
       ...(hasPos ? { x, z, hd, mv } : {}),
       displayName,
       look,
+      // W10 — THE WHEELS' SEED: the car rides the same push (the face of
+      // it + the spot it stands at); the wire:car lane is deltas only.
+      ...(car ? { car: { model: car.model, plate: car.plate, paint: car.paint, x: car.x, z: car.z, hd: car.hd, mv: car.mv } } : {}),
     }))
 }
 
@@ -820,6 +902,10 @@ io.on('connection', (socket) => {
    * (guest-mic-dark — the spectate law: guests watch, never walk). ── */
   socket.on('pos', (raw: unknown, ack?: (r: unknown) => void) => {
     if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    // W10 — THE CARRIED LAW: while my car is live on the wire, my BODY
+    // lane is silent — the walker is IN the car (the client's own sender
+    // pauses; this door is the backstop the suite proves).
+    if (presence.get(identity.handle!)?.car) return ack?.({ ok: false, why: 'carried' })
     if (!allow('pos')) return ack?.({ ok: false, why: 'too-fast' })
     if (!posOk(raw)) return ack?.({ ok: false, why: 'bad-pos' })
     const p = presence.get(identity.handle!)
@@ -832,6 +918,94 @@ io.on('connection', (socket) => {
     p.ts = Date.now()
     lastMoment.set(identity.handle!, { x: raw.x, z: raw.z, hd: raw.hd })
     relayPos(io, p)
+    ack?.({ ok: true })
+  })
+
+  /* ── W10 THE CAR DOOR — the fleet's hello. THE ADULT-HANDS LAW at the
+   * server door (a minor NEVER drives online — kid or teen, the wheel
+   * refuses), the plate/paint/pos laws verbatim, and THE SEED: the car
+   * rides the roster from this instant. The ack carries the DISK truth
+   * (the fuel/condition/odometer the car was last left with) — the
+   * readback law. ── */
+  socket.on('vehicle:hello', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('veh')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { model?: unknown; plate?: unknown; paint?: unknown; x?: unknown; z?: unknown; hd?: unknown; mv?: unknown }
+    const v = carHelloVerdict({
+      band: identity.band,
+      model: body.model,
+      plate: body.plate,
+      paint: body.paint,
+      pos: { x: body.x, z: body.z, hd: body.hd, mv: body.mv === true },
+    })
+    if (!v.ok) return ack?.(v)
+    const p = presence.get(identity.handle!)
+    if (!p) return ack?.({ ok: false, why: 'no-street' })
+    // switching cars persists the old one's last park first (the row is sacred)
+    if (p.car && p.car.model !== v.model) vehiclePersist(p.car, identity.handle!)
+    const row = vehicleRowOf(identity.handle!, v.model)
+    p.car = {
+      model: v.model,
+      plate: v.plate,
+      paint: v.paint || row?.paint || '',
+      x: v.pos.x,
+      z: v.pos.z,
+      hd: v.pos.hd,
+      mv: v.pos.mv,
+      t: Date.now(),
+      odo: typeof row?.odometer === 'number' ? row.odometer : 0,
+      fuel: typeof row?.fuel === 'number' ? row.fuel : 1,
+      condition: typeof row?.condition === 'number' ? row.condition : 1,
+    }
+    // THE PARK LAW: a parked hello is a park — the row persists at once
+    if (!v.pos.mv) vehiclePersist(p.car, identity.handle!)
+    broadcastRoster(io)
+    ack?.({ ok: true, car: { model: p.car.model, plate: p.car.plate, paint: p.car.paint, fuel: p.car.fuel, condition: p.car.condition, odometer: p.car.odo } })
+  })
+
+  /* ── W10 THE WHEEL POS DOOR — the 12Hz ONLY-WHILE-MOVING delta lane.
+   * THE N12 SPEED LAW lives here: the wire CLAMPS every step to the
+   * model's TRUE top speed (a cheating leap relays as the lawful
+   * distance along its own heading) and the odometer reads ONLY the
+   * clamped metres. THE PARK LAW: the stop persists the row once. THE
+   * BLOCK WALL per recipient, exactly like the body's lane. ── */
+  socket.on('vehicle:pos', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('veh')) return ack?.({ ok: false, why: 'too-fast' })
+    const p = presence.get(identity.handle!)
+    if (!p || !p.car) return ack?.({ ok: false, why: 'no-car' })
+    if (!posOk(raw)) return ack?.({ ok: false, why: 'bad-pos' })
+    const now = Date.now()
+    const wasMoving = p.car.mv
+    const step = clampVehicleStep({ x: p.car.x, z: p.car.z, t: p.car.t }, { x: raw.x, z: raw.z }, p.car.model, now)
+    p.car.x = step.x
+    p.car.z = step.z
+    p.car.hd = raw.hd
+    p.car.mv = raw.mv
+    p.car.t = now
+    p.car.odo += step.moved
+    // THE PARK LAW: the move→stop transition persists the row ONCE
+    if (isParkTransition(wasMoving, raw.mv)) vehiclePersist(p.car, identity.handle!)
+    const payload = { h: identity.handle, model: p.car.model, plate: p.car.plate, paint: p.car.paint, x: p.car.x, z: p.car.z, hd: p.car.hd, mv: p.car.mv }
+    for (const o of presence.values()) {
+      if (o.handle === identity.handle || o.street !== p.street || !o.sid) continue
+      if (!bodyRelayOk(edgeGet(identity.handle!, o.handle)?.state === 'blocked' || edgeGet(o.handle, identity.handle!)?.state === 'blocked')) continue
+      io.to(o.sid).emit('wire:car', payload)
+    }
+    ack?.({ ok: true, clamped: step.clamped })
+  })
+
+  /* ── W10 THE BYE DOOR — the engine dies with MY hand: exit the world,
+   * the menu, or the garage's own off switch. The row persists (the car
+   * stays where it stopped), the seed leaves the roster. ── */
+  socket.on('vehicle:bye', (_raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    const p = presence.get(identity.handle!)
+    if (p?.car) {
+      vehiclePersist(p.car, identity.handle!)
+      p.car = null
+      broadcastRoster(io)
+    }
     ack?.({ ok: true })
   })
 
@@ -1645,6 +1819,9 @@ io.on('connection', (socket) => {
     if (claimed && p && p.sid === socket.id) {
       // THE LAST MOMENT survives the goodbye — the re-hello law reads it
       if (p.hasPos) lastMoment.set(identity.handle!, { x: p.x, z: p.z, hd: p.hd })
+      // W10 — THE PARK LAW's last word: the goodbye persists the car where
+      // it stopped (the disk row is the truth a reconnect reads back).
+      if (p.car) vehiclePersist(p.car, identity.handle!)
       presence.delete(identity.handle!)
       broadcastRoster(io)
     }

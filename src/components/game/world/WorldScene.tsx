@@ -22,6 +22,7 @@ import { CityMesh } from './CityMesh'
 import { SchoolMesh } from './SchoolMesh'
 import { Birds, Npcs, PlayerController, Rain, SmokeWisps, Traffic } from './Actors'
 import { RemoteWalkers } from './RemoteWalkers'
+import { RemoteVehicles } from './RemoteVehicles'
 import { StageCapture } from './StageCapture'
 import { DriveSystem } from './DriveSystem'
 import { PolishLayer } from './polish'
@@ -563,6 +564,10 @@ export function WorldScene({
       {/* M24 W2 — THE BODIES: real claimed walkers as real bodies (additive
           layer; the roster seeds the face, the 10Hz lane walks the body) */}
       <RemoteWalkers />
+      {/* M24 W10-a — THE WHEELS: real claimed drivers' cars as real rigs
+          (additive layer; the roster seeds the car, the 12Hz lane turns
+          the wheels — ONLY while moving; a parked car stands where it stopped) */}
+      <RemoteVehicles />
       <StageCapture />
       <Rain weather={weather} />
       {/* M6 — the food strip turns after dark: night-market bulbs */}

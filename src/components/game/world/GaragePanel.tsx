@@ -1,12 +1,15 @@
 'use client'
 
 /**
- * LOKOJA LIFE — Garage / Vehicle Shop (Stage 5-a)
- * ------------------------------------------------
+ * LOKOJA LIFE — Garage / Vehicle Shop (Stage 5-a + M24 W10-a)
+ * -----------------------------------------------------------
  * The motor park bottom sheet: the showroom (buy through the ONE store
- * action, buyVehicle) and your garage (Drive hands the request to the
- * 3D DriveSystem through controls.ts). Presentation only — prices,
- * plates and affordability live in data/vehicles.ts + the store.
+ * action, buyVehicle), your garage (Drive hands the request to the 3D
+ * DriveSystem through controls.ts) and THE WHEELS' FACE (W10 — paint +
+ * custom plate through the SAME laws the wire door runs; the street
+ * sees your ride exactly as you paint it here). Presentation only —
+ * prices, plates, affordability and the paint vocabulary live in
+ * data/vehicles.ts + systems/wheels.ts + the store.
  */
 
 import { useGameStore } from '@/game/store/useGameStore'
@@ -14,15 +17,32 @@ import { VEHICLES, VEHICLE_BY_MODEL } from '@/game/data/vehicles'
 import type { VehicleModel } from '@/game/types'
 import { formatNaira } from '@/game/systems/progression'
 import { resaleValue } from '@/game/systems/garage'
+import { PAINT_VOCAB } from '@/game/systems/wheels'
 import { audio } from '@/game/systems/audio'
 import { CheckIcon, CoinsIcon } from '../icons'
 import { requestEnterVehicle } from './controls'
+
+/** the swatch the paint key shows — the rigs' REAL tones (presentation
+ *  mirror of world3d/vehicles.ts; the vocabulary itself is the law's) */
+const PAINT_SWATCH: Record<string, { label: string; css: string }> = {
+  '0': { label: 'Red', css: '#b33a2b' },
+  '1': { label: 'Blue', css: '#2b62b3' },
+  '2': { label: 'Green', css: '#2e7d5b' },
+  '3': { label: 'Black', css: '#3d4043' },
+  stock: { label: 'Stock', css: 'linear-gradient(135deg,#e3b53a,#3e8e5a)' },
+  yellow: { label: 'Yellow', css: '#e3b53a' },
+  white: { label: 'White', css: '#e8e8e8' },
+  silver: { label: 'Silver', css: '#b8bcc2' },
+  darkblue: { label: 'Navy', css: '#24466e' },
+  maroon: { label: 'Maroon', css: '#6e2430' },
+}
 
 export function GaragePanel({ onClose }: { onClose: () => void }) {
   const player = useGameStore((s) => s.player)!
   const world = useGameStore((s) => s.world)!
   const buyVehicle = useGameStore((s) => s.buyVehicle)
   const sellVehicle = useGameStore((s) => s.sellVehicle)
+  const setVehicleStyle = useGameStore((s) => s.setVehicleStyle)
   const cash = player.cash
   const owned = player.vehicles
 
@@ -95,6 +115,64 @@ export function GaragePanel({ onClose }: { onClose: () => void }) {
               )
             })}
           </div>
+          {/* ---------- W10 — THE WHEELS' FACE (paint + plate) ---------- */}
+          {owned.map((v) => {
+            const def = VEHICLE_BY_MODEL[v.model]
+            const vocab = PAINT_VOCAB[v.model] ?? []
+            const current = v.paint ?? vocab[0] ?? 'stock'
+            return (
+              <div key={`${v.id}-style`} className="lko-card mt-1.5 p-2.5">
+                <p className="mb-1.5 text-[10.5px] font-extrabold uppercase tracking-wide text-[var(--lko-ink-soft)]">
+                  {def.short} — the face the street sees
+                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {vocab.map((p) => {
+                    const sw = PAINT_SWATCH[p] ?? PAINT_SWATCH.stock
+                    const on = current === p
+                    return (
+                      <button
+                        key={p}
+                        data-testid={`paint-${v.model}-${p}`}
+                        aria-label={`Paint ${def.short} ${sw.label}`}
+                        onClick={() => {
+                          audio.play('click')
+                          setVehicleStyle(v.id, { paint: p })
+                        }}
+                        className={`lko-press h-7 w-7 rounded-full border-2 ${on ? 'border-[var(--lko-green)] ring-2 ring-[var(--lko-green)]/30' : 'border-black/10'}`}
+                        style={{ background: sw.css }}
+                      />
+                    )
+                  })}
+                  <span className="ml-1 text-[10.5px] font-bold text-[var(--lko-ink-soft)]">
+                    {(PAINT_SWATCH[current] ?? PAINT_SWATCH.stock).label}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <input
+                    data-testid={`plate-${v.model}`}
+                    defaultValue={v.plate}
+                    maxLength={10}
+                    aria-label={`Custom plate for ${def.short}`}
+                    onChange={(e) => {
+                      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '')
+                    }}
+                    className="lko-num h-8 w-32 rounded-lg border border-black/10 bg-black/[0.03] px-2 text-[11.5px] font-extrabold tracking-wider text-[var(--lko-ink)] outline-none focus:border-[var(--lko-green)]"
+                  />
+                  <button
+                    data-testid={`plate-save-${v.model}`}
+                    onClick={(e) => {
+                      const input = (e.currentTarget.previousElementSibling as HTMLInputElement | null)?.value ?? v.plate
+                      audio.play('click')
+                      setVehicleStyle(v.id, { plate: input })
+                    }}
+                    className="lko-press flex h-8 items-center rounded-lg bg-black/[0.05] px-3 text-[11px] font-extrabold text-[var(--lko-ink-soft)]"
+                  >
+                    Set plate
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 

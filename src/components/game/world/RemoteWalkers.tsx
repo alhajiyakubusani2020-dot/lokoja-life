@@ -29,7 +29,7 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { MidRig, type RigColors } from './HumanRig'
 import { heightAt } from '@/game/world3d/layout'
-import { playerPos, requestE2eTeleport } from './controls'
+import { playerPos, requestE2eTeleport, isDriveActive, getDriveModel, getDriveSpeed } from './controls'
 import { inRenderRange } from '@/game/systems/bodies'
 import {
   remoteStartSending,
@@ -41,6 +41,13 @@ import {
   setJoinExecutor,
   useBodiesStore,
 } from '@/game/systems/remotenet'
+import {
+  wheelStartSending,
+  wheelStopSending,
+  wheelSetDriveReader,
+  isLiveDriver,
+  wheelsWitness,
+} from '@/game/systems/wheelnet'
 import { DEFAULT_AVATAR } from '@/game/data/avatar'
 
 /* ------------------------------ rig colour mapping ---------------------------- */
@@ -121,6 +128,12 @@ function RemoteBodyView({ handle }: { handle: string }) {
     if (!g) return
     const b = remoteBody(handle)
     if (!b) return
+    // W10 — THE CARRIED LAW'S FACE: a walker whose car is live on the
+    // wire is IN that car — their body must not ghost-walk beside it.
+    if (isLiveDriver(handle)) {
+      g.visible = false
+      return
+    }
     // the snaps are wall-clock anchored (Date.now() at the wire push) — the
     // sample clock is the SAME wall clock, never the R3F scene clock
     const s = b.buf.sample(Date.now())
@@ -171,12 +184,26 @@ export function RemoteWalkers() {
     // the local moment + the join seam — the walker's own truths, brought here
     setPosReader(() => ({ x: playerPos.x, z: playerPos.z, hd: playerPos.heading }))
     setJoinExecutor((x, z) => requestE2eTeleport(x, z))
+    // W10 — the drive truth + the wheels' bracket: my car speaks while I
+    // am seated (the sender reads THIS layer's own module truth)
+    wheelSetDriveReader(() => ({
+      active: isDriveActive(),
+      model: getDriveModel(),
+      speed: getDriveSpeed(),
+      x: playerPos.x,
+      z: playerPos.z,
+      hd: playerPos.heading,
+    }))
     remoteStartSending()
+    wheelStartSending()
     // the E2E witness reads REALITY (the net's counters + the body list)
     ;(window as unknown as Record<string, unknown>).__lklBodies = bodiesWitness
+    ;(window as unknown as Record<string, unknown>).__lklWheels = wheelsWitness
     return () => {
       remoteStopSending()
+      wheelStopSending()
       delete (window as unknown as Record<string, unknown>).__lklBodies
+      delete (window as unknown as Record<string, unknown>).__lklWheels
     }
   }, [])
 

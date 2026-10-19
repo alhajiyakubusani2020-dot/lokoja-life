@@ -213,3 +213,30 @@ model ProfileRow {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+/// M24 W10-a THE FLEET — the shared world's wheels are SERVER truth.
+/// One row per (owner, model) — the garage law: one car per model per
+/// citizen. paint/plate are the WHEELS' FACE (the paint/pplate laws in
+/// systems/wheels.ts validate every value at the door); fuel/condition
+/// ride 0..1 for the petrol + garage waves (W10-c); x/z/hd is THE PARK
+/// SPOT (the car stays where you stopped it — persisted on every park,
+/// every bye and every disconnect); odometer is the honest meter the
+/// wire itself accumulates from CLAMPED steps (a cheat's metres never
+/// enter the books). updatedAt is INTEGER epoch-ms (the Prisma SQLite
+/// DateTime law from W4 — the wire writes the same shape).
+model VehicleRow {
+  id        Int      @id @default(autoincrement())
+  handle    String
+  model     String
+  plate     String
+  paint     String   @default("")
+  fuel      Float    @default(1)
+  condition Float    @default(1)
+  x         Float    @default(0)
+  z         Float    @default(0)
+  hd        Float    @default(0)
+  odometer  Float    @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([handle, model])
+}

@@ -50,6 +50,7 @@ import { STARTING, NEEDS, TRAVEL, WORK, HUSTLE, AUTOSAVE, WORLD3D, INTERIOR, MEA
 import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
 import { DEFAULT_AVATAR } from '../data/avatar'
 import { VEHICLE_BY_MODEL, generatePlate } from '../data/vehicles'
+import { plateOk, paintOk } from '../systems/wheels'
 import { NPC_CHAT } from '../data/npcChat'
 import { NPC_BY_ID } from '../data/npcs'
 import { LOCATION_BY_ID } from '../data/locations'
@@ -402,6 +403,9 @@ interface GameStore {
   buyVehicle: (model: VehicleModel) => boolean
   /** M4 — sell a garage ride back at the park (deterministic depreciation). */
   sellVehicle: (vehicleId: string) => boolean
+  /** W10 — the wheels' face: repaint / re-plate a garage ride (the plate
+   *  and paint LAWS validate — an invented colour or a bad plate refuses). */
+  setVehicleStyle: (vehicleId: string, style: { paint?: string; plate?: string }) => boolean
   /** Wardrobe — change appearance (merges over DEFAULT_AVATAR). */
   setAvatar: (avatar: AvatarConfig) => void
   /** Gym workout — needs shift + one honest clock slot. */
@@ -1951,6 +1955,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })
     audio.play('levelup')
     haptics.fire('levelup')
+    scheduleAutosave(get)
+    return true
+  },
+
+  /* W10 — THE WHEELS' FACE: the garage paints and plates through the SAME
+   * laws the wire door runs (zero copies — an invented colour or a bad
+   * plate refuses before it ever reaches the street). */
+  setVehicleStyle: (vehicleId, style) => {
+    const player = get().player
+    if (!player) return false
+    const vehicle = player.vehicles.find((v) => v.id === vehicleId)
+    if (!vehicle) return false
+    if (style.plate !== undefined && !plateOk(style.plate.toUpperCase())) {
+      get().notify({
+        icon: '🚫',
+        text: 'Plate na 4–10 characters — letters, numbers and dash only.',
+        tone: 'bad',
+      })
+      return false
+    }
+    if (style.paint !== undefined && !paintOk(vehicle.model, style.paint)) {
+      get().notify({ icon: '🎨', text: 'That colour no dey the book for this ride.', tone: 'bad' })
+      return false
+    }
+    const paint = style.paint !== undefined ? style.paint : (vehicle.paint ?? '')
+    const plate = style.plate !== undefined ? style.plate.toUpperCase() : vehicle.plate
+    set({
+      player: {
+        ...player,
+        vehicles: player.vehicles.map((v) => (v.id === vehicleId ? { ...v, paint, plate } : v)),
+      },
+    })
+    const def = VEHICLE_BY_MODEL[vehicle.model]
+    get().notify({ icon: def.emoji, text: `${def.short} done — plate ${plate}. The street go see am.`, tone: 'good' })
     scheduleAutosave(get)
     return true
   },

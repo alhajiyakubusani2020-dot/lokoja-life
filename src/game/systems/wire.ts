@@ -57,6 +57,20 @@ export interface WireRosterRow {
   z?: number
   hd?: number
   mv?: boolean
+  // W10 — THE WHEELS' SEED: the car I'm driving (or parked in) rides the
+  // same push — the face of it + the spot it stands at; the wire:car lane
+  // is deltas only after the seed.
+  car?: WireCarSeed
+}
+
+export interface WireCarSeed {
+  model: string
+  plate: string
+  paint: string
+  x: number
+  z: number
+  hd: number
+  mv: boolean
 }
 
 interface WireStore {
@@ -225,6 +239,14 @@ export function wireEnsure(
   s.on('wire:pos', (p: WirePosPush) => {
     if (p && typeof p.h === 'string' && typeof p.x === 'number' && typeof p.z === 'number') {
       for (const fn of posFns) fn(p)
+    }
+  })
+
+  // W10: the car lane — a same-street driver's 12Hz wheel moment
+  // (ephemeral, memory-only; wheelnet owns the buffers)
+  s.on('wire:car', (p: WireCarPush) => {
+    if (p && typeof p.h === 'string' && typeof p.model === 'string' && typeof p.x === 'number' && typeof p.z === 'number') {
+      for (const fn of carFns) fn(p)
     }
   })
 
@@ -423,6 +445,64 @@ export function wireOnPos(fn: PosFn): () => void {
  *  to a sender misbehaving, and the cap's 'too-fast' is felt as a pause). */
 export function wireSendPos(p: { x: number; z: number; hd: number; mv: boolean }): void {
   if (socket?.connected) socket.emit('pos', p)
+}
+
+/* ── W10: the car lanes — the wheels' hello/park/bye doors, thin as the body's. ── */
+
+export type WireCarPush = {
+  h: string
+  model: string
+  plate: string
+  paint: string
+  x: number
+  z: number
+  hd: number
+  mv: boolean
+}
+
+type CarFn = (p: WireCarPush) => void
+const carFns = new Set<CarFn>()
+
+export function wireOnCar(fn: CarFn): () => void {
+  carFns.add(fn)
+  return () => {
+    carFns.delete(fn)
+  }
+}
+
+export interface WireCarRow {
+  model: string
+  plate: string
+  paint: string
+  fuel: number
+  condition: number
+  odometer: number
+}
+
+/** THE CAR HELLO — claim my wheels on the wire (the adult-hands + face
+ *  laws at the door); the ack carries the DISK truth (fuel/odometer). */
+export function wireSendCarHello(p: {
+  model: string
+  plate: string
+  paint: string
+  x: number
+  z: number
+  hd: number
+  mv: boolean
+}): Promise<WireSendResult & { car?: WireCarRow }> {
+  return wireEmitAck('vehicle:hello', p as unknown as Record<string, unknown>) as Promise<WireSendResult & { car?: WireCarRow }>
+}
+
+/** THE WHEEL TICK — fire-and-forget at the 12Hz cadence, ONLY-WHILE-MOVING
+ *  (the same law the body's pos tick speaks: an ack per tick doubles the
+ *  wire for zero honesty). */
+export function wireSendCarPos(p: { x: number; z: number; hd: number; mv: boolean }): void {
+  if (socket?.connected) socket.emit('vehicle:pos', p)
+}
+
+/** THE CAR BYE — the engine dies with my hand; the row persists. */
+export function wireSendCarBye(): Promise<WireSendResult> {
+  return wireEmitAck('vehicle:bye', {}) as Promise<WireSendResult>
 }
 
 /** THE WHERE DOOR — where does my paddy stand this second? */

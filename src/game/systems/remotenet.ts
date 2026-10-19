@@ -29,6 +29,7 @@
 
 import { create } from 'zustand'
 import { InterpBuffer, POS_TICK_MS, posWorthSending, bodyLook, type PosPayload } from './bodies'
+import { wheelIsDriving } from './wheelnet'
 import { wireOnPos, wireSendPos, wireWhere, wireSetStreet, wireEnsure, useWireStore, type WireRosterRow } from './wire'
 import { useGameStore } from '../store/useGameStore'
 
@@ -171,6 +172,10 @@ export function remoteStartSending(): void {
     // controls' own truth — the walker reports it every frame
     const c = playerPosRef()
     if (!c) return
+    // W10 — THE CARRIED COORDINATION: my wheels are live on the wire, so
+    // my body lane is silent — the walker is IN the car (the wire's pos
+    // door refuses 'carried' as the backstop; this pause is the politeness)
+    if (wheelIsDriving()) return
     // THE MOVEMENT TRUTH: measured between MY OWN reads (0.02u ≈ 2cm —
     // a still body stays still; a walking body says mv)
     const mv = !!prevRead && Math.hypot(c.x - prevRead.x, c.z - prevRead.z) > 0.02

@@ -23,7 +23,8 @@ import { MapIcon, PinIcon } from '../icons'
 import { audio } from '@/game/systems/audio'
 import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
-import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen, requestE2eTeleport, setDriveActive, reportDriveSpeed } from './controls'
+import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen, requestE2eTeleport, setDriveActive, reportDriveSpeed, reportPlayerPos } from './controls'
+import { generatePlate } from '@/game/data/vehicles'
 import { music, moodForTimeOfDay } from '@/game/systems/music'
 import { extrasLive } from '@/game/systems/extras'
 import { PATTI_SECRETS } from '@/game/systems/patti'
@@ -222,12 +223,52 @@ export function WorldTab({
         const s = useGameStore.getState()
         if (s.world) useGameStore.setState({ world: { ...s.world, weather: w as import('@/game/types').Weather } })
       },
-      forceDrive: (on: boolean, speed?: number) => {
+      forceDrive: (on: boolean, speed?: number, model?: 'okada' | 'keke' | 'taxi' | 'danfo') => {
         // W4 E2E — feeds the REAL HUD pipeline (the same setDriveActive /
         // reportDriveSpeed the DriveSystem calls). Never mutates player cash
         // or world state; lets the speedo cluster be witnessed headless.
-        setDriveActive(on, 'danfo')
+        // W10 — the model rides as an arg (defaults danfo, the W4 law).
+        setDriveActive(on, model ?? 'danfo')
         reportDriveSpeed(on ? (speed ?? 5.2) : 0)
+      },
+      driveStep: (dx: number, dz: number) => {
+        // W10 E2E — steps the car's SHARED truth along the road: the same
+        // reportPlayerPos the real drive loop feeds every frame (the HUD,
+        // the minimap, the bodies AND the wheels all read it). The speed is
+        // implied honestly: one 0.5u step per 12Hz tick ≈ 6 u/s. Never
+        // mutates cash or world state — ?e2e=1 gates this whole hook.
+        const p = playerPos
+        const nx = p.x + dx
+        const nz = p.z + dz
+        reportPlayerPos(nx, nz, Math.atan2(dx, dz))
+        reportDriveSpeed(Math.hypot(dx, dz) * 12)
+      },
+      grantRide: (model: 'okada' | 'keke' | 'taxi' | 'danfo', paint?: string) => {
+        // W10 E2E — the ownership seam the wire witness needs (the same
+        // class of shortcut as forceDrive: the speedo drove without a road;
+        // the wheels witness drives without the ₦750k grind). ONE honest
+        // OwnedVehicle with a REAL generated plate; the ECONOMY suites own
+        // the purchase laws — this hook only puts a lawful key in the hand.
+        const s = useGameStore.getState()
+        if (!s.player) return false
+        if (s.player.vehicles.some((v) => v.model === model)) {
+          // already granted this session — just paint it if asked
+          if (paint !== undefined) {
+            const mine = s.player.vehicles.find((v) => v.model === model)!
+            s.setVehicleStyle(mine.id, { paint })
+          }
+          return true
+        }
+        const world = s.world
+        const vehicle = {
+          id: `${model}-e2e-${Date.now().toString(36)}`,
+          model,
+          plate: generatePlate(model, world?.day ?? 1, s.player.vehicles.length),
+          paint: paint ?? '',
+          boughtDay: world?.day ?? 1,
+        }
+        useGameStore.setState({ player: { ...s.player, vehicles: [...s.player.vehicles, vehicle] } })
+        return true
       },
       /** M8 E2E — the live chaos slice (outage / pool / scarcity bookkeeping) */
       chaos: () => {

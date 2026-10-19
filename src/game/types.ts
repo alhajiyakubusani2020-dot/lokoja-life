@@ -233,6 +233,8 @@ export interface OwnedVehicle {
   model: VehicleModel
   /** display plate, e.g. "LKO-419-AB" */
   plate: string
+  /** W10 — the paint the street sees (the PAINT VOCABULARY only; '' = stock) */
+  paint?: string
   /** in-game day it was bought */
   boughtDay: number
 }
