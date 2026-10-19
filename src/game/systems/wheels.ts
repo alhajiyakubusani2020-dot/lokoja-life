@@ -296,3 +296,170 @@ export function isParkTransition(prevMv: boolean | undefined, nextMv: boolean): 
 export function carWorthSending(prev: PosPayload | null, next: PosPayload): boolean {
   return next.mv === true || (prev !== null && prev.mv === true) // the park tick rides once
 }
+
+/* ─────────────── W10-b: THE BOARDING LAWS (the crew + the DMV) ─────────────── */
+
+/** THE SEAT LAW — the rigs' REAL capacities: an okada carries one
+ *  pillion, a keke two, a taxi three, a danfo five. The model decides;
+ *  nothing else does. */
+export const PASSENGER_SEATS: Record<string, number> = {
+  okada: 1,
+  keke: 2,
+  taxi: 3,
+  danfo: 5,
+}
+
+export function seatsOf(model: string): number {
+  return PASSENGER_SEATS[model] ?? 0
+}
+
+export interface BoardInput {
+  band: Band
+  model: string
+  carLive: boolean
+  carMv: boolean
+  seatsOpen: boolean
+  seated: number
+  blocked?: boolean
+  alreadyAboard: boolean // driving my own car or riding another already
+}
+
+/**
+ * THE BOARD VERDICT — the plan's own law (N12: "only a stopped and
+ * consenting car is boardable"; the hijack law: consent or nothing):
+ * the car must be LIVE, the rider must be CLAIMED (a guest rides
+ * nothing — guest-dark), the rider must arrive on foot, a blocked pair
+ * shares NO car, the driver's seats must be OPEN (the standing consent),
+ * the car must be STOPPED, and a seat must be free. Kids AND teens may
+ * ride shotgun (the M13 mercy — they just never hold the wheel).
+ */
+export function boardVerdict(
+  input: BoardInput,
+): { ok: true; seat: number } | { ok: false; why: string } {
+  if (!input.carLive) return { ok: false, why: 'no-car' }
+  if (input.band === 'guest') return { ok: false, why: 'guest-dark' }
+  if (input.alreadyAboard) return { ok: false, why: 'already-aboard' }
+  if (input.blocked) return { ok: false, why: 'blocked' }
+  if (!input.seatsOpen) return { ok: false, why: 'seats-shut' }
+  if (input.carMv) return { ok: false, why: 'moving' }
+  if (input.seated >= seatsOf(input.model)) return { ok: false, why: 'full' }
+  return { ok: true, seat: input.seated }
+}
+
+/**
+ * THE UNBOARD VERDICT — a passenger steps off where the car STANDS. A
+ * moving danfo drops nobody (the honest law: jump out at the stop —
+ * the same wall the boarding door speaks, mirrored).
+ */
+export function unboardVerdict(riding: boolean, carMv: boolean): { ok: boolean; why?: string } {
+  if (!riding) return { ok: false, why: 'not-riding' }
+  if (carMv) return { ok: false, why: 'moving' }
+  return { ok: true }
+}
+
+/**
+ * THE CREW VOICE LAW — the interior is its OWN zone (the plan's W10
+ * letter): both mouths must be ADULT (M17: minors never voice — the
+ * server doors stay structural), both must be IN the same crew. The
+ * crew's key is the driver's handle: the driver owns their crew, every
+ * passenger carries the driver's key. While the wheel is live the zone
+ * TIGHTENS — the street walkie hears the car, not the whole road.
+ */
+export function crewVoiceOk(input: {
+  meBand: Band
+  peerBand: Band
+  myCrew: string | null
+  peerCrew: string | null
+}): boolean {
+  if (input.meBand !== 'adult' || input.peerBand !== 'adult') return false
+  if (!input.myCrew || !input.peerCrew) return false
+  return input.myCrew === input.peerCrew
+}
+
+export interface PatchInput {
+  band: Band
+  model: unknown
+  paint?: unknown
+  plate?: unknown
+}
+
+/**
+ * THE DMV VERDICT — the patch door's walls in order: a claimed citizen
+ * only (guest-dark), a REAL model, the paint law, the plate law. Plate
+ * UNIQUENESS is the server's own eye (the disk query — a pure verdict
+ * cannot see the table); the doors run it behind this verdict.
+ */
+export function patchVerdict(
+  input: PatchInput,
+): { ok: true; model: string; paint?: string; plate?: string } | { ok: false; why: string } {
+  if (input.band === 'guest') return { ok: false, why: 'guest-dark' }
+  const model = input.model
+  if (typeof model !== 'string' || !VEHICLE_BY_MODEL[model as keyof typeof VEHICLE_BY_MODEL]) {
+    return { ok: false, why: 'bad-model' }
+  }
+  const wantsPaint = input.paint !== undefined && input.paint !== null
+  if (wantsPaint && !paintOk(model as string, input.paint)) return { ok: false, why: 'bad-paint' }
+  const wantsPlate = input.plate !== undefined && input.plate !== null
+  if (wantsPlate && !plateOk(input.plate)) return { ok: false, why: 'bad-plate' }
+  return {
+    ok: true,
+    model: model as string,
+    ...(wantsPaint ? { paint: input.paint as string } : {}),
+    ...(wantsPlate ? { plate: input.plate as string } : {}),
+  }
+}
+
+/**
+ * THE PLATE OWNERSHIP LAW — the DMV's eye at EVERY door that writes a
+ * plate (the hello included): a plate may belong to ONE row. The server
+ * reads the disk and hands the owner here; the law stays pure.
+ */
+export function plateOwnershipOk(
+  plate: string,
+  handle: string,
+  model: string,
+  owner: { handle: string; model: string } | null,
+): boolean {
+  if (!owner) return true // the plate is free
+  return owner.handle === handle && owner.model === model // my own row may keep it
+}
+
+export interface ParkedSeed {
+  handle: string
+  model: string
+  plate: string
+  paint: string
+  x: number
+  z: number
+  hd: number
+  odometer: number
+  fuel: number
+  condition: number
+}
+
+/** the parked-spawn list never floods a street (the wire stays thin) */
+export const PARKED_SEED_CAP = 24
+
+/**
+ * THE PARKED SEED LAW — the disk rows of ABSENT drivers, near a walker:
+ * inside the range law's own 90u, deduped against the LIVE roster (a
+ * live car wins its own row — the seed only fills absences), nearest
+ * first, capped. This is the persistence spawn: the city keeps its
+ * parked cars after their drivers go home.
+ */
+export function parkedSeedsNear(
+  rows: ParkedSeed[],
+  x: number,
+  z: number,
+  liveKeys: Set<string>,
+): ParkedSeed[] {
+  const near = rows
+    .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.z))
+    .filter((r) => !liveKeys.has(`${r.handle}\u0000${r.model}`))
+    .filter((r) => (r.x - x) * (r.x - x) + (r.z - z) * (r.z - z) <= CAR_RANGE * CAR_RANGE)
+  near.sort(
+    (a, b) =>
+      (a.x - x) * (a.x - x) + (a.z - z) * (a.z - z) - ((b.x - x) * (b.x - x) + (b.z - z) * (b.z - z)),
+  )
+  return near.slice(0, PARKED_SEED_CAP)
+}

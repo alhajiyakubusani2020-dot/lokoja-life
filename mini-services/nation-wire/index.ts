@@ -131,6 +131,13 @@ import {
   clampVehicleStep,
   isParkTransition,
   VEH_TICK_MS,
+  boardVerdict,
+  unboardVerdict,
+  crewVoiceOk,
+  patchVerdict,
+  plateOwnershipOk,
+  parkedSeedsNear,
+  type ParkedSeed,
 } from '../../src/game/systems/wheels'
 
 const PORT = Number(process.env.WIRE_PORT ?? 3003)
@@ -156,6 +163,11 @@ const CAPS = {
   // W9 — the stage: ingest/subscribe are single gestures; watch toggles
   // are the bursty one (a board click-around); chat rides the chat cap.
   stage: { n: 4, ms: 10_000 },
+  // W10-b — the boarding doors: the seats toggle, the board/unboard
+  // gestures, and the parked-spawn query are single honest gestures;
+  // the DMV patch is its own slower key (a repaint spree stays human).
+  board: { n: 8, ms: 10_000 },
+  patch: { n: 4, ms: 10_000 },
 } as const
 
 const DM_HISTORY_CAP = 100
@@ -291,6 +303,11 @@ interface WireCar {
   odo: number // the honest odometer — CLAMPED metres only
   fuel: number
   condition: number
+  // W10-b — THE CREW: the standing consent (seatsOpen) + the handles
+  // aboard. A full car carries its people by handle; the roster carries
+  // the same truth on every passenger's own row (riding).
+  seatsOpen: boolean
+  crew: string[]
 }
 
 interface WirePresence {
@@ -302,6 +319,9 @@ interface WirePresence {
   ts: number
   sid: string // the socket that owns this presence — the sweep's truth
   car: WireCar | null // W10 — the car I'm driving (null = on foot)
+  // W10-b — THE RIDE: whose car carries me (null = on foot). While it
+  // lives my body lane refuses 'carried' — the walker is IN the car.
+  riding: { driver: string; model: string; plate: string } | null
   // W2 — THE BODIES: the walker's moment + the face the body wears.
   // Positions are EPHEMERAL (the bodies.ts law): memory only, never a row.
   x: number
@@ -350,6 +370,7 @@ function freshPresence(handle: string, band: LiveBand, street: string, status: s
     displayName: face.displayName,
     look: face.look,
     car: null,
+    riding: null,
   }
 }
 
@@ -401,12 +422,126 @@ function vehiclePersist(car: WireCar, handle: string): void {
   }
 }
 
+/* ───────────── W10-b the crew + the DMV + the parked spawn ───────────── */
+
+/** THE DMV'S EYE — who owns this plate? One plate, one row (bun:sqlite
+ *  is synchronous: the check and the write cannot race inside one
+ *  process — the uniqueness wall needs no index to be honest). */
+function plateOwnerOf(plate: string): { handle: string; model: string } | null {
+  try {
+    return (
+      (db
+        .query('SELECT handle, model FROM VehicleRow WHERE plate = ? LIMIT 1')
+        .get(plate) as { handle: string; model: string } | undefined) ?? null
+    )
+  } catch {
+    return null
+  }
+}
+
+/** THE CREW KEY — the driver owns their crew; a passenger carries the
+ *  driver's key; a walker on foot carries none. The interior voice zone
+ *  reads this at the envelope doors. */
+function crewKeyOf(handle: string): string | null {
+  const p = presence.get(handle)
+  if (!p) return null
+  if (p.car) return handle
+  if (p.riding) return p.riding.driver
+  return null
+}
+
+/** THE CREW PUSH — the instant lane to the driver's socket (the crew UI
+ *  learns a member joined/left/was dropped in one beat, roster follows). */
+function pushCarCrew(
+  io: Server,
+  driverSid: string | null | undefined,
+  driver: string,
+  car: WireCar,
+  op: 'board' | 'unboard' | 'dropped',
+  who: string,
+  why?: string,
+): void {
+  const payload = {
+    type: op,
+    driver,
+    model: car.model,
+    plate: car.plate,
+    crew: [...car.crew],
+    who,
+    ...(why ? { why } : {}),
+  }
+  if (driverSid) io.to(driverSid).emit('wire:car-crew', payload)
+  for (const h of car.crew) {
+    const rp = presence.get(h)
+    if (rp?.sid) io.to(rp.sid).emit('wire:car-crew', payload)
+  }
+}
+
+/** THE PARKED BROADCAST — a car left behind stays VISIBLE where it
+ *  stopped (the persistence spawn): every same-street socket holds the
+ *  disk row as a ghost rig until the driver returns. Memory on the
+ *  client, disk on the server — the same honest split as the park law. */
+function broadcastParked(io: Server, street: string, car: WireCar, handle: string): void {
+  io.to(`wire:street:${street}`).emit('wire:parked', {
+    op: 'park',
+    row: {
+      handle,
+      model: car.model,
+      plate: car.plate,
+      paint: car.paint,
+      x: car.x,
+      z: car.z,
+      hd: car.hd,
+      odometer: car.odo,
+      fuel: car.fuel,
+      condition: car.condition,
+    },
+  })
+}
+
+/** THE CREW DROP — the driver's seat emptied (bye, goodbye, or the
+ *  sweep): every passenger is put down WHERE THE CAR STANDS, honestly
+ *  marked 'driver-gone', and their body lane reopens. */
+function dropCrew(io: Server, car: WireCar, driver: string): void {
+  for (const h of [...car.crew]) {
+    const rp = presence.get(h)
+    if (rp && rp.riding?.driver === driver) {
+      rp.riding = null
+      if (rp.sid) {
+        io.to(rp.sid).emit('wire:car-crew', {
+          type: 'dropped',
+          driver,
+          model: car.model,
+          plate: car.plate,
+          crew: [],
+          who: h,
+          why: 'driver-gone',
+          x: car.x,
+          z: car.z,
+          hd: car.hd,
+        })
+      }
+    }
+  }
+  car.crew = []
+}
+
 const presence = new Map<string, WirePresence>() // handle -> record (one walker, one row)
 
 /** THE LAST MOMENT — a body's final honest position, kept so a reconnecting
  *  walker STANDS where they last stood instead of blinking to (0,0). Memory
  *  only (the ephemeral law): three numbers per claimed walker, no rows. */
 const lastMoment = new Map<string, { x: number; z: number; hd: number }>()
+
+/** THE CREW ZONE — the door-side wrapper of the pure law: while EITHER
+ *  mouth sits in a live car, both must share the crew (crewVoiceOk
+ *  verbatim); on foot, the street walkie's own law already ruled. */
+function crewZoneOk(meHandle: string, meBand: LiveBand, peerHandle: string, peerBand: LiveBand): boolean {
+  const myCrew = crewKeyOf(meHandle)
+  const peerCrew = crewKeyOf(peerHandle)
+  if (!myCrew && !peerCrew) return true // nobody is aboard — the street walkie rules
+  return crewVoiceOk({ meBand, peerBand, myCrew, peerCrew })
+}
 
 function sweepPresence(io: Server): boolean {
   const now = Date.now()
@@ -417,6 +552,13 @@ function sweepPresence(io: Server): boolean {
       // a connected socket IS presence — the TTL only ever sweeps zombies
       p.ts = now
       continue
+    }
+    // W10-b — the zombie's car ends honestly: the crew is put down where
+    // the car stands, and the parked row keeps the car visible.
+    if (p.car) {
+      dropCrew(io, p.car, handle)
+      vehiclePersist(p.car, handle)
+      broadcastParked(io, p.street, p.car, handle)
     }
     presence.delete(handle)
     changed = true
@@ -432,7 +574,7 @@ function sweepPresence(io: Server): boolean {
 function rosterFor(street?: string) {
   return [...presence.values()]
     .filter((p) => (street ? p.street === street : true))
-    .map(({ handle, band, street: st, status, voiceOn, ts, x, z, hd, mv, hasPos, displayName, look, car }) => ({
+    .map(({ handle, band, street: st, status, voiceOn, ts, x, z, hd, mv, hasPos, displayName, look, car, riding }) => ({
       handle,
       band,
       street: st,
@@ -446,7 +588,23 @@ function rosterFor(street?: string) {
       look,
       // W10 — THE WHEELS' SEED: the car rides the same push (the face of
       // it + the spot it stands at); the wire:car lane is deltas only.
-      ...(car ? { car: { model: car.model, plate: car.plate, paint: car.paint, x: car.x, z: car.z, hd: car.hd, mv: car.mv } } : {}),
+      ...(car
+        ? {
+            car: {
+              model: car.model,
+              plate: car.plate,
+              paint: car.paint,
+              x: car.x,
+              z: car.z,
+              hd: car.hd,
+              mv: car.mv,
+              seatsOpen: car.seatsOpen, // W10-b — the standing consent rides the seed
+            },
+          }
+        : {}),
+      // W10-b — THE RIDE rides the passenger's own row (the crew truth is
+      // derivable: everybody whose riding.driver is the same handle).
+      ...(riding ? { riding } : {}),
     }))
 }
 
@@ -902,10 +1060,11 @@ io.on('connection', (socket) => {
    * (guest-mic-dark — the spectate law: guests watch, never walk). ── */
   socket.on('pos', (raw: unknown, ack?: (r: unknown) => void) => {
     if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
-    // W10 — THE CARRIED LAW: while my car is live on the wire, my BODY
-    // lane is silent — the walker is IN the car (the client's own sender
-    // pauses; this door is the backstop the suite proves).
-    if (presence.get(identity.handle!)?.car) return ack?.({ ok: false, why: 'carried' })
+    // W10/W10-b — THE CARRIED LAW: while my car is live on the wire — or
+    // I ride in somebody's — my BODY lane is silent (the walker is IN a
+    // car; the client's own sender pauses; this door is the backstop).
+    const carriedMe = presence.get(identity.handle!)
+    if (carriedMe?.car || carriedMe?.riding) return ack?.({ ok: false, why: 'carried' })
     if (!allow('pos')) return ack?.({ ok: false, why: 'too-fast' })
     if (!posOk(raw)) return ack?.({ ok: false, why: 'bad-pos' })
     const p = presence.get(identity.handle!)
@@ -941,8 +1100,17 @@ io.on('connection', (socket) => {
     if (!v.ok) return ack?.(v)
     const p = presence.get(identity.handle!)
     if (!p) return ack?.({ ok: false, why: 'no-street' })
+    // W10-b — THE PLATE OWNERSHIP LAW at the hello too: the plate this
+    // hello carries must not be another citizen's row (the DMV's eye at
+    // every door that writes a plate — the upsert below must never clone one).
+    if (!plateOwnershipOk(v.plate, identity.handle!, v.model, plateOwnerOf(v.plate))) {
+      return ack?.({ ok: false, why: 'plate-taken' })
+    }
     // switching cars persists the old one's last park first (the row is sacred)
-    if (p.car && p.car.model !== v.model) vehiclePersist(p.car, identity.handle!)
+    if (p.car && p.car.model !== v.model) {
+      dropCrew(io, p.car, identity.handle!)
+      vehiclePersist(p.car, identity.handle!)
+    }
     const row = vehicleRowOf(identity.handle!, v.model)
     p.car = {
       model: v.model,
@@ -956,6 +1124,8 @@ io.on('connection', (socket) => {
       odo: typeof row?.odometer === 'number' ? row.odometer : 0,
       fuel: typeof row?.fuel === 'number' ? row.fuel : 1,
       condition: typeof row?.condition === 'number' ? row.condition : 1,
+      seatsOpen: false, // W10-b — consent is EXPLICIT: every hello starts shut
+      crew: [],
     }
     // THE PARK LAW: a parked hello is a park — the row persists at once
     if (!v.pos.mv) vehiclePersist(p.car, identity.handle!)
@@ -986,7 +1156,7 @@ io.on('connection', (socket) => {
     p.car.odo += step.moved
     // THE PARK LAW: the move→stop transition persists the row ONCE
     if (isParkTransition(wasMoving, raw.mv)) vehiclePersist(p.car, identity.handle!)
-    const payload = { h: identity.handle, model: p.car.model, plate: p.car.plate, paint: p.car.paint, x: p.car.x, z: p.car.z, hd: p.car.hd, mv: p.car.mv }
+    const payload = { h: identity.handle, model: p.car.model, plate: p.car.plate, paint: p.car.paint, x: p.car.x, z: p.car.z, hd: p.car.hd, mv: p.car.mv, seatsOpen: p.car.seatsOpen }
     for (const o of presence.values()) {
       if (o.handle === identity.handle || o.street !== p.street || !o.sid) continue
       if (!bodyRelayOk(edgeGet(identity.handle!, o.handle)?.state === 'blocked' || edgeGet(o.handle, identity.handle!)?.state === 'blocked')) continue
@@ -996,17 +1166,160 @@ io.on('connection', (socket) => {
   })
 
   /* ── W10 THE BYE DOOR — the engine dies with MY hand: exit the world,
-   * the menu, or the garage's own off switch. The row persists (the car
-   * stays where it stopped), the seed leaves the roster. ── */
+   *   the menu, or the garage's own off switch. The row persists (the car
+   *   stays where it stopped), the seed leaves the roster — and (W10-b)
+   *   the crew is put down where the car stands, while the PARKED
+   *   BROADCAST keeps the car visible to the street it stopped on. ── */
   socket.on('vehicle:bye', (_raw: unknown, ack?: (r: unknown) => void) => {
     if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
     const p = presence.get(identity.handle!)
     if (p?.car) {
+      dropCrew(io, p.car, identity.handle!)
       vehiclePersist(p.car, identity.handle!)
+      broadcastParked(io, p.street, p.car, identity.handle!)
       p.car = null
       broadcastRoster(io)
     }
     ack?.({ ok: true })
+  })
+
+  /* ── W10-b THE SEATS DOOR — the driver's standing consent. THE HIJACK
+   *   LAW: consent or nothing — the toggle is the driver's own hand, the
+   *   car must be live, and the roster re-pushes so the street's chips
+   *   read the same truth. ── */
+  socket.on('vehicle:seats', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('board')) return ack?.({ ok: false, why: 'too-fast' })
+    const p = presence.get(identity.handle!)
+    if (!p?.car) return ack?.({ ok: false, why: 'no-car' })
+    const body = (raw ?? {}) as { open?: unknown }
+    p.car.seatsOpen = body.open === true
+    broadcastRoster(io)
+    ack?.({ ok: true, seatsOpen: p.car.seatsOpen })
+  })
+
+  /* ── W10-b THE BOARD DOOR — ride shotgun. THE BOARD VERDICT verbatim
+   *   (no-car → guest-dark → already-aboard → blocked → seats-shut →
+   *   moving → full), THE SAME-STREET WALL (you board a car you can
+   *   walk up to), and THE CREW: the passenger's own row carries the
+   *   ride; the body lane refuses 'carried' from this instant. ── */
+  socket.on('vehicle:board', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-dark' })
+    if (!allow('board')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { handle?: unknown }
+    const driver = socialNorm(body.handle)
+    if (!driver || driver === identity.handle!) return ack?.({ ok: false, why: 'no-car' })
+    const dp = presence.get(driver)
+    const car = dp?.car ?? null
+    const me = presence.get(identity.handle!)
+    if (!me) return ack?.({ ok: false, why: 'no-street' })
+    if (!dp || !car || dp.street !== me.street) return ack?.({ ok: false, why: 'not-here' })
+    const blockedEitherWay =
+      edgeGet(identity.handle!, driver)?.state === 'blocked' || edgeGet(driver, identity.handle!)?.state === 'blocked'
+    const v = boardVerdict({
+      band: identity.band,
+      model: car.model,
+      carLive: true,
+      carMv: car.mv,
+      seatsOpen: car.seatsOpen,
+      seated: car.crew.length,
+      blocked: blockedEitherWay,
+      alreadyAboard: !!me.riding || !!me.car,
+    })
+    if (!v.ok) return ack?.(v)
+    me.riding = { driver, model: car.model, plate: car.plate }
+    car.crew.push(identity.handle!)
+    broadcastRoster(io)
+    pushCarCrew(io, dp.sid, driver, car, 'board', identity.handle!, me.displayName)
+    ack?.({
+      ok: true,
+      seat: v.seat,
+      car: { model: car.model, plate: car.plate, paint: car.paint, x: car.x, z: car.z, hd: car.hd },
+    })
+  })
+
+  /* ── W10-b THE UNBOARD DOOR — step off where the car STANDS. A moving
+   *   danfo drops nobody (the verdict mirrors the boarding wall); the
+   *   ack carries the car's pose so the walker lands BESIDE it. ── */
+  socket.on('vehicle:unboard', (_raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-dark' })
+    if (!allow('board')) return ack?.({ ok: false, why: 'too-fast' })
+    const me = presence.get(identity.handle!)
+    if (!me?.riding) return ack?.({ ok: false, why: 'not-riding' })
+    const driver = me.riding.driver
+    const dp = presence.get(driver)
+    const car = dp?.car ?? null
+    const u = unboardVerdict(true, car?.mv === true)
+    if (!u.ok) return ack?.(u)
+    const pose = car ? { x: car.x, z: car.z, hd: car.hd } : null
+    if (car) {
+      car.crew = car.crew.filter((h) => h !== identity.handle!)
+      pushCarCrew(io, dp!.sid, driver, car, 'unboard', identity.handle!)
+    }
+    me.riding = null
+    broadcastRoster(io)
+    ack?.({ ok: true, ...(pose ?? {}) })
+  })
+
+  /* ── W10-b THE DMV DOOR — the paint and the plate, server truth. THE
+   *   DMV VERDICT verbatim (claimed only, real model, paint law, plate
+   *   law), THE OWNERSHIP WALL (not-yours), THE PLATE UNIQUENESS WALL
+   *   (one plate, one row), and a LIVE car wears the new face at once
+   *   (the roster re-push repaints every street rig in one beat). ── */
+  socket.on('vehicle:patch', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-dark' })
+    if (!allow('patch')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { model?: unknown; paint?: unknown; plate?: unknown }
+    const v = patchVerdict({ band: identity.band, model: body.model, paint: body.paint, plate: body.plate })
+    if (!v.ok) return ack?.(v)
+    const row = vehicleRowOf(identity.handle!, v.model)
+    if (!row) return ack?.({ ok: false, why: 'not-yours' })
+    if (v.plate !== undefined && !plateOwnershipOk(v.plate, identity.handle!, v.model, plateOwnerOf(v.plate))) {
+      return ack?.({ ok: false, why: 'plate-taken' })
+    }
+    const nextPlate = v.plate ?? row.plate
+    const nextPaint = v.paint ?? row.paint
+    try {
+      db
+        .query('UPDATE VehicleRow SET plate = ?, paint = ?, updatedAt = ? WHERE handle = ? AND model = ?')
+        .run(nextPlate, nextPaint, Date.now(), identity.handle!, v.model)
+    } catch {
+      return ack?.({ ok: false, why: 'dmv-down' })
+    }
+    const p = presence.get(identity.handle!)
+    if (p?.car && p.car.model === v.model) {
+      p.car.plate = nextPlate
+      p.car.paint = nextPaint
+      broadcastRoster(io)
+    }
+    ack?.({ ok: true, plate: nextPlate, paint: nextPaint })
+  })
+
+  /* ── W10-b THE PARKED SPAWN DOOR — the city keeps its cars. A walker
+   *   asks for the parked rows NEAR them (the range law's own 90u, the
+   *   disk's honest box query), the seed law dedupes the LIVE roster (a
+   *   live car wins its own row), the cap keeps the wire thin. ── */
+  socket.on('vehicle:parked', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-dark' })
+    if (!allow('board')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { x?: unknown; z?: unknown }
+    const x = Number(body.x)
+    const z = Number(body.z)
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return ack?.({ ok: false, why: 'bad-pos' })
+    const half = 200 // the box the SQL prunes; the seed law's 90u decides the rest
+    let rows: ParkedSeed[] = []
+    try {
+      rows = db
+        .query(
+          'SELECT handle, model, plate, paint, x, z, hd, odometer, fuel, condition FROM VehicleRow WHERE x BETWEEN ? AND ? AND z BETWEEN ? AND ?',
+        )
+        .all(x - half, x + half, z - half, z + half) as unknown as ParkedSeed[]
+    } catch {
+      rows = []
+    }
+    const liveKeys = new Set<string>()
+    for (const p of presence.values()) if (p.car) liveKeys.add(`${p.handle}\u0000${p.car.model}`)
+    ack?.({ ok: true, parked: parkedSeedsNear(rows, x, z, liveKeys) })
   })
 
   /* ── W2 THE WHERE DOOR — the join-teleport law. Where does my paddy
@@ -1542,6 +1855,12 @@ io.on('connection', (socket) => {
     const from = presence.get(identity.handle!) ?? null
     const target = presence.get(socialNorm(body.to)) ?? null
     if (!pvRelayOk(from, target)) return ack?.({ ok: false, why: 'voice-dark' })
+    // W10-b — THE INTERIOR ZONE: while either mouth sits in a live car
+    // (driving or riding), the envelope must stay INSIDE that crew — the
+    // street walkie hears the car, not the whole road.
+    if (!crewZoneOk(identity.handle!, identity.band, target!.handle, target!.band)) {
+      return ack?.({ ok: false, why: 'not-crew' })
+    }
     pushPv(io, target!.handle, { type: 'pv-offer', from: identity.handle!, sdp: body.sdp })
     ack?.({ ok: true })
   })
@@ -1555,6 +1874,9 @@ io.on('connection', (socket) => {
     const from = presence.get(identity.handle!) ?? null
     const target = presence.get(socialNorm(body.to)) ?? null
     if (!pvRelayOk(from, target)) return ack?.({ ok: false, why: 'voice-dark' })
+    if (!crewZoneOk(identity.handle!, identity.band, target!.handle, target!.band)) {
+      return ack?.({ ok: false, why: 'not-crew' })
+    }
     pushPv(io, target!.handle, { type: 'pv-answer', from: identity.handle!, sdp: body.sdp })
     ack?.({ ok: true })
   })
@@ -1567,6 +1889,9 @@ io.on('connection', (socket) => {
     const from = presence.get(identity.handle!) ?? null
     const target = presence.get(socialNorm(body.to)) ?? null
     if (!pvRelayOk(from, target)) return ack?.({ ok: false, why: 'voice-dark' })
+    if (!crewZoneOk(identity.handle!, identity.band, target!.handle, target!.band)) {
+      return ack?.({ ok: false, why: 'not-crew' })
+    }
     pushPv(io, target!.handle, { type: 'pv-ice', from: identity.handle!, candidate: body.candidate })
     ack?.({ ok: true })
   })
@@ -1819,9 +2144,14 @@ io.on('connection', (socket) => {
     if (claimed && p && p.sid === socket.id) {
       // THE LAST MOMENT survives the goodbye — the re-hello law reads it
       if (p.hasPos) lastMoment.set(identity.handle!, { x: p.x, z: p.z, hd: p.hd })
-      // W10 — THE PARK LAW's last word: the goodbye persists the car where
-      // it stopped (the disk row is the truth a reconnect reads back).
-      if (p.car) vehiclePersist(p.car, identity.handle!)
+      // W10/W10-b — THE PARK LAW's last word: the goodbye persists the car
+      // where it stopped, the crew is put down honestly, and the PARKED
+      // BROADCAST keeps the car visible to the street it stopped on.
+      if (p.car) {
+        dropCrew(io, p.car, identity.handle!)
+        vehiclePersist(p.car, identity.handle!)
+        broadcastParked(io, p.street, p.car, identity.handle!)
+      }
       presence.delete(identity.handle!)
       broadcastRoster(io)
     }

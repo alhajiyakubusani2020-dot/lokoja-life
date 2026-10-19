@@ -39,10 +39,11 @@ import { bumpHeightAt, BUMP_AMPLITUDE } from '@/game/world3d/junctions' // W3 �
 import { bridgeDeckY, cameraObstructionT, resolvePosition } from '@/game/world3d/collision'
 import { useGameStore } from '@/game/store/useGameStore'
 import {
-  addDriveMeters, consumeEnterRequest, consumeParkRequest, getDriveMeters, isDriveActive,
+  addDriveMeters, consumeEnterRequest, consumeParkRequest, freezeInput, getDriveMeters, isDriveActive,
   reportDriveSpeed, reportNearVehicle, reportPlayerPos, playerPos, readMoveInput, resetDriveMeters,
-  setDriveActive, setDriveSeat,
+  requestE2eTeleport, setDriveActive, setDriveSeat,
 } from './controls'
+import { myRideState, sampleCar } from '@/game/systems/wheelnet' // W10-b — the passenger seat
 
 /* ------------------------------- feel constants ------------------------------- */
 
@@ -55,6 +56,12 @@ const RESPAWN_FAR = 60 // parked farther than this from you → re-spot nearby
 const CHASE_DIST = 7.4
 const CHASE_HEIGHT = 3.05
 const FOV_BASE = 55
+
+/* W10-b — the passenger seat hangs ON the rig (the honest danfo ride):
+ * seat 0 left, seat 1 right, seat 2 back — and the reach per model (the
+ * okada's pillion rides BEHIND the rider, the cars take the running board). */
+const SEAT_SIDE = ['left', 'right', 'back'] as const
+const SEAT_DIST: Record<string, number> = { okada: 1.15, keke: 1.2, taxi: 1.4, danfo: 1.65 }
 
 /** react-hooks/immutability guards hook values from stray writes — animating
  *  the canvas camera's fov goes through this sanctioned module helper */
@@ -225,6 +232,9 @@ export function DriveSystem({
   const parkVehicleRef = useRef<() => void>(null)
   const frameRef = useRef(0)
   const spawnedThisVisit = useRef(false)
+  // W10-b — the passenger seat: whose car I follow + where it last stood
+  const rideRef = useRef<string | null>(null)
+  const rideLastSample = useRef<{ x: number; z: number; hd: number } | null>(null)
   const humRef = useRef<DriveHum | null>(null)
   const soundRef = useRef(soundOn)
   const scratch = useRef({
@@ -414,6 +424,43 @@ export function DriveSystem({
     const wantEnter = consumeEnterRequest()
     if (wantEnter && !d.active) enterVehicle(wantEnter)
     if (consumeParkRequest() && d.active) parkVehicle()
+
+    /* ---- W10-b — THE PASSENGER SEAT: riding somebody's stopped car ----
+     * While myRide lives, the walker controller is FROZEN and the body
+     * teleports each frame to the car's own buffer sample (the E2E
+     * teleport seam — the controller keeps its truth, we just aim it).
+     * The seat hangs ON the rig: okada behind the rider, keke/taxi/danfo
+     * on the running board — the honest danfo ride, visible, no ghost
+     * beside the car. The body lane is silent (the carried law); on
+     * unboard/drop the body steps off where the car STANDS. */
+    const ride = myRideState()
+    if (ride && !d.active) {
+      if (!rideRef.current) {
+        rideRef.current = ride.driver
+        freezeInput(true)
+      }
+      const s = sampleCar(ride.driver)
+      if (s) {
+        rideLastSample.current = { x: s.x, z: s.z, hd: s.hd }
+        const side = SEAT_SIDE[ride.seat % 3] ?? 'left'
+        const dist = SEAT_DIST[ride.model] ?? 1.3
+        const sin = Math.sin(s.hd)
+        const cos = Math.cos(s.hd)
+        // heading 0 faces +z; left = +cos/-sin, right = −cos/+sin, back = −forward
+        const ox = side === 'left' ? cos * dist : side === 'right' ? -cos * dist : -sin * dist
+        const oz = side === 'left' ? -sin * dist : side === 'right' ? sin * dist : -cos * dist
+        requestE2eTeleport(s.x + ox, s.z + oz)
+      }
+    } else if (rideRef.current && !ride) {
+      // the ride ended (my hop-off ack, the crew drop, or the wire's own
+      // roster backstop): the input unfreezes and the body lands where
+      // the car last stood — never inside its geometry, never at (0,0)
+      rideRef.current = null
+      freezeInput(false)
+      const last = rideLastSample.current
+      if (last) requestE2eTeleport(last.x + 1.2, last.z + 1.2)
+      rideLastSample.current = null
+    }
 
     // world entry: once the walking controller has reported a real position,
     // the last-driven ride waits parked by the roadside nearby

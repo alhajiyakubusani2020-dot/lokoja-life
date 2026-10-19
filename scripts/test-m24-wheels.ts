@@ -67,6 +67,10 @@ import {
   PAINT_VOCAB,
 } from '../src/game/systems/wheels'
 
+// W10-b — the plate is UNIQUE property: a per-run plate the disk has never met
+const RUN_PLATE = `LKO-${Date.now().toString(36).slice(-4).toUpperCase()}-Z`
+const RUN_PLATE_B = `LKO-${Date.now().toString(36).slice(-4).toUpperCase()}-X`
+
 const BASE = 'http://localhost:3000'
 const WIRE = 'http://localhost:3005'
 const WIRE_PORT = 3005
@@ -97,10 +101,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 section('PURE 1. the hello verdict matrix')
 {
   const pos = { x: 10, z: 10, hd: 0.3, mv: false }
-  const base = { model: 'okada', plate: 'LKO-419-AB', paint: '1', pos }
+  const base = { model: 'okada', plate: RUN_PLATE, paint: '1', pos }
   check('an adult claims their wheels', carHelloVerdict({ band: 'adult', ...base }).ok === true)
   const ok = carHelloVerdict({ band: 'adult', ...base })
-  check('the ok carries the validated shape', ok.ok === true && ok.ok && ok.model === 'okada' && ok.plate === 'LKO-419-AB' && ok.paint === '1' && ok.pos.mv === false)
+  check('the ok carries the validated shape', ok.ok === true && ok.ok && ok.model === 'okada' && ok.plate === RUN_PLATE && ok.paint === '1' && ok.pos.mv === false)
   const g1 = carHelloVerdict({ band: 'guest', ...base })
   check('a guest stays dark', !g1.ok && g1.why === 'guest-mic-dark')
   const k1 = carHelloVerdict({ band: 'kid', ...base })
@@ -123,7 +127,7 @@ section('PURE 1. the hello verdict matrix')
 
 section('PURE 2. the plate law (the generator AND the custom plate, one wall)')
 {
-  check("the generator's shape fits", plateOk('LKO-419-AB') === true)
+  check("the generator's shape fits", plateOk(RUN_PLATE) === true)
   check('a custom plate fits', plateOk('MY-RIDE-9') === true)
   check('a short custom fits', plateOk('AB12') === true)
   check('lowercase refuses (the wall is uppercase)', plateOk('lko-123-ab') === false)
@@ -341,12 +345,12 @@ try {
   const hb = await emit(sb, 'hello', { street: 'kpata-market' })
   const ht = await emit(st, 'hello', { street: 'patti' })
   check('three walkers claim their streets (A+B market, T patti)', !!ha.ok && !!hb.ok && !!ht.ok)
-  const vhello = await emit(sa, 'vehicle:hello', { model: 'okada', plate: 'LKO-419-AB', paint: '1', x: 10, z: 10, hd: 0.3, mv: false })
+  const vhello = await emit(sa, 'vehicle:hello', { model: 'okada', plate: RUN_PLATE, paint: '1', x: 10, z: 10, hd: 0.3, mv: false })
   check('A claims their okada (the door accepts)', vhello.ok === true, JSON.stringify(vhello))
   const readback = (vhello.car ?? null) as { model?: string; plate?: string; paint?: string; fuel?: number; condition?: number; odometer?: number } | null
-  check('THE READBACK LAW: the ack carries the DISK truth (a fresh row: fuel 1, odometer 0)', !!readback && readback.model === 'okada' && readback.plate === 'LKO-419-AB' && readback.paint === '1' && readback.fuel === 1 && readback.condition === 1 && readback.odometer === 0, JSON.stringify(readback))
+  check('THE READBACK LAW: the ack carries the DISK truth (a fresh row: fuel 1, odometer 0)', !!readback && readback.model === 'okada' && readback.plate === RUN_PLATE && readback.paint === '1' && readback.fuel === 1 && readback.condition === 1 && readback.odometer === 0, JSON.stringify(readback))
   const rowNow = carRow(A, 'okada')
-  check('THE PARK LAW: a parked hello persists the row at once', !!rowNow && rowNow.plate === 'LKO-419-AB' && rowNow.paint === '1' && Math.abs(rowNow.x - 10) < 1e-6 && Math.abs(rowNow.z - 10) < 1e-6, JSON.stringify(rowNow))
+  check('THE PARK LAW: a parked hello persists the row at once', !!rowNow && rowNow.plate === RUN_PLATE && rowNow.paint === '1' && Math.abs(rowNow.x - 10) < 1e-6 && Math.abs(rowNow.z - 10) < 1e-6, JSON.stringify(rowNow))
 
   section('11+12. THE ADULT-HANDS LAW + the face laws at the REAL door')
   const teenHello = await emit(st, 'vehicle:hello', { model: 'keke', plate: 'TEEN-RIDE', paint: 'stock', x: 12, z: 12, hd: 0, mv: false })
@@ -355,9 +359,9 @@ try {
   check('a guest stays dark at the car door', guestHello.ok === false && guestHello.why === 'guest-mic-dark')
   const badPlate = await emit(sa, 'vehicle:hello', { model: 'okada', plate: 'no spaces!', paint: '', x: 10, z: 10, hd: 0, mv: false })
   check('a bad plate refuses at the door', badPlate.ok === false && badPlate.why === 'bad-plate')
-  const badPaint = await emit(sa, 'vehicle:hello', { model: 'okada', plate: 'LKO-419-AB', paint: 'gold-flake', x: 10, z: 10, hd: 0, mv: false })
+  const badPaint = await emit(sa, 'vehicle:hello', { model: 'okada', plate: RUN_PLATE, paint: 'gold-flake', x: 10, z: 10, hd: 0, mv: false })
   check('an invented paint refuses at the door', badPaint.ok === false && badPaint.why === 'bad-paint')
-  const badModel = await emit(sa, 'vehicle:hello', { model: 'jet', plate: 'LKO-419-AB', paint: '', x: 10, z: 10, hd: 0, mv: false })
+  const badModel = await emit(sa, 'vehicle:hello', { model: 'jet', plate: RUN_PLATE, paint: '', x: 10, z: 10, hd: 0, mv: false })
   check('an invented model refuses at the door', badModel.ok === false && badModel.why === 'bad-model')
 
   section('13+14. the 12Hz relay + the street law')
@@ -366,7 +370,7 @@ try {
   const tick1 = await emit(sa, 'vehicle:pos', { x: 10.3, z: 10, hd: 0.3, mv: true })
   const got1 = await flow
   check('the wheel tick relays (the door accepts)', tick1.ok === true)
-  check('B hears A\'s wheels sub-second, FULL FACE', !!got1 && got1.p.model === 'okada' && got1.p.plate === 'LKO-419-AB' && got1.p.paint === '1' && got1.p.mv === true && Math.abs(got1.p.x - 10.3) < 1e-6, JSON.stringify(got1?.p))
+  check('B hears A\'s wheels sub-second, FULL FACE', !!got1 && got1.p.model === 'okada' && got1.p.plate === RUN_PLATE && got1.p.paint === '1' && got1.p.mv === true && Math.abs(got1.p.x - 10.3) < 1e-6, JSON.stringify(got1?.p))
   check('the relay is SUB-SECOND', !!got1 && got1.dt < 1000, `dt=${got1?.dt}ms`)
 
   section('15. THE N12 LAW AT THE DOOR — the cheat leap scales back')
@@ -401,7 +405,7 @@ try {
 
   section('17. THE PARK LAW ON DISK — the row is the truth a reconnect reads')
   // re-hello (drive again), move lawfully, then PARK
-  await emit(sa, 'vehicle:hello', { model: 'okada', plate: 'LKO-419-AB', paint: '1', x: 10, z: 10, hd: 0.3, mv: true })
+  await emit(sa, 'vehicle:hello', { model: 'okada', plate: RUN_PLATE, paint: '1', x: 10, z: 10, hd: 0.3, mv: true })
   await sleep(90)
   await emit(sa, 'vehicle:pos', { x: 10.5, z: 10, hd: 0.3, mv: true })
   await sleep(90)
@@ -411,10 +415,10 @@ try {
   await parkWatch
   check('the park tick relays (mv=false rides once)', parkTick.ok === true)
   const rowParked = carRow(A, 'okada')
-  check('THE PARK ROW: the stop persists the spot + the face', !!rowParked && Math.abs(rowParked.x - 10.8) < 1e-6 && rowParked.plate === 'LKO-419-AB' && rowParked.paint === '1', JSON.stringify(rowParked))
+  check('THE PARK ROW: the stop persists the spot + the face', !!rowParked && Math.abs(rowParked.x - 10.8) < 1e-6 && rowParked.plate === RUN_PLATE && rowParked.paint === '1', JSON.stringify(rowParked))
   check('THE HONEST ODOMETER: the row keeps the CLAMPED metres (>0, sane)', !!rowParked && rowParked.odometer > 0 && rowParked.odometer < 5, `odo=${rowParked?.odometer}`)
   // the goodbye's last word: disconnect with the car live persists again
-  await emit(sa, 'vehicle:hello', { model: 'okada', plate: 'LKO-419-AB', paint: '1', x: 20, z: 20, hd: 0, mv: true })
+  await emit(sa, 'vehicle:hello', { model: 'okada', plate: RUN_PLATE, paint: '1', x: 20, z: 20, hd: 0, mv: true })
   await sleep(80)
   sa.disconnect()
   await sleep(400)
@@ -428,7 +432,7 @@ try {
   const rosterE = ((he.roster as RosterRow[]) ?? [])
   // A disconnected above — hello a fresh driver instead: B borrows the wheel? No —
   // B claims their OWN keke parked (mv=false), then E sees B's car in the roster.
-  const bcar = await emit(sb, 'vehicle:hello', { model: 'keke', plate: 'LKO-222-CD', paint: 'stock', x: 15, z: 15, hd: 0.9, mv: false })
+  const bcar = await emit(sb, 'vehicle:hello', { model: 'keke', plate: RUN_PLATE_B, paint: 'stock', x: 15, z: 15, hd: 0.9, mv: false })
   check('B claims their keke (parked)', bcar.ok === true)
   const rosterNow = await (async () => {
     const se2 = await connect(te)
@@ -436,7 +440,7 @@ try {
     se2.disconnect()
     return ((h2.roster as RosterRow[]) ?? []).find((r) => r.handle === B)?.car ?? null
   })()
-  check('THE SEED LAW: the roster carries the car (face + spot) to a walker who arrived LATER', !!rosterNow && rosterNow.model === 'keke' && rosterNow.plate === 'LKO-222-CD' && Math.abs(rosterNow.x - 15) < 1e-6 && rosterNow.mv === false, JSON.stringify(rosterNow))
+  check('THE SEED LAW: the roster carries the car (face + spot) to a walker who arrived LATER', !!rosterNow && rosterNow.model === 'keke' && rosterNow.plate === RUN_PLATE_B && Math.abs(rosterNow.x - 15) < 1e-6 && rosterNow.mv === false, JSON.stringify(rosterNow))
   se.disconnect()
 
   section('19. the block wall covers the driveway')
@@ -445,7 +449,7 @@ try {
   const se2 = await connect(te)
   await emit(se2, 'hello', { street: 'kpata-market' })
   const eSilent = silenceCar(se2, B, 800)
-  await emit(sb, 'vehicle:hello', { model: 'keke', plate: 'LKO-222-CD', paint: 'stock', x: 15.5, z: 15, hd: 0.9, mv: true })
+  await emit(sb, 'vehicle:hello', { model: 'keke', plate: RUN_PLATE_B, paint: 'stock', x: 15.5, z: 15, hd: 0.9, mv: true })
   await sleep(80)
   await emit(sb, 'vehicle:pos', { x: 15.9, z: 15, hd: 0.9, mv: true })
   check('the blocked pair shares NO car (the wall walks the driveway)', await eSilent)

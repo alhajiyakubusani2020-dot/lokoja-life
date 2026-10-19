@@ -61,6 +61,9 @@ export interface WireRosterRow {
   // same push — the face of it + the spot it stands at; the wire:car lane
   // is deltas only after the seed.
   car?: WireCarSeed
+  // W10-b — THE RIDE: whose car carries me (the crew truth: everybody
+  // whose riding.driver is the same handle is one crew).
+  riding?: { driver: string; model: string; plate: string }
 }
 
 export interface WireCarSeed {
@@ -71,6 +74,21 @@ export interface WireCarSeed {
   z: number
   hd: number
   mv: boolean
+  seatsOpen?: boolean // W10-b — the standing consent rides the seed
+}
+
+/** W10-b — a parked row the disk kept (the persistence spawn's ghost) */
+export interface WireParkedRow {
+  handle: string
+  model: string
+  plate: string
+  paint: string
+  x: number
+  z: number
+  hd: number
+  odometer: number
+  fuel: number
+  condition: number
 }
 
 interface WireStore {
@@ -247,6 +265,20 @@ export function wireEnsure(
   s.on('wire:car', (p: WireCarPush) => {
     if (p && typeof p.h === 'string' && typeof p.model === 'string' && typeof p.x === 'number' && typeof p.z === 'number') {
       for (const fn of carFns) fn(p)
+    }
+  })
+
+  // W10-b: the crew lane — a member boarded, hopped off, or was dropped
+  s.on('wire:car-crew', (p: WireCarCrewPush) => {
+    if (p && typeof p.type === 'string' && typeof p.driver === 'string' && typeof p.who === 'string') {
+      for (const fn of carCrewFns) fn(p)
+    }
+  })
+
+  // W10-b: the parked lane — a car left behind stays visible where it stopped
+  s.on('wire:parked', (p: WireParkedPush) => {
+    if (p?.op === 'park' && p.row && typeof p.row.handle === 'string') {
+      for (const fn of parkedFns) fn(p)
     }
   })
 
@@ -458,6 +490,7 @@ export type WireCarPush = {
   z: number
   hd: number
   mv: boolean
+  seatsOpen?: boolean // W10-b — the standing consent rides the delta too
 }
 
 type CarFn = (p: WireCarPush) => void
@@ -467,6 +500,43 @@ export function wireOnCar(fn: CarFn): () => void {
   carFns.add(fn)
   return () => {
     carFns.delete(fn)
+  }
+}
+
+/* ── W10-b: the crew + parked lanes — the boarding face of the wire. ── */
+
+export type WireCarCrewPush = {
+  type: 'board' | 'unboard' | 'dropped'
+  driver: string
+  model: string
+  plate: string
+  crew: string[]
+  who: string
+  why?: string
+  x?: number // the dropped pose (the crew is put down where the car stands)
+  z?: number
+  hd?: number
+}
+
+type CarCrewFn = (p: WireCarCrewPush) => void
+const carCrewFns = new Set<CarCrewFn>()
+
+export function wireOnCarCrew(fn: CarCrewFn): () => void {
+  carCrewFns.add(fn)
+  return () => {
+    carCrewFns.delete(fn)
+  }
+}
+
+export type WireParkedPush = { op: 'park'; row: WireParkedRow }
+
+type ParkedFn = (p: WireParkedPush) => void
+const parkedFns = new Set<ParkedFn>()
+
+export function wireOnParked(fn: ParkedFn): () => void {
+  parkedFns.add(fn)
+  return () => {
+    parkedFns.delete(fn)
   }
 }
 
@@ -503,6 +573,44 @@ export function wireSendCarPos(p: { x: number; z: number; hd: number; mv: boolea
 /** THE CAR BYE — the engine dies with my hand; the row persists. */
 export function wireSendCarBye(): Promise<WireSendResult> {
   return wireEmitAck('vehicle:bye', {}) as Promise<WireSendResult>
+}
+
+/* ── W10-b: the boarding + DMV senders (the ack carries the verdict) ── */
+
+/** THE SEATS TOGGLE — the driver's standing consent, open or shut. */
+export function wireSendVehicleSeats(open: boolean): Promise<WireSendResult & { seatsOpen?: boolean }> {
+  return wireEmitAck('vehicle:seats', { open }) as Promise<WireSendResult & { seatsOpen?: boolean }>
+}
+
+export type BoardAck = WireSendResult & {
+  seat?: number
+  car?: { model: string; plate: string; paint: string; x: number; z: number; hd: number }
+}
+
+/** THE BOARD — ride a stopped, consenting car; the ack carries the pose. */
+export function wireSendVehicleBoard(driverHandle: string): Promise<BoardAck> {
+  return wireEmitAck('vehicle:board', { handle: driverHandle }) as Promise<BoardAck>
+}
+
+export type UnboardAck = WireSendResult & { x?: number; z?: number; hd?: number }
+
+/** THE UNBOARD — step off where the car stands; the ack carries the pose. */
+export function wireSendVehicleUnboard(): Promise<UnboardAck> {
+  return wireEmitAck('vehicle:unboard', {}) as Promise<UnboardAck>
+}
+
+/** THE DMV PATCH — the paint and the plate as SERVER truth (the uniqueness
+ *  wall is the wire's own eye; the ack carries the disk's answer). */
+export function wireSendVehiclePatch(
+  model: string,
+  style: { paint?: string; plate?: string },
+): Promise<WireSendResult & { plate?: string; paint?: string }> {
+  return wireEmitAck('vehicle:patch', { model, ...style }) as Promise<WireSendResult & { plate?: string; paint?: string }>
+}
+
+/** THE PARKED SPAWN QUERY — the parked rows near me (the disk's honest box). */
+export function wireSendVehicleParkedQuery(x: number, z: number): Promise<WireSendResult & { parked?: WireParkedRow[] }> {
+  return wireEmitAck('vehicle:parked', { x, z }) as Promise<WireSendResult & { parked?: WireParkedRow[] }>
 }
 
 /** THE WHERE DOOR — where does my paddy stand this second? */

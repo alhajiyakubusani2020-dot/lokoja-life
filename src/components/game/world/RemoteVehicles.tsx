@@ -38,7 +38,8 @@ import { heightAt } from '@/game/world3d/layout'
 import { bridgeDeckY } from '@/game/world3d/collision'
 import { playerPos } from './controls'
 import { carInRenderRange } from '@/game/systems/wheels'
-import { remoteCarList, remoteCarCount, useWheelsStore } from '@/game/systems/wheelnet'
+import { remoteCarList, remoteCarCount, useWheelsStore, parkedGhostByKey, wheelQueryParked } from '@/game/systems/wheelnet'
+import { useWireStore } from '@/game/systems/wire'
 import type { VehicleModel } from '@/game/types'
 
 /* --------------------------- the rig builder (paint law) --------------------------- */
@@ -183,20 +184,77 @@ function RemoteCarView({ handle }: { handle: string }) {
 
 const WHEEL_R: Record<VehicleModel, number> = { okada: 0.33, keke: 0.34, taxi: 0.34, danfo: 0.38 }
 
+/* ------------------------- W10-b — one parked ghost ------------------------- */
+
+/**
+ * THE PARKED GHOST VIEW — an ABSENT driver's disk row, spawned where the
+ * car was left: the same rig, the same plate tag, NO buffer (nothing
+ * moves), the same range law. A live roster row for the same (handle,
+ * model) erases the ghost client-side (the LIVE-WINS law in wheelnet) —
+ * here the ghost simply disappears with the key.
+ */
+function ParkedGhostView({ gkey }: { gkey: string }) {
+  const group = useRef<THREE.Group>(null)
+  const [, handle, model, plate, paint] = gkey.split('\u0000')
+  const rig = rigFor(model as VehicleModel, paint)
+
+  useFrame(() => {
+    const g = group.current
+    if (!g) return
+    const gh = parkedGhostByKey(gkey)
+    if (!gh) {
+      g.visible = false
+      return
+    }
+    if (!carInRenderRange(playerPos.x, playerPos.z, gh.x, gh.z)) {
+      g.visible = false
+      return
+    }
+    g.visible = true
+    g.position.set(gh.x, bridgeDeckY(gh.x, gh.z) ?? heightAt(gh.x, gh.z), gh.z)
+    g.rotation.y = gh.hd
+  })
+
+  if (!rig) return null
+  return (
+    <group ref={group} visible={false}>
+      <primitive object={rig.group} />
+      <PlateTag name={handle} plate={plate} />
+    </group>
+  )
+}
+
 /* ---------------------------------- the layer ---------------------------------- */
 
 /**
  * THE LAYER — mount inside the world canvas beside RemoteWalkers. Renders
- * one honest rig per roster car; the roster cadence mounts/unmounts the
- * delta only.
+ * one honest rig per roster car + one parked ghost per disk row; the
+ * roster cadence mounts/unmounts the delta only.
  */
 export function RemoteVehicles() {
   const count = useWheelsStore((s) => s.count)
   const plates = useWheelsStore((s) => s.plates)
+  const parkedKeys = useWheelsStore((s) => s.parkedKeys)
 
   useEffect(() => {
-    // the paint tag cache is a module truth — nothing to register here;
-    // the sender bracket lives in RemoteWalkers (one world, one bracket)
+    // W10-b — THE PARKED SPAWN: one honest query per world mount, landed
+    // when BOTH truths exist — a LIVE wire AND a real body pos (a query
+    // fired at (0,0) or before the handshake is a wasted beat). The
+    // wire:parked broadcast lane keeps the map warm after this first ask.
+    let alive = true
+    void (async () => {
+      for (let i = 0; i < 40 && alive; i++) {
+        const p = playerPos
+        if (useWireStore.getState().state === 'live' && (p.x !== 0 || p.z !== 0)) {
+          await wheelQueryParked(p.x, p.z)
+          return
+        }
+        await new Promise((r) => setTimeout(r, 1500))
+      }
+    })()
+    return () => {
+      alive = false
+    }
   }, [])
 
   const platesKey = plates.join('|')
@@ -209,6 +267,9 @@ export function RemoteVehicles() {
     <group>
       {handles.map((k) => (
         <RemoteCarView key={k} handle={k.split('\u0000')[0]} />
+      ))}
+      {parkedKeys.map((k) => (
+        <ParkedGhostView key={k} gkey={k} />
       ))}
     </group>
   )

@@ -64,7 +64,12 @@ console.log('\n— Vehicle catalog —')
   check('every model has speed/accel/handling + description', VEHICLES.every((v) => v.topSpeed > 0 && v.accel > 0 && v.handling > 0 && v.description.length > 10 && v.label.length > 3))
   const p1 = generatePlate('okada', 4, 1)
   check('plates are LKO-###-XX format', /^LKO-\d{3}-[A-N]{2}$/.test(p1))
-  check('plates deterministic for same inputs', generatePlate('okada', 4, 1) === p1)
+  // W10-b AMENDMENT (the W9 precedent): the plate became UNIQUE PROPERTY
+  // (one plate, one row — the wire's ownership wall), so the draw is RANDOM
+  // by law: a (day, index) formula handed TWO citizens the SAME plate. The
+  // old 'deterministic' pin pinned the bug — uniqueness is the new law.
+  const draws = Array.from({ length: 20 }, () => generatePlate('okada', 4, 1))
+  check('W10-b the DMV law: 20 draws, all lawful, effectively all distinct', draws.every((p) => /^LKO-\d{3}-[A-N]{2}$/.test(p)) && new Set(draws).size >= 18)
   check('plates differ across garage slots', generatePlate('okada', 4, 0) !== generatePlate('okada', 4, 1))
   check('drive energy config is gentler than walking', INTERIOR.gym.energy < 0 && INTERIOR.NIGHT_OUT.cost > 0 && INTERIOR.lounge.mood > INTERIOR.relax.tv.mood)
 }

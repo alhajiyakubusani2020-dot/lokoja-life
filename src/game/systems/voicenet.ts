@@ -46,6 +46,7 @@ import {
   type WirePvPush,
 } from './wire'
 import { PV_MESH_MAX } from './voice'
+import { wheelCrewHandles } from './wheelnet' // W10-b — the interior zone filter
 
 /* ───────────────────────── the shared microphone ───────────────────────── */
 
@@ -558,8 +559,19 @@ function hookPvPc(conn: PvConn): void {
   }
 }
 
+/* W10-b — THE INTERIOR ZONE (the client half): while I ride or drive,
+ * the walkie mesh only pairs me with MY OWN CREW (the server's envelope
+ * doors run the same law — a stranger's envelope never lands). On foot
+ * the filter reads null and the street walkie keeps its own law. */
+function crewZoneAllows(peer: string): boolean {
+  const crew = wheelCrewHandles()
+  if (!crew) return true
+  return crew.includes(peer)
+}
+
 async function pvDial(handle: string): Promise<void> {
   if (!pvActive || pvConns.has(handle) || pvConns.size >= PV_MESH_MAX) return
+  if (!crewZoneAllows(handle)) return
   let stream: MediaStream
   try {
     stream = await ensureMic()
@@ -580,6 +592,7 @@ async function pvDial(handle: string): Promise<void> {
 async function pvOnOffer(from: string, sdp: string): Promise<void> {
   if (!pvActive) return
   if (currentCall) return // THE PV PAUSE LAW
+  if (!crewZoneAllows(from)) return // W10-b — not my crew: the envelope never opens
   const me = handleProvider() ?? ''
   let conn = pvConns.get(from)
   if (!conn) {

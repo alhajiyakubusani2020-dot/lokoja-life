@@ -51,6 +51,7 @@ import { walkingEnergyCost, describeWalkSettle } from '../systems/world3d'
 import { DEFAULT_AVATAR } from '../data/avatar'
 import { VEHICLE_BY_MODEL, generatePlate } from '../data/vehicles'
 import { plateOk, paintOk } from '../systems/wheels'
+import { useWireStore, wireSendVehiclePatch } from '../systems/wire' // W10-b — the DMV sync rides the wire
 import { NPC_CHAT } from '../data/npcChat'
 import { NPC_BY_ID } from '../data/npcs'
 import { LOCATION_BY_ID } from '../data/locations'
@@ -1374,7 +1375,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       japa: save.japa ?? freshJapaState(),
       goals: save.goals ?? freshGoalState(),
       onboarding: save.onboarding ?? freshOnboardingState(),
-      account: save.account ? { ...freshAccountState(), ...save.account } : freshAccountState(),
+      // W1-b — THE LOGIN SURVIVES THE LOAD: a just-claimed/logged-in account's
+      // token is FRESHER than the save's own line (the register rotates the
+      // key; the save was written with the previous one). The save restores
+      // the IDENTITY; a live linked session keeps its own key — otherwise
+      // every return-login re-enters the wire as a guest (the W10-b
+      // reload witness caught this: guest-dark at the parked door).
+      account:
+        get().account.linked && save.account && save.account.handle === get().account.handle
+          ? get().account
+          : save.account
+            ? { ...freshAccountState(), ...save.account }
+            : freshAccountState(),
       shield: save.shield ?? freshShieldState(),
       fortress: save.fortress ?? freshFortressState(),
       cityPulse: save.cityPulse ?? freshPulseState(),
@@ -1961,7 +1973,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   /* W10 — THE WHEELS' FACE: the garage paints and plates through the SAME
    * laws the wire door runs (zero copies — an invented colour or a bad
-   * plate refuses before it ever reaches the street). */
+   * plate refuses before it ever reaches the street). W10-b: the patch
+   * also RIDES TO THE WIRE — the DMV door is the server's own eye (the
+   * plate uniqueness wall); a refusal REVERTS the local face so the save
+   * never disagrees with the disk. */
   setVehicleStyle: (vehicleId, style) => {
     const player = get().player
     if (!player) return false
@@ -1979,6 +1994,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().notify({ icon: '🎨', text: 'That colour no dey the book for this ride.', tone: 'bad' })
       return false
     }
+    const prevPaint = vehicle.paint ?? ''
+    const prevPlate = vehicle.plate
     const paint = style.paint !== undefined ? style.paint : (vehicle.paint ?? '')
     const plate = style.plate !== undefined ? style.plate.toUpperCase() : vehicle.plate
     set({
@@ -1990,6 +2007,39 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const def = VEHICLE_BY_MODEL[vehicle.model]
     get().notify({ icon: def.emoji, text: `${def.short} done — plate ${plate}. The street go see am.`, tone: 'good' })
     scheduleAutosave(get)
+    // W10-b — THE DMV SYNC: claimed + live only, fire-and-forget; the ack's
+    // refusal reverts the local face (the disk is the court of final appeal)
+    const { token } = get().account
+    if (token && useWireStore.getState().state === 'live') {
+      void wireSendVehiclePatch(vehicle.model, {
+        ...(style.paint !== undefined ? { paint } : {}),
+        ...(style.plate !== undefined ? { plate } : {}),
+      })
+        .then((r) => {
+          if (r.ok) return
+          const cur = get().player
+          if (!cur) return
+          set({
+            player: {
+              ...cur,
+              vehicles: cur.vehicles.map((v) =>
+                v.id === vehicleId ? { ...v, paint: prevPaint, plate: prevPlate } : v,
+              ),
+            },
+          })
+          const why =
+            r.why === 'plate-taken'
+              ? 'DMV: that plate don belong to another motor — pick another.'
+              : r.why === 'bad-plate'
+                ? 'DMV: the plate no follow the law.'
+                : 'DMV no gree — the old face stands.'
+          get().notify({ icon: '🚫', text: why, tone: 'bad' })
+          scheduleAutosave(get)
+        })
+        .catch(() => {
+          /* the wire hiccuped — the local face stands, the next hello reconciles */
+        })
+    }
     return true
   },
 

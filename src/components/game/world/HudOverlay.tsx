@@ -31,6 +31,10 @@ import { playerCountIn, wireToPresences, type WirePresenceRow } from '@/game/sys
 import { formatNaira } from '@/game/systems/progression'
 import { ambience } from '@/game/systems/ambience'
 import { audio } from '@/game/systems/audio'
+import {
+  boardableNear, wheelIsRiding, wheelRequestBoard, wheelRequestUnboard, wheelRequestSeats,
+} from '@/game/systems/wheelnet' // W10-b — the boarding chips read the net's own truth
+import { useWireStore } from '@/game/systems/wire'
 import { GaragePanel } from './GaragePanel'
 import { PerfChip } from './PerfChip'
 import {
@@ -41,8 +45,8 @@ import {
 import {
   attachControls, consumeInteract, cycleCamMode, freezeInput, getCamMode, getDriveModel,
   getDriveSpeed, getDriveStartedAt, getNearVehicle, getTutProgress, getWalkedMeters, isDriveActive,
-  isPhotoMode, playerPos, queueInteract, requestEnterVehicle, requestParkVehicle, resetTutProgress,
-  resetWalkedMeters, setJoystick, setPhotoMode, setSprint, speedToKmh, togglePhotoMode, CAM_MODES,
+  isPhotoMode, playerPos, queueInteract, requestE2eTeleport, requestEnterVehicle, requestParkVehicle,
+  resetTutProgress, resetWalkedMeters, setJoystick, setPhotoMode, setSprint, speedToKmh, togglePhotoMode, CAM_MODES,
 } from './controls'
 import { nearestPlate } from '@/game/world3d/plates' // W4 — the banner law
 
@@ -249,9 +253,15 @@ interface DriveUi {
   near: VehicleModel | null
   /** first-5-seconds drive hints */
   hints: boolean
+  /** W10-b — I ride in somebody's car right now (the body follows the wheels) */
+  riding: boolean
+  /** W10-b — a stopped, consenting car in walk-up range ("Board …" chip) */
+  boardable: { handle: string; name: string; model: VehicleModel; plate: string } | null
+  /** W10-b — my own live car's standing consent (the seats toggle's truth) */
+  seatsOpen: boolean | null
 }
 
-const DRIVE_UI_IDLE: DriveUi = { driving: false, model: null, near: null, hints: false }
+const DRIVE_UI_IDLE: DriveUi = { driving: false, model: null, near: null, hints: false, riding: false, boardable: null, seatsOpen: null }
 
 /** the motor park — the Vehicle Shop button lives within this radius */
 const SHOP_RADIUS = 28
@@ -553,19 +563,37 @@ export function HudOverlay({
 
       // STAGE 5 — drive chrome: poll the input layer, re-render on real changes only
       const driving = isDriveActive()
+      const riding = wheelIsRiding()
+      const boardable = !driving && !riding ? boardableNear(playerPos.x, playerPos.z) : null
+      // my own live car's consent — the roster row is the wire's truth
+      let seatsOpen: boolean | null = null
+      if (driving) {
+        const me = useGameStore.getState().account.handle
+        const row = me ? useWireStore.getState().roster.find((r) => r.handle === me) : null
+        seatsOpen = row?.car?.seatsOpen === true
+      }
       const dui: DriveUi = {
         driving,
         model: getDriveModel(),
-        near: driving ? null : getNearVehicle(),
+        near: driving || riding ? null : getNearVehicle(),
         hints:
           driving && getDriveStartedAt() > 0 && performance.now() - getDriveStartedAt() < 5200,
+        riding,
+        boardable: boardable
+          ? { handle: boardable.handle, name: boardable.name, model: boardable.model, plate: boardable.plate }
+          : null,
+        seatsOpen,
       }
       const prevDui = driveUiRef.current
       if (
         prevDui.driving !== dui.driving ||
         prevDui.model !== dui.model ||
         prevDui.near !== dui.near ||
-        prevDui.hints !== dui.hints
+        prevDui.hints !== dui.hints ||
+        prevDui.riding !== dui.riding ||
+        prevDui.seatsOpen !== dui.seatsOpen ||
+        prevDui.boardable?.handle !== dui.boardable?.handle ||
+        (dui.boardable && prevDui.boardable && prevDui.boardable.plate !== dui.boardable.plate)
       ) {
         driveUiRef.current = dui
         setDriveUi(dui)
@@ -675,7 +703,10 @@ export function HudOverlay({
   // STAGE 5 — your parked ride is close enough to enter; it wins the prompt slot
   const nearVehicleDef = driveUi.near ? VEHICLE_BY_MODEL[driveUi.near] : null
   const vehicleChip =
-    nearVehicleDef && panel.kind === 'none' && !driveUi.driving && !interior && !isTravelling && !photo
+    nearVehicleDef && panel.kind === 'none' && !driveUi.driving && !driveUi.riding && !interior && !isTravelling && !photo
+  const boardableDef = driveUi.boardable ? VEHICLE_BY_MODEL[driveUi.boardable.model] : null
+  const boardChip =
+    boardableDef && driveUi.boardable && panel.kind === 'none' && !driveUi.driving && !driveUi.riding && !vehicleChip && !interior && !isTravelling && !photo
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none" style={{ zIndex: 30 }}>
@@ -1006,7 +1037,61 @@ export function HudOverlay({
           </button>
         </div>
       )}
-      {!interior && doorDef && panel.kind === 'none' && !isTravelling && !photo && !vehicleChip && !driveUi.driving && (
+      {/* ---------- W10-b — the boarding chips (board / hop off) ---------- */}
+      {driveUi.riding && panel.kind === 'none' && !photo && (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
+          <button
+            data-testid="unboard-chip"
+            onClick={async () => {
+              audio.play('click')
+              const r = await wheelRequestUnboard()
+              if (r.ok) {
+                if (typeof r.x === 'number' && typeof r.z === 'number') requestE2eTeleport(r.x, r.z)
+                useGameStore.getState().notify({ icon: '🚌', text: 'You hop off — safe journey.', tone: 'good' })
+              } else if (r.why === 'moving') {
+                useGameStore.getState().notify({ icon: '🚌', text: 'The danfo still dey move — wait make e stop.', tone: 'neutral' })
+              }
+            }}
+            className="lko-press lko-pop flex max-w-full items-center gap-2.5 rounded-full border border-white/25 bg-black/60 px-5 py-3 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#e8a317] text-[12px]">🚏</span>
+            <span className="truncate text-[14px] font-extrabold">Hop off</span>
+          </button>
+        </div>
+      )}
+      {boardChip && driveUi.boardable && boardableDef && (
+        <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
+          <button
+            data-testid="board-chip"
+            onClick={async () => {
+              audio.play('click')
+              const target = driveUi.boardable!
+              const r = await wheelRequestBoard(target.handle)
+              const notify = useGameStore.getState().notify
+              if (r.ok) {
+                notify({ icon: '🚌', text: `You enter ${target.name}'s ${boardableDef.label} — hold well.`, tone: 'good' })
+              } else {
+                const why: Record<string, string> = {
+                  'seats-shut': 'The driver no open seat.',
+                  moving: 'The danfo still dey move — wait make e stop.',
+                  full: 'The motor don full.',
+                  blocked: 'You no fit enter this one.',
+                  'guest-dark': 'Claim your name first — guests no dey ride.',
+                  'already-aboard': 'You don dey inside already.',
+                }
+                notify({ icon: '🚫', text: why[r.why ?? ''] ?? 'The motor don go.', tone: 'bad' })
+              }
+            }}
+            className="lko-press lko-pop flex max-w-full items-center gap-2.5 rounded-full border border-[#ffd88a]/45 bg-black/60 px-5 py-3 text-white shadow-[var(--lko-shadow-lg)] backdrop-blur-md"
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#e8a317] text-[12px]">
+              {boardableDef.emoji}
+            </span>
+            <span className="truncate text-[14px] font-extrabold">Board {driveUi.boardable.name}'s {boardableDef.label}</span>
+          </button>
+        </div>
+      )}
+      {!interior && doorDef && panel.kind === 'none' && !isTravelling && !photo && !vehicleChip && !driveUi.driving && !driveUi.riding && !boardChip && (
         <div className="pointer-events-auto absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-10">
           <button
             onClick={() => openPanelFor(promptAnchor)}
@@ -1145,6 +1230,37 @@ export function HudOverlay({
             className="lko-press flex min-h-[44px] items-center gap-2 rounded-full border border-[#ffd88a]/70 bg-[#e8a317]/90 px-4 text-[12.5px] font-extrabold text-[#3d2a00] shadow-[0_0_18px_rgba(232,163,23,0.5)] backdrop-blur-md"
           >
             🅿 Park & Step Out
+          </button>
+        </div>
+      )}
+
+      {/* ---------- W10-b — the driver's standing consent (the seats toggle) ---------- */}
+      {driveUi.driving && driveUi.seatsOpen !== null && panel.kind === 'none' && !photo && (
+        <div className="pointer-events-auto absolute bottom-[5.6rem] right-4">
+          <button
+            data-testid="seats-toggle"
+            onClick={async () => {
+              audio.play('click')
+              const next = !(driveUi.seatsOpen === true)
+              const ok = await wheelRequestSeats(next)
+              const notify = useGameStore.getState().notify
+              if (ok) {
+                notify({
+                  icon: '🚪',
+                  text: next ? 'Seats open — paddies fit board when you stop.' : 'Seats shut — na you alone dey inside.',
+                  tone: next ? 'good' : 'neutral',
+                })
+              } else {
+                notify({ icon: '🚫', text: 'The wire no gree — try again.', tone: 'bad' })
+              }
+            }}
+            className={`lko-press flex min-h-[40px] items-center gap-1.5 rounded-full border px-3.5 text-[11.5px] font-extrabold shadow-[var(--lko-shadow-lg)] backdrop-blur-md ${
+              driveUi.seatsOpen
+                ? 'border-[#7ee2a8]/60 bg-[#146b3a]/85 text-[#eafff2]'
+                : 'border-white/25 bg-black/55 text-white/90'
+            }`}
+          >
+            🚪 {driveUi.seatsOpen ? 'Seats: Open' : 'Seats: Shut'}
           </button>
         </div>
       )}

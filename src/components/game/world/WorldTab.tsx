@@ -24,6 +24,11 @@ import { audio } from '@/game/systems/audio'
 import { ambience } from '@/game/systems/ambience'
 import { INTERIOR_BY_ID } from '@/game/world3d/interiors'
 import { getWalkedMeters, resetWalkedMeters, playerPos, setJoystick, isInputFrozen, requestE2eTeleport, setDriveActive, reportDriveSpeed, reportPlayerPos } from './controls'
+import {
+  boardableNear, myRideState, wheelCrewHandles, wheelIsRiding, wheelQueryParkedWhenLive, wheelRequestBoard,
+  wheelRequestSeats, wheelRequestUnboard, wheelsWitness,
+} from '@/game/systems/wheelnet' // W10-b — the boarding seams the witness reads
+import { useWireStore, wireSendVehicleParkedQuery } from '@/game/systems/wire'
 import { generatePlate } from '@/game/data/vehicles'
 import { music, moodForTimeOfDay } from '@/game/systems/music'
 import { extrasLive } from '@/game/systems/extras'
@@ -270,6 +275,32 @@ export function WorldTab({
         useGameStore.setState({ player: { ...s.player, vehicles: [...s.player.vehicles, vehicle] } })
         return true
       },
+      /* ── W10-b E2E — the boarding seams (the same class of honest
+       *   shortcut as grantRide: the REAL wire doors run; the witness
+       *   reads REALITY — the UI chips click their own testids too) ── */
+      boardable: () => boardableNear(playerPos.x, playerPos.z),
+      board: (handle: string) => wheelRequestBoard(handle),
+      unboard: () => wheelRequestUnboard(),
+      seats: (open: boolean) => wheelRequestSeats(open),
+      riding: () => wheelIsRiding(),
+      ride: () => myRideState(),
+      crew: () => wheelCrewHandles(),
+      wheels: () => wheelsWitness(),
+      queryParked: (x: number, z: number) => wheelQueryParkedWhenLive(x, z),
+      parkedProbe: async (x: number, z: number) => {
+        const r = await wireSendVehicleParkedQuery(x, z)
+        return { ok: r.ok, why: r.why, n: (r.parked ?? []).length }
+      },
+      wireState: () => useWireStore.getState().state,
+      /** W10-b E2E — the DMV seams: the REAL store style door (the garage
+       * panel's save button runs the same one — the patch rides the wire
+       * and the plate-taken refusal reverts, all inside the store) */
+      setPlate: (model: string, plate: string) => {
+        const st = useGameStore.getState()
+        const v = st.player?.vehicles.find((vv) => vv.model === model)
+        return v ? st.setVehicleStyle(v.id, { plate }) : false
+      },
+      myPlate: (model: string) => useGameStore.getState().player?.vehicles.find((vv) => vv.model === model)?.plate ?? null,
       /** M8 E2E — the live chaos slice (outage / pool / scarcity bookkeeping) */
       chaos: () => {
         const s = useGameStore.getState()

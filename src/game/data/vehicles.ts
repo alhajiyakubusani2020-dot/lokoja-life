@@ -79,11 +79,20 @@ export const VEHICLE_BY_MODEL = Object.fromEntries(
   VEHICLES.map((v) => [v.model, v]),
 ) as Record<VehicleModel, VehicleDef>
 
-/** Deterministic-ish plate generator — flavour only, not economy. */
+/** THE DMV'S GENERATOR — flavour only, not economy. W10-b: the plate is
+ *  UNIQUE property now (one plate, one row — the wire's ownership wall),
+ *  so the draw is RANDOM per pick (3 digits + 2 letters ≈ 1-in-152k
+ *  collision), never a (day, index) formula two citizens could share.
+ *  The day/index args stay for the save's reproducibility story; the
+ *  wire's plate-taken door is the honest backstop if the coin ever
+ *  collides (the owner re-plates through the DMV). */
 export function generatePlate(model: VehicleModel, day: number, index: number): string {
+  void model
+  void day
+  void index
   const letters = 'ABCDEFGHJKLMN'
-  const l1 = letters[(day * 3 + index) % letters.length]
-  const l2 = letters[(day * 7 + index * 5 + 4) % letters.length]
-  const digits = 100 + ((day * 37 + index * 91) % 900)
+  const l1 = letters[Math.floor(Math.random() * letters.length)]
+  const l2 = letters[Math.floor(Math.random() * letters.length)]
+  const digits = 100 + Math.floor(Math.random() * 900)
   return `LKO-${digits}-${l1}${l2}`
 }
