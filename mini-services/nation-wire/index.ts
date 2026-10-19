@@ -55,10 +55,26 @@ import {
   sanitizeChat,
   canLive,
   emoteById,
+  crowdMult,
   PRESENCE_TTL_MS,
   type LiveBand,
   type LiveIdentity,
 } from '../../src/game/systems/live'
+
+// THE STAGE LAWS — W9, same verbatim doctrine (zero copies)
+import {
+  stageVerdict,
+  stageWatchVerdict,
+  stageEyeVerdict,
+  stageTipVerdict,
+  stageEndOk,
+  stageIdOk,
+  stageRoom,
+  stageChannel,
+  stageTitleOk,
+  STAGE_KIND,
+  type StageWhy,
+} from '../../src/game/systems/stage'
 
 // THE SOCIAL GRAPH LAWS — W5, same verbatim doctrine (zero copies)
 import {
@@ -126,6 +142,9 @@ const CAPS = {
   // W2 — the 10Hz body cadence (POS_TICK_MS=100) + a burst headroom of one
   // full second; the cap is data, the cadence law lives in bodies.ts.
   pos: { n: Math.ceil((1000 / POS_TICK_MS) * 2.4), ms: 1_000 },
+  // W9 — the stage: ingest/subscribe are single gestures; watch toggles
+  // are the bursty one (a board click-around); chat rides the chat cap.
+  stage: { n: 4, ms: 10_000 },
 } as const
 
 const DM_HISTORY_CAP = 100
@@ -457,6 +476,69 @@ function rateKeeper() {
     b.n += 1
     return true
   }
+}
+
+/* ────────────── W9 THE STAGE — the mesh registry ────────────── */
+
+/* THE MESH DOCTRINE (the honest amendment, recorded in stage.ts): the OSS
+ * livekit-server ships NO WHIP door (witnessed 404 with a VALID grant on
+ * two versions) and the SDK would blow the N2 wire budget — so the stage
+ * rides the W7/W8 architecture: SIGNALING on the nation-wire, MEDIA
+ * peer-to-peer. The publisher offers to each eye; the wire relays the
+ * sealed envelopes and NEVER sees a media byte (N5 holds). The SFU is the
+ * W12+ upgrade path when the mesh cap demands it. */
+
+interface StageT {
+  id: string
+  host: string
+  title: string
+  startedAt: number
+  viewers: Set<string> // the eye keys (handles; guests = guest:<sid>)
+  eyesSid: Map<string, string> // eye key → the socket the envelopes ride to
+  hostSid: string
+}
+
+/* THE REGISTRY IS MEMORY — a stage is a LIVE thing: when the host's socket
+ * dies, the stage dies with it (THE STAGE DIES WITH THE HOST law). The
+ * StreamRow keeps the honest board record (status live → ended); the live
+ * truth is this map, like presence, like calls. */
+const stages = new Map<string, StageT>()
+const stageIdByHost = new Map<string, string>()
+
+function stageRow(id: string, status: 'live' | 'ended', viewersSnapshot: string[]): void {
+  try {
+    db.query('UPDATE StreamRow SET status = ?, viewersJson = ?, updatedAt = ? WHERE id = ?').run(
+      status,
+      JSON.stringify(viewersSnapshot),
+      new Date().toISOString(),
+      id
+    )
+  } catch (e) {
+    console.error(`[nation-wire] stageRow refused (${String(e).slice(0, 120)})`)
+  }
+}
+
+function stageBoard() {
+  return [...stages.values()]
+    .sort((a, b) => a.startedAt - b.startedAt)
+    .map((s) => ({ id: s.id, host: s.host, title: s.title, kind: STAGE_KIND, viewers: s.viewers.size, startedAt: s.startedAt }))
+}
+
+function endStage(io: Server, s: StageT, why: 'host' | 'system'): void {
+  if (!stages.has(s.id)) return
+  stages.delete(s.id)
+  if (stageIdByHost.get(s.host) === s.id) stageIdByHost.delete(s.host)
+  stageRow(s.id, 'ended', [...s.viewers])
+  io.to(stageRoom(s.id)).emit('wire:stage', { type: 'ended', streamId: s.id, why })
+  io.to('wire:global').emit('wire:stage', { type: 'ended', streamId: s.id, why })
+}
+
+function pushViewers(io: Server, s: StageT): void {
+  io.to(stageRoom(s.id)).emit('wire:stage', { type: 'viewers', streamId: s.id, viewers: s.viewers.size })
+}
+
+function mintStageId(): string {
+  return `stg-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`
 }
 
 /* ─────────────────────── the social graph (W5, FriendRow) ────────────────── */
@@ -1318,7 +1400,240 @@ io.on('connection', (socket) => {
   /* ── latency witness ── */
   socket.on('ping', (_raw: unknown, ack?: (r: unknown) => void) => ack?.({ t: Date.now() }))
 
+
+  /* ── W9 THE STAGE — the nation's broadcast at the server door.
+   * THE BROADCAST DOOR (stageVerdict verbatim): guests stay dark, minors
+   * never broadcast, the title law, THE ONE-STAGE LAW. THE TOKEN LAW: the
+   * wire mints the media-house token; the media NEVER rides this wire.
+   * THE BOARD LAW: the StreamRow is the board record; the live registry
+   * is the truth; every start/end rides BOTH lanes (the room + the
+   * global board). ── */
+  socket.on('stage:start', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('stage')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { title?: unknown }
+    const v = stageVerdict(identity, body.title, stageIdByHost.has(identity.handle!))
+    if (!v.ok) return ack?.({ ok: false, why: v.why })
+    const id = mintStageId()
+    const stage: StageT = { id, host: identity.handle!, title: v.title!, startedAt: Date.now(), viewers: new Set(), eyesSid: new Map(), hostSid: socket.id }
+    stages.set(id, stage)
+    stageIdByHost.set(identity.handle!, id)
+    socket.join(stageRoom(id))
+    // THE BOARD RECORD — StreamRow is upserted live; a crash between map
+    // and row leaves an honest 'live' row that the next start/end re-pins.
+    try {
+      db.query(
+        "INSERT INTO StreamRow (id, host, kind, title, viewersJson, startedDay, status, updatedAt) VALUES (?, ?, ?, ?, '[]', ?, 'live', ?) ON CONFLICT(id) DO UPDATE SET status = 'live', title = excluded.title, kind = excluded.kind, updatedAt = excluded.updatedAt"
+      ).run(id, stage.host, STAGE_KIND, stage.title, 1, new Date().toISOString())
+    } catch (e) {
+      stages.delete(id)
+      stageIdByHost.delete(stage.host)
+      console.error(`[nation-wire] stage board row refused (${String(e).slice(0, 120)})`)
+      return ack?.({ ok: false, why: 'wire no gree — try again' })
+    }
+    io.to('wire:global').emit('wire:stage', { type: 'started', stage: { id, host: stage.host, title: stage.title, kind: STAGE_KIND, viewers: 0, startedAt: stage.startedAt } })
+    ack?.({ ok: true, streamId: id, title: stage.title })
+  })
+
+  /* ── THE SPECTATE DOOR (stageWatchVerdict verbatim): ANYBODY on the wire
+   * may watch a LIVE stage — claimed or guest, kid or adult. Watching is
+   * not speaking: the chat door below still runs the M17 tier laws. ── */
+  socket.on('stage:watch', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!allow('stage')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { streamId?: unknown }
+    if (!stageIdOk(body.streamId)) return ack?.({ ok: false, why: 'bad-stage' })
+    const s = stages.get(body.streamId)
+    const w = stageWatchVerdict(identity, !!s)
+    if (!w.ok || !s) return ack?.({ ok: false, why: w.why ?? 'stage-not-live' })
+    const eye = identity.handle ?? `guest:${socket.id}`
+    // THE EYE LAW (stage.ts verbatim): the spectate law + THE MESH CAP —
+    // the 9th eye is refused honestly, never a stuttering stage.
+    const cap = stageEyeVerdict(s.viewers.size, true)
+    if (!cap.ok) return ack?.({ ok: false, why: cap.why })
+    s.viewers.add(eye)
+    s.eyesSid.set(eye, socket.id)
+    socket.join(stageRoom(s.id))
+    pushViewers(io, s)
+    // THE PUBLISHER OFFERS: the host learns the eye and starts the handshake
+    const hp = presence.get(s.host)
+    if (hp?.sid) io.to(hp.sid).emit('wire:stage', { type: 'eye', streamId: s.id, eye })
+    ack?.({ ok: true, streamId: s.id, title: s.title, host: s.host, viewers: s.viewers.size })
+  })
+
+  socket.on('stage:leave', (raw: unknown, ack?: (r: unknown) => void) => {
+    const body = (raw ?? {}) as { streamId?: unknown }
+    if (!stageIdOk(body.streamId)) return ack?.({ ok: false, why: 'bad-stage' })
+    const s = stages.get(body.streamId)
+    if (!s) return ack?.({ ok: true })
+    const eye = identity.handle ?? `guest:${socket.id}`
+    if (s.viewers.delete(eye)) {
+      s.eyesSid.delete(eye)
+      socket.leave(stageRoom(s.id))
+      pushViewers(io, s)
+      const hp = presence.get(s.host)
+      if (hp?.sid) io.to(hp.sid).emit('wire:stage', { type: 'eye-gone', streamId: s.id, eye })
+    }
+    ack?.({ ok: true })
+  })
+
+  /* ── THE MESH RELAY — three doors, sealed envelopes only. THE ENVELOPE
+   * LAWS are the W7 voice's own (sdpOk ≤16KB, iceOk the full candidate
+   * envelope) run VERBATIM here. THE DIRECTION LAW: the offer flows from
+   * the HOST alone; the answer and the ICE from a registered eye alone;
+   * every envelope lands on its named peer — a stranger's envelope never
+   * rides. ── */
+  socket.on('stage:offer', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { streamId?: unknown; to?: unknown; sdp?: unknown }
+    if (!stageIdOk(body.streamId)) return ack?.({ ok: false, why: 'bad-stage' })
+    const s = stages.get(body.streamId)
+    if (!s) return ack?.({ ok: false, why: 'stage-not-live' })
+    if (identity.handle !== s.host) return ack?.({ ok: false, why: 'not-yours' })
+    if (typeof body.sdp !== 'string' || !sdpOk(body.sdp)) return ack?.({ ok: false, why: 'bad-sdp' })
+    const sid = typeof body.to === 'string' ? s.eyesSid.get(body.to) : undefined
+    if (!sid) return ack?.({ ok: false, why: 'no-such-eye' })
+    io.to(sid).emit('wire:stage', { type: 'offer', streamId: s.id, sdp: body.sdp, from: s.host })
+    ack?.({ ok: true })
+  })
+
+  socket.on('stage:answer', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed && identity.band !== 'guest') return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { streamId?: unknown; sdp?: unknown }
+    if (!stageIdOk(body.streamId)) return ack?.({ ok: false, why: 'bad-stage' })
+    const s = stages.get(body.streamId)
+    if (!s) return ack?.({ ok: false, why: 'stage-not-live' })
+    const eye = identity.handle ?? `guest:${socket.id}`
+    if (!s.viewers.has(eye)) return ack?.({ ok: false, why: 'not-watching' })
+    if (typeof body.sdp !== 'string' || !sdpOk(body.sdp)) return ack?.({ ok: false, why: 'bad-sdp' })
+    const hp = presence.get(s.host)
+    if (hp?.sid) io.to(hp.sid).emit('wire:stage', { type: 'answer', streamId: s.id, sdp: body.sdp, from: eye })
+    ack?.({ ok: true })
+  })
+
+  socket.on('stage:ice', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!allow('call')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { streamId?: unknown; to?: unknown; candidate?: unknown }
+    if (!stageIdOk(body.streamId)) return ack?.({ ok: false, why: 'bad-stage' })
+    const s = stages.get(body.streamId)
+    if (!s) return ack?.({ ok: false, why: 'stage-not-live' })
+    const eye = identity.handle ?? `guest:${socket.id}`
+    const isHost = identity.handle === s.host
+    if (!isHost && !s.viewers.has(eye)) return ack?.({ ok: false, why: 'not-watching' })
+    if (!body.candidate || typeof body.candidate !== 'object' || !iceOk(body.candidate)) return ack?.({ ok: false, why: 'bad-ice' })
+    if (isHost) {
+      // the host's candidate rides to a named eye
+      const sid = typeof body.to === 'string' ? s.eyesSid.get(body.to) : undefined
+      if (!sid) return ack?.({ ok: false, why: 'no-such-eye' })
+      io.to(sid).emit('wire:stage', { type: 'ice', streamId: s.id, candidate: body.candidate, from: s.host })
+    } else {
+      // the eye's candidate rides to the host
+      const hp = presence.get(s.host)
+      if (hp?.sid) io.to(hp.sid).emit('wire:stage', { type: 'ice', streamId: s.id, candidate: body.candidate, from: eye })
+    }
+    ack?.({ ok: true })
+  })
+
+  /* ── THE STAGE CHAT — the SAME words the street speaks: sanitizeChat at
+   * the door (kid emote-only / teen 140 / adult 280 + the link law), the
+   * SAME LiveEvent table (THE ONE-NATION LAW — the 12s lane and the cursor
+   * replay carry the stage's words too), relayed to the stage room alone. ── */
+  socket.on('stage:chat', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('chat')) return ack?.({ ok: false, why: 'too-fast' })
+    const body = (raw ?? {}) as { streamId?: unknown; text?: unknown }
+    if (!stageIdOk(body.streamId)) return ack?.({ ok: false, why: 'bad-stage' })
+    if (!stages.has(body.streamId)) return ack?.({ ok: false, why: 'stage-not-live' })
+    const verdict = sanitizeChat(identity, typeof body.text === 'string' ? body.text : '')
+    if (!verdict.ok) return ack?.({ ok: false, why: verdict.why })
+    const channel = stageChannel(body.streamId)
+    const seq = persistEvent('chat', channel, identity.handle!, identity.band, {
+      text: verdict.text,
+      stripped: verdict.stripped ?? false,
+    })
+    if (seq === null) return ack?.({ ok: false, why: 'wire no gree — try again' })
+    const ev = { seq, kind: 'chat' as const, channel, actor: identity.handle!, band: identity.band, payload: { text: verdict.text, stripped: verdict.stripped ?? false } }
+    io.to(stageRoom(body.streamId)).emit('wire:event', ev)
+    ack?.({ ok: true, seq, stripped: verdict.stripped ?? false, echo: ev })
+  })
+
+  /* ── THE TIP DOOR — a spray of REAL naira at the stage. The stage walls
+   * (stageTipVerdict verbatim: live stage, no self-tip, adults) + the W6
+   * money laws VERBATIM (the PIN law, the replay law, transferVerdict's
+   * cap and minor walls, THE MOVE's idempotency + fortress chain). The
+   * room hears the spray (the M17 SPRAY spirit); the receipts ride the
+   * SAME deliverTransferReceipt both-lane law. ── */
+  socket.on('stage:tip', (raw: unknown, ack?: (r: unknown) => void) => {
+    if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
+    if (!allow('wallet')) return ack?.({ ok: false, why: 'too-fast' })
+    const account = accountFullByToken(handshakeTokenOf(socket))
+    if (!account || account.handle !== identity.handle) return ack?.({ ok: false, why: 'unclaimed' })
+    if (identity.band === 'kid' || identity.band === 'teen') return ack?.({ ok: false, why: 'minors-no-money' })
+    const body = (raw ?? {}) as { streamId?: unknown; amount?: unknown; pin?: unknown; idemKey?: unknown }
+    if (!stageIdOk(body.streamId)) return ack?.({ ok: false, why: 'bad-stage' })
+    const s = stages.get(body.streamId)
+    const tv = stageTipVerdict(identity, !!s, s?.host ?? '')
+    if (!tv.ok || !s) return ack?.({ ok: false, why: tv.why ?? 'stage-not-live' })
+    const amount = Math.floor(Number(body.amount))
+    const idemKey = typeof body.idemKey === 'string' ? body.idemKey.slice(0, 80) : ''
+    if (!idemKey) return ack?.({ ok: false, why: 'bad-idem' })
+    if (!pinVerifies(account, body.pin)) return ack?.({ ok: false, why: 'bad-pin' })
+    // THE REPLAY FIRST (the W6 law): a retry with the SAME key returns the
+    // SAME receipt and sprays NOTHING twice.
+    const replay = ledgerByIdem(idemKey)
+    if (replay) return ack?.({ ok: true, receipt: receiptOf(replay), balance: walletGet(identity.handle!).balance, replayed: true })
+    if (accountBand(s.host) !== 'adult') return ack?.({ ok: false, why: 'minors-collect-nothing' })
+    const verdict = transferVerdict({ band: identity.band, to: s.host, from: identity.handle, amount, purse: walletGet(identity.handle!).balance, transferredToday: dayTransferred(identity.handle!) })
+    if (!verdict.ok) return ack?.({ ok: false, why: verdict.why })
+    try {
+      const receipt = theMove({ kind: 'tip', from: identity.handle!, to: s.host, amount, idemKey, note: `tip@${s.id}` })
+      deliverTransferReceipt(io, receipt, s.host)
+      io.to(stageRoom(s.id)).emit('wire:stage', { type: 'tip', streamId: s.id, from: identity.handle, amount, host: s.host })
+      ack?.({ ok: true, receipt, balance: walletGet(identity.handle!).balance })
+    } catch (why) {
+      ack?.({ ok: false, why: String(why) })
+    }
+  })
+
+  /* ── THE END DOOR — the host's own hand, or the system's (the disconnect
+   * law below). THE ONE-UNMOUNT SPIRIT: the stage ends ONCE, the room and
+   * the global board both learn it, the row reads 'ended'. ── */
+  socket.on('stage:end', (raw: unknown, ack?: (r: unknown) => void) => {
+    const body = (raw ?? {}) as { streamId?: unknown }
+    if (!stageIdOk(body.streamId)) return ack?.({ ok: false, why: 'bad-stage' })
+    const s = stages.get(body.streamId)
+    if (!s) return ack?.({ ok: true })
+    const e = stageEndOk(identity, s.host)
+    if (!e.ok) return ack?.({ ok: false, why: e.why })
+    endStage(io, s, 'host')
+    ack?.({ ok: true })
+  })
+
+  /* ── THE BOARD DOOR — the LIVE truth only (ended rows are history, the
+   * honest empty state is the board's own face). ── */
+  socket.on('stage:list', (_raw: unknown, ack?: (r: unknown) => void) => {
+    ack?.({ ok: true, stages: stageBoard() })
+  })
+
   socket.on('disconnect', () => {
+    // W9 — THE STAGE DIES WITH THE HOST: my socket's goodbye ends my live
+    // stage (the sweep is not needed — a stage without its host is a dead
+    // air lie), and my eye leaves every stage I was watching.
+    if (identity.handle) {
+      const myStageId = stageIdByHost.get(identity.handle)
+      if (myStageId) {
+        const s = stages.get(myStageId)
+        if (s && s.hostSid === socket.id) endStage(io, s, 'system')
+      }
+      for (const s of stages.values()) {
+        if (s.viewers.has(identity.handle)) {
+          s.viewers.delete(identity.handle)
+          pushViewers(io, s)
+        }
+      }
+    }
+
     // W7: my phone fell off the wire — my call ends honestly (the sweep
     // is the backstop; this is the instant truth). THE FRESH-SID LAW: a
     // reconnect races its own disconnect — the old socket's goodbye may

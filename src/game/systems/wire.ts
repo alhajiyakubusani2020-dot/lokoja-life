@@ -187,6 +187,13 @@ export function wireEnsure(
     if (p && typeof p.type === 'string') for (const fn of socialPushFns) fn(p)
   })
 
+  // W9: the stage push lane — board truth, viewer counts, tips
+  s.on('wire:stage', (p: unknown) => {
+    if (p && typeof p === 'object' && typeof (p as { type?: unknown }).type === 'string') {
+      for (const fn of stageFns) fn(p as WireStagePush)
+    }
+  })
+
   // W6: the ledger push lane — a receipt for MY wallet (the receiver's door)
   s.on('wire:ledger', (r: WireLedgerReceipt) => {
     if (r && typeof r.idemKey === 'string') for (const fn of ledgerFns) fn(r)
@@ -315,6 +322,30 @@ export function wireOnLedger(fn: LedgerFn): () => void {
   ledgerFns.add(fn)
   return () => {
     ledgerFns.delete(fn)
+  }
+}
+
+/* ── W9: the stage push lane — the board (started/ended), the viewer
+ * counts and the sprays ride the room; the face subscribes once. ── */
+export interface WireStagePush {
+  type: string
+  streamId?: string
+  why?: string
+  viewers?: number
+  amount?: number
+  from?: string
+  host?: string
+  stage?: { id: string; host: string; title: string; kind: string; viewers: number; startedAt: number }
+  [k: string]: unknown
+}
+
+type StageFn = (p: WireStagePush) => void
+const stageFns = new Set<StageFn>()
+
+export function wireOnStage(fn: StageFn): () => void {
+  stageFns.add(fn)
+  return () => {
+    stageFns.delete(fn)
   }
 }
 

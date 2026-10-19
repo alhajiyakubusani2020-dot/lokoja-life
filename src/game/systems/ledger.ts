@@ -50,7 +50,9 @@ export const LEDGER_LIMITS = {
 
 export const LEDGER_SEED = 'lko-ledger-seed'
 
-export type LedgerKind = 'deposit' | 'withdraw' | 'transfer'
+/** W9 — 'tip' joins the book: a stage spray is a REAL transfer (both legs,
+ * the day cap, the fortress chain) — the same money, a lawful name. */
+export type LedgerKind = 'deposit' | 'withdraw' | 'transfer' | 'tip'
 
 export type LedgerRefusal =
   | 'minors-no-money'
