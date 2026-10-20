@@ -31,6 +31,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { freezeInput } from '../world/controls'
 import { FOOD } from '@/game/data/config'
 import { formatNaira } from '@/game/systems/progression'
 import { callSeconds } from '@/game/systems/callflow'
@@ -85,6 +86,17 @@ export function WorldPhoneLayer({ onOpenWork }: { onOpenWork?: () => void }) {
   const [foodOpen, setFoodOpen] = useState(false)
   const [now, setNow] = useState(Date.now())
   const [claimOpen, setClaimOpen] = useState(false)
+  // THE PHONE HOLDS THE WORLD STILL (hardening): the handset is a dialog —
+  // WASD/E/C/V acted BEHIND the open overlay (the walker strolled off while
+  // the player typed a DM; E silently entered a car). The overlay owns the
+  // input freeze for as long as any of its faces is open.
+  const worldUiOpen = overlayOpen || foodOpen || claimOpen
+  useEffect(() => {
+    freezeInput(worldUiOpen)
+    return () => {
+      if (worldUiOpen) freezeInput(false)
+    }
+  }, [worldUiOpen])
 
   // W3 — ONE PHONE: the dashboard's in-world faces (Home sheet's phone
   // button, deep-links) wake THIS handset with 'lko:phone-open'. The phone

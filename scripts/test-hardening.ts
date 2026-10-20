@@ -169,7 +169,7 @@ async function main(): Promise<void> {
   })
   if (!(await waitWire())) {
     console.error('the scratch wire never came up on :' + WIRE_PORT)
-    const err = await new Response(svc.stderr).text()
+    const err = await new Response(svc.stderr as unknown as ReadableStream).text()
     console.error(err.slice(-2000))
     process.exit(1)
   }

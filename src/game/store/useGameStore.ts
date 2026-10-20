@@ -647,6 +647,10 @@ interface GameStore {
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let notificationId = 0
 let pulseId = 0
+/** THE ONE APPLICATION LAW (hardening) — the ack-applied tradeIds: the 12s
+ * sync's broadcast of the SAME trade must never pay a second time. Module
+ * scope: the book outlives any single sync pass. */
+const appliedTrades = new Set<string>()
 /** M16 — the online listener wires itself exactly once. */
 let cloudQueueWired = false
 
@@ -1346,6 +1350,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gateOpen: false,
       fleet: { day: 1, done: [] },
       offers: [],
+      // THE RESET IS TOTAL (hardening): the new life is born NEW — the old
+      // life's quest book, Patti secrets and wardrobe died with it (the
+      // audit caught graduate Musa reborn with chapter 5 done and the
+      // white agbada already owned), and no stale transition walks in.
+      story: freshStoryState(),
+      patti: freshPattiState(),
+      wardrobe: freshWardrobeState(),
+      isTravelling: false,
+      isWorking: false,
+      workingLabel: null,
     })
     startNationBridge(get)
     // M15 — a postcard was waiting for a fresh life: land at that street
@@ -1397,6 +1411,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       nation: save.nation ?? freshNationState(),
       fleet: save.fleet,
       settings,
+      // THE BOUNDARY LAW (hardening): the old session's transition timers
+      // and flags die at the load — a travel that was mid-flight in the
+      // PREVIOUS life never lands its cash in this one
+      isTravelling: false,
+      isWorking: false,
+      workingLabel: null,
     })
     startNationBridge(get)
     // M15 — a postcard came with the boot URL: land the moment the city opens
@@ -4796,12 +4816,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const lv = get().live ?? freshLiveState()
       const moves: { cash: number; why: string }[] = []
       for (const ev of data.events ?? []) {
-        // THE TRADE LAW: each side applies the accepted trade through its
-        // OWN honest engines (the kobo-chain + the income guard chain it)
+/**
+ * THE TRADE LAW: each side applies the accepted trade through its
+ * OWN honest engines (the kobo-chain + the income guard chain it)
+ */
         if (ev.kind === 'trade' && ev.payload?.accepted) {
-          const t = ev.payload as { from: string; to: string; giveCash: number; wantCash: number }
-          if (t.from === me) moves.push({ cash: (t.wantCash ?? 0) - (t.giveCash ?? 0), why: `trade with ${t.to}` })
-          if (t.to === me) moves.push({ cash: (t.giveCash ?? 0) - (t.wantCash ?? 0), why: `trade with ${t.from}` })
+          const t = ev.payload as { tradeId?: number | string; from: string; to: string; giveCash: number; wantCash: number }
+          // THE ONE APPLICATION LAW (hardening): the accepter already paid
+          // and was paid through the ack's own engines — the 12s sync's
+          // broadcast of the SAME tradeId must never pay twice (the audit
+          // caught the double-credit: ack path + sync path, no book).
+          const alreadyApplied = t.to === me && t.tradeId !== undefined && appliedTrades.has(String(t.tradeId))
+          if (!alreadyApplied) {
+            if (t.from === me) moves.push({ cash: (t.wantCash ?? 0) - (t.giveCash ?? 0), why: `trade with ${t.to}` })
+            if (t.to === me) moves.push({ cash: (t.giveCash ?? 0) - (t.wantCash ?? 0), why: `trade with ${t.from}` })
+          }
         }
         // THE COURT GUARANTEE: a fine against me lands through my engines
         if (ev.kind === 'court' && ev.payload?.defaulter === me) {
@@ -4995,8 +5024,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!account.linked || !account.token) return { ok: false, why: 'unclaimed' }
     const res = await get().liveAction('trade-accept', { tradeId })
     if (!res.ok) return { ok: false, why: res.why }
-    const t = (res as { trade?: { from: string; to: string; giveCash: number; wantCash: number; terms: string } }).trade
+    const t = (res as { trade?: { id?: number | string; from: string; to: string; giveCash: number; wantCash: number; terms: string } }).trade
     if (t && t.to === account.handle) {
+      // THE ONE APPLICATION LAW (hardening): this ack is THE application —
+      // the tradeId joins the book so the 12s sync's broadcast of the same
+      // trade is recognized and skipped, never a double credit/debit
+      if (t.id !== undefined) {
+        if (appliedTrades.size > 200) appliedTrades.clear()
+        appliedTrades.add(String(t.id))
+      }
       get().addMoney(t.giveCash, { label: `accepted trade from ${t.from}`, category: 'other' })
       if (t.wantCash > 0) get().removeMoney(t.wantCash, { label: `paid for trade from ${t.from}`, category: 'other' })
       const lv = get().live ?? freshLiveState()
@@ -5411,6 +5447,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gateOpen: false,
       screen: 'menu',
       hasSave: false,
+      // THE RESET IS TOTAL here too: Start Over leaves NOTHING of the old
+      // life standing (story/patti/wardrobe/transients — see startNewGame)
+      story: freshStoryState(),
+      patti: freshPattiState(),
+      wardrobe: freshWardrobeState(),
+      isTravelling: false,
+      isWorking: false,
+      workingLabel: null,
     })
   },
 

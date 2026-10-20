@@ -675,7 +675,7 @@ export function HudOverlay({
       cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKey)
     }
-  }, [world.currentLocation, world.timeOfDay, world.weather])
+  }, [world.currentLocation, world.timeOfDay, world.weather, banner])
 
   // freeze walking while a sheet is open
   useEffect(() => {

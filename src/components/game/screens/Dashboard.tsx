@@ -408,7 +408,7 @@ function ProfileTab() {
   const wardrobeActiveWalk = useGameStore((s) => s.wardrobe.activeWalk)
   const pattiFound = useGameStore((s) => Object.keys(s.patti.found).length)
   // M14 — the fortress honesty row: the ledger's chain walks the live entries
-  const chainOk = verifyChain(player.transactions).ok
+  const chainOk = verifyChain([...player.transactions].reverse()).ok
 
   const tier = reputationTier(player.reputation)
   const nextTier = nextReputationTier(player.reputation)

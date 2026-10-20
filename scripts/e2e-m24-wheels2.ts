@@ -95,7 +95,7 @@ async function pointBrowserAtScratchWire(ctx: BrowserContext): Promise<void> {
     const realOpen = XMLHttpRequest.prototype.open
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     XMLHttpRequest.prototype.open = function (this: any, method: string, url: string | URL, ...rest: any[]) {
-      return realOpen.call(this, method, rewrite(url), ...rest)
+      return (realOpen as (...a: unknown[]) => void).call(this, method, rewrite(url), ...rest)
     } as typeof XMLHttpRequest.prototype.open
     const realFetch = window.fetch.bind(window)
     window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
