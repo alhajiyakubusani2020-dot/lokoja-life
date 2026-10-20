@@ -68,3 +68,38 @@ fi
 
 echo "[$(date '+%F %T')] mode=$mode HEAD=$sha $state subject=$(git log -1 --pretty=%s 2>/dev/null | head -c 110)" >> "$BK/MANIFEST.log"
 echo "[shield] $mode ok HEAD=$sha $state"
+
+# ── THE BOOKS GET A SAFE (hardening) ──────────────────────────────────
+# db_backup: a consistent online snapshot via VACUUM INTO (WAL-safe, works
+# while the servers run), 7 rotating copies in download/backups/db/.
+db_backup() {
+  local DIR="/home/z/my-project/download/backups/db"
+  mkdir -p "$DIR"
+  local STAMP FILE
+  STAMP=$(date +%Y%m%d-%H%M%S)
+  FILE="$DIR/custom-$STAMP.db"
+  bun -e "import {Database} from 'bun:sqlite'; const db=new Database('/home/z/my-project/db/custom.db',{readonly:true}); db.exec(\"VACUUM INTO '$FILE'\"); db.close();"
+  if [ -f "$FILE" ]; then
+    # integrity verification: the copy must read clean before we trust it
+    local CHECK
+    CHECK=$(bun -e "import {Database} from 'bun:sqlite'; const db=new Database('$FILE',{readonly:true}); console.log(db.query('PRAGMA integrity_check').get().integrity_check); db.close();")
+    if [ "$CHECK" = "ok" ]; then
+      echo "[shield] DB SNAPSHOT $FILE (integrity: ok, $(du -h "$FILE" | cut -f1))"
+      ls -1t "$DIR"/custom-*.db 2>/dev/null | tail -n +8 | xargs -r rm -f
+      echo "[shield] db backup ok (7 kept)"
+    else
+      echo "[shield] DB SNAPSHOT FAILED INTEGRITY: $CHECK" >&2
+      rm -f "$FILE"
+      return 1
+    fi
+  else
+    echo "[shield] DB SNAPSHOT FAILED" >&2
+    return 1
+  fi
+}
+
+# dispatch: every ANCHOR and every manual `db` run snapshots the books;
+# the per-commit `incr` hook stays fast
+if [ "$mode" = "anchor" ] || [ "$mode" = "db" ]; then
+  db_backup
+fi
