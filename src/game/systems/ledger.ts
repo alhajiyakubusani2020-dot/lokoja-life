@@ -41,11 +41,15 @@
 
 import { createHash } from 'node:crypto'
 
-/** The purse limits — data, not law-code, so they tune without ceremony. */
+/** The purse limits — data, not law-code, so they tune without ceremony.
+ *  HARDENING: DAY_DEPOSIT_CAP joins — the deposit door was the one mint
+ *  left (client-declared amount, no ceiling); now the faucet has a meter
+ *  and the meter is at the SERVER's eye, not the client's word. */
 export const LEDGER_LIMITS = {
   MIN_AMOUNT: 1,
   MAX_PER_TRANSFER: 50_000,
   DAY_TRANSFER_CAP: 200_000,
+  DAY_DEPOSIT_CAP: 200_000,
 } as const
 
 export const LEDGER_SEED = 'lko-ledger-seed'
@@ -95,14 +99,22 @@ export function transferVerdict(input: {
 
 /** THE DEPOSIT VERDICT — a deposit draws from the POCKET (the client's
  * honest engine judges the pocket), never from the purse. The purse
- * check is meaningless here and would refuse every first top-up. */
-export function depositVerdict(input: { band: 'guest' | 'kid' | 'teen' | 'adult'; amount: number }): { ok: boolean; why?: LedgerRefusal } {
+ * check is meaningless here and would refuse every first top-up.
+ * HARDENING — THE DEPOSIT CAP: the amount alone no longer decides. The
+ * door passes `depositedToday` (the SERVER's own sum of today's deposit
+ * rows — the client's copy is advisory at best) and the verdict refuses
+ * the move that would cross DAY_DEPOSIT_CAP. One account cannot mint
+ * more than the cap in a day, no matter how many sockets it holds.
+ * `depositedToday` stays optional (default 0) so the client's advisory
+ * call sites compile unchanged — the server's eye is the law. */
+export function depositVerdict(input: { band: 'guest' | 'kid' | 'teen' | 'adult'; amount: number; depositedToday?: number }): { ok: boolean; why?: LedgerRefusal } {
   const { band, amount } = input
   if (band === 'kid' || band === 'teen') return { ok: false, why: 'minors-no-money' }
   if (band === 'guest') return { ok: false, why: 'unclaimed' }
   if (!Number.isFinite(amount) || Math.floor(amount) !== amount) return { ok: false, why: 'bad-amount' }
   if (amount < LEDGER_LIMITS.MIN_AMOUNT) return { ok: false, why: 'too-small' }
   if (amount > LEDGER_LIMITS.MAX_PER_TRANSFER) return { ok: false, why: 'too-big' }
+  if ((input.depositedToday ?? 0) + amount > LEDGER_LIMITS.DAY_DEPOSIT_CAP) return { ok: false, why: 'day-cap' }
   return { ok: true }
 }
 

@@ -597,7 +597,8 @@ export async function POST(req: Request) {
       })
       const transferredToday = await db.ledgerRow.aggregate({
         _sum: { amount: true },
-        where: { fromHandle: account.handle, kind: 'transfer', createdAt: { gte: new Date(dayStartMs()) } },
+        // THE ONE CAP LAW (hardening): the view counts what the wire counts
+        where: { fromHandle: account.handle, kind: { in: ['transfer', 'tip', 'refuel', 'repair'] }, createdAt: { gte: new Date(dayStartMs()) } },
       })
       return NextResponse.json({ ok: true, balance: w?.balance ?? 0, transferredToday: transferredToday._sum.amount ?? 0, recent: recent.map((r) => receiptOf(r)) })
     }
@@ -630,12 +631,15 @@ export async function POST(req: Request) {
           if (existing) return { receipt: receiptOf(existing), replayed: true }
           const wMe = await tx.walletRow.findUnique({ where: { handle: account.handle } })
           const purse = wMe?.balance ?? 0
-          const transferredToday = kind === 'transfer'
-            ? (await tx.ledgerRow.aggregate({ _sum: { amount: true }, where: { fromHandle: account.handle, kind: 'transfer', createdAt: { gte: new Date(dayStartMs()) } } }))._sum.amount ?? 0
-            : 0
+          // THE ONE CAP LAW (hardening): every counted kind, both lanes —
+          // the relay can no longer spend past what the wire already spent
+          // (the old eye read ONLY 'transfer', so wire-tips + relay-transfers
+          // doubled the day). THE DEPOSIT EYE rides the same transaction.
+          const spentToday = (await tx.ledgerRow.aggregate({ _sum: { amount: true }, where: { fromHandle: account.handle, kind: { in: ['transfer', 'tip', 'refuel', 'repair'] }, createdAt: { gte: new Date(dayStartMs()) } } }))._sum.amount ?? 0
+          const depositedToday = (await tx.ledgerRow.aggregate({ _sum: { amount: true }, where: { fromHandle: account.handle, kind: 'deposit', createdAt: { gte: new Date(dayStartMs()) } } }))._sum.amount ?? 0
           const verdict = kind === 'deposit'
-            ? depositVerdict({ band: identity.band, amount })
-            : transferVerdict({ band: identity.band, to: kind === 'transfer' ? to : undefined, from: account.handle, amount, purse, transferredToday })
+            ? depositVerdict({ band: identity.band, amount, depositedToday })
+            : transferVerdict({ band: identity.band, to: kind === 'transfer' ? to : undefined, from: account.handle, amount, purse, transferredToday: spentToday })
           if (!verdict.ok) throw new Error(verdict.why ?? 'refused')
           const tail = (await tx.ledgerRow.findFirst({ orderBy: { id: 'desc' }, select: { chainHash: true } }))?.chainHash ?? LEDGER_SEED
           const ts = Date.now()

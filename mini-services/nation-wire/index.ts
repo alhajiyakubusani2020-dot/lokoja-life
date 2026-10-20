@@ -724,6 +724,61 @@ function rateKeeper() {
   }
 }
 
+/* ── THE ACCOUNT EYE (hardening): the socket buckets above are per-
+ * connection — one token holding many sockets multiplied every cap by
+ * the socket count (100 sockets = 100× every rate limit, plus a
+ * scryptSync starvation weapon). This second eye is keyed by HANDLE
+ * (a guest falls back to its socket id) with a 3× headroom for the
+ * honest multi-device citizen. A door is only open when BOTH eyes
+ * agree: the socket's flood law AND the account's manners. ── */
+const accountBuckets = new Map<string, Map<string, { n: number; reset: number }>>()
+function accountAllow(key: string, kind: keyof typeof CAPS): boolean {
+  const cap = CAPS[kind]
+  const now = Date.now()
+  let buckets = accountBuckets.get(key)
+  if (!buckets) {
+    buckets = new Map()
+    accountBuckets.set(key, buckets)
+  }
+  const b = buckets.get(kind)
+  if (!b || now >= b.reset) {
+    buckets.set(kind, { n: 1, reset: now + cap.ms })
+    return true
+  }
+  if (b.n >= cap.n * 3) return false
+  b.n += 1
+  return true
+}
+
+/* ── THE RELOCATION GATE (hardening): vehicle:hello trusts the client's
+ * pose — the N12 clamp never sees the jump, so a bye→far-hello cycle
+ * teleported the car (and its full tank) anywhere for free. The law:
+ * the car stands where IT parked. A hello landing far from the row's
+ * own last park is a RELOCATION — allowed, but scarced to one per
+ * window per handle:model, so the honest cross-town morning still
+ * drives while hello-farming stops paying. Near-park hellos never
+ * touch the gate. ── */
+const RELOCATE_RADIUS = 60
+const RELOCATE_WINDOW = 5 * 60_000
+const relocateAt = new Map<string, number>()
+function relocateGate(key: string): boolean {
+  const now = Date.now()
+  const at = relocateAt.get(key)
+  if (at !== undefined && now - at < RELOCATE_WINDOW) return false
+  relocateAt.set(key, now)
+  return true
+}
+
+/* the eyes sweep: expired buckets and stale gates leave the books */
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, buckets] of accountBuckets) {
+    for (const [kind, b] of buckets) if (now >= b.reset) buckets.delete(kind)
+    if (buckets.size === 0) accountBuckets.delete(k)
+  }
+  for (const [k, at] of relocateAt) if (now - at >= RELOCATE_WINDOW) relocateAt.delete(k)
+}, 60_000).unref()
+
 /* ────────────── W9 THE STAGE — the mesh registry ────────────── */
 
 /* THE MESH DOCTRINE (the honest amendment, recorded in stage.ts): the OSS
@@ -881,6 +936,16 @@ function dayTransferred(handle: string): number {
   return Number(r.s ?? 0)
 }
 
+/** THE DEPOSIT EYE (hardening) — today's deposits for this handle, the
+ * sum the deposit cap is judged against. The mint died here: the cap
+ * is the SERVER's sum of the disk rows, never the client's word. */
+function dayDeposited(handle: string): number {
+  const r = db
+    .query("SELECT COALESCE(SUM(amount), 0) AS s FROM LedgerRow WHERE fromHandle = ? AND kind = 'deposit' AND createdAt >= ?")
+    .get(handle, dayStartMs()) as { s: number | null }
+  return Number(r.s ?? 0)
+}
+
 function recentLedger(handle: string, cap = 8): LedgerReceipt[] {
   const rows = db
     .query('SELECT * FROM LedgerRow WHERE fromHandle = ? OR toHandle = ? ORDER BY id DESC LIMIT ?')
@@ -1020,7 +1085,11 @@ function dmRoom(a: string, b: string): string {
 
 io.on('connection', (socket) => {
   const identity = identityOf(socket)
-  const allow = rateKeeper()
+  const sockAllow = rateKeeper()
+  // THE ACCOUNT EYE: both buckets must agree — the socket's flood law
+  // AND the handle's account-level manners (one token, no capMultiply).
+  const allow = (kind: keyof typeof CAPS): boolean =>
+    sockAllow(kind) && accountAllow(identity.handle ?? socket.id, kind)
   let claimed = identity.band !== 'guest'
   let currentStreet = 'home'
   socket.join('wire:global')
@@ -1135,6 +1204,16 @@ io.on('connection', (socket) => {
       vehiclePersist(p.car, identity.handle!)
     }
     const row = vehicleRowOf(identity.handle!, v.model)
+    // THE RELOCATION GATE (hardening): the car stands where IT parked.
+    // A far hello is a teleport — scarced to one per window per
+    // handle:model; the honest near-park hello never touches the gate.
+    if (row && Number.isFinite(row.x) && Number.isFinite(row.z)) {
+      const rdx = v.pos.x - row.x
+      const rdz = v.pos.z - row.z
+      if (rdx * rdx + rdz * rdz > RELOCATE_RADIUS * RELOCATE_RADIUS && !relocateGate(`${identity.handle!}:${v.model}`)) {
+        return ack?.({ ok: false, why: 'too-far-from-park' })
+      }
+    }
     p.car = {
       model: v.model,
       plate: v.plate,
@@ -1375,7 +1454,10 @@ io.on('connection', (socket) => {
     if (replayed) {
       return ack?.({ ok: true, replayed: true, fuel: p.car.fuel, receipt: receiptOf(replayed), balance: walletGet(identity.handle!).balance })
     }
-    const atPump = nearServiceSpot('pump', Number(body.x), Number(body.z))
+    // THE WIRE'S OWN EYES (hardening): the pump is judged on the SERVER's
+    // clamped car pos — the client's paper coords are no longer read, so
+    // a refuel from across the map is simply not at the pump
+    const atPump = nearServiceSpot('pump', p.car.x, p.car.z)
     const v = refuelVerdict({ band: identity.band, model: p.car.model, fuel: p.car.fuel, amount: body.amount, atPump })
     if (!v.ok) return ack?.(v)
     try {
@@ -1406,7 +1488,9 @@ io.on('connection', (socket) => {
     if (replayed) {
       return ack?.({ ok: true, replayed: true, condition: p.car.condition, receipt: receiptOf(replayed), balance: walletGet(identity.handle!).balance })
     }
-    const atGarage = nearServiceSpot('garage', Number(body.x), Number(body.z))
+    // THE WIRE'S OWN EYES (hardening): the garage is judged on the
+    // SERVER's clamped car pos, same law as the pump
+    const atGarage = nearServiceSpot('garage', p.car.x, p.car.z)
     const v = repairVerdict({ band: identity.band, model: p.car.model, condition: p.car.condition, atGarage })
     if (!v.ok) return ack?.(v)
     try {
@@ -1716,6 +1800,9 @@ io.on('connection', (socket) => {
   socket.on('wallet', (_raw: unknown, ack?: (r: unknown) => void) => {
     if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
     if (identity.band === 'kid' || identity.band === 'teen') return ack?.({ ok: false, why: 'minors-no-money' })
+    // THE RATE LAW (hardening): the purse read was the one unthrottled
+    // DB door — the account eye now watches it like every money verb
+    if (!allow('wallet')) return ack?.({ ok: false, why: 'too-fast' })
     const w = walletGet(identity.handle!)
     ack?.({ ok: true, balance: w.balance, transferredToday: dayTransferred(identity.handle!), recent: recentLedger(identity.handle!) })
   })
@@ -1728,9 +1815,10 @@ io.on('connection', (socket) => {
     const amount = Math.floor(Number(body.amount))
     const idemKey = typeof body.idemKey === 'string' ? body.idemKey.slice(0, 80) : ''
     if (!idemKey) return ack?.({ ok: false, why: 'bad-idem' })
-    // THE DEPOSIT VERDICT — the pocket is judged client-side by the honest
-    // engine; the purse check is meaningless for a top-up
-    const verdict = depositVerdict({ band: identity.band, amount })
+    // THE DEPOSIT CAP (hardening) — the mint died: the server sums
+    // today's deposits at its own eye and refuses the move that would
+    // cross DAY_DEPOSIT_CAP, whatever the client claims about its pocket
+    const verdict = depositVerdict({ band: identity.band, amount, depositedToday: dayDeposited(identity.handle!) })
     if (!verdict.ok) return ack?.({ ok: false, why: verdict.why })
     try {
       const receipt = theMove({ kind: 'deposit', from: identity.handle!, to: identity.handle!, amount, idemKey, note: typeof body.note === 'string' ? body.note.slice(0, 80) : 'pocket → purse' })
@@ -2226,8 +2314,25 @@ io.on('connection', (socket) => {
       for (const s of stages.values()) {
         if (s.viewers.has(identity.handle)) {
           s.viewers.delete(identity.handle)
+          s.eyesSid.delete(identity.handle)
           pushViewers(io, s)
+          const hp = presence.get(s.host)
+          if (hp?.sid) io.to(hp.sid).emit('wire:stage', { type: 'eye-gone', streamId: s.id, eye: identity.handle })
         }
+      }
+    }
+
+    // THE GUEST EYE LAW (hardening): a guest's eye dies with its socket —
+    // eight refreshes can no longer hold a stage's seats hostage. The
+    // old cleanup only ran for claimed handles, so guest eyes leaked
+    // until the host ended the stage.
+    const guestEye = `guest:${socket.id}`
+    for (const s of stages.values()) {
+      if (s.viewers.delete(guestEye)) {
+        s.eyesSid.delete(guestEye)
+        pushViewers(io, s)
+        const hp = presence.get(s.host)
+        if (hp?.sid) io.to(hp.sid).emit('wire:stage', { type: 'eye-gone', streamId: s.id, eye: guestEye })
       }
     }
 
