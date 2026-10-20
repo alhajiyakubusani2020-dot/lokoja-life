@@ -1710,3 +1710,19 @@ Stage Summary:
 - Books truth: 1,888 accounts (≈100% synthetic test families), ₦3,577,106 circulation, conservation EXACT (₦0 drift), fortress chain 319/319 green server-side, 0 negatives
 - What held: M13 at all 40 doors, token identity, idemKey UNIQUE, PIN scrypt, N12 clamp, 4KB cap, parameterized SQL, no render bombs, OSM geography honest
 - Full kill-list delivered in chat; no code changed (audit only)
+---
+Task ID: PHASE1-A..F
+Agent: orchestrator (Trust & World Hardening Update)
+Task: Phase One — eliminate every critical engineering gap (security/DB/multiplayer/economy/testing)
+
+Work Log:
+- 1A THE MINT DIES (5aeafb6): deposit day-cap at the server's eye (DAY_DEPOSIT_CAP 200k), one day-cap law both lanes (relay counted transfer only), per-account rate eye (3x headroom) behind every socket eye, pump/garage proximity on SERVER clamped pos, relocation gate (1 far hello/5min per handle:model), guest stage-eye dies on disconnect, wallet read joins the rate law — PROOF: NEW scripts/test-hardening.ts 18/18 on a VACUUM copy + scratch wire
+- 1B THE BOOT GUN UNLOADED (ce57de2): --accept-data-loss removed from db:push, migrations 0_init baselined + resolve --applied (the SIGSTOP lesson: paused procs keep file locks — writers must DIE for DDL), backup.sh db_backup (VACUUM INTO + integrity gate + 7 rotation)
+- 1C THE BOOKS GET THEIR LAWS (35e3c30): wire toISOString poisoners → Date.now() (StreamRow 196/196 uniform), 12 clone plates deduped (LKO-137-DM ×7 → oldest keeps), migration hardening_indexes applied: VehicleRow_plate_key UNIQUE + Account_token + LedgerRow(from,createdAt)/to + VehicleRow(x,z) — QUERY PLAN: SEARCH USING INDEX where SCAN ran
+- 1D THE SEAM (a39e2f3): scripts/lib/test-db.ts (makeTestDb/seedAccount/scrubTestHandles), 5 suites retrofitted (wheels 90/90, wire 35/35, fuel 53/53 re-authored to the honest pump law, ledger 45/45, e2e-wheels2's :3003 kill DELETED); playwright browser reinstalled; e2e page-lane 502 = platform gateway sid-bound WS routing (REMAINING, not ours)
+- 1E THE CLIENT LAWS (1b6620a): fortress chain orientation fixed (Dashboard lied from the 2nd signed entry), trade one-application book (ack + sync double-pay dead), reset is TOTAL (story/patti/wardrobe/transients in startNewGame+resetGame+continueGame), phone overlay freezes input, street banner deps fixed
+- 1F FINAL: fuel 53/53 + ledger 45/45 + hardening 18/18 on final code; dev 200; wire health ok
+
+Stage Summary:
+- 5 commits, 6 P0s dead (mint, tests-on-books, boot gun, dup plates, chain lie, trade double-pay), rate/teleport/guest-eye walls up
+- REMAINING: 5 direct-cash bypass sites (festival/ferry/travel/bank writes unsigned entries), rig-cache per-instance, mid-drive re-hello, async scrypt, gateway allowlist for scratch WS, battery runner exit codes + CI, World Accuracy (Phase 2) untouched
