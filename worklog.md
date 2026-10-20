@@ -1587,3 +1587,126 @@ Work Log:
 
 Stage Summary:
 - W10-c SHIPPED: the wheels eat real naira. The clamp's own metres burn the tank and wear the body; the dry engine dies at the line and takes no key; the Motor Park's pump pours ₦2,000 at a time through the fortress ledger — exactly once, replay-safe, day-capped — and the mechanic's quote is the wear's own math, paid the same way. The condition column is alive: the garage's books are the city's books. THE WHEELS SAGA (W10-a/b/c) IS COMPLETE: the nation owns, drives, parks, boards, refuels and repairs — every kobo through the ledger, every law at the server door.
+
+---
+Task ID: AUD-2
+Agent: auditor (server security)
+Task: Hostile security audit of nation-wire server + ledger + M13
+Work Log:
+- Read mini-services/nation-wire/index.ts end-to-end (2287 lines) + wheels.ts, ledger.ts, bodies.ts, socialgraph.ts, stage.ts, voice.ts, live.ts, profile.ts, prisma/schema.prisma, wire.ts (protocol cross-check), Caddyfile, /api/live/action relay money block.
+- P0: wallet:deposit mints purse naira with NO PIN, NO server-side pocket proof, NO day cap on deposits (index.ts:1723-1741; depositVerdict caps 50k/move only) — unbounded mint at 4 calls/10s/socket, worse on the HTTP relay which has no rate limit at all.
+- P1: day-cap is inconsistent across doors — wire counts transfer+tip+refuel+repair (index.ts:877-882), relay counts ONLY 'transfer' (route.ts:633-634) → cap bypass by mixing doors; relay's async aggregate-then-write is also TOCTOU-raceable.
+- P1: refuel/repair proximity trusts CLIENT x/z (index.ts:1378, 1409) instead of the server's clamped p.car.x/z — pump/garage walls die to a coordinate claim.
+- P1: every rate cap is PER-SOCKET (index.ts:1023) and one token may open unlimited sockets → all caps (wallet/chat/patch/veh) multiply ×N; scryptSync PIN check blocks the whole wire per attempt.
+- P2: vehicle:hello accepts any client pos (free car teleport, index.ts:1138-1152); body pos lane has no speed clamp by its own admission (bodies.ts law); stage guest eyes leak on disconnect (cleanup gated on identity.handle, index.ts:2220) → 8 ghost eyes permanently kill a stage; hello/dm:open/chat create unbounded rooms, hello is unthrottled roster amplification; plate uniqueness is app-level only (no UNIQUE(plate) in schema).
+- Verified good: token→DB identity at handshake (no handle spoofing), idemKey UNIQUE + transactional theMove + WAL, PIN scrypt timing-safe on spend sides, M13 walls at wheel/pump/garage/stage/voice/money doors, N12 clamp immune to dt-spoof/zigzag/tick-flood, 4KB message cap, parameterized SQL only, fresh-sid sweep law, plate/paint laws enforced at every write door.
+- Probes (5 GETs, no POSTs): :3003/health ok (head=1782, online=0); gateway :81 routes any XTransformPort (loopback forwarder, confirmed); Access-Control-Allow-Origin: * confirmed live on the socket.io handshake.
+Stage Summary: 15 findings — 1 P0 (deposit money-mint), 3 P1 (day-cap door split + relay race, client-side pump/garage proximity, per-socket rate-limit multiplication), 6 P2, 5 P3. Top fix: make deposits server-proven and per-account-capped, unify the day-cap SQL across both doors, and drive pump/garage proximity from the clamped car pos.
+---
+Task ID: AUD-5
+Agent: auditor (build/tests/perf)
+Task: Hostile audit of build, test arsenal, SILK perf, process
+Work Log:
+- Ran `bunx tsc --noEmit` on the whole tree: exit 2 with 9 errors — 3 in repo-owned scripts (test-m24-bodies.ts:268, e2e-m23-flora.ts:87, probe-home-street.ts:12), 4 in vendored research/competitor-zip, 2 in skills/ — tsconfig `**/*.ts` include sweeps vendored dirs; src/ itself is 100% clean. next.config.ts:7 `ignoreBuildErrors: true` makes the build gate decorative.
+- Ran `bunx eslint .`: exit 0, 0 errors 0 warnings — but eslint.config.mjs:12-17 disables no-explicit-any, no-unused-vars, no-non-null-assertion, ban-ts-comment, prefer-as-const. "Clean" is defanged.
+- Mapped the arsenal: scripts/ = 146 files, 47 test-*.ts, 58 e2e-*.ts. run-battery.sh loops test-*.ts with `timeout 90`, tails output into /tmp/battery-m20.log, checks NO exit codes, never fails — "46/46 GREEN" is a human eyeballing a log, and the file count has already drifted to 47. No .github/workflows — zero CI.
+- Test hygiene: test-m24-wire.ts:287-292 INSERTs a fake Account into db/custom.db (the production books); test-m24-fuel.ts:294 UPDATEs VehicleRow.fuel on the same live DB; e2e-m24-wheels2.ts:169 runs `lsof -ti :3003 | xargs -r kill` before spawning its own wire. Good counter-pattern exists: readonly opens in e2e-m24-fuel.ts:123, test-m24-wheels.ts:291.
+- Dependency audit: 54 deps + 12 devDeps. Dead: react-hook-form + @hookform/resolvers, recharts, embla-carousel, input-otp, cmdk, vaul, react-day-picker, next-themes, ~25 @radix-ui/* (their shadcn wrappers in src/components/ui/* are only imported by each other; only ui/toaster is reachable via layout.tsx). Duplicates: @types/bun AND bun-types, tailwindcss-animate AND tw-animate-css. z-ai-web-dev-sdk is a runtime dep used only by scripts/gen_art.mjs. Prisma migrations dir: 0 files — `db:push --accept-data-loss` is the only schema workflow.
+- Perf forensics: .next holds ONLY dev/ (no BUILD_ID, no standalone/) — the claimed SILK 2.59s/406KB prod build no longer exists on disk; `npm start` would fail until a fresh build. First-load architecture verified honest: page.tsx is a 'use client' shell with ssr:false dynamic imports for CharacterCreation/Dashboard, menu-store sliced away from the 5,442-line useGameStore, idle preload; no lucide star imports, no moment/lodash/date-fns, AVIF/webp, public/ = 1.5MB.
+- Process: db/custom.db IS in git (git ls-files confirms; 33 commits of history, 2.1MB production books with citizen accounts; .gitignore only excludes the -shm/-wal sidecars). .env also tracked (2 commits, currently just a local DATABASE_URL path, no secret). scripts/ is a junk drawer: one-off patch-w9-*.py, splice-trees.py, report_content_[abc].py, m23-new-trees.tsx.txt, 8 teardown-ours* variants, tmp/ subdir. `.next` = 309MB dev artifacts uncommitted (fine) but never cleaned.
+- Coverage gaps: /api/wire-status route zero test refs; systems with zero direct refs = nation-bridge, perfProbe, remotenet, socialnet, walletnet, wheelnet (6/63); phone apps houses/health/school/wardrobe have no direct test refs; several older e2e witnesses (e2e-m13-shield.ts, e2e-m22-streets.ts) contain zero assertions and zero exit gates — pass = didn't crash.
+Stage Summary:
+- tsc: 9 errors total (0 in src/, 3 in scripts/, 6 in vendored research/+skills/ swept by tsconfig); eslint: 0/0 but 6 core rules disabled; deps: 66 declared, ~30 dead or duplicated; battery runner aggregates nothing; no CI.
+- Top findings: production DB committed to git with 33 commits of history (P1); tests write directly to the live production books + kill port 3003 (P1); type/lint gates decorative — ignoreBuildErrors:true + defanged eslint (P1); "46/46 GREEN" battery has no exit-code checking and no CI to run it (P1).
+- SILK story itself holds up statically: honest dynamic-import shell, sliced stores, optimized assets — but the last green numbers reference a build that no longer exists on disk.
+---
+Task ID: AUD-4
+Agent: auditor (DB/economy)
+Task: Hostile audit of schema, ledger books, economy math
+Work Log:
+- READ-ONLY posture held: :3000/:3003 confirmed live first (ss -ltn); every DB touch was sqlite mode=ro via bun:sqlite (sqlite3 CLI absent). Zero writes, zero schema changes, zero server starts. (One exception: the mandated worklog append.)
+- Read prisma/schema.prisma (17 models), mini-services/nation-wire/index.ts in full (2,286 lines), ledger.ts, wheels.ts, fortress.ts, economy.ts, walletnet.ts, api/live/action wallet section, backup.sh, repair-ledger-chain.ts, run-battery.sh, .zscripts/dev.sh.
+- SQL facts (mode=ro): conservation identity proved EXACT — deposits 3,610,200 − withdraws 9,500 − refuels 22,000 − repairs 1,594 = 3,577,106 = Σ WalletRow.balance (drift 0). 1,888 accounts, 125 wallets, 319 ledger rows. 0 negative balances, 0 dup idemKeys, 0 non-integer amounts, 0 wallet orphans, 0 day-cap breaches any day.
+- Independent fortress-chain re-walk (own sha256, not their script): 319/319 links verify seed → tail d9d49e17…, zero breaks.
+- Fleet audit: 85 VehicleRow rows, 0 fuel/condition out of [0,1], 0 odometer absurdities (max 552.2u), 0 plate-format violations, 0 orphans — BUT duplicate plates: LKO-137-DM ×7 (7 handles), LKO-222-CD ×4, LKO-419-AB ×4. No unique(plate) in schema; door-only enforcement empirically falsified on the books.
+- EXPLAIN QUERY PLAN: Account.token, LedgerRow(fromHandle/toHandle), VehicleRow.plate and the parked box query are all full SCANs (no indexes); token lookup runs at every socket handshake.
+- Found the second money door: /api/live/action re-implements theMove in Prisma — its transferredToday still counts kind='transfer' ONLY (route.ts:600,634) while the wire counts transfer+tip+refuel+repair (index.ts:879) — the W10-c day-cap fix half-landed; lane-mixing dodges the cap.
+- Found the mint: depositVerdict (ledger.ts:96-107) has NO daily cap and NO PIN; the server credits the purse on client declaration, both lanes. ₦3.61M minted vs ₦9.5k withdrawn. The 200k day cap on spends is downstream theater.
+- Found the test-pipeline hole: test-m24-ledger.ts:46 and test-m24-fuel.ts:294 point at db/custom.db — fuel suite even UPDATEs VehicleRow.fuel on the live books; the register is ~100% synthetic (ldg_/stg_/f3a_/whl_/whla_ families, 'e2e-fund-*' idemKeys).
+- Found the boot landmine: .zscripts/dev.sh runs `bun run db:push` (= prisma db push --accept-data-loss) on EVERY container boot; no prisma/migrations dir exists at all. StreamRow.updatedAt is a mixed-type column (60 integer + 136 text) that Prisma reads — the exact poison class their own index.ts:244 comment warns about.
+- Refuel overpay law confirmed at door level: refuelVerdict charges the full requested amount while fuel clamps at 1 (wheels.ts:546-551) — the pump keeps the change. Refuel/repair proximity checks the CLIENT-sent x/z (index.ts:1378,1409), not the server's own clamped presence pos — teleport-pump.
+Stage Summary:
+- BOOKS: 1,888 accounts (≈100% synthetic), ₦3,577,106 in 125 purses, conservation EXACT, chain 319/319 GREEN, 0 negatives, 0 dup idemKeys, 0 cap breaches.
+- TOP P0s: (1) unlimited server-side mint via client-declared deposits, no cap/PIN; (2) the 46-suite battery mutates the LIVE db (test-m24-fuel.ts:294 writes VehicleRow); (3) db push --accept-data-loss runs at every boot, zero migrations.
+- TOP P1s: dup plates on disk (no unique index), refuel overpay never refunded, teleport-pump via client-supplied coords, relay day-cap still transfer-only, StreamRow.updatedAt mixed-type time bomb.
+- Infrastructure: backup.sh backs up GIT, never the DB; two writer processes (bun:sqlite wire + Prisma relay) share one SQLite file; hot lookups (token, dayTransferred, plate) are full scans.
+
+---
+Task ID: AUD-6
+Agent: auditor (phone apps/UI)
+Task: Hostile audit of phone apps, HUD, screens, landing truth (READ-ONLY — nothing modified)
+
+Work Log:
+- Mapped the whole UI surface: PhoneScreen (1,291) + 26-app grid + manifest.ts (10 M21 entries) + app-face.tsx kit + HudOverlay (1,919) + WorldPhoneLayer + GaragePanel + controls.ts + InteriorScene + MainMenu/page.tsx + /api/wire-status + menu-store.
+- THE 26-APP CLAIM PROVEN: counted 26 entries in PhoneScreen's apps array, every one mounts a real component reading REAL store slices — verified every useGameStore/social/wire selector used by phone files exists (nation*, japa, housing, cityPulse, liveAction, walletnet, patchVehicleMeters, fleet...). Zero stubs, zero dead buttons, zero "coming soon" fakes. Whot is a full 54-card engine; Story/Patti/Career are honest readers with real empty states.
+- Extracted ALL data-testid refs from scripts/e2e-*.ts (184 selectors) and cross-grepped src (414 defs incl. 80 template forms): found exactly 2 rot entries (kid-emote-fire, gate-maybe — both in e2e-m13-shield.ts, both null-guarded so the suite silently skips its own assertions); everything else resolves statically or via ${id}-hero / calls-screen-${phase} / garage-fuel-${model} templates; also flagged render-time dup garage-sell (per-vehicle) in GaragePanel.
+- Read HudOverlay end-to-end: ref-driven speedo/tank gauge confirmed honest (DOM writes only on change); found the W4 junction banner stale-closure (auto-clear check reads a banner captured at effect-mount → never fires) and a right-4 collision stack (speedo vs seats-toggle vs pump chip) computed from the actual rem values.
+- Traced the input law: controls.ts guards only INPUT/TEXTAREA; freezeInput is called by HudOverlay (panel/travel) and InteriorScene only — the WorldPhoneLayer phone overlay (z-45, bg-black/35) freezes NOTHING: WASD/E/C/V still drive the world behind the open phone. No Escape/focus-trap on phone overlay, food sheet, register wall (HUD sheets DO get Escape).
+- State-vs-UI drift found concretely: phone garage-app still prints the dead M4 law ("fuel e no dey park for garage") and shows no fuel/condition, while W10-c's GaragePanel shows tank/body bars + pump + mechanic reading the same save's fuel?/condition? fields.
+- Checked the landing's truth: /api/wire-status is a clean 1.5s pass-through of the wire /health; ribbon renders live/quiet honestly; chips LOCATIONS.length (10) and NPCS.length (14) derive — but the "26 phone apps" chip is a hardcoded literal and the worklog's "LOCATIONS.length=32" claim is false (real count 10).
+- catalogued visual-rot inventory: 11 faces speak app-face; garage-app + whot-app (M21) + 7 core PhoneScreen apps + messages/calls/connect/profile/LiveApp do not; raw hex counts outside the kit (PhoneScreen 7, connect-app 9, LiveApp 6, MenuAuthSheet/WorldPhoneLayer dark-surface hex throughout) vs the kit's own "no colour outside the tokens" law.
+
+Stage Summary:
+- 12 findings: 2 P1 (phone overlay leaves world input live — walker moves/interacts behind the open phone; junction banner never auto-dismisses — stale closure), 3 P2 (two-garage truth drift, driving-chrome right-4 overlap, dialogs without Escape/focus-trap + testid rot), 7 P3.
+- 26/26 apps are REAL (no stubs, no dead buttons, no missing data); manifest law holds; all e2e-pinned testids resolve except kid-emote-fire + gate-maybe.
+- Landing honesty holds at the API/ribbon level; the "26 phone apps" chip is the one hardcoded number, and the worklog's own "32 locations" claim is inflated (real: 10).
+- Design language: 11/26 faces on the app-face kit; garage-app + whot-app + the 7 core apps + 5 social apps still speak the old language — wave 2's "eleven remaining faces" silently excluded garage.
+---
+Task ID: AUD-3
+Agent: auditor (client state/vehicles/sync)
+Task: Hostile audit of useGameStore + vehicle/sync systems (READ-ONLY)
+Work Log:
+- Read useGameStore.ts in full (all 5,442 lines, chunk by chunk), wheels.ts + wheelnet.ts + wire.ts + save.ts + guest.ts + remotenet.ts + walletnet.ts + nation-bridge.ts + menu-store.ts + social-store.ts in full; skimmed live.ts, shield.ts, economy/ledger/fortress, HudOverlay/RemoteVehicles/RemoteWalkers/DriveSystem/Actors, mini-services/nation-wire vehicle doors, and the live relay routes.
+- Hunted the CLOBBER BUG CLASS field by field at every load/save boundary (boot, continueGame, loginAccount merge, registerAccount, startNewGame, resetGame, scheduleAutosave/saveNow, SaveSystem descent). The W10-b token fix is correctly in place; found a fresh sibling: startNewGame + resetGame never reset story/patti/wardrobe (and the transient flags), so "Start Over" re-persists the old life's quest/secret/wardrobe state into the new save at the first autosave.
+- Proved a P1 with bun: verifyChain (fortress.ts:181) walks OLDEST-first but the player ledger is NEWEST-first (economy.ts pushTransaction prepends) — Dashboard.tsx:411 `verifyChain(player.transactions).ok` is false from the second signed entry on; the "fortress honesty row" permanently lies. Repro: chainNext×2 → newest-first array → {ok:false,brokenAt:0}; reversed → {ok:true}.
+- Proved the trade double-pay: liveAcceptTrade (store:4993) pays the accepter immediately; the relay ALSO broadcasts kind:'trade' accepted:true (api/live/action/route.ts:328-333) and liveSync (store:4801-4809) applies giveCash/wantCash AGAIN at the next 12s heartbeat — no applied-trade book exists client-side.
+- Found the shared-rig collision: RemoteVehicles' module RIGS cache (keyed model:paint) feeds one THREE.Group into multiple <primitive> mounts — any two same-model same-paint cars (every stock danfo/keke pair; live car vs its parked ghost) fight over one parent; three.js single-parent law means one car renders, one vanishes.
+- Listener/timer sweep: wireForget is exported and never called (dead OFF-SWITCH; resetGame leaves the socket + old roster); wheelnet's burn mirrors lastMetres one tick stale and skips the final deceleration interval; a mid-drive wire drop never re-hellos (server answers vehicle:pos 'no-car', refusals invisible on the fire-and-forget lane); a missed crew 'dropped' push can strand a rider frozen (roster backstop only fires when my row still shows riding with a DIFFERENT driver).
+- Guest/child matrix + testid cross-check: server doors (minor-wheel, minors-no-money, guest-dark, carried) all re-check client latches; 5 stale e2e testids (gate-maybe, postcard-arrive, nation-hero, contacts-hero, stage-kid) no longer exist in the UI; zero console.log in game code; zero object-literal Zustand selectors in all of src.
+Stage Summary:
+- 1 proof-driven P1 + 3 P1-class defects, 5 P2, ~6 P3 logged; top: ledger chain-orientation lie, trade double-pay, shared vehicle rig primitive collision, startNewGame/resetGame stale-slice clobber (W10-b bug class sibling).
+- Vehicle/sync layer is otherwise honest: LIVE-WINS enforced client-side (order-independent), HELLO TIMEOUT LAW present (4s), 12Hz truth lives in module maps with DOM-only HUD writes — no 12Hz render bomb.
+- Money doors are sound at the store (guards + chain + walletnet refund/server-wins laws) but bypassed unsigned by 5 direct-cash write sites (bank deposit/withdraw, festival spray, ferry fare, travel fare).
+- Fix order: (1) reverse ledger before verifyChain (or store oldest-first), (2) applied-trade book or skip-self in liveSync, (3) per-car rig instances (or three.js SkeletonUtils clone) in RemoteVehicles, (4) reset story/patti/wardrobe + transients in startNewGame/resetGame, (5) re-hello on wire reconnect while carLive, (6) call wireForget in resetGame.
+---
+Task ID: AUD-1
+Agent: Explore auditor (roads/world)
+Task: Hostile audit of roads & world geometry layer
+Work Log:
+- Read worklog tail (m24-w10c), then read roads.ts, junctions.ts, geo.ts, geo-gate.ts, layout.ts (all 1,739 lines), collision.ts, drains.ts, plates.ts in full; section-read CityMesh.tsx (2,811), WorldTerrain.tsx (1,308), Actors.tsx, WorldScene.tsx, DriveSystem.tsx, vehicles.ts, flora.ts, props.ts.
+- Ran read-only bun computes against scripts/geo/bootstrap + the real geo-v1.bin: segment/endpoint extraction, ε=0.5 endpoint clustering + union-find, dead-end→nearest-foreign-road gap histogram, duplicate/zero-length segment scan, river-crossing + sunken-road sweeps vs BRIDGES zones, confluence geometry, anchor lat/lon projection (6.753E/7.790N, 1u=26m).
+- Measured world-layer module eval on Bun: bootstrap 13.7ms, layout 795ms, flora 1,100ms, drains 84ms, junctions 20ms; micro-benchmarked the scatter probe at ~15µs/candidate → layout.TREES (700, ZERO consumers) + layout.GRASS (7,500, one consumer = 72 flowers) burn ~0.4–0.8s of every world boot.
+- Verified the road-clearance law chain (roadGap/roadDistance grids) across buildings/lamps/kerbs/drains/plates/flora/props; verified drains' 1:100 invert law (minCover 0.22, minFallRatio 0.0099) and that every major crosses carved water on a real BRIDGES deck (0 non-bridge majors in water).
+- Audited render layer for per-frame geometry/material explosions: none found in roads/kerbs/zebras/drains/plates (merged, memoized, disposed); found instead systematic height offsets (bump paint buried under tarmac, blob shadows under roads) and the collision census gap (walls/stalls/parked/trees non-solid).
+- Diagnosed the stall genocide: 30/32 hand-placed market/food stalls die on roadGap ≥ 0.45 (gaps −3.1..−0.08 — the real roads run through the market grid); STALLS = 2 citywide.
+- Confirmed config/constant contradictions are minor (ROAD_RENDER_W fallback 2.2 vs 4.2; Math.random in Rain vs the repo's no-Math.random law); config.ts itself is respected (trafficBaseSpeed, MAP_SCALE 6.2 = WIRE_MAP_SCALE).
+Stage Summary:
+- 0 P0 / 5 P1 / 5 P2 / 5 P3. The roads are REAL (752 km OSM arc, names, correct Niger/Benue/Patti/confluence arrangement) but the fabric is unstitched and the world layer has three systemic truths-vs-renders splits.
+- Top 3: (1) world boot pays ~1.9s main-thread module eval, ~0.5–0.8s of it DEAD data (layout.TREES unused, GRASS → 72 flowers); (2) road graph is a stroke pile — 83% of endpoint clusters are dead-ends, ~1,045 endpoints sit >1u (26m+) from any other road, incl. a highway stub 7.2u from anything; (3) collision covers buildings/schools/POIs only — compound walls, the civic-campus fence, stalls, lamps, trees, parked lorries are all walk-through.
+- Honorable mentions: Kpata market renders ZERO stalls; school-bump paint always buried under tarmac while DriveSystem lifts the car; 24 foot/minor/track ways dive under the water plane with no bridge and the river wall blocks walkers mid-path.
+- Read-only audit: no files created/edited, no servers touched; all computes printed to stdout.
+---
+Task ID: AUD-0
+Agent: orchestrator (main agent)
+Task: Full hostile audit of the whole app — 6 parallel auditors (roads/world, server security, client state, DB/economy, build/tests/perf, UI/phone), every claim re-verified by hand before delivery
+
+Work Log:
+- Re-anchored shield first (mirror was dead AGAIN — 3rd env wipe): bash scripts/backup.sh anchor → HEAD c9a1ee4, MIRROR-IN-SYNC
+- Swarmed AUD-1..AUD-6 read-only; each verified findings with file:line quotes + computed SQL/topology
+- Hand-verified the top claims: deposit door (ledger.ts:96-107 + index.ts:1723-1741), test DB writes (test-m24-fuel.ts:294), boot db:push (.zscripts/dev.sh:130), dup plates SQL (LKO-137-DM ×7), fortress chain orientation (Dashboard:411 + economy:45 + fortress:181), trade double-pay (4999/4801), rig map (RemoteVehicles:114), per-socket rate (index:1023), relay cap (route:633), pump proximity (index:1378), CORS *, banner stale closure (HudOverlay:656), phone no-freeze (WorldPhoneLayer 0 freezeInput hits)
+
+Stage Summary:
+- ~60 verified findings: 3× P0 (deposit mint, tests-on-prod-books, boot --accept-data-loss), 19× P1 (DMV dup plates ON DISK, fortress row always lies, trade double-pay, two day-cap laws, teleport-pump, hello-teleport, per-socket caps, shared-rig erasure, reset doesn't reset, mid-drive drop dead lane, StreamRow type bomb, 0.4-0.8s dead boot compute, road fabric holes, collision ghosts, Kpata 0 stalls, phone no-freeze, banner immortal, prod DB in git, decorative type gate)
+- Books truth: 1,888 accounts (≈100% synthetic test families), ₦3,577,106 circulation, conservation EXACT (₦0 drift), fortress chain 319/319 green server-side, 0 negatives
+- What held: M13 at all 40 doors, token identity, idemKey UNIQUE, PIN scrypt, N12 clamp, 4KB cap, parameterized SQL, no render bombs, OSM geography honest
+- Full kill-list delivered in chat; no code changed (audit only)
