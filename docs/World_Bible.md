@@ -1,11 +1,13 @@
 # LOKOJA LIFE — WORLD BIBLE
-### Version 1.0 · The book of the city itself
+### Version 2.0 · The book of the city itself
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *the place*: its land, districts, landmarks, fabric, nature, seasons, people, and time. The Experience Bible owns how the place *feels*; this one owns how the place *is*.
 >
 > **Companions.** `Experience_Bible.md` (the feelings), `Art_Audio_Bible.md` (the senses), `Content_Bible.md` (how to grow the place without breaking it).
 >
 > **Ground rule.** Every number below was verified on disk (source files cited). Where the city today falls short of the city this book describes, the gap is named as a **debt** — never hidden, never faked. Honesty about the city is part of the city.
+>
+> **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: the geo layer re-decoded from the binary itself (2,655 ways / 5,894 segments / **750.4 km**), street-craft counts re-verified at runtime, stale figures amended, and the living-constitution layers added (Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 
 ---
 
@@ -13,7 +15,7 @@
 
 ### 0.1 A real place, not a collection of assets
 
-Lokoja is a real city — the capital of Kogi State, Nigeria, sitting where the Niger and Benue rivers meet. Lokoja Life is built from its *actual geography*: the road network is decoded from real OpenStreetMap data (`public/world/geo-v1.bin` — 2,655 ways / 5,900 segments / **754 km of real roads**, 16 rivers, 16 bridges, loaded before any layout module evaluates, `geo-gate.ts`). The districts carry their real names. The hill is the real hill. The confluence is the real confluence.
+Lokoja is a real city — the capital of Kogi State, Nigeria, sitting where the Niger and Benue rivers meet. Lokoja Life is built from its *actual geography*: the road network is decoded from real OpenStreetMap data (`public/world/geo-v1.bin` — 2,655 ways / 5,894 segments / **750.4 km of real roads**, 16 rivers, 16 bridges, loaded before any layout module evaluates, `geo-gate.ts`). The districts carry their real names. The hill is the real hill. The confluence is the real confluence.
 
 This is the founding decision of the whole project and it is **permanent law**:
 
@@ -46,6 +48,7 @@ The city's measures are engine law (`geo.ts:7-38`, `layout.ts:36-49`):
 | World half-extent | 310 u ≈ **16 km across** | The playable city |
 | 2D map grid | 0–100 ↔ world via `MAP_SCALE = 6.2` | The paper map and the 3D city are one truth |
 | Playable water | None — rivers are law-protected barriers | Bridge decks excepted (`collision.ts`) |
+| Rendered widths | Stylised | Plan geometry is 1:1 (W-1); road ribbons render widened for readability (minor ≈ 2.6 u visual) and Patti's 30 u mound compresses its real ~450 m — lawful stylisation, never presented as survey truth |
 
 **Law W-2 — One truth, two renderings.** The 2D map and the 3D world are renderings of the same data. Nothing may appear on one and not the other (except UI affordances). A place added to the map that is not in the world is a lie; so is the reverse.
 
@@ -80,7 +83,7 @@ The city's measures are engine law (`geo.ts:7-38`, `layout.ts:36-49`):
 
 **DOCTRINE.**
 
-- **Law W-5 — Bridges are promises.** A bridge rendered must be walkable/drivable, and a road that crosses water must do it on a bridge. The known fabric debt (18 underwater road segments — audit §4) is a *lie the city tells*; it is scheduled fabric repair (§3.5), and until then no content may route the player onto one.
+- **Law W-5 — Bridges are promises.** A bridge rendered must be walkable/drivable, and a road that crosses water must do it on a bridge. The known fabric debt (15 channel-crossing road segments, 6 fully submerged at half-width — threshold-dependent measure, re-audited 2026-10-21) is a *lie the city tells*; it is scheduled fabric repair (§3.5), and until then no content may route the player onto one.
 - Ferry fares follow the universal consent law (quote → consent → pay → receipt).
 - The rivers have moods with the weather: flood days raise them (Experince EX-24); storm makes them loud (the river ambience layer swells). A river that ignores the sky is a texture, not a river.
 
@@ -302,7 +305,7 @@ Each entry below is a *character sheet for a place*. Content added to a district
 
 ### 3.1 The Road Network
 
-**GROUND.** 2,655 ways / 5,900 segments / **754 km of real Lokoja roads** decoded from `geo-v1.bin` (60,071 B) into draped ribbon geometry with markings, kerbs, zebras (`WorldTerrain.tsx:499-662`, `CityMesh.tsx:71-160`). Five traffic loops exist; **three carry rigs** (loops 0/1/2 — `TRAFFIC_MIX`, `Actors.tsx:749`; loops 3/4 have tables, zero rigs — audit §4.4).
+**GROUND.** 2,655 ways / 5,894 segments / **750.4 km of real Lokoja roads** decoded from `geo-v1.bin` (60,071 B) into draped ribbon geometry with markings, kerbs, zebras (`WorldTerrain.tsx:499-662`, `CityMesh.tsx:71-160`). Only 19 ways carry OSM names — the wayfinding load rests on the 32 anchors and the landmark silhouettes (W-41), which is why they are law. Five traffic loops exist; **three carry rigs** (loops 0/1/2 — `TRAFFIC_MIX`, `Actors.tsx:749`; loops 3/4 have tables, zero rigs — audit §4.4). **Stale-header debt:** `layout.ts:7` still claims "3,000+ ways, ~930 km" — a fossil comment; the binary and `geo.ts` are the truth.
 
 **DOCTRINE.**
 
@@ -312,7 +315,7 @@ Each entry below is a *character sheet for a place*. Content added to a district
 
 ### 3.2 Junctions, Signals & Bumps
 
-**GROUND.** 14 traffic-light clusters max (`LIGHT_CAP = 14`, `junctions.ts:46`); the phase law is GREEN 12 s → AMBER 3 s → RED 15 s (30 s cycle, `junctions.ts:52-54`); speed bumps capped at 12 (`BUMP_CAP`); danfo stops placed as street furniture. **Debt (named):** light heads are unlit — the hardware exists, the behavior is not rendered (`CityMesh.tsx:1358`).
+**GROUND.** **12 signal heads placed** (cap `LIGHT_CAP = 14`, `junctions.ts:46`, placement `:168-212`); the phase law is GREEN 12 s → AMBER 3 s → RED 15 s (30 s cycle, `junctions.ts:52-54`); **6 speed bumps placed** (cap `BUMP_CAP = 12`); danfo stops placed as street furniture. **Debt (named):** light heads are unlit — the hardware exists, the behavior is not rendered (`CityMesh.tsx:1358`).
 
 **DOCTRINE.**
 
@@ -342,7 +345,7 @@ Named, ranked, and honest — these are the repairs the city owes its own truth 
 | # | Debt | Truth broken | Where |
 |---|---|---|---|
 | 1 | Kpata + food-area stall resurrection | The commercial heart renders empty | `layout.ts:1660` filter |
-| 2 | 18 underwater road segments | Roads that drown | geo layer dressing |
+| 2 | 15 underwater road segments (6 fully submerged; threshold-dependent count) | Roads that drown | geo layer dressing |
 | 3 | 72% dead-end way-ends | Suburbs that go nowhere | geo layer + rim logic |
 | 4 | Unlit signal heads | Hardware with no behavior | `CityMesh.tsx:1358` |
 | 5 | Civic fence walk-through | Boundaries that aren't | `collision.ts:56-71` |
@@ -370,11 +373,11 @@ Twelve hand-built landmarks exist (`CityMesh.tsx`): **Confluence Deck + flag + c
 
 ### 5.1 The Tree Guild
 
-**GROUND.** 720 trees across 10 species (`TREE_CAP = 720`, `flora.ts:115`; `SPECIES_IDS`/`SPECIES_META` from `flora-species.ts`), instanced with a wind shader; species placement obeys spacing and guild laws. **Debt (named):** `layout.TREES` (700 legacy trees) computes at import with zero render consumers — dead compute, ~0.4–0.8 s of world-boot (audit §4); flora's guild is the real forest.
+**GROUND.** 720 trees across 10 species (`TREE_CAP = 720`, `flora.ts:115`; `SPECIES_IDS`/`SPECIES_META` from `flora-species.ts`), instanced with a wind shader; species placement obeys spacing and guild laws. The 2026-10-21 stand: neem 181 · mango 227 · cashew 94 · shea 92 · acacia 54 · plantain 45 · raffia 16 · oilpalm 6 · iroko 3 · baobab 2. **Debt (named):** `layout.TREES` (700 legacy trees) computes at import with zero render consumers — dead compute, ~0.4–0.8 s of world-boot (audit §4); flora's guild is the real forest.
 
 **DOCTRINE.**
 
-- **Law W-43 — The guild is calibrated, not random.** Species follow Lokoja's real green: neem and locust-bean in the older quarters, mango and citrus near homes, economic trees at the edges. A species list change is a Bible amendment (flora-species is the register).
+- **Law W-43 — The guild is calibrated, not random.** The guild calibrates toward Lokoja's real green: neem in the older quarters, mango and cashew near homes, shea and acacia at the edges. Locust-bean and citrus are *future* species — admitted only through the flora-species register (a Bible amendment), never by a content PR. A species list change is a Bible amendment (flora-species is the register).
 - **Law W-44 — Trees are shade, and shade is architecture.** Every gathering place (neem trees per the Constitution) earns its shade: sitting spots, conversation geometry (EX-33.4). Trees exist for *life under them*, not for skyline garnish.
 - The legacy TREES array dies in the boot-diet work (Gate 0 adjacent) — the guild is the only forest.
 
@@ -386,7 +389,7 @@ Twelve hand-built landmarks exist (`CityMesh.tsx`): **Confluence Deck + flag + c
 
 ### 5.3 Wildlife
 
-**GROUND.** Birds exist (Ambient Birds); goats, lizards, and the rest are not yet simulated.
+**GROUND.** Birds exist (3 flocks, 18 birds, day-only — confluence 7, Patti 6, market 5, `Actors.tsx:1111-1171`); goats, lizards, and the rest are not yet simulated (they live in copy only — `locVibes.ts`).
 
 **DOCTRINE.**
 
@@ -440,7 +443,7 @@ Twelve hand-built landmarks exist (`CityMesh.tsx`): **Confluence Deck + flag + c
 
 ### 7.3 Institutions
 
-**GROUND.** Schools (98 doors, 17 interior builders, `schools.ts`), civic desks (KGIRS/NEPA/police/EFCC → CivicPanel), the bank (teller → BankPanel in a real bank building — the healthiest interior path), the clinics' orbit (no dedicated hospital interior yet — a named horizon).
+**GROUND.** Schools (12 sites · 98 doors · 88 rooms, 17 interior builders, `schools.ts`), civic desks (KGIRS/NEPA/police/EFCC → CivicPanel), the bank (teller → BankPanel in a real bank building — the healthiest interior path), the clinics' orbit (no dedicated hospital interior yet — a named horizon). **Built but doorless (named horizon):** five G2 rooms — the Maigari palace hall, stadium office, Sokamms room, Adankolo reading room, Emiwoziri fish shed — are schema-valid and registered, excluded from the door array pending their exterior pins (the one-door law, `interiors.ts:758-768`); they are the next rooms, not decoration.
 
 **DOCTRINE.**
 
@@ -511,7 +514,7 @@ Twelve hand-built landmarks exist (`CityMesh.tsx`): **Confluence Deck + flag + c
 
 ### 8.2 The Seasonal Rhythm
 
-The rare skies (W-49) mark the year: harmattan's dust weeks (the pale sun, the cold mornings), the storm builds, the flood's humility days. Festivals recur on the honest calendar (Content Bible festival playbook — crowd + sound + signed economy + dress, all four or none, EX-25.1). **Law W-64 — Seasons are felt in the body:** each season changes at least one meal, one price, one activity, and one sound in the city.
+The rare skies (W-49) mark the year: harmattan's dust weeks (the pale sun, the cold mornings), the storm builds, the flood's humility days. The calendar year is **72 days** (`yearDays`, `config.ts:658`); **ten festivals** recur on it, among them Ramadan's drifting night market and Detty December (`calendar.ts:159-173`; Content Bible festival playbook — crowd + sound + signed economy + dress, all four or none, EX-25.1). **Law W-64 — Seasons are felt in the body:** each season changes at least one meal, one price, one activity, and one sound in the city.
 
 ---
 
@@ -533,18 +536,20 @@ The rare skies (W-49) mark the year: harmattan's dust weeks (the pale sun, the c
 14. **W-60 History remembered, not exhibited.**
 15. **W-61–62 Transport is culture · teleport is bought with story.**
 16. **W-63–64 The rhythm is canon · seasons are felt in the body.**
+17. **The Foundation Laws bind the place too** (EX-44 → EX-47, C-19 → C-21): memory, human scale, consequence, truth over spectacle, performance-before-expansion, AI citizens, cultural respect.
 
 ### Appendix — The City Quick Sheet (disk truth)
 
 | Fact | Value | Anchor |
 |---|---|---|
-| Real roads | 2,655 ways / 5,900 segs / 754 km | `geo-v1.bin` |
+| Real roads | 2,655 ways / 5,894 segs / 750.4 km (+ Patti trail) | `geo-v1.bin` |
 | Rivers / bridges | 16 / 16 | geo layer |
 | Scale | 1 u = 26 m · ≈16 km across | `geo.ts:7-38` |
 | Launch places | 10 anchors · 32 district anchors wired | `locations.ts`, `Actors.tsx` |
 | G2 wards | 10 real wards, stage-honest | `locations.ts:340-574` |
 | Trees / grass / rocks | 720 / 10 sp · 10,000 tufts · 110 | `flora.ts:115`, layout |
-| Lamps / drains / lights / bumps | 492 / 204 / 14 / 12 | junctions, layout |
+| Lamps / drains / lights / bumps | 492 / 204 / 12 placed (cap 14) / 6 placed (cap 12) | junctions, layout |
+| Calendar | 72-day year · 10 festivals | `config.ts:658`, `calendar.ts` |
 | Clock / weather | 4 slots · 7 skies | `config.ts:192`, `types.ts:289` |
 | Ambience layers | 8, procedural, zero assets | `ambience.ts:37-106` |
 | NPCs / traffic rigs | 12 (night 4) / 14 on loops 0–2 | `Actors.tsx:356,749` |
@@ -555,6 +560,59 @@ The rare skies (W-49) mark the year: harmattan's dust weeks (the pale sun, the c
 | Money | ₦5,000 Day 1 · pocket + purse · v20 save | `config.ts:14`, `save.ts:45` |
 
 This sheet is the shared vocabulary of every Bible. When a number here changes, all four documents are amended together.
+
+---
+
+## PART X — THE LIVING CONSTITUTION LAYERS
+### *Added in the ERA II upgrade (v2.0). The place, instrumented.*
+
+### 10.1 Implementation Reality
+
+**What exists today (disk-verified 2026-10-21):** 2,655 OSM ways / 5,894 segments / 750.4 km (plus the authored Patti trail → 2,656 rendered roads) · 16 rivers / 16 bridges, confluence vertex-exact (0.00 u) · 32 district anchors (10 launch places + 10 G2 wards + 12 school sites) · analytic terrain with a reachable, authored Patti summit (5 secrets, 110 rocks, plateau 30.03 u) · 204 drains / 492 lamps / 12 signal heads (unlit) / 6 bumps placed · 720 trees in 10 species / 10,000 grass tufts / 3 bird flocks (18 birds) · 108 doors (10 interiors + 98 school doors) + 5 built-but-doorless G2 rooms · 21 jobs / 20 hustles / 4 boards / 14 named NPCs / 12 strollers (night 4) + 14 traffic rigs · 72-day year, 10 festivals · 7 skies, 4 slots · 1 u = 26 m, confluence origin-true.
+
+**What is planned (the honest horizon):** the stall resurrection (W-9, with count assertions) · lit signal heads on the existing 12/3/15 phase law (W-34) · exterior door pins for the five G2 rooms · loop 3/4 rigs or their deletion (W-33) · NPC event memory (EX-44) · the fabric ledger's repairs (§3.5, in order) · flood waterline honesty beyond the veil · river moods deepening.
+
+**What is forbidden:** invented geography (W-1) · decorative dressing without wiring (C-1) · content routed onto known fabric lies (W-39) · anything above knee height in the protected sightlines (W-3/W-17) · renaming or re-spelling the community's wards (W-28) · a swimming body in the rivers until a full amendment with doctrine exists (W-3).
+
+### 10.2 The Verification Layer
+
+| Laws | Verification method | Responsible system | Failure condition |
+|---|---|---|---|
+| W-1, W-31 | Every new way traces to the geo pipeline; no nudged ribbon | `geo-gate.ts`, pipeline | invented or bent geometry |
+| W-2 | Map↔world parity spot checks per district | `locations.ts`, MapScreen | a pin without a place (or reverse) |
+| W-3, W-17 | Deck + summit screenshots at golden hour | composition review | occlusion above knee height |
+| W-5, W-32 | Bridge/segment walk: rendered crossings carry; debt ledger walked each release | collision, §3.5 | a routed underwater road; a normalized lie |
+| W-6, W-9 | Ground walk (nothing floats); stall count assertion | `test-world3d.ts` | floating prop; stall wipe (kpata = 0) |
+| W-28 → W-30 | Ward list vs register; stage-99 copy check; gate-order audit | `locations.ts`, Content P3 | renamed ward; decoration promoted |
+| W-33 → W-35 | Loop rig audit; phase law 12/3/15 vs rendered heads | `junctions.ts`, Actors | fake flow; phase drift; crash mechanics |
+| W-38 | Plate uniqueness query | schema `@unique` | a duplicate plate |
+| W-46, W-47 | Clock walk (only `advanceClock`); night census check | `world.ts`, Actors | private clock; day-tinted night |
+| W-48, W-49 | Four-system weather check; weight drift audit | weather weights, guards | wallpaper weather; FOMO skies |
+| W-50, W-51 | NPC roster: every NPC has corner + rhythm + memory line | NPC register | a dispenser NPC |
+| W-56, W-57 | Eyes-closed district test; zero-asset scan | ambience tables, CI sweep | silent district; a sample sneaks in |
+| W-58 → W-60 | Copy register read-through; one-paragraph history check | copy register | fake pidgin; brochure voice |
+| W-61, W-62 | Vehicle culture sheet; teleport audit | transport register | mesh-only vehicle; free fast travel |
+| W-63, W-64 | Rhythm table vs systems; seasonal meal/price/sound check | calendar, seasons | a 24-hour market |
+
+### 10.3 The Production Layer
+
+**"How do I build in this city without breaking it?"**
+
+- **Boot order first:** `geo-gate.ts` gates every layout-family module — nothing in that family may evaluate before `initGeo()`; a careless new import silently empties the world.
+- **Terrain:** `heightAt` is an equality law (grid == brute force). Terrain-touching code drinks from the grid, never re-derives; placed things sit at ground truth (W-6).
+- **A building:** door id joins the location namespace · interior with ≥ 3 wired hotspots · wash family · room parameters · sightline check · both-way exit test (Content P2).
+- **A district:** the G2 gate order — name → description → ambience → one wired activity → anchor (W-30) — with its mix and wash, or nothing.
+- **Nature:** the flora-species register + caps (720 trees / 10,000 tufts / 110 rocks); wildlife follows the wildlife profile (W-45).
+- **The one-door law:** door meshes are pinned one-per-INTERIORS-entry by `scripts/test-world3d.ts`; a room without its pin stays doorless by design (the five G2 rooms are the standing pattern).
+- **Every world PR** ends with the fabric walk (§3.5) and the caps check (Content §6) — measured, not assumed.
+
+### 10.4 The Future Scale Layer
+
+- **More city:** growth enters through the OSM pipeline (geo binary versioning + the gate), never hand-placed roads; the binary format is the scaling seam.
+- **More life:** crowd systems may add bodies to markets first (EX-16's bustle law); the nation-sim kernel (10k NPCs off-thread) is weather, not cast (C-20).
+- **More river:** flow physics, flood waterlines, and swimming remain amendments with doctrine — the rivers are characters before they are fluid simulations.
+- **More players:** presence stays street-scoped; the roster fan-out must go district-scoped before nation scale (a named debt).
+- **The soul clause:** every scale-up passes W-50 — few but true beats many but fake — and the Ten-Year Test: a player from today must recognize this city in ten years. The answer stays yes only if the anchors, the sightlines, and the names never move.
 
 
 

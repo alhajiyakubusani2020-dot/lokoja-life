@@ -3,6 +3,8 @@
 **Date:** 2026-10-20 · **HEAD at audit:** `d36ac8d` (clean tree) · **Mode:** read-only, zero code changed
 **Method:** 6 parallel read-only auditors (engine architecture · player journey · UI inventory · world-touch map · visual quality · design system + performance). Every claim carries `file:line`. 13 headline claims were then personally re-verified by the orchestrator (12 confirmed, 1 falsified and excluded). Where a number is marked **[computed]** it was produced by executing the repo's own world bootstrap, not by reading code.
 
+> **Correction banner (2026-10-21, ERA II Bible reverification).** This document is an audit *of record* and is left as written. Where its figures drifted on re-decoding the binary, the corrected canon lives in the four Bibles v2.0 and `BIBLE_UPGRADE_AUDIT.md`: **750.4 km / 5,894 segments** (not 754 / 5,900) · **58 client-facing doors** (not 57) · **15 underwater segments, 6 fully submerged, threshold-dependent** (the "18" was not reproducible) · **12 signal heads and 6 bumps placed** (14/12 are caps) · **≈1,173 exact `text-[Npx]`** (this audit's 1,191 used a wider regex) · **48 unit suites** (not 47). SILK posture re-measured same day: 2.59 s / 406 KB.
+
 **Honesty ledger (RULE ZERO):**
 - A stale session summary claimed ERA I Phase 1 was 0% started. Git truth: **Phase 1 is complete** (`5aeafb6`→`d36ac8d`, 5 commits, 6 P0s dead). This report builds on the *actual* state.
 - One agent finding was falsified on re-check: `WorldPhoneLayer.tsx:351` holds a **valid** `pb-[max(env(safe-area-inset-bottom),1rem)]` class — not a defect. Excluded.

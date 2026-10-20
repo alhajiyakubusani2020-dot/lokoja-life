@@ -1,11 +1,13 @@
 # LOKOJA LIFE — EXPERIENCE BIBLE
-### Version 1.0 · The book of how the player should feel
+### Version 2.0 · The book of how the player should feel
 
 > **Authority.** This Bible is subordinate to the **Design Constitution** (the Philosophy Bible). Where this document and the Constitution disagree, the Constitution wins. This document turns the Constitution's laws into felt experience, one experience at a time.
 >
 > **Companions.** `World_Bible.md` (the place), `Art_Audio_Bible.md` (the senses), `Content_Bible.md` (the growth rules). This document owns **the player's inner weather**.
 >
 > **Ground rule.** Every anchor marked `file:line` was verified on disk. Lokoja Life's engine truth is the floor this book builds on — nothing here asks the engine to become something it is not.
+>
+> **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: every claim re-verified against disk, stale scar anchors corrected, numeric drift amended — and the living-constitution layers added: Implementation Reality (§47), Verification (§48), Production (§49), Future Scale (§50), plus the four Foundation Laws (EX-44 → EX-47, Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 
 ---
 
@@ -17,7 +19,7 @@ This is not a UI specification. It does not describe buttons, sheets, or layouts
 
 **How should the player feel?**
 
-A "feature" is code. An "experience" is what the code does to a human being. Lokoja Life has plenty of features — 63 systems, 26 phone apps, a 754 km road network decoded from real OSM data (`public/world/geo-v1.bin`, 2,655 ways). What it needs now, and what this book provides, is the felt contract for each of them: the emotion we promise, the senses we use to promise it, the mistakes that would break the promise, and the rules that keep it whole.
+A "feature" is code. An "experience" is what the code does to a human being. Lokoja Life has plenty of features — 63 systems, 26 phone apps, a 750 km road network decoded from real OSM data (`public/world/geo-v1.bin`, 2,655 ways). What it needs now, and what this book provides, is the felt contract for each of them: the emotion we promise, the senses we use to promise it, the mistakes that would break the promise, and the rules that keep it whole.
 
 Any designer, programmer, writer, or QA engineer should be able to open this book, find the experience they are touching, and know — without asking anyone — what the player must feel when they are done.
 
@@ -108,7 +110,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 - EX-2.1: A brand-new player reaches character creation in ≤ 2 taps from cold boot.
 - EX-2.2: No authentication is ever required to *enter the world*; identity is an upgrade, not a gate.
 - EX-2.3: The menu contains no metric, banner, or number the player did not earn.
-- EX-2.4: TTI stays under the SILK gate (last recorded 2.54 s; gate < 3.0 s, `scripts/silk-gates.ts`). First launch *is* the first feeling of the city's unhurried honesty — a slow, janky boot contradicts everything.
+- EX-2.4: TTI stays under the SILK gate (gate < 3.0 s, `scripts/silk-gates.ts`; last measured 2.59 s, 2026-10-20 — re-measured per Content C-13, never assumed). First launch *is* the first feeling of the city's unhurried honesty — a slow, janky boot contradicts everything.
 
 ### EX-3 · First Arrival
 
@@ -230,7 +232,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 
 **Common mistakes.**
 1. *Walking as waiting.* If walking feels like dead time to skip, we have failed and fast-travel will eat the game. Walking must reliably drop discoveries, gist, and small money.
-2. *Distance lie.* OSM honesty says roads are real (754 km). Distances must *feel* real — 1 u = 26 m is law (`geo.ts:7-38`). Never silently shrink the city to please impatience; give impatience a keke instead.
+2. *Distance lie.* OSM honesty says roads are real (750 km). Distances must *feel* real — 1 u = 26 m is law (`geo.ts:7-38`). Never silently shrink the city to please impatience; give impatience a keke instead.
 3. *Silent streets.* No ambience variation by district makes walking a screensaver.
 
 **Design principles.**
@@ -297,7 +299,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 **Common mistakes.**
 1. *The split-brain tank.* Offline tank never burns while the server's does (open audit item). One car, one truth — until unified, never show two fuel numbers.
 2. *The shared-rig theft.* Two cars with same model:paint mounting one `rig.group` — cars vanish/teleport (`RemoteVehicles.tsx:114/:179/:221`). Multiplayer presence trust dies here; the per-instance rig fix is a feel-blocker, not a polish item.
-3. *Ghost economy.* Client-side money mirrors (`ledger.ts:96-107` style minting) anywhere near driving. The wire is the only wallet that matters at the pump.
+3. *Ghost economy.* Client-side minting anywhere near driving (the historic deposit-mint scar — dead since the server's day-cap and rate eyes; `ledger.ts` today holds only pure verdicts). The wire is the only wallet that matters at the pump.
 
 **Design principles.**
 - EX-10.1: All money mutations while driving are server-authoritative and idempotent (idemKey replay law).
@@ -549,9 +551,10 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 1. *The SECURE lie.* Any UI claiming fortress-grade safety for an unsigned path. Copy must match the ledger truth (audit-verified debt).
 2. *Silent money.* Any mutation without a receipt object. If it didn't receipt, it didn't happen.
 3. *Three wallets.* Three visual languages for one truth. The money-UI unification is a feel debt of the first order — one wallet law, one visual grammar (see Art Bible, UI).
+4. *The wolf alarm.* Unsigned rows written after signed rows make the fortress verifier report the whole chain broken — a false tamper alarm that cries wolf after ordinary banking, ferry rides, or festival joy. The cure is signing the paths (EX-20.1), never muting the alarm.
 
 **Design principles.**
-- EX-20.1: No money mutation in the game may bypass a signed path; the 5 direct-cash bypass sites (festival/ferry/travel/bank ×2) are the last sanctioned debts and each must die behind its own narrated ceremony.
+- EX-20.1: No money mutation in the game may bypass a signed path; the 5 direct-cash bypass sites (bank deposit/withdraw ×2, festival spray, canoe ferry, travel fare — re-verified 2026-10-21; the dev-bridge `addCash` is production-stripped and adds none) are the last sanctioned debts and each must die behind its own narrated ceremony.
 - EX-20.2: Every financial screen shows *which* money it touches (pocket vs purse) — the split-brain may exist in code, never in the player's mind.
 - EX-20.3: Receipts are eternal, searchable, and player-owned.
 - EX-20.4: The bank never gamifies: no streaks, no bonus spins, no confetti. Gravity is the brand.
@@ -725,7 +728,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 **Interaction philosophy.** Every spend asks the body first (E at a teller, a market row, a fare chip) and answers with a why. The Verdict Voice governs all refusals (insufficient funds, caps, M13 walls): the *reason*, warmly and precisely, every time.
 
 **Common mistakes.**
-1. *Number shrink-wrapped in silence.* A balance changing with no ritual. (The store's double-pay scars — `useGameStore.ts:4999`/:4801 — are why this law has teeth.)
+1. *Number shrink-wrapped in silence.* A balance changing with no ritual. (The store's historic double-pay scar — since fenced by the one-application book — is why this law has teeth.)
 2. *The invisible split.* UIs that hide which money is touched. EX-20.2 applies to every screen, not just the bank.
 3. *Free money.* Any grant outside the signed paths (the 5 bypass sites are sanctioned debts — new code may add zero more).
 
@@ -870,7 +873,7 @@ Covered in EX-20 (The Bank) — the ritual, the gravity, the receipts, the hones
 
 ### EX-34 · Multiplayer Trust
 
-**Purpose.** The meta-experience that makes all others possible: the player's *felt security* — my money cannot be stolen, my car cannot be ghosted, my child cannot be reached by the wrong adult, the world will not lie to me. This is The Honest Wire as a *feeling*. The machinery (57 doors, idemKey, chainHash, rate buckets, M13 walls, PIN/scrypt) exists; the experience is that the machinery is *invisible and absolute*.
+**Purpose.** The meta-experience that makes all others possible: the player's *felt security* — my money cannot be stolen, my car cannot be ghosted, my child cannot be reached by the wrong adult, the world will not lie to me. This is The Honest Wire as a *feeling*. The machinery (58 client-facing doors / 59 handlers, idemKey, chainHash, dual rate buckets, M13 walls, PIN/scrypt) exists; the experience is that the machinery is *invisible and absolute*.
 
 **Emotions.** Safety → relaxed openness → the confidence to be generous (I can give because taking is impossible).
 
@@ -890,7 +893,7 @@ Covered in EX-20 (The Bank) — the ritual, the gravity, the receipts, the hones
 
 ### EX-35 · Exploration
 
-**Purpose.** The pleasure of the map with legs: 2,655 real ways, 754 km of real Lokoja roads, 20 launch places + 10 G2 wards, and the promise that *around any corner is something true*. Exploration is the game's quietest compulsion loop — no markers, no fog-of-war gameification; just streets that keep being real.
+**Purpose.** The pleasure of the map with legs: 2,655 real ways, 750 km of real Lokoja roads, 20 launch places + 10 G2 wards, and the promise that *around any corner is something true*. Exploration is the game's quietest compulsion loop — no markers, no fog-of-war gameification; just streets that keep being real.
 
 **Emotions.** Wanderlust → the collector's itch (districts found, 32 anchors) → the *patina of familiarity* (routes becoming mine).
 
@@ -1066,7 +1069,7 @@ Covered in EX-20 (The Bank) — the ritual, the gravity, the receipts, the hones
 
 **Common mistakes.**
 1. *The dead end.* Any wall without a way through, around, or a reason. (The 60 s guest preview wall dead-ending newcomers is the canonical scar.)
-2. *Server says, client shrugs.* Copy that contradicts the wire's actual refusal reasons (40 distinct reasons across 11 families exist — the client must speak them all in Verdict Voice, never "Error").
+2. *Server says, client shrugs.* Copy that contradicts the wire's actual refusal reasons (45 distinct reasons re-counted 2026-10-21, across the registered families — the ledger lives in the wire and grows; the client must speak them all in Verdict Voice, never "Error").
 3. *Cage theater.* M13 walls that humiliate the child. Protection is dignity.
 
 **Design principles.**
@@ -1109,13 +1112,81 @@ Every player-facing PR names its experience entry (Law EX-1). The registry below
 | VI Second OS | EX-26 → EX-30 | Phone, money, banking, eating, sleeping |
 | VII People | EX-31 → EX-34 | Presence, friendship, community, trust |
 | VIII Inner | EX-35 → EX-43 | Exploration, discovery, wonder, homesickness, success, failure, chill, belonging, refusal |
+| X Foundations | EX-44 → EX-47 | City memory, human scale, consequence, truth over spectacle |
 | IX Verify | 44–45 | Tests and registry |
+| XI Layers | 47–50 | Reality, verification, production, future scale |
 
 ### 46. Amendment Procedure
 
 This book is a living constitution's right hand. Amendments follow the Content Bible's review gates: a proposal names the chapter, the law changed, the feel preserved, and the test that proves it. Laws EX-1 through EX-43.4 change only by Bible amendment; every amendment is recorded in the chapter's *Horizon* notes and the worklog. Where the Constitution speaks, this book listens — and where this book is silent, build from the nearest chapter's spirit and write down what you learned.
 
 **The last word belongs to the city:** if a proposed change makes Lokoja more *true, warm, and honest* — it is probably right. If it makes Lokoja faster, louder, or more efficient — measure twice, and ask the neem tree.
+
+---
+
+## PART X — THE FOUNDATION LAWS
+### *Added in the ERA II upgrade. Seven foundation laws were reviewed for explicit statement; four belong to this book. Their three siblings live in the Content Bible (C-19 → C-21). Where a law here meets a chapter above, both are true and both bind.*
+
+**Law EX-44 — The City Memory Law.** *The city remembers meaningful player actions.* Not as a database remembers — as a street remembers: a favor done becomes an offer later, a greeting repeated becomes warmth, a secret found becomes a story the city can be asked about. Disk truth today: familiarity tiers (stranger → acquaintance → paddy → close-paddy, `social.ts:22-27`), story beats (`story.ts`), idempotent discoveries, relationship state carried in save v20 — real, but shallow; no NPC yet recalls *events*. **Horizon:** per-NPC memory of meaningful acts, wired through the existing relationship grammar, never a private quest system (P1). **Failure condition:** a player action that visibly mattered produces no future difference anywhere — the city forgot; that is a bug against this law.
+
+**Law EX-45 — The Human Scale Law.** *Small moments matter more than empty size.* Lokoja is 750 km of real roads, and the game would still be a failure if the summit view were epic and the neighbor's greeting were flat. The attention budget follows the band: a gist line, a fare negotiated, a plate of food — these outrank any square kilometre added. Every expansion PR names the small moment it deepens or the new one it creates (Content C-19 is this law's growth-rule twin). **Failure condition:** content that adds area, objects, or players without adding one new *small* human moment.
+
+**Law EX-46 — The Consequence Law.** *Actions alter future states.* The honest city keeps what you did: spent naira are gone (conservation), parked cars persist (`VehicleRow`), discoveries are permanent, failure costs what it costs and no more. No state may silently reset behind the player's back — a reset is always a narrated, player-chosen act (the total-reset law: `startNewGame`/`resetGame` birth every life state fresh). **Failure condition:** any mutation the player can observe that leaves no trace in the world, the books, or the save.
+
+**Law EX-47 — Truth Over Spectacle Law.** *Never fake depth.* A crowd that is a texture, a market that is signage, a security badge that outruns the ledger, a stat that implies machinery that does not exist — all are forgeries of the same kind, and all are forbidden. If a thing cannot be real, it is honestly small (`stage: 99`) or it does not ship (C-1). Spectacle is welcome only when the systems underneath it are true. **Failure condition:** any surface that implies machinery the disk does not contain.
+
+---
+
+## PART XI — THE LIVING CONSTITUTION LAYERS
+### *The v2.0 upgrade: this book is no longer only doctrine — it is a production instrument.*
+
+### 47. Implementation Reality
+
+**What exists today (disk-verified 2026-10-21):** 63 systems · 26 phone apps · save v20 (HMAC envelope, shadow, backup, 20-step migration ladder) · the wire: 58 client-facing doors / 59 handlers, 4 KB cap, dual rate buckets (per-socket + per-account), idemKey UNIQUE, scrypt PIN, M13 minor walls, N12 clamp · conservation ₦0 drift on the live books (319 ledger rows, full chain walk clean) · 10 interiors + 98 school doors (108 doors) · 21 jobs / 20 hustles / 4 job boards · 14 named NPCs on the familiarity grammar · 5 Patti secrets, idempotent · ferry, postcards, stage/spray/trades on the wire · 100% procedural art and audio.
+
+**What is planned (the honest horizon):** NPC event memory (EX-44's table) · the stall resurrection, then market economy (EX-16.1) · the Bag tab made real · the signed bank/festival/ferry/travel paths (EX-20.1) · rig-per-view co-presence (EX-31.2) · the hospital interior, when it can be honestly a hospital (W-54). Swimming is *not* planned — the river's inviolability (W-3) stands until amended.
+
+**What is forbidden:** faking any of the above with copy or props (EX-47) · any unsigned money path (EX-27.4) · decorative content (C-1) · anxiety timers, gambling, pay-to-mean (Content red lines) · a second visual, audio, or narrative grammar (A-30, W-59).
+
+### 48. The Verification Layer
+
+Every major law is checkable. QA files against law numbers; this table says how each is proven and how it fails:
+
+| Laws | Verification method | Responsible system | Failure condition |
+|---|---|---|---|
+| EX-2, EX-6 | Cold-boot stopwatch; kill-tab relaunch (Blackout Test) | boot path, save descent | > 2 taps to creation; any state loss |
+| EX-3 → EX-5 | Stranger Test on a fresh device | spawn path, distance loops | empty spawn; stub E-press; wall mid-flow |
+| EX-7, EX-8 | Walk a launch district 60 s; sprint-energy check | `controls.ts`, `needs.ts` | no affordance passed; alarm-style tiredness |
+| EX-9 → EX-11 | Exit Test fares; wire refuel; plate uniqueness | `travel.ts`, wire vehicle doors | silent debit; teleport ride; shared rig |
+| EX-12, EX-13 | Confluence/summit walk; secret replay | `patti.ts`, collision law | occluded sightline; double-paid secret |
+| EX-14 → EX-20 | Walk every door both ways; reconcile receipts | `interiors.ts`, bank paths | dead room; unsigned row; the SECURE lie |
+| EX-21 → EX-25 | Silence Test; Rain Test on low tier; festival four-plan check | `atmosphere.ts`, `ambience.ts`, calendar | slot pop; frame crime; unsigned festival joy |
+| EX-26 → EX-30 | Freeze-law poke; Pocket Test; sleep-save loop | `WorldPhoneLayer`, wallet, `housing.ts` | input bleed; unreconcilable ₦; unsafe bed |
+| EX-31 → EX-34 | Two-device presence walk; child-account wall sweep | wire presence, M13 walls | presence lie; client↔wire wall mismatch |
+| EX-35 → EX-43 | Discovery replay; refusal sweep (all 45 reasons) | discovery ledger, Verdict Voice copy | repeat toast; "Error" in place of a why |
+| EX-44 → EX-47 | Consequence walk: act → save → return → verify trace | save, books, story, memory horizon | forgotten act; fake depth |
+
+### 49. The Production Layer
+
+**"How do I build this without breaking Lokoja?"** — the standing answers:
+
+- **Before any edit:** read the fifteen load-bearing files (`ERA2-UI-AUDIT.md` §1). The wire imports game systems *verbatim* — a "tweak" to `wheels.ts`, `ledger.ts`, `bodies.ts`, `socialgraph.ts`, or `live.ts` changes the server too; run both suites.
+- **Player-facing feature:** name its EX entries in the PR (EX-1) → playbook (Content Part III) → gates (Content Part VIII) → the Feel Test that proves it.
+- **Money:** new money = new door = the full ritual (C-11). Never add a sixth bypass site.
+- **World truth:** new geometry obeys W-1/W-31/W-32; new places obey the G2 gate order (W-30); every panel freezes input (EX-26.2).
+- **UI:** one grammar (A-26), the six-step type scale (A-27), one WHY source (C-15).
+- **When this book and a deadline disagree:** gates may be scheduled; laws may not be skipped.
+
+### 50. The Future Scale Layer
+
+Lokoja must scale without losing its soul. The pre-committed rules:
+
+- **Millions of players:** the wire is per-street truth, not a global feed. The roster fan-out (O(n²) on presence changes today — a named debt) must go district-scoped before nation scale. SQLite is the honest beginning, not the forever — the chain-ledger *format* is the portability contract. The relay lane degrades, never lies.
+- **Multiple districts:** growth rides the OSM pipeline and the G2 promotion gate (W-30). A new district is a *character sheet*, a *mix*, and a *wash* before it is geometry.
+- **AI citizens:** the nation-sim kernel (10k NPCs off-thread) is crowd *weather*, never a replacement for authored neighbors (W-50, C-20). AI may fill a market's bustle; it may not hand out quests, speak gist, or replace a named NPC.
+- **Economic expansion:** conservation is load-bearing at any scale (C-11's ritual); new value sinks and sources amend the Bibles first.
+- **Live content:** feature flags (`flags.ts`), the calendar, and the Forge vote are the lawful live levers; nothing live may break the Feel Tests.
+- **The soul clause:** at any scale, a player from today must still recognize the city in ten years — the anchors, the sightlines, and the names never move.
 
 
 

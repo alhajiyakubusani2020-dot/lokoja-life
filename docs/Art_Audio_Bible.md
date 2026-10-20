@@ -1,11 +1,13 @@
 # LOKOJA LIFE — ART & AUDIO BIBLE
-### Version 1.0 · The book of the senses
+### Version 2.0 · The book of the senses
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *how Lokoja looks and sounds*: art direction, color, light, camera, character, motion, effects, the UI's visual system, and the entire audio identity.
 >
 > **Companions.** `Experience_Bible.md` (what the senses are *for*), `World_Bible.md` (what the senses describe), `Content_Bible.md` (how new sensory content is admitted).
 >
 > **Ground rule.** Every token, constant, and system named here exists on disk (`globals.css`, `WorldScene.tsx`, `atmosphere.ts`, `ambience.ts`, `music.ts`, `polish.tsx`). This book never asks the engine to become something it is not — it defines what the engine's materials must *mean*.
+>
+> **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: the SILK law restated as gates + dated measurements (re-measured, never assumed), the arbitrary-size census re-counted, and the living-constitution layers added (Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 
 ---
 
@@ -23,7 +25,7 @@ Lokoja Life's eye is the light of the evening slot (the game's signature amber h
 2. **Law A-2 — 100% procedural.** Zero model files, zero image-sequenced animation, zero audio assets in `public/` (disk truth). The city is *generated from its own parameters* — canvas-baked textures, instanced flora, synthesized sound. This is a creative law, not just a budget: a procedural city can respond to its state (weather, slot, district) in ways baked assets never can. **No binary art asset may be committed without a Bible amendment.**
 3. **Law A-3 — The senses agree.** What the eye says (a market, evening, rain) the ear must confirm, and the camera must respect. A conflict between senses is a bug of meaning, not of style.
 4. **Law A-4 — Style is a decision, so is its boundary.** Stylized realism with warm abstractions — never photoreal envy, never cartoon pastiche. The test: does it look like *this Lokoja*?
-5. **Law A-5 — Performance is an aesthetic.** TTI 2.54 s, wire 389 KB, heap 27 MB, warm click 4 ms (SILK posture) is what a *well-made* city feels like. Jank is not a technical debt; it is an art failure.
+5. **Law A-5 — Performance is an aesthetic.** The SILK posture is what a *well-made* city feels like: TTI < 3.0 s · wire < 900 KB · 0 console errors · warm click < 100 ms · heap < 300 MB (G1–G6, `scripts/silk-gates.ts`). Last measured 2.59 s / 406 KB / heap 27 MB / warm click 4 ms (2026-10-20). The numbers are **re-measured, never assumed** (C-13); a stale number in this book is a measurement debt, not a license. Jank is not a technical debt; it is an art failure.
 
 ---
 
@@ -184,7 +186,7 @@ The UI is the game's *paper* — cards of `--lko-surface` on `--lko-cream`, ink 
 
 ### 7.2 Typography
 
-**GROUND.** `lko-display` for headers, `lko-num` for figures (tabular truth — money aligns), body sizes currently scattered across ~1,191 arbitrary values (audit debt #1 in the design system pillar).
+**GROUND.** `lko-display` for headers, `lko-num` for figures (tabular truth — money aligns), body sizes currently scattered across ≈1,200 arbitrary values (re-audit 2026-10-21: ~1,173 exact `text-[Npx]`; the audit's 1,191 used a wider regex — debt #1 in the design system pillar).
 
 **DOCTRINE.**
 
@@ -200,7 +202,7 @@ These are the art debts that *must* die before UI feature work scales further:
 2. **Three button systems** — `lko-press` is the one press (the green pill in `Actors.tsx:458` is a copy to be migrated, not a second law).
 3. **Six sheet implementations** — `lko-sheet` is the one sheet.
 4. **Ghost classes** (`lko-glass`, `lko-label` referenced, never defined — `kit.tsx:96,125`) — defined or deleted; ghosts invite cargo cults.
-5. **~1,191 arbitrary font sizes** — the six-step scale (A-27) is the migration target.
+5. **≈1,200 arbitrary font sizes** — the six-step scale (A-27) is the migration target.
 6. **`tailwind.config.ts` untouched shadcn defaults** — the config is aligned to tokens or emptied; drift between config and `globals.css` is how two design systems are born.
 
 **Law A-30 — No new visual language, ever.** A PR introducing a new button class, a new sheet, a new glass, a new shadow, or a foreign component library is rejected on sight, however pretty.
@@ -301,5 +303,52 @@ Every visual/audio addition passes this checklist before it merges:
 | Audio | A-35 mix is census · A-36 layers are data · A-37 district mixes · A-38 accompany · A-39 grammar · A-40 two motifs · A-41 scored silence · A-42 room parameters · A-43 text is voice · A-44 real voices sacred · A-45 mobile first · A-46 budgeted nodes · A-47 consent |
 
 **The book's last word:** beauty in Lokoja is not decoration — it is *truth, arranged warmly*. When in doubt: less, warmer, quieter, truer.
+
+---
+
+## PART X — THE LIVING CONSTITUTION LAYERS
+### *Added in the ERA II upgrade (v2.0). The senses, instrumented.*
+
+### 10.1 Implementation Reality
+
+**What exists today (disk-verified 2026-10-21):** zero asset files — 100% procedural, permanent · 13 `--lko-*` tokens + surface + line + 3 shadow tokens as the entire color constitution · 8 ambience layers (shaped noise at 320 / 850 / 480 / 1,400 / 140 / 4,400 / 520 / 3,200 Hz) · a 4-mood procedural afro-fusion engine (8-voice cap, deterministic per-bar) · ACES @1.12 · one 1024² governed shadow sun · 620 rain particles · two permanent motifs (discovery, refusal) · the paper-UI primitives (`lko-card / press / display / num / sheet / toast / scrim`) · fonts: Geist (body) + Outfit (display) · canvas-baked facades with per-district washes and life-pattern night emissives.
+
+**What is planned:** the six-step type scale replacing the ≈1,200 arbitrary sizes · one wallet grammar, one button, one sheet (§7.3's unification debts) · `--lko-*` registered in Tailwind's `@theme` · the ghost classes (`lko-glass`, `lko-label`) defined or deleted · one merged icon set · festival music arrangements (the lawful density exception, A-38).
+
+**What is forbidden:** any binary art or audio asset (A-2) · a second visual grammar (A-30) · a third motif (A-40) · unsourced light (A-14) · motion that gates truth (A-32) · beauty that spends the mobile budget without the FramePacer/DynRes valve · icon fonts, emoji as UI iconography, glassmorphism envy.
+
+### 10.2 The Verification Layer
+
+| Laws | Verification method | Responsible system | Failure condition |
+|---|---|---|---|
+| A-1 → A-5 | Art Test on 360 px + SILK G1–G6 run | `scripts/silk-gates.ts` | illegible in sun; a gate red |
+| A-2 | asset scan: no model/image/audio file in `public/` | CI sweep | any asset file appears |
+| A-6 → A-8 | Color Line grep: no new hex without a token; wash family check | token registry | off-palette color ships |
+| A-9, A-10 | painter read-through; layer-height registry walk | WorldTerrain/CityMesh | phototexture slap; z-fighting |
+| A-11 → A-14 | light audit: one sun, per-slot keyframes, sourced glow | atmosphere/WorldScene | second caster; orphan glow |
+| A-15 → A-18 | camera walk; zero-UI photo test | controls, photo mode | wrestled neck; UI-littered frame |
+| A-19 → A-25 | one-species check; motion-with-reason read; particle budget | Actors, animation | blob citizens; idle-for-attention |
+| A-26 → A-34 | class audit: primitives only; type-scale diff; icon set diff | globals.css, kit | new grammar; new arbitrary size |
+| A-35 → A-41 | eyes-closed district test; motif census | ambience/music | an unjustified layer; motif #3 |
+| A-42 → A-47 | room-params per interior; phone-speaker pass; consent check | interiors, Settings | identical rooms; autoplay; un-skippable social |
+
+### 10.3 The Production Layer
+
+**"How do I add beauty without breaking the law?"**
+
+- A new color is a new token first (`globals.css`), a token never a literal (A-7).
+- A new motion rides an existing vocabulary (`lko-pop / fade / toast / kenburns / float`) or it is an amendment (A-31/A-33).
+- A new ambience need is a shaped-noise layer with a truth-driver and a node budget (A-36/A-46) — never a loop file.
+- A new icon is an ink stroke in the drawn set, never an import, never an emoji (A-34).
+- Anything optional (haze, puddles, dust, polish) enters behind the extras-first tier system (`device.ts:137-148`) — beauty's lawful valve.
+- Every sensory PR ends in the Art Test (Part IX): all eight checks, in order, on the worst device you own.
+
+### 10.4 The Future Scale Layer
+
+- **Device span:** the low/mid/high tier contract (`device.ts`) is the scale law — a flagship-only effect is a bug (A-25/A-45). DynamicRes and the 30 Hz FramePacer absorb pressure before content is cut.
+- **Content scale:** procedural means a city that *responds* (weather-aware facades, season-true palettes) at zero asset cost — a new district inherits the whole sensory machine for free if it ships its mix and wash (A-8/A-37).
+- **Audio scale:** the node budget (A-46) holds at any district count; layers are data, so the census scales with the map, not with files.
+- **Live events:** festival arrangements, lantern light, bunting cloth — all ride existing systems within caps; spectacle never buys its way past A-5.
+- **The soul clause:** ten years from now, on a phone not yet built, a screenshot must still pass the squint test — *golden hour on zinc roofs, seen through warm paper*.
 
 

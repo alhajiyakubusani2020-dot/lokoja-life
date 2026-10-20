@@ -1,11 +1,13 @@
 # LOKOJA LIFE — CONTENT BIBLE
-### Version 1.0 · The book of growth
+### Version 2.0 · The book of growth
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *how the game grows*: the laws every future content addition obeys, the playbook for each content type, the wire rulebook, the save law, the performance budgets, the copy voice, and the review gates.
 >
 > **Companions.** `Experience_Bible.md` (the feelings content must serve — each playbook names its EX chapters), `World_Bible.md` (the place content enters — each playbook names its W laws), `Art_Audio_Bible.md` (the senses content wears — each playbook names its A laws).
 >
 > **Reader.** This is the book a new contributor opens on day one — and the book a veteran opens before every merge. If a rule here surprises you, the rule wins until amended.
+>
+> **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: counts re-verified on disk (48 unit suites, 58 client-facing doors, 45 refusal reasons, 12/6 placed signal heads/bumps, 16 Prisma models), the three Foundation Laws enter the register (C-19 → C-21, §1.1), and the living-constitution layers added (Part XI). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 
 ---
 
@@ -45,9 +47,17 @@ Two gates stand above all content gates: the **Mother Test** (cultural truth and
 5. **C-5 Caps are law** — new content respects the performance budget registry (§6) or amends it first.
 6. **C-6 The save is sacred** — new player-facing state joins save v20's schema through the migration ladder (§5), or it doesn't persist and *says so*.
 7. **C-7 M13 by construction** — child-safety is designed-in (band gates, wall parity with the wire), never patched on.
-8. **C-8 The Refusal Covenant** — every new gate ships its Verdict Voice why + next move (EX-43.1), on the same wire reasons the server speaks (40 reasons, 11 families — the client speaks them all, never "Error").
+8. **C-8 The Refusal Covenant** — every new gate ships its Verdict Voice why + next move (EX-43.1), on the same wire reasons the server speaks (45 reasons re-counted 2026-10-21, across the registered families — the ledger lives in the wire and grows; the client speaks them all, never "Error").
 9. **C-9 Test what can fail** — every law-flavored behavior gets a test (unit/e2e per §8); untestable laws are rewritten until testable.
 10. **C-10 The Bibles are amended together** — a change to city facts updates World's quick sheet; a change to feelings updates Experience; a change to senses updates Art & Audio. One truth, four books, one edit wave.
+
+### 1.1 The three Foundation Laws (ERA II canon)
+
+Seven foundation laws were reviewed in the ERA II reverification; four entered the Experience Bible (EX-44 → EX-47). Three belong here, where growth is governed:
+
+- **Law C-19 — Performance Before Expansion.** *Never expand the world before the current world breathes.* A new district, app, or festival cannot enter review while a Gate-0 trust debt or a red SILK gate stands — the budget gate (§8.1) is not a formality. The caps registry (§6) is measured per release; the stall resurrection, the fabric ledger, and the boot diet precede all new playbooks. Why: expansion on a limping world multiplies the limp.
+- **Law C-20 — AI Citizen.** *AI enhances humanity; it never replaces it.* The procedural crowd kernel, the murmur band, the nation sim — these are *weather*, filling the world's bustle. What they may never do: replace a named NPC, author gist, grant quests, or hold money. Every AI-assisted contribution follows the same playbooks and gates as human work, and a named NPC's voice is always human-written. Why: the city's soul is specific people (W-50); simulated specificity is the one thing this book exists to prevent.
+- **Law C-21 — Cultural Respect.** *Lokoja is represented, never exploited.* Every cultural surface — faith, markets, language, festivals, history, clothing — enters as a resident's truth. The Mother Test is a gate with veto power, not a vibe. Real ward names are never rebranded; no sacred practice becomes a mechanic; no hardship becomes a toy; no stereotype becomes content. Why: the game's deepest purpose (EX-38) dies the day the culture becomes decoration.
 
 ---
 
@@ -263,7 +273,7 @@ Each playbook: **where it lives** (register) · **laws it serves** · **the rule
 ## PART IV — THE WIRE RULEBOOK
 ### *Adding or changing anything the server owns.*
 
-The wire (`mini-services/nation-wire/index.ts` — Bun + `bun:sqlite` on the shared `db/custom.db`, WAL; 57 game doors / 59 handlers; one socket lane behind Caddy :81) is the city's honest spine. **The server imports game systems verbatim — editing shared systems edits the server too.**
+The wire (`mini-services/nation-wire/index.ts` — Bun + `bun:sqlite` on the shared `db/custom.db`, WAL; 58 client-facing doors / 59 handlers incl. disconnect; one socket lane behind Caddy :81) is the city's honest spine. **The server imports game systems verbatim — editing shared systems edits the server too.**
 
 **Law C-11 — New money = new door = the full ritual.** Any feature that moves ₦ across players or between pocket and purse ships as a server door with ALL of:
 
@@ -273,7 +283,7 @@ The wire (`mini-services/nation-wire/index.ts` — Bun + `bun:sqlite` on the sha
 4. **Chain integrity** — writes through the chainHash ledger (`index.ts:963-1019` theHealthiestPath pattern); no direct cash writes anywhere (the 5 bypass sites are debts to kill, not patterns to copy).
 5. **Walls** — M13 band checks, PIN checks on purse paths, LEDGER_LIMITS caps, per-socket *and* per-account rate buckets (`index.ts:711-780`).
 6. **Size & cadence law** — 4 KB packet cap (`index.ts:1064`); body 10 Hz / vehicles 12 Hz only-while-moving; a new channel respects the cadence table or amends it.
-7. **Refusal parity** — every new refusal reason joins the 40-reason/11-family ledger AND its Verdict Voice line ships in the same PR (C-8).
+7. **Refusal parity** — every new refusal reason joins the 45-reason ledger AND its Verdict Voice line ships in the same PR (C-8).
 8. **Relay honesty** — if the door matters during wire-down, the degraded relay lane (`/api/live/sync`, 12 s) carries it or the feature says it doesn't work offline. No silent assumption.
 9. **Tests** — a door test proves: replay-safe, wall-enforced, conservation ₦0, refusal voiced. (Test-DB seam law: tests never write production books — the pre-ERA I scar.)
 
@@ -283,7 +293,7 @@ The wire (`mini-services/nation-wire/index.ts` — Bun + `bun:sqlite` on the sha
 
 ## PART V — SAVE & MIGRATION LAW
 
-**GROUND.** Save v20 (`save.ts:45`), HMAC envelope + shadow + backup descent, a 20-step migration ladder; autosave 1.2 s debounce + pagehide flush; reconnect `resume` gap cap 100.
+**GROUND.** Save v20 (`save.ts:45`), HMAC envelope + shadow + backup descent, a 20-step migration ladder; 16 Prisma models with migrations baselined (`0_init` + hardening indexes); autosave 1.2 s debounce + pagehide flush; reconnect `resume` gap cap 100.
 
 **Law C-12 — The ladder is the only way in.** New persisted state: extend the schema → write the migration step (`vN → vN+1`) → bump `SAVE_VERSION` → keep *every* old step runnable (a player on v1 must reach v21 through the same ladder). Migrations never lose data (the `--accept-data-loss` era is dead; `prisma/migrations` is baselined).
 
@@ -304,9 +314,9 @@ These numbers are law (disk-verified). A PR that exceeds one amends this table *
 | Trees (render guild) | **720** | `flora.ts:115` |
 | Grass tufts | **10,000** | flora |
 | Patti rocks | 110 | layout |
-| Traffic lights | **14** (`LIGHT_CAP`) | `junctions.ts:46` |
+| Traffic lights | **12 placed / 14 cap** | `junctions.ts:46,168-212` |
 | Signal phase | GREEN 12 / AMBER 3 / RED 15 | `junctions.ts:52-54` |
-| Speed bumps | **12** (`BUMP_CAP`) | junctions |
+| Speed bumps | **6 placed / 12 cap** | junctions |
 | Lamps | 492 live / **1,500** cap | layout |
 | Drains | 204 live / **1,800** cap | drains.ts |
 | Plates | **40** cap · unique forever | plates.ts |
@@ -368,9 +378,9 @@ The game speaks with **one narrator** (W-59) through registers:
 
 ### 8.2 The test floor
 
-- Every law-flavored behavior has a test (C-9): unit for math/laws, e2e for journeys (the 47 + 58 existing suites are the floor, not the ceiling).
+- Every law-flavored behavior has a test (C-9): unit for math/laws, e2e for journeys (the 48 unit + 58 e2e suites are the floor, not the ceiling).
 - The scar tests never regress: double-pay, unsigned bank, duplicate plates, tests-on-prod-books, accept-data-loss boot, shared-rig theft, presence staleness — each has or gets a regression test; a PR that breaks one is a P0 regardless of review.
-- The e2e suite owns the Exit Test (EX-44): every door both ways, every fare quoted-then-paid, the whole Patti trail.
+- The e2e suite owns the Exit Test (Experience §44's Feel Tests): every door both ways, every fare quoted-then-paid, the whole Patti trail.
 
 ---
 
@@ -409,11 +419,57 @@ Breaking a red line is not a review note; it is a refusal — and the Constituti
 
 ---
 
+## PART XI — THE LIVING CONSTITUTION LAYERS
+### *Added in the ERA II upgrade (v2.0). The growth book, instrumented.*
+
+### 11.1 Implementation Reality
+
+**What exists today (disk-verified 2026-10-21):** 15 playbooks with a live review order · save v20 over 16 Prisma models, migrations baselined · 48 unit suites + 58 e2e suites · 26 apps (7 wire-backed, 12 store-backed, 6 read-only) · 21 jobs / 20 hustles / 4 boards · 5 Patti secrets · 10 festivals on a 72-day calendar · 58 client-facing wire doors with the full C-11 ritual on money · the refusal ledger at 45 reasons · conservation ₦0 drift on the live books.
+
+**What is planned:** the one-register reconciliation for phone apps (before app #27) · the WHY single-source (C-15) · discovery moved from localStorage into the save (the v21 candidate) · market content after the stall resurrection · the festival playbook's first live run · exterior door pins for the five G2 rooms · per-NPC event memory (EX-44's horizon).
+
+**What is forbidden:** everything in Part X's red lines · decorative content (C-1) · unsigned money (C-11) · data-loss migrations (C-12) · unmeasured budgets (C-13) · expansion while a Gate-0 debt stands (C-19).
+
+### 11.2 The Verification Layer
+
+| Laws | Verification method | Responsible system | Failure condition |
+|---|---|---|---|
+| C-1, C-2 | decorative-path sweep; stage-99 copy check | `test-world3d.ts` + copy register | dead content; fake state |
+| C-3, C-21 | playbook identity pass + Art Test + Mother Test | review gates | good-but-foreign content; exploited culture |
+| C-4 | register grep: two homes for one truth | data registers | manifest-style drift |
+| C-5, C-13 | caps diff + SILK run on the PR | §6 registry, `silk-gates.ts` | unmeasured "should be fine" |
+| C-6, C-12 | migration ladder test v1 → current; merge-law check | `save.ts` | lost state; a broken ladder |
+| C-7, C-8 | child-band sweep both sides; refusal-copy parity | wire walls + client | wall mismatch; bare "Error" |
+| C-9 | suite run: 48 + 58 green | run-battery | a red law test |
+| C-10 | four-book diff in the PR | the Bibles | one book amended alone |
+| C-11 | the 9-point door ritual checklist | wire review | a mint, a replay, or a silent wall |
+| C-14 → C-18 | copy read-through against the register | copy register | fake pidgin; a why written twice |
+| C-19, C-20 | gate-order proof; AI-content provenance check | review board | expansion on a limp; AI-authored voice |
+
+### 11.3 The Production Layer
+
+This whole book is the production layer — its daily shape:
+
+- **The 9-point Definition of Done (Part II)** is the checklist every item lives or dies by.
+- **The gate order (§8.1)** is the review's spine: playbook → identity → wire → save → budget → feel → Bible.
+- **The scar tests (§8.2)** never regress: double-pay, unsigned bank, duplicate plates, tests-on-prod-books, accept-data-loss boot, shared-rig theft, presence staleness.
+- **Onboarding (Part IX)** is the first-day script; the oath is the culture.
+- **Facing "how do I build X?"** — answer from the playbook first (P1–P15), then the fifteen load-bearing files (`ERA2-UI-AUDIT.md` §1), then the gates. A silent playbook is a bug in this book: the nearest playbook's spirit governs, and the gap is amended.
+
+### 11.4 The Future Scale Layer
+
+- **Millions of players:** the wire's per-account eyes and idempotent doors already assume strangers at scale; what must change first is the roster fan-out (district-scope it) and the books' backend — the chain-ledger *format* is the portability contract (SQLite today, anything verifiable tomorrow). The relay lane already models degraded honesty.
+- **Live content:** flags, calendar, and Forge votes are the only lawful live levers; every live lever passes the same gates — live does not mean ungated.
+- **Team scale:** the playbooks and gates are designed for contributors who have never met; the amendment procedure (C-10) keeps four books coherent without a meeting.
+- **The soul clause:** at any scale, the four unfalsifiable gates — the Mother Test, the Honest Wire, the caps, the Feel Tests — are never waived. Growth that cannot pass them is not growth; it is drift with momentum.
+
+---
+
 ## The books in one breath
 
 **The Constitution** says: the city is real, the player is a resident, nothing lies, nobody dies.
 **The Experience Bible** says: here is how every hour *feels* — stranger to elder.
-**The World Bible** says: here is the place that earns the feeling — 754 km of truth.
+**The World Bible** says: here is the place that earns the feeling — 750 km of truth.
 **The Art & Audio Bible** says: here is how the truth looks and sounds — golden hour, warm paper, the city as instrument.
 **This book** says: here is how the truth *grows* — wired, voiced, capped, tested, amended together.
 
