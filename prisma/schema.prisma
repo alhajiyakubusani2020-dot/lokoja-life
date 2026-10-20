@@ -29,6 +29,8 @@ model Account {
   cloudSave     CloudSave?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+
+  @@index([token])
 }
 
 /// M9 — the cloud save vault: one row per account, the whole GameSave as
@@ -196,6 +198,9 @@ model LedgerRow {
   chainHash  String
   note       String   @default("")
   createdAt  DateTime @default(now())
+
+  @@index([fromHandle, createdAt])
+  @@index([toHandle])
 }
 
 /// M24 W1 THE REGISTER — what the street sees. One row per account,
@@ -228,7 +233,11 @@ model VehicleRow {
   id        Int      @id @default(autoincrement())
   handle    String
   model     String
-  plate     String
+  /// THE DMV LAW (hardening): one plate, ONE row — the uniqueness is now
+  /// STRUCTURAL (a second writer cannot clone a plate; the check-then-write
+  /// door was the only wall before, and the books already carried 7 clones
+  /// of LKO-137-DM). Dedupe ran before this index was born.
+  plate     String   @unique
   paint     String   @default("")
   fuel      Float    @default(1)
   condition Float    @default(1)
@@ -239,4 +248,10 @@ model VehicleRow {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@unique([handle, model])
+  @@index([x, z])
 }
+
+/// HARDENING INDEXES — the money paths were full table scans:
+/// Account WHERE token (every socket handshake), LedgerRow WHERE
+/// fromHandle+createdAt (the day-cap eye, every spend), toHandle
+/// (receipts + conservation walks), VehicleRow x/z (the parked box).

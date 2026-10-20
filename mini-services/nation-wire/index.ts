@@ -808,10 +808,13 @@ const stageIdByHost = new Map<string, string>()
 
 function stageRow(id: string, status: 'live' | 'ended', viewersSnapshot: string[]): void {
   try {
+    // THE EPOCH LAW (hardening): updatedAt is INTEGER epoch-ms — the same
+    // shape Prisma's @updatedAt writes. The old toISOString() text rows
+    // were the exact mixed-type poison that once killed Prisma reads.
     db.query('UPDATE StreamRow SET status = ?, viewersJson = ?, updatedAt = ? WHERE id = ?').run(
       status,
       JSON.stringify(viewersSnapshot),
-      new Date().toISOString(),
+      Date.now(),
       id
     )
   } catch (e) {
@@ -2109,7 +2112,7 @@ io.on('connection', (socket) => {
     try {
       db.query(
         "INSERT INTO StreamRow (id, host, kind, title, viewersJson, startedDay, status, updatedAt) VALUES (?, ?, ?, ?, '[]', ?, 'live', ?) ON CONFLICT(id) DO UPDATE SET status = 'live', title = excluded.title, kind = excluded.kind, updatedAt = excluded.updatedAt"
-      ).run(id, stage.host, STAGE_KIND, stage.title, 1, new Date().toISOString())
+      ).run(id, stage.host, STAGE_KIND, stage.title, 1, Date.now())
     } catch (e) {
       stages.delete(id)
       stageIdByHost.delete(stage.host)
