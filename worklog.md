@@ -1726,3 +1726,102 @@ Work Log:
 Stage Summary:
 - 5 commits, 6 P0s dead (mint, tests-on-books, boot gun, dup plates, chain lie, trade double-pay), rate/teleport/guest-eye walls up
 - REMAINING: 5 direct-cash bypass sites (festival/ferry/travel/bank writes unsigned entries), rig-cache per-instance, mid-drive re-hello, async scrypt, gateway allowlist for scratch WS, battery runner exit codes + CI, World Accuracy (Phase 2) untouched
+---
+Task ID: AUD-1
+Agent: orchestrator (main agent) + 6 read-only Explore auditors
+Task: ERA II GATE — UI Evolution & World Experience Audit (audit-only directive: NO code changes)
+
+Work Log:
+- Pre-flight: HEAD d36ac8d clean; worklog re-read; discovered stale summary error — ERA I Phase 1 was ALREADY COMPLETE (5aeafb6→d36ac8d, 6 P0s dead), adopted git truth
+- Swarmed 6 parallel read-only auditors: engine architecture / player journey / complete UI inventory / world-touch map / visual quality / design system + performance; every claim file:line
+- Personally re-verified 13 headline claims: 12 confirmed (STALLS=2 live-computed kpata 0/food 0/ganaja 2; RemoteVehicles RIGS shared group mounted at :179+:221; lko-glass/lko-label undefined while used in kit.tsx:96,125; bankDeposit unsigned at useGameStore.ts:2197-2220; TREES zero consumers; markings +0.1 vs tarmac +0.106; puddles fixed y=0.035; APP_VERSION 'Stage 5'; TRAFFIC_MIX loops 0/1/2 only) — 1 FALSIFIED (pb-ax class claim: WorldPhoneLayer.tsx:351 is valid Tailwind; excluded)
+- Wrote the canonical 10-section report → docs/ERA2-UI-AUDIT.md (architecture, journey, ~140-interface inventory, 20-wired vs 15-dead world map, merged problems, 6-pillar upgrade architecture "one world no exits", safe upgrade order Gate 0→Phases A-E, 10 risks, 14 must-not-break systems, first target)
+
+Stage Summary:
+- Key verdicts: design system 6.5/10 (one identity, weakly enforced — ghost classes, 1,191 arbitrary font sizes, 3 button systems, 6 sheet impls); perf posture good (TTI 2.54s / wire 389KB / heap 27MB) with 1.8s world-boot module eval incl. ~0.5s dead compute; world truth: 20 wired vs 15 decorative/dead systems; multiplayer's ugliest visible bug = shared-rig car theft
+- Safe Upgrade Order: Gate 0 (signed bank ledger, rig-per-view, presence street refresh, boot diet, stall resurrection) → A design system → B landing doorway (3D flythrough) → C HUD+phone split → D map intelligence → E world answers + buildings-as-interface; no NEW gameplay until Gate 0 green
+- Deliverable: docs/ERA2-UI-AUDIT.md; zero source files touched
+
+---
+Task ID: R1
+Agent: Explore
+Task: Phone/UI recon (read-only) — inventory of WorldPhoneLayer, PhoneScreen, HudOverlay, global UI + styling system for the creative-director design doc
+
+Work Log:
+- Read worklog history first (G1-APPS/M21-CLOSE, M24-UI, W3 diegetic entries) to avoid duplication; no prior agent had produced a consolidated phone/UI inventory.
+- Read PhoneScreen.tsx fully (1290L): 26-app union type (line 79), apps grid + titles (839-1053), bezel/status bar/battery (91-105, 1055-1155), deep-link door (82-85), travel/work gate overlay (1142-1149), BankApp/CivicApp/ChatsApp/HustleApp/SettingsApp/ShieldApp/BizApp inline.
+- Read WorldPhoneLayer.tsx fully (370L): needs rail + phone FAB + unread dot, freezeInput(worldUiOpen) effect (89-99), lko:phone-open event listener (101-108), call banner/pill/video face, register wall, phone overlay z-45 (347-361).
+- Read HudOverlay.tsx (1918L) key sections: MiniMap (145-218), top bar (748-853: exit, location, copresence, cash, day/time/weather, places-found, camera, photo, PerfChip), onboarding tour, arrival toast, W4 speedometer (931-962), photo frame (964-981), junction banner (984-994), drive hints, shop/vehicle/board/door/travel prompts, gist chip, joystick/RUN/interact, park, seats toggle, panel sheets; Escape closes HUD sheets only (671).
+- Read WorldTab.tsx (558L), Dashboard.tsx shell parts (tabs, WorldOverlaySheet 777-843, notifications toasts 927-944, BagTab ComingSoon 359-390, ProfileTab), diegetic.ts (laws), BottomNav.tsx (7 tabs), controls.ts (input/freeze/keys), useGameStore notify (5463-5471), kit.tsx, globals.css, tailwind.config.ts, app-face.tsx, app headers (messages/calls/connect/wallet/profile/pulse/live/forge/nation, ChatThread), MainMenu settings dialog, CasualShell GoalsCard, MapScreen header.
+- Verified absences via grep: no P-key/keyboard phone opener, no wallpaper/signal/wifi, no pause API (NO_PAUSE law), no HUD quest tracker, no persistent notification inbox, lko-glass class referenced but never defined.
+
+Stage Summary:
+- Phone = PhoneScreen (26 functional apps, 2×N grid, cream bezel handset) rendered in two hosts: Dashboard tab (pre-world) and WorldPhoneLayer diegetic overlay (in-world, FAB + deep links; input freezes, world never pauses). HUD (HudOverlay) = chips + minimap + speedo + banners + prompts + touch controls; no quest tracker, no health bar. Notifications = ephemeral toasts only (3.2s, max 3) + FAB unread dot + tile sublabels. Styling = hand-rolled --lko-* token system + lko-* utility classes + two shared kits (ui/kit.tsx, phone/apps/app-face.tsx); shadcn/ui scaffolded but nearly unused; tailwind.config.ts is the untouched shadcn default. Absences confirmed: pause menu, wallpaper picker, signal/wifi indicators, real clock, minimap on dashboard, save/settings in HUD (live in phone Settings + ProfileTab), keybinding for phone.
+---
+Task ID: R2
+Agent: Explore
+Task: World systems recon (read-only) — verify + detail the world/environment reality for the Lokoja Life Experience Bible
+
+Work Log:
+- Read worklog tail (AUD-0/1, PHASE1) + docs/ERA2-UI-AUDIT.md to avoid duplication; then verified every claim myself in source
+- Districts: locations.ts (10 launch + 10 G2 wards w/ district=chaos-zone claims), layout DISTRICTS/ANCHORS, geo-map.ts real OSM suburb labels, chaos.ts zones
+- Landmarks: patti.ts (5 secrets), layout.ts heightAt/PATTI_TRAIL/ROCKS, CityMesh.tsx (ConfluenceDeck+canoe, PattiTower, LugardRestHouse, TownStadium, CentralMosque, ChurchHall, Boats)
+- Buildings w/ UI: interiors.ts ids, layout DOORS, schools.ts ALL_DOORS + 17 interior builders, InteriorScene panels (Bank/Civic/Lounge/Garage), phone apps
+- Roads: geo.ts/geo-gate.ts (geo-v1.bin 2,655 ways), WorldTerrain (markings/kerbs/zebras/bridges/drains), junctions.ts (lights cap 14, phases 12/3/15, bumps, danfo stops), plates.ts, drains.ts, props/catenary
+- Nature: flora.ts TREE_CAP 720 / 10 species / 10k grass tufts, flora-species.ts, WorldTerrain grass/flowers/terrain/water, layout ROCKS 110
+- Time/weather: world.ts 4-slot clock, config TIME/weatherWeights, types Weather ×7, atmosphere.ts keyframes, polish.tsx (DustHaze/Puddles), Actors Rain/Birds/SmokeWisps
+- Audio: audio.ts + ambience.ts (8 layers) + music.ts (procedural afro-fusion) — confirmed ZERO audio assets in public/
+- NPCs/traffic: Actors.tsx (12 NPC strollers in 13 zones, night=4; TRAFFIC_MIX 14 rigs on loops 0-2; night headlight cones), RemoteWalkers/RemoteVehicles (multiplayer), wheels.ts boardVerdict
+- Transport: travel.ts, fleet.ts, rivers.ts ferry, DriveSystem (chase cam, kmh law), garage/wheels; teleport.ts = postcard share codes, NOT fast travel
+- Camera/controls: controls.ts (WASD/joystick, follow/orbit/drone, photo mode), WorldScene/WorldTab wiring
+- Searches for absences: swimming, hospital building, hour-clock, .mp3/.ogg/Howler, sidewalks, Sarkin/Nagazi/Karaworo/Banda, crowd AI
+
+Stage Summary:
+- ALL 12 topics EXIST in some form; 8 fully rich (districts, landmarks, roads, nature, weather, audio, transport, camera), 4 with real limits (time = 4-slot discrete clock, no hour; NPCs = 12 circular strollers, no crowd AI; swimming/boats absent in 3D; no dedicated hospital)
+- World truth chain: public/world/geo-v1.bin (2,655 ways/754km, 16 rivers, 16 bridges, loops) → geo-gate → layout.ts module-scope derivation → WorldTerrain/CityMesh/SchoolMesh renderers
+- Prior audit numbers re-confirmed in code: TREE_CAP=720 (flora.ts:115), LIGHT_CAP=14 w/ phase law green12/amber3/red15 (junctions.ts:46-55), plate cap 40, lamp cap 1500, drain cap 1800 (204 live per AUD-1), stall law roadGap 0.45 (layout.ts:1660 — Kpata 0 stalls bug still live in code)
+- Best untouched design seams: Mount Patti (summit stone + Lugard house exist, no activity), Confluence (deck + boats decorative, fishing/tourism activities stage-7 greyed), G2 wards (10 places, most activities stage 99 = unbuilt), danfo stops (3D furniture, boarding only multiplayer), night market (bulb strings + discount law, no stall crowd)
+- Read-only: zero source files touched; only this worklog entry appended
+---
+Task ID: R3
+Agent: Explore
+Task: Player journey recon (Experience Bible) — read-only
+
+Work Log:
+- Read worklog (1,743 lines) + docs/ERA2-UI-AUDIT.md first; built on it, re-verified every headline claim against source before citing
+- Traced ENTRY: page.tsx (SPA menu/creation/game switch, pagehide autosave) → MainMenu (hero webp, live ribbon, 4 CTAs) → CharacterCreation → Dashboard WorldTab entry (veil, WebGL fallback, spawn Actors.tsx:136-155, 3-step tour HudOverlay:394-919)
+- Traced IDENTITY: creation inputs (name/gender/look/M13 band, no origin), guest loop laws (guest.ts gate+grace, 60s preview wall profile.ts:191), W1 auth sheet 2-step register
+- Traced SAVE: startNewGame:1290-1372 / continueGame:1374-1431 / scheduleAutosave:1122-1158 / saveNow:5383; save.ts v20 HMAC envelope + shadow + backup descent; merge law
+- Traced HOME/PROPERTY: interiors.ts (10 interiors incl. home hotspots bed/stove/tv/bath/wardrobe), housing.ts rent book + wahala + ownership ladder + furnishing + comfort sleep bonus
+- Traced ECONOMY: 21 jobs/20 hustles/job-board POIs, eatMeal, ram market, pump chip + wheelRequestRefuel idemKey, garage buy/sell/paint/plate/repair, biz tills, civic bills, chaos ATM/POS
+- Traced BANKING: 3 money UIs; offline bank unsigned (confirmed :2197-2278), server purse WalletApp PIN+receipts, LEDGER_LIMITS, walletnet pocket/purse law
+- Traced STORY: story.ts 5-chapter chain + STORY_BEATS + wardrobe drops; patti.ts 5 secrets 2Hz poll; read-only story/patti apps
+- Traced M13: AGE_LAW, CRIME_REFUSALS toasts, ShieldApp (scam drill, tier ladder parent PIN, elder), server minor walls
+- Traced MULTIPLAYER: RemoteWalkers/RemoteVehicles (incl. shared-rig bug re-confirmed), boarding, Messages/Live/Connect/Calls/Stage faces, presence rosters, co-presence chip; categorized all wire gates (59 doors, 13 rate buckets, 40 distinct refusal reasons across 11 families)
+- Traced SETTINGS (sound/music/haptics/chill/elder/graphics auto-low-mid-high; no volume slider/language), TELEPORT (map travel + M15 postcards /t/[code] + remoteJoin), FAILURE (health 0 = nothing; no death/bankruptcy/jail loops)
+- Ran absence greps: death/arrest/bankrupt/bag/volume/language/storage-lock/map-presence/selling — all confirmed missing with evidence
+
+Stage Summary:
+- Journey is: menu (guest-first, 60s preview note) → creation (name+look+band) → Day 1 ₦5,000 at home → dashboard → "Explore in 3D" → world never unmounts (tabs = overlay sheets) → phone (26 apps) is the second OS → autosave 1.2s everywhere
+- Money is split-brain by design: POCKET (offline engine, signed save) vs PURSE (server ledger, PIN+idemKey+caps); offline bank deposits/withdraws bypass the signed chain (known open P1)
+- M13 is structural: band picker at creation, refusals as toasts, server walls (money/voice/DM), parent-PIN tier ladder, scam literacy drill
+- Multiplayer: real bodies with real looks + real cars (10Hz/12Hz), street chat + DMs + calls + stage broadcasts w/ real-₦ sprays/tips; friends live in Connect, invisible on the map; 1 known visual bug (shared-rig RemoteVehicles)
+- Death/failure absent by design: needs-only consequences, soft refusals everywhere; no game-over state machine exists
+- Deliverable: full 12-section journey inventory returned to orchestrator; zero project files modified (worklog record only)
+
+---
+Task ID: B1 (orchestrator) + R1/R2/R3 (recon)
+Agent: Main Agent (Super Z)
+Task: EXPERIENCE BIBLE v0.1 — creative constitution directive (Rule Zero: no code, no files, no HTML/React/Three.js; Bible written directly into chat)
+
+Work Log:
+- Read worklog tail for prior audit state (AUD-0..6, PHASE1, ERA2 UI audit, M22/M23/M24 history)
+- Launched 3 parallel read-only Explore recons (haiku): R1 = phone/UI layer (26 apps enumerated, phone mechanics, HUD contents, styling tokens, absences), R2 = world systems (districts/wards, Patti + 5 secrets, confluence deck, OSM geo-v1.bin pipeline, roads fabric, flora, 4-slot clock, 7-state weather, procedural audio, NPCs, transport, camera, sky), R3 = player journey (entry/landing, identity, save v20, housing, economy flows, 3 money UIs, story chain, M13 as experienced, multiplayer faces + 59 wire gates, settings, teleport, failure doctrine)
+- Synthesized recon into the Bible: ~75 chapters in 11 parts, every chapter grounded with GROUND (file-true: what exists) and HORIZON (what to build), plus Ten Laws + Confluence Test + Death List + review invitation
+- Zero project files modified beyond this worklog record. The Bible itself lives ONLY in chat per explicit user directive (no md/pdf/html output, no code)
+
+Stage Summary:
+- Bible v0.1 "The Confluence Draft" delivered in chat: vision, five pillars, arrival arc (Approach/first 5 min/first hour/Stranger-to-Elder), living world chapters for all 10 launch districts + 10 G2 OSM wards, senses chapters (procedural-first sound, harmattan light, Confluence design language), invisible-interface chapters (phone as the one lawful screen, Whisper HUD, sleep-is-saving, Great Disappearance death list), life systems (pocket/purse, teller-PIN P1 noted), people chapters (wire law as world law), performance/streaming laws protecting TTI 2.59s + NO-PAUSE canon
+- Key creative canon coined: The City Never Blinks; Lokoja Knows Your Name; Earned Convenience; Money With A Body; The Honest Wire; Soft Failure doctrine (nobody dies in Lokoja); The Color Line; Under The Neem Tree; Sleep Is Saving; The Verdict Voice
+- Flagged for implementation respect: Kpata roadGap<0.45 stall bug must die before Market chapter is "true"; offline bank unsigned writes (P1) contradicts The Ledger Never Lies; RemoteVehicles shared-rig bug breaks multiplayer presence trust
+- Next: user reviews Bible in chat; sections to be challenged/rewritten/removed per directive
