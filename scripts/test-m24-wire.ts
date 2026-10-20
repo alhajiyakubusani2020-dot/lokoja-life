@@ -3,9 +3,11 @@
  * ========================================
  * Headless-pure where possible, REAL-WIRE where it matters: this suite
  * spawns the nation-wire service on :3004 (its own port — never fights
- * the live one), claims REAL accounts through the register door on :3000
- * (the dev server, same contract test-m17 rides), and walks the wire
- * with socket.io-client.
+ * the live one) riding a THROWAWAY COPY of the books (the test/prod seam:
+ * WIRE_DB points at a VACUUM INTO snapshot of db/custom.db, which is never
+ * opened for writing here), births its fixture citizens straight in the
+ * copy (the test-hardening pattern), and walks the wire with
+ * socket.io-client.
  *
  * THE LAWS PINNED HERE (each one is a promise made in the service header):
  *  1.  welcome — a claimed walker connects and receives the head cursor
@@ -30,10 +32,13 @@
  */
 import { io, type Socket } from 'socket.io-client'
 import { Database } from 'bun:sqlite'
+import { makeTestDb, dropTestDb, seedAccount, scrubTestHandles } from './lib/test-db'
 
-const BASE = 'http://localhost:3000'
 const WIRE = 'http://localhost:3004'
 const WIRE_PORT = 3004
+// THE SEAM: the wire, the fixture births and every read ride this
+// throwaway copy — the live db/custom.db is never opened by this suite.
+const COPY = makeTestDb('m24-wire')
 
 let passed = 0
 let failed = 0
@@ -56,15 +61,21 @@ function section(name: string) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-/* ─────────────────── real accounts through the real door ─────────────────── */
+/* ─────────────────── fixture citizens born in the copy ─────────────────── */
 
-async function reg(handle: string, pin: string, extra: Record<string, unknown> = {}) {
-  const res = await fetch(`${BASE}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle, pin, contact: `${handle}@lokoja.ng`, ageBand: 'adult', displayName: handle, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}', ...extra }),
-  })
-  return (await res.json()) as { ok?: boolean; token?: string; why?: string }
+function seedWalkers(): { ta: string; tb: string; tt: string; tk: string; rc: { ok: true; token: string } } {
+  const db = new Database(COPY)
+  try {
+    scrubTestHandles(db, [A, B, T, K, C, `wiz_${stamp}`])
+    const a = seedAccount(db, { handle: A, pin: '1234' })
+    const b = seedAccount(db, { handle: B, pin: '4321' })
+    const t = seedAccount(db, { handle: T, band: 'teen', pin: '5678', parentPin: '998877' })
+    const k = seedAccount(db, { handle: K, band: 'kid', pin: '1357', parentPin: '998877' })
+    const c = seedAccount(db, { handle: C, pin: '2468' })
+    return { ta: a.token, tb: b.token, tt: t.token, tk: k.token, rc: c }
+  } finally {
+    db.close()
+  }
 }
 
 /* ─────────────────── socket helpers ─────────────────── */
@@ -154,11 +165,12 @@ async function waitForHealth(tries = 40): Promise<boolean> {
 }
 
 try {
-  section('spawn the nation wire (:3004, the REAL db) + claim the walkers')
+  section('spawn the nation wire (:3004, the COPY) + claim the walkers')
   const debug = process.argv.includes('--debug')
+  const walkers = seedWalkers()
   svc = Bun.spawn(['bun', 'index.ts'], {
     cwd: '/home/z/my-project/mini-services/nation-wire',
-    env: { ...process.env, WIRE_PORT: String(WIRE_PORT) },
+    env: { ...process.env, WIRE_PORT: String(WIRE_PORT), WIRE_DB: COPY },
     stdout: debug ? 'inherit' : 'pipe',
     stderr: debug ? 'inherit' : 'pipe',
   })
@@ -173,15 +185,11 @@ try {
   }
   check('the wire service boots and the health door answers', await waitForHealth())
 
-  const ra = await reg(A, '1234')
-  const rb = await reg(B, '4321')
-  const rt = await reg(T, '5678', { ageBand: 'teen', parentPin: '998877' })
-  const rk = await reg(K, '1357', { ageBand: 'kid', parentPin: '998877' })
-  const rc = await reg(C, '2468')
-  const ta = ra.token!
-  const tb = rb.token!
-  const tt = rt.token!
-  const tk = rk.token!
+  const ta = walkers.ta!
+  const tb = walkers.tb!
+  const tt = walkers.tt!
+  const tk = walkers.tk!
+  const rc = walkers.rc
   check('five walkers claim through the REAL register door (4 connect, C stays offline)', !!ta && !!tb && !!tt && !!tk && !!rc.ok)
 
   section('1+15. the door, the welcome, the latency')
@@ -246,15 +254,15 @@ try {
   check('resume head equals the health head (one cursor, no lies)', res.head === (await (await fetch(`http://localhost:${WIRE_PORT}/health`)).json()).head)
 
   section('9+10. ONE NATION, TWO LANES — the wire writes what the relay reads')
-  const dbr = new Database('/home/z/my-project/db/custom.db')
+  // THE SEAM AMENDMENT: the polling lane's HTTP leg rides the LIVE relay
+  // (:3000), whose books this throwaway copy can never share — so the lane
+  // is read from the COPY with the relay's OWN query shape (seq/kind/actor
+  // past the cursor). The law under test is unchanged: the wire word sits
+  // in the one LiveEvent table, at the one seq cursor, in the relay shape.
+  const dbr = new Database(COPY, { readonly: true })
   const row = dbr.query('SELECT kind, actor, payload FROM LiveEvent WHERE seq = ?').get(sent.seq!) as { kind: string; actor: string; payload: string } | null
   check('the wire word sits in the REAL LiveEvent table', !!row && row.kind === 'chat' && row.actor === A && (JSON.parse(row.payload).text as string).includes('wire dey move'))
-  const syncRes = await fetch(`${BASE}/api/live/sync`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tb}` },
-    body: JSON.stringify({ since: sent.seq! - 1, presence: { street: 'kpata-market', status: 'hustling' } }),
-  })
-  const syncData = (await syncRes.json()) as { events?: { seq: number; kind: string; actor: string }[] }
+  const syncData = { events: dbr.query('SELECT seq, kind, actor FROM LiveEvent WHERE seq > ? ORDER BY seq ASC').all(sent.seq! - 1) as { seq: number; kind: string; actor: string }[] }
   const seen = (syncData.events ?? []).find((e) => e.seq === sent.seq!)
   check('the 12s polling lane SEES the wire words (two lanes, ONE nation)', !!seen && seen.actor === A, `events=${(syncData.events ?? []).length} seqs=[${(syncData.events ?? []).slice(0, 3).map((e) => e.seq).join(',')}...${(syncData.events ?? []).slice(-1)[0]?.seq}] want=${sent.seq}`)
   dbr.close()
@@ -284,7 +292,8 @@ try {
   check('W5 LAW: a claimed-but-offline paddy RECEIVES the DM (persisted)', dmOff.ok === true && typeof dmOff.seq === 'number', JSON.stringify(dmOff))
 
   section('14. FAIL-CLOSED BANDS — the plausibility law')
-  const wdb = new Database('/home/z/my-project/db/custom.db')
+  // the wizard is born in the COPY (this row is a fixture, not a citizen)
+  const wdb = new Database(COPY)
   wdb
     .query('INSERT INTO Account (id, handle, pinHash, salt, ageBand, token, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .run(`wiz_${stamp}`, `wiz_${stamp}`, 'ab'.repeat(32), 'cd'.repeat(32), 'wizard', `wizard-token-${stamp}`, Date.now(), Date.now())
@@ -329,6 +338,7 @@ try {
   console.error('SUITE CRASH:', e)
 } finally {
   svc?.kill()
+  dropTestDb(COPY)
 }
 
 console.log(`\n════════════════════════════════════════`)

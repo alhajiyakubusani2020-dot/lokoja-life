@@ -2,10 +2,12 @@
  * LOKOJA LIFE — M24 W10-a: THE WHEELS LAW SUITE
  * ==============================================
  * Headless-pure where possible, REAL-WIRE where it matters: the suite
- * spawns the nation-wire on :3005, claims REAL accounts through the
- * register door on :3000 (the W1 face rides along), and walks the
- * wheels' lanes with socket.io-client. The park rows are read straight
- * off the disk (THE PARK LAW's witness).
+ * spawns the nation-wire on :3005 against a THROWAWAY COPY of the books
+ * (the test/prod seam: WIRE_DB points at a VACUUM INTO snapshot, the live
+ * db/custom.db is never opened for writing here, and the walkers are
+ * seeded straight into the copy — the test-hardening pattern), and walks
+ * the wheels' lanes with socket.io-client. The park rows are read straight
+ * off the copy's disk (THE PARK LAW's witness).
  *
  * THE LAWS PINNED HERE:
  *  — pure (systems/wheels.ts, no server):
@@ -49,6 +51,7 @@
  */
 import { io, type Socket } from 'socket.io-client'
 import { Database } from 'bun:sqlite'
+import { makeTestDb, dropTestDb, seedAccount, scrubTestHandles } from './lib/test-db'
 
 import {
   carHelloVerdict,
@@ -71,9 +74,11 @@ import {
 const RUN_PLATE = `LKO-${Date.now().toString(36).slice(-4).toUpperCase()}-Z`
 const RUN_PLATE_B = `LKO-${Date.now().toString(36).slice(-4).toUpperCase()}-X`
 
-const BASE = 'http://localhost:3000'
 const WIRE = 'http://localhost:3005'
 const WIRE_PORT = 3005
+// THE SEAM: every read and every spawned wire rides this throwaway copy
+// of the books — the live db/custom.db is never touched by this suite.
+const COPY = makeTestDb('m24-wheels')
 
 let passed = 0
 let failed = 0
@@ -236,15 +241,24 @@ section('PURE 8+9. the range law for cars + the carried verdict')
   check('a walker is not carried', carriedVerdict(false).ok === true)
 }
 
-/* ─────────────────────── real accounts through the real door ─────────────────────── */
+/* ─────────────────────── fixture citizens born in the copy ───────────────────────
+ * THE SEAM LAW: the register door on :3000 writes the LIVE books, so this
+ * suite claims its walkers the way test-hardening does — the fixtures are
+ * born DIRECTLY in the throwaway copy (same column set the register door
+ * writes: scrypt PIN + salt, token, the M13 parent shield for minors). */
 
-async function reg(handle: string, pin: string, extra: Record<string, unknown> = {}) {
-  const res = await fetch(`${BASE}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle, pin, contact: `${handle}@lokoja.ng`, ageBand: 'adult', displayName: handle, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}', ...extra }),
-  })
-  return (await res.json()) as { ok?: boolean; token?: string; why?: string }
+function seedWalkers(): { ta: string; tb: string; tt: string; te: string } {
+  const db = new Database(COPY)
+  try {
+    scrubTestHandles(db, [A, B, T, E])
+    const a = seedAccount(db, { handle: A, pin: '1234' })
+    const b = seedAccount(db, { handle: B, pin: '4321' })
+    const t = seedAccount(db, { handle: T, band: 'teen', pin: '5678', parentPin: '998877' })
+    const e = seedAccount(db, { handle: E, pin: '2468' })
+    return { ta: a.token, tb: b.token, tt: t.token, te: e.token }
+  } finally {
+    db.close()
+  }
 }
 
 function connect(token: string | null): Promise<Socket> {
@@ -288,7 +302,7 @@ function silenceCar(s: Socket, from: string, ms = 900): Promise<boolean> {
 }
 
 function carRow(handle: string, model: string): { plate: string; paint: string; fuel: number; condition: number; x: number; z: number; hd: number; odometer: number } | null {
-  const db = new Database('/home/z/my-project/db/custom.db', { readonly: true })
+  const db = new Database(COPY, { readonly: true })
   try {
     return (db.query('SELECT plate, paint, fuel, condition, x, z, hd, odometer FROM VehicleRow WHERE handle = ? AND model = ? LIMIT 1').get(handle, model) as never) ?? null
   } finally {
@@ -313,10 +327,11 @@ async function waitForHealth(tries = 40): Promise<boolean> {
 }
 
 try {
-  section('spawn the nation wire (:3005) + claim the walkers (the W1 face rides)')
+  section('spawn the nation wire (:3005, the COPY) + claim the walkers (the W1 face rides)')
+  const tokens = seedWalkers()
   svc = Bun.spawn(['bun', 'index.ts'], {
     cwd: '/home/z/my-project/mini-services/nation-wire',
-    env: { ...process.env, WIRE_PORT: String(WIRE_PORT) },
+    env: { ...process.env, WIRE_PORT: String(WIRE_PORT), WIRE_DB: COPY },
     stdout: 'pipe',
     stderr: 'pipe',
   })
@@ -328,11 +343,7 @@ try {
   })()
   check('the wire service boots and the health door answers', await waitForHealth())
 
-  const ra = await reg(A, '1234')
-  const rb = await reg(B, '4321')
-  const rt = await reg(T, '5678', { ageBand: 'teen', parentPin: '998877' })
-  const re = await reg(E, '2468')
-  const ta = ra.token!, tb = rb.token!, tt = rt.token!, te = re.token!
+  const ta = tokens.ta, tb = tokens.tb, tt = tokens.tt, te = tokens.te
   check('four walkers claim through the REAL register door', !!ta && !!tb && !!tt && !!te)
 
   const sa = await connect(ta)
@@ -471,7 +482,7 @@ try {
 
   section('21. THE EPHEMERALITY LAW — no LiveEvent row ever carries a vehicle')
   {
-    const dbr = new Database('/home/z/my-project/db/custom.db', { readonly: true })
+    const dbr = new Database(COPY, { readonly: true })
     try {
       const vehRows = dbr.query("SELECT COUNT(*) AS n FROM LiveEvent WHERE kind LIKE 'vehicle%' OR kind = 'car'").get() as { n: number }
       check('NOT ONE LiveEvent row carries a vehicle kind (movement is a moment, the park is a row)', Number(vehRows.n) === 0, `rows=${vehRows.n}`)
@@ -488,6 +499,7 @@ try {
   console.error('SUITE THREW:', e)
 } finally {
   svc?.kill()
+  dropTestDb(COPY)
 }
 
 console.log(`\n════════════════════════════════════════`)

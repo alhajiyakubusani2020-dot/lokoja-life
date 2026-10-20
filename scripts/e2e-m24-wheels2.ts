@@ -1,8 +1,15 @@
 /**
  * LOKOJA LIFE — M24 W10-b: THE BOARDING WITNESS
  * ==============================================
- * Two real walkers through the REAL gateway (:81), the REAL wire
- * (:3003), the REAL doors — the boarding wave witnessed, not claimed:
+ * Two real walkers through the REAL gateway (:81), the REAL doors — the
+ * boarding wave witnessed, not claimed. THE SEAM LAW (AUD-D): the wire
+ * under witness is THIS suite's own scratch wire on :3006 riding a
+ * THROWAWAY COPY of the books (WIRE_DB) — the shared :3003 wire is never
+ * killed, never dialed, and the live db/custom.db is never opened for
+ * writing here. The browsers' wire lane is repointed in-page (the client
+ * hardcodes XTransformPort=3003; src/ is out of bounds) through the SAME
+ * gateway. The register leg still rides the REAL :3000 relay — the
+ * unavoidable door today (the relay IS the dev server).
  *
  *   01 A's parked danfo + the seats toggle OPEN (the driver's consent)
  *   02 B's board chip at the car door (the REAL UI button)
@@ -20,6 +27,7 @@ import { mkdirSync } from 'fs'
 import { Database } from 'bun:sqlite'
 import { spawn, spawnSync, type Subprocess } from 'bun'
 import { io, type Socket } from 'socket.io-client'
+import { makeTestDb, dropTestDb, LIVE_DB } from './lib/test-db'
 
 const BASE = process.env.E2E_BASE ?? 'http://localhost:81'
 const SHOTS = '/home/z/my-project/download/m24-wheels2-shots'
@@ -27,6 +35,10 @@ const stamp = Date.now().toString(36).slice(-5)
 const HANDLE_A = `w2a_${stamp}`
 const HANDLE_B = `w2b_${stamp}`
 const DMV_PLATE = `LKO-${stamp.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)}-D`
+// THE SEAM: this suite's own scratch wire — never :3003, never the prod books
+const WIRE_PORT = 3006
+const WIRE = `http://localhost:${WIRE_PORT}`
+let COPY = ''
 
 mkdirSync(SHOTS, { recursive: true })
 
@@ -59,8 +71,45 @@ function section(name: string) {
 
 const page_wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+/** THE SEAM LAW for the browser lane: the page's wire client is hardcoded
+ *  to the gateway query `XTransformPort=3003` (src/game/systems/wire.ts —
+ *  out of bounds for a test retrofit), so THIS suite rewrites the port in
+ *  the page itself (WebSocket + XHR + fetch): the walkers dial the gateway
+ *  for :3006, the scratch wire — the shared :3003 is never dialed. */
+async function pointBrowserAtScratchWire(ctx: BrowserContext): Promise<void> {
+  await ctx.addInitScript((port: number) => {
+    // THE GATEWAY LANE RESTORED: the gateway upgrades :3006 fine (proven:
+    // 'WS UPGRADE THROUGH GATEWAY: OPEN') — the original 502 was the spawn
+    // pipe deadlock below, not the gateway. Port-only replace, as before.
+    const rewrite = (u: unknown): string => {
+      const s = typeof u === 'string' ? u : u instanceof URL ? u.toString() : String(u ?? '')
+      return s.includes('XTransformPort=3003') ? s.replace(/XTransformPort=3003/g, `XTransformPort=${port}`) : s
+    }
+    const RealWS = window.WebSocket
+    const PatchedWS = function (url: string | URL, protocols?: string | string[]) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return protocols === undefined ? new (RealWS as any)(rewrite(url)) : new (RealWS as any)(rewrite(url), protocols)
+    } as unknown as typeof WebSocket
+    PatchedWS.prototype = RealWS.prototype
+    window.WebSocket = PatchedWS
+    const realOpen = XMLHttpRequest.prototype.open
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    XMLHttpRequest.prototype.open = function (this: any, method: string, url: string | URL, ...rest: any[]) {
+      return realOpen.call(this, method, rewrite(url), ...rest)
+    } as typeof XMLHttpRequest.prototype.open
+    const realFetch = window.fetch.bind(window)
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      if (typeof input === 'string' || input instanceof URL) return realFetch(rewrite(input), init)
+      const req = input as Request
+      const u = rewrite(req.url)
+      return u === req.url ? realFetch(input, init) : realFetch(new Request(u, req), init)
+    }) as typeof window.fetch
+  }, WIRE_PORT)
+}
+
 async function walker(handle: string): Promise<{ page: Page; ctx: BrowserContext }> {
   const ctx = await browser!.newContext({ viewport: { width: 1280, height: 800 } })
+  await pointBrowserAtScratchWire(ctx)
   const page = await ctx.newPage()
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(`[${handle}] ${m.text().slice(0, 200)}`)
@@ -156,7 +205,7 @@ async function waitForCond(fn: () => Promise<boolean>, timeoutMs: number): Promi
 }
 
 function carRow(handle: string, model: string): { plate: string; paint: string } | null {
-  const db = new Database('/home/z/my-project/db/custom.db', { readonly: true })
+  const db = new Database(COPY, { readonly: true })
   try {
     return (db.query('SELECT plate, paint FROM VehicleRow WHERE handle = ? AND model = ? LIMIT 1').get(handle, model) as never) ?? null
   } finally {
@@ -165,23 +214,7 @@ function carRow(handle: string, model: string): { plate: string; paint: string }
 }
 
 try {
-  section('the wire behind the gateway door (:3003, the REAL db)')
-  Bun.spawnSync(['sh', '-c', 'lsof -ti :3003 | xargs -r kill']) // the stale-wire trap, killed first
-  await page_wait(600)
-  wireProc = spawn(['bun', 'index.ts'], {
-    cwd: '/home/z/my-project/mini-services/nation-wire',
-    env: { ...process.env, WIRE_PORT: '3003' },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  let wireUp = false
-  for (let i = 0; i < 40; i++) {
-    try { const r = await fetch('http://localhost:3003/health'); if (r.ok) { wireUp = true; break } } catch { /* not up yet */ }
-    await page_wait(150)
-  }
-  check('the wire is up behind the gateway door', wireUp)
-
-  section('two walkers claim through the REAL doors')
+  section('two walkers claim through the REAL doors (the register leg rides the :3000 relay — the unavoidable door)')
   browser = await chromium.launch()
   const A = await walker(HANDLE_A)
   const B = await walker(HANDLE_B)
@@ -191,6 +224,36 @@ try {
   const pageB = B.page
   await pageA.waitForTimeout(2500)
   await pageB.waitForTimeout(2500)
+
+  section('the wire behind the gateway door (:3006, a throwaway copy of the books)')
+  // THE SEAM LAW (AUD-D): no lsof kill, no :3003, no prod books. The
+  // walkers' sockets kept retrying while the world settled; the copy is
+  // cut AFTER the claims so it carries THIS run's own citizens + tokens.
+  COPY = makeTestDb('m24-wheels2')
+  wireProc = spawn(['bun', 'index.ts'], {
+    cwd: '/home/z/my-project/mini-services/nation-wire',
+    env: { ...process.env, WIRE_PORT: String(WIRE_PORT), WIRE_DB: COPY },
+    // THE PIPE LAW: 'pipe' with nobody draining = the wire fills its 64KB
+    // stdout buffer mid-suite, BLOCKS on its next log line, stops accepting
+    // sockets, and the gateway answers 502. The scratch wire's voice goes
+    // to the void — the suite's assertions are the witness.
+    stdout: 'ignore',
+    stderr: 'ignore',
+  })
+  let wireUp = false
+  for (let i = 0; i < 40; i++) {
+    try { const r = await fetch(`${WIRE}/health`); if (r.ok) { wireUp = true; break } } catch { /* not up yet */ }
+    await page_wait(150)
+  }
+  check('the wire is up behind the gateway door', wireUp)
+  // the walkers' in-page lanes ride the gateway to :3006 — the first
+  // reconnect after the wire boots is the proof
+  const pagesLive = await waitForCond(async () => {
+    const a = await ww(pageA).catch(() => null)
+    const b = await ww(pageB).catch(() => null)
+    return (a?.hello ?? 0) >= 1 && (b?.hello ?? 0) >= 1
+  }, 60_000)
+  check('both walkers went LIVE on the scratch wire (the page lane rides :3006, never :3003)', pagesLive)
 
   section('01 A takes the wheel — parked, then the SEATS TOGGLE opens the consent')
   const bPos = await pos(pageB)
@@ -306,6 +369,24 @@ try {
     await pageB.getByTestId('auth-handle').fill(HANDLE_B)
     await pageB.getByTestId('auth-pin').fill('2468')
     await pageB.getByTestId('auth-submit').click({ timeout: 10_000 })
+    // THE SEAM MIRROR: the return-login rotates the bearer token on the
+    // LIVE books (the relay's own law — one device holds the latest). The
+    // copy still holds the old one, so the suite mirrors the rotated token
+    // into OUR copy (a READ of the live books, a write to the copy) and the
+    // wire's next retry lands claimed. The live row is never written here.
+    await waitForCond(async () => {
+      const live = new Database(LIVE_DB, { readonly: true })
+      let tok: string | undefined
+      try { tok = (live.query('SELECT token FROM Account WHERE handle = ?').get(HANDLE_B) as { token?: string } | undefined)?.token } finally { live.close() }
+      if (!tok) return false
+      const mine = new Database(COPY, { readonly: true })
+      let same: boolean
+      try { same = (mine.query('SELECT token FROM Account WHERE handle = ?').get(HANDLE_B) as { token?: string } | undefined)?.token === tok } finally { mine.close() }
+      if (same) return false // not rotated yet (or already mirrored)
+      const w = new Database(COPY)
+      try { w.query('UPDATE Account SET token = ? WHERE handle = ?').run(tok, HANDLE_B) } finally { w.close() }
+      return true
+    }, 20_000)
   }
   const backHome = await waitForCond(async () => pageB.getByTestId('goals-card').isVisible().catch(() => false), 50_000)
   check('B logged back in (the dashboard returned)', backHome)
@@ -314,16 +395,16 @@ try {
   // A's danfo is parked-on-disk and A's socket holds NO car — the seed law returns it
   // the wire's own health at this exact moment (the node side's eye)
   let wireHealth = 'down'
-  try { const r = await fetch('http://localhost:3003/health'); wireHealth = r.ok ? 'up' : `http ${r.status}` } catch { wireHealth = 'fetch-fail' }
+  try { const r = await fetch(`${WIRE}/health`); wireHealth = r.ok ? 'up' : `http ${r.status}` } catch { wireHealth = 'fetch-fail' }
   console.log(`  🩺 wire health at the reload leg: ${wireHealth}`)
   // THE NODE-SIDE PROBE: the run's own wire, A's own token, the SAME box
   const nodeProbe = await (async () => {
-    const db = new Database('/home/z/my-project/db/custom.db', { readonly: true })
+    const db = new Database(COPY, { readonly: true })
     const acct = db.query('SELECT token FROM Account WHERE handle = ? LIMIT 1').get(HANDLE_A) as { token: string } | undefined
     const diskRow = db.query('SELECT x, z, plate FROM VehicleRow WHERE handle = ? AND model = ? LIMIT 1').get(HANDLE_A, 'danfo') as { x: number; z: number; plate: string } | undefined
     db.close()
     if (!acct) return { err: 'no token' }
-    const s: Socket = io('http://localhost:3003', { transports: ['websocket'], reconnection: false, auth: { token: acct.token } })
+    const s: Socket = io(WIRE, { transports: ['websocket'], reconnection: false, auth: { token: acct.token } })
     await new Promise<void>((res, rej) => { const t = setTimeout(() => rej(new Error('connect timeout')), 5000); s.on('connect', () => { clearTimeout(t); res() }) })
     const ack = await new Promise<any>((res) => { const t = setTimeout(() => res({ timeout: true }), 4000); s.emit('vehicle:parked', { x: -86.5, z: 39.1 }, (r: any) => { clearTimeout(t); res(r) }) })
     s.disconnect()
@@ -370,6 +451,7 @@ try {
   try { await ctxA?.close() } catch { /* already gone */ }
   try { await ctxB?.close() } catch { /* already gone */ }
   try { await browser?.close() } catch { /* already gone */ }
+  if (COPY) dropTestDb(COPY)
 }
 
 console.log(`\n════════════════════════════════════════`)

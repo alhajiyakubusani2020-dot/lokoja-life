@@ -5,7 +5,9 @@
  * clamp's metres burn it), THE WEAR LAW, THE PUMP VERDICT matrix (adults
  * only, the pump proximity the WIRE's own eye, the tank-full + amount
  * laws), THE SERVICE BOOK's quote, and the REAL doors on a fresh :3005
- * wire: the burn lands on the disk, the dry tank refuses, the REAL ₦
+ * wire riding a THROWAWAY COPY of the books (the test/prod seam — the
+ * live db/custom.db is never opened for writing here): the burn lands on
+ * the copy's disk, the dry tank refuses, the REAL ₦
  * debit (deposit → refuel → the balance moves EXACTLY once), the replay
  * law (the same idemKey returns the SAME receipt — the tank never
  * double-pours), the day cap now counts the pump, and the repair brings
@@ -14,6 +16,7 @@
 
 import { Database } from 'bun:sqlite'
 import { io, type Socket } from 'socket.io-client'
+import { makeTestDb, dropTestDb, seedAccount, scrubTestHandles } from './lib/test-db'
 
 let pass = 0
 let fail = 0
@@ -109,16 +112,9 @@ function pureLaws(): void {
 
 const WIRE_PORT = Number(process.env.WIRE_PORT ?? 3005)
 const WIRE = `http://localhost:${WIRE_PORT}`
-const BASE = process.env.BASE ?? 'http://localhost:3000'
-
-async function reg(handle: string, pin: string, extra: Record<string, unknown> = {}) {
-  const res = await fetch(`${BASE}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ handle, pin, contact: `${handle}@lokoja.ng`, ageBand: 'adult', displayName: handle, avatarLook: '{"skinTone":"#6E4326","hairColor":"#1A1714","hairstyle":"low-cut","clothingStyle":"tshirt","clothingColor":"#1B7A43"}', ...extra }),
-  })
-  return (await res.json()) as { ok?: boolean; token?: string; why?: string }
-}
+// THE SEAM: the wire, the harness's tank write and every read ride this
+// throwaway copy — the live db/custom.db is never opened by this suite.
+const COPY = makeTestDb('m24-fuel')
 
 function connect(token: string | null): Promise<Socket> {
   return new Promise((resolve, reject) => {
@@ -139,7 +135,7 @@ function emit(s: Socket, ev: string, body: unknown): Promise<Ack> {
 }
 
 function rowOf(handle: string, model: string): { fuel: number; condition: number; odometer: number } | null {
-  const db = new Database('/home/z/my-project/db/custom.db', { readonly: true })
+  const db = new Database(COPY, { readonly: true })
   try {
     return (db.query('SELECT fuel, condition, odometer FROM VehicleRow WHERE handle = ? AND model = ? LIMIT 1').get(handle, model) as never) ?? null
   } finally {
@@ -148,7 +144,7 @@ function rowOf(handle: string, model: string): { fuel: number; condition: number
 }
 
 function walletOf(handle: string): number {
-  const db = new Database('/home/z/my-project/db/custom.db', { readonly: true })
+  const db = new Database(COPY, { readonly: true })
   try {
     const r = db.query('SELECT balance FROM WalletRow WHERE handle = ? LIMIT 1').get(handle) as { balance: number } | undefined
     return r?.balance ?? -1
@@ -158,7 +154,7 @@ function walletOf(handle: string): number {
 }
 
 function ledgerRow(idemKey: string): { kind: string; amount: number; from: string; to: string } | null {
-  const db = new Database('/home/z/my-project/db/custom.db', { readonly: true })
+  const db = new Database(COPY, { readonly: true })
   try {
     return (db.query('SELECT kind, amount, fromHandle as \"from\", toHandle as \"to\" FROM LedgerRow WHERE idemKey = ? LIMIT 1').get(idemKey) as never) ?? null
   } finally {
@@ -186,16 +182,30 @@ async function waitForHealth(tries = 40): Promise<boolean> {
 async function main(): Promise<void> {
   pureLaws()
 
-  section('8. spawn the wire + claim the walkers')
+  section('8. spawn the wire (on the COPY) + claim the walkers')
+  // THE SEAM LAW: the register door on :3000 writes the LIVE books, so the
+  // fixtures are born DIRECTLY in the copy (the test-hardening pattern) —
+  // same columns the register door writes, M13 parent shield for the teen.
+  // The scrub first: this suite's 4-char stamp can repeat within ~28min,
+  // and a stale fixture row in the snapshot must never masquerade as fresh.
+  const seeded: { a: string; t: string } = (() => {
+    const db = new Database(COPY)
+    try {
+      scrubTestHandles(db, [A, T])
+      return { a: seedAccount(db, { handle: A, pin: '1234' }).token, t: seedAccount(db, { handle: T, band: 'teen', pin: '5678', parentPin: '998877' }).token }
+    } finally {
+      db.close()
+    }
+  })()
   svc = Bun.spawn(['bun', 'index.ts'], {
     cwd: '/home/z/my-project/mini-services/nation-wire',
-    env: { ...process.env, WIRE_PORT: String(WIRE_PORT) },
+    env: { ...process.env, WIRE_PORT: String(WIRE_PORT), WIRE_DB: COPY },
     stdout: 'pipe',
     stderr: 'pipe',
   })
   check('the wire boots (the health door answers)', await waitForHealth())
-  const ra = await reg(A, '1234')
-  const rt = await reg(T, '5678', { ageBand: 'teen', parentPin: '998877' })
+  const ra = { token: seeded.a }
+  const rt = { token: seeded.t }
   check('the adult + the teen claim through the REAL register', !!ra.token && !!rt.token)
   const sa = await connect(ra.token!)
   const st = await connect(rt.token!)
@@ -221,7 +231,10 @@ async function main(): Promise<void> {
     return true
   }
   while (x < 315) { if (!(await driveTick(Math.min(315, x + 32)))) break; x = Math.min(315, x + 32) }
-  for (let i = 0; i < 6 && x > PUMP.x + 32; i++) { if (!(await driveTick(x - 32))) break; x -= 32 }
+  // THE HONEST PARK: the wire judges the pump on ITS OWN clamped car pos
+  // (hardening) — the taxi must STAND at the pump (≤ SERVICE_RADIUS 26u),
+  // exactly like the honest client does, before the pour is lawful
+  for (let i = 0; i < 20 && x > PUMP.x + 20; i++) { if (!(await driveTick(x - 32))) break; x -= 32 }
   await sleep(600) // the park tick breathes well clear of the bucket window
   const parkAck = await emit(sa, 'vehicle:pos', { x, z: PUMP.z, hd: 0.2, mv: false }) // the park persists the row
   if (parkAck.ok === false) {
@@ -239,26 +252,26 @@ async function main(): Promise<void> {
   const balance0 = walletOf(A)
   check('A funded the purse (₦5,000 through the deposit door)', balance0 === 5000, `balance=${balance0}`)
   await sleep(2600)
-  const offPump = await emit(sa, 'vehicle:refuel', { model: 'taxi', amount: 2000, x: PUMP.x + 900, z: PUMP.z, idemKey: `r-off-${stamp}` })
-  check('the wire\'s own eye: 900u off the pump refuses (no-pump)', offPump.ok === false && offPump.why === 'no-pump', JSON.stringify(offPump))
+  // THE PAPER LIE DIES (the hardening law): the coords claim 900u off the
+  // pump, but the wire judges its OWN clamped car pos — the taxi STANDS at
+  // the pump, so the pour is lawful and the client's paper is dead weight.
+  const thePour = await emit(sa, 'vehicle:refuel', { model: 'taxi', amount: 2000, x: PUMP.x + 900, z: PUMP.z, idemKey: `r-off-${stamp}` })
+  check("THE WIRE'S OWN EYE: the coords lie 900u off, the server's pos pours anyway (₦2,000)", thePour.ok === true && typeof thePour.fuel === 'number' && typeof thePour.balance === 'number', JSON.stringify(thePour).slice(0, 240))
   const teenPour = await emit(st, 'vehicle:refuel', { model: 'taxi', amount: 2000, x: PUMP.x, z: PUMP.z, idemKey: `r-teen-${stamp}` })
   check('the teen\'s money wall holds at the pump (minors-no-money / no-car)', teenPour.ok === false, JSON.stringify(teenPour))
   await sleep(2600)
   const tooBig = await emit(sa, 'vehicle:refuel', { model: 'taxi', amount: 21_000, x: PUMP.x, z: PUMP.z, idemKey: `r-big-${stamp}` })
   check('₦21,000 refuses (the pump\'s ceiling)', tooBig.ok === false && tooBig.why === 'too-big')
   await sleep(2600)
-  const idem = `fuel-${stamp}-1`
-  const pour = await emit(sa, 'vehicle:refuel', { model: 'taxi', amount: 2000, x: PUMP.x, z: PUMP.z, idemKey: idem })
-  check('THE REAL POUR: ₦2,000 accepted, the ack carries the tank + the balance', pour.ok === true && typeof pour.fuel === 'number' && typeof pour.balance === 'number', JSON.stringify(pour).slice(0, 240))
   const balance1 = walletOf(A)
   check('THE DEBIT IS REAL: ₦5,000 − ₦2,000 = ₦3,000 on the disk', balance1 === 3000, `balance=${balance1}`)
-  const led = ledgerRow(idem)
+  const led = ledgerRow(`r-off-${stamp}`)
   check('THE LEDGER ROW: kind refuel, from A, to the pump', !!led && led.kind === 'refuel' && led.amount === 2000 && led.from === A && led.to === 'pump', JSON.stringify(led))
   const row2 = rowOf(A, 'taxi')
-  check('THE TANK ON DISK: the pour landed on the row at once', !!row2 && typeof pour.fuel === 'number' && Math.abs((row2?.fuel ?? -1) - pour.fuel) < 1e-9, JSON.stringify(row2))
+  check('THE TANK ON DISK: the pour landed on the row at once', !!row2 && typeof thePour.fuel === 'number' && Math.abs((row2?.fuel ?? -1) - (thePour.fuel ?? -2)) < 1e-9, JSON.stringify(row2))
   await sleep(2600)
-  const replay = await emit(sa, 'vehicle:refuel', { model: 'taxi', amount: 2000, x: PUMP.x, z: PUMP.z, idemKey: idem })
-  check('THE REPLAY LAW: the same idemKey returns ok + replayed, the tank never double-pours', replay.ok === true && replay.replayed === true && replay.fuel === pour.fuel, JSON.stringify(replay).slice(0, 200))
+  const replay = await emit(sa, 'vehicle:refuel', { model: 'taxi', amount: 2000, x: PUMP.x + 900, z: PUMP.z, idemKey: `r-off-${stamp}` })
+  check('THE REPLAY LAW: the same idemKey returns ok + replayed, the tank never double-pours', replay.ok === true && replay.replayed === true && replay.fuel === thePour.fuel, JSON.stringify(replay).slice(0, 200))
   check('THE BOOKS ARE SEALED: the replay moved nothing (balance still ₦3,000)', walletOf(A) === 3000)
   await sleep(2600)
   const capView = await emit(sa, 'wallet', {})
@@ -268,19 +281,20 @@ async function main(): Promise<void> {
   // force wear: the suite's odometer is honest — service the worn taxi
   const quoteNeeded = row2 ? Math.ceil((1 - row2.condition) * 24_000) : 0
   await sleep(2600)
-  const offGarage = await emit(sa, 'vehicle:repair', { model: 'taxi', x: PUMP.x + 900, z: PUMP.z, idemKey: `s-off-${stamp}` })
-  check('the wire\'s own eye: 900u off the garage refuses (no-garage)', offGarage.ok === false && offGarage.why === 'no-garage')
-  await sleep(2600)
-  const ridem = `service-${stamp}-1`
-  const fix = await emit(sa, 'vehicle:repair', { model: 'taxi', x: PUMP.x, z: PUMP.z, idemKey: ridem })
-  check('THE REAL SERVICE: accepted, condition 1, the balance rides', fix.ok === true && fix.condition === 1 && typeof fix.balance === 'number', JSON.stringify(fix).slice(0, 240))
+  // THE PAPER LIE DIES at the garage too: the coords claim 900u off, the
+  // wire's own eye sees the taxi STANDING at the mechanic row — lawful.
+  const theFix = await emit(sa, 'vehicle:repair', { model: 'taxi', x: PUMP.x + 900, z: PUMP.z, idemKey: `s-off-${stamp}` })
+  check("THE WIRE'S OWN EYE at the garage: the coords lie, the server's pos services (the quote lands)", theFix.ok === true && theFix.condition === 1 && typeof theFix.balance === 'number', JSON.stringify(theFix).slice(0, 240))
   check('THE QUOTE IS THE WEAR\'S OWN MATH: the debit equals the book\'s quote', walletOf(A) === 3000 - quoteNeeded, `balance=${walletOf(A)} quote=${quoteNeeded}`)
   const row3 = rowOf(A, 'taxi')
   check('THE BODY ON DISK: condition 1 (the mechanic\'s word is the row)', !!row3 && row3.condition === 1)
   await sleep(2600)
   const noNeed = await emit(sa, 'vehicle:repair', { model: 'taxi', x: PUMP.x, z: PUMP.z, idemKey: `s2-${stamp}` })
   check('a sound body refuses (no-need) — the mechanic does not invent work', noNeed.ok === false && noNeed.why === 'no-need')
-  const ledgerAfter = ledgerRow(ridem)
+  await sleep(2600) // the wallet cap breathes before the replay law asks again
+  const replayFix = await emit(sa, 'vehicle:repair', { model: 'taxi', x: PUMP.x + 900, z: PUMP.z, idemKey: `s-off-${stamp}` })
+  check('THE REPLAY LAW at the garage: the same idemKey services nothing twice', replayFix.ok === true && replayFix.replayed === true && replayFix.condition === 1, JSON.stringify(replayFix).slice(0, 200))
+  const ledgerAfter = ledgerRow(`s-off-${stamp}`)
   check('THE LEDGER ROW: kind repair, to the garage', !!ledgerAfter && ledgerAfter.kind === 'repair' && ledgerAfter.to === 'garage')
 
   section('12. THE DRY TANK — the engine coughs at the line')
@@ -291,7 +305,9 @@ async function main(): Promise<void> {
   await emit(sa, 'vehicle:hello', { model: 'okada', plate: `LKO-${stamp}-O`, paint: '', x: PUMP.x, z: PUMP.z, hd: 0, mv: false })
   await emit(sa, 'vehicle:bye', {}) // the memory row drops; the disk holds the fresh row
   await sleep(200)
-  const dbW = new Database('/home/z/my-project/db/custom.db')
+  // the harness sets the tank ON THE COPY (the suite's own arena — the live
+  // books are never written by a test)
+  const dbW = new Database(COPY)
   try {
     dbW.query('UPDATE VehicleRow SET fuel = ? WHERE handle = ? AND model = ?').run(0.005, A, 'okada')
   } finally {
@@ -305,7 +321,7 @@ async function main(): Promise<void> {
   check('a STILL dry car still speaks (the park lane is not fuel-locked)', stillTick.ok === true)
 
   section('13. THE EPHEMERALITY LAW re-pinned')
-  const db = new Database('/home/z/my-project/db/custom.db', { readonly: true })
+  const db = new Database(COPY, { readonly: true })
   const kinds = (db.query('SELECT DISTINCT kind FROM LiveEvent WHERE createdAt >= ?').all(Date.now() - 120_000) as { kind: string }[]).map((r) => r.kind)
   db.close()
   check('no LiveEvent row carries a vehicle/fuel kind', !kinds.some((k) => k.includes('vehicle') || k.includes('fuel') || k.includes('refuel')))
@@ -322,6 +338,7 @@ try {
   console.error(e)
 } finally {
   try { (svc as { kill: () => void } | null)?.kill() } catch { /* already gone */ }
+  dropTestDb(COPY)
 }
 
 console.log(`\n════════════════════════════════════════`)

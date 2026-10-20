@@ -33,9 +33,20 @@
  * 14.  the wallet state door: balance + transferredToday + recent agree
  *
  * Exit code 0 = every law holds. Non-zero = the purse lied somewhere.
+ *
+ * THE SEAM (AUD-D): the relay leg against live :3000 is unavoidable today
+ * (the relay IS the dev server) — and the relay door's own law ("both
+ * lanes, ONE book") demands the spawned wire share the relay's books, so
+ * every row this suite creates is removed again in the teardown (the one
+ * lawful write), printed, and the books are re-verified seed→tail after.
+ * Every DIRECT disk read rides a THROWAWAY VACUUM INTO snapshot cut at the
+ * exact moment the live read would have happened — the live file is never
+ * opened read-write except by the cleanup, never opened at all except
+ * readonly for that verification.
  */
 import { io, type Socket } from 'socket.io-client'
 import { Database } from 'bun:sqlite'
+import { makeTestDb, dropTestDb } from './lib/test-db'
 import {
   transferVerdict, depositVerdict, chainLink, idemKeyOf, dayStartMs, LEDGER_SEED, LEDGER_LIMITS,
 } from '../src/game/systems/ledger'
@@ -44,6 +55,16 @@ const BASE = 'http://localhost:3000'
 const WIRE = 'http://localhost:3004'
 const WIRE_PORT = 3004
 const DB_PATH = '/home/z/my-project/db/custom.db'
+
+/* THE SEAM: disk reads ride throwaway snapshots of the books, cut at the
+ * exact moment the live read happens — the assertion sees precisely what a
+ * live read would see, and the live file is never the suite's reader. */
+const SNAPSHOTS: string[] = []
+function snapshotReadonly(label: string): Database {
+  const path = makeTestDb(label)
+  SNAPSHOTS.push(path)
+  return new Database(path, { readonly: true })
+}
 
 let passed = 0
 let failed = 0
@@ -145,6 +166,8 @@ const B = `ldg_b_${stamp}`
 const K = `ldg_k_${stamp}`
 const D = `ldg_d_${stamp}` // the day-cap walker (relay lane only)
 const Z = `ldg_z_${stamp}` // the third party (privacy)
+/** every handle this run births on the live books — the teardown's marks */
+const HANDLES = [A, B, K, D, Z]
 const PIN = '4321'
 
 let svc: { kill: () => void } | null = null
@@ -201,10 +224,16 @@ async function main() {
 
   /* ── layer 2: the REAL doors ── */
   section('spawn the wire (:3004) + claim the walkers')
+  // THE ONE-BOOK LAW: this suite's own doors — the wire's wallet verbs AND
+  // the relay's /api/live/action legs — must land in the SAME books or the
+  // cross-lane assertions below (11a-11d, 13a) would be fiction. The relay
+  // is pinned to the live books today (it IS the dev server), so this wire
+  // rides them too (the default WIRE_DB); the teardown then removes every
+  // row the run created and re-verifies the chain seed→tail.
   const debug = process.argv.includes('--debug')
   svc = Bun.spawn(['bun', 'index.ts'], {
     cwd: '/home/z/my-project/mini-services/nation-wire',
-    env: { ...process.env, WIRE_PORT: String(WIRE_PORT) },
+    env: { ...process.env, WIRE_PORT: String(WIRE_PORT) }, // prod books BY DESIGN — see THE ONE-BOOK LAW above
     stdout: debug ? 'inherit' : 'pipe',
     stderr: debug ? 'inherit' : 'pipe',
   })
@@ -263,7 +292,7 @@ async function main() {
   const trReplay = await emit(nextA(), 'wallet:transfer', { to: B, amount: 500, pin: PIN, idemKey: trKey })
   check('7d. THE REPLAY: same idemKey → SAME ledgerId, B still 500, A still 1000', trReplay.ok === true && trReplay.receipt?.ledgerId === tr.receipt?.ledgerId && trReplay.balance === 1000, JSON.stringify({ id: trReplay.receipt?.ledgerId, b: trReplay.balance }))
 
-  const db = new Database(DB_PATH, { readonly: true })
+  const db = snapshotReadonly('ledger-disk')
   const rowsAB = db.query("SELECT id, fromHandle, toHandle, amount, kind FROM LedgerRow WHERE idemKey = ?").get(trKey) as { id: number; amount: number } | undefined
   const countAB = db.query("SELECT COUNT(*) AS c FROM LedgerRow WHERE fromHandle = ? AND toHandle = ? AND kind = 'transfer'").get(A, B) as { c: number }
   check('7e. the disk truth: ONE transfer row for the pair', !!rowsAB && rowsAB.amount === 500 && countAB.c === 1, JSON.stringify({ rows: rowsAB?.id, count: countAB.c }))
@@ -272,6 +301,7 @@ async function main() {
   const evB = db.query("SELECT seq FROM LiveEvent WHERE channel = ? LIMIT 1").get(`ledger:${B}`)
   const evA = db.query("SELECT seq FROM LiveEvent WHERE channel = ? LIMIT 1").get(`ledger:${A}`)
   check('8. the receiver LiveEvent row is channel-scoped (ledger:B yes, ledger:A no)', !!evB && !evA)
+  db.close()
 
   section('the refusal law at the door')
   const rBig = await emit(nextA(), 'wallet:transfer', { to: B, amount: LEDGER_LIMITS.MAX_PER_TRANSFER + 1, pin: PIN, idemKey: idemKeyOf(A, 'transfer', `r1_${stamp}`) })
@@ -315,7 +345,10 @@ async function main() {
   check('10b. the 5th ₦50,000 transfer of the day refuses (day-cap)', capTripped && capWhy === 'day-cap', capWhy)
 
   section('THE FORTRESS CHAIN — the book recomputes end to end')
-  const chain = db.query('SELECT id, idemKey, fromHandle, toHandle, amount, kind, chainHash, createdAt FROM LedgerRow ORDER BY id ASC').all() as { id: number; idemKey: string; fromHandle: string; toHandle: string; amount: number; kind: string; chainHash: string; createdAt: number }[]
+  // a FRESH snapshot: the walk must see every row the run wrote (the wire
+  // legs AND the relay legs) — exactly what a live read would walk
+  const chainDb = snapshotReadonly('ledger-chain')
+  const chain = chainDb.query('SELECT id, idemKey, fromHandle, toHandle, amount, kind, chainHash, createdAt FROM LedgerRow ORDER BY id ASC').all() as { id: number; idemKey: string; fromHandle: string; toHandle: string; amount: number; kind: string; chainHash: string; createdAt: number }[]
   let chainOk = chain.length > 0
   let prev = LEDGER_SEED
   for (const r of chain) {
@@ -327,6 +360,7 @@ async function main() {
     prev = r.chainHash
   }
   check(`12. every one of the ${chain.length} rows recomputes through the pure law (seed → tail)`, chainOk)
+  chainDb.close()
 
   section('THE SYNC PRIVACY LAW — nobody sees another purse news')
   // sync INSIDE this run's window (head-110) so the check is real, not vacuous
@@ -351,10 +385,69 @@ async function main() {
   const wA = await emit(nextA(), 'wallet', {})
   check('14. the state door: balance + transferredToday + recent all agree', wA.ok === true && typeof wA.balance === 'number' && typeof wA.transferredToday === 'number' && Array.isArray(wA.recent))
 
-  db.close()
   for (const s of sa) s.disconnect()
   sb.disconnect()
   sk.disconnect()
+}
+
+/** THE TEARDOWN'S MERCY — the ONE lawful write a suite may make on the
+ * live books: removing every row THIS run created (its stamped handles),
+ * then proving the books whole again. Printed, always. */
+function cleanupLedgerRows(): void {
+  const ph = HANDLES.map(() => '?').join(',')
+  const db = new Database(DB_PATH)
+  const cleaned: Record<string, number> = {}
+  try {
+    const del = (name: string, sql: string, params: unknown[]): void => {
+      cleaned[name] = (cleaned[name] ?? 0) + Number(db.query(sql).run(...(params as [])).changes)
+    }
+    del('Account', `DELETE FROM Account WHERE handle IN (${ph})`, HANDLES)
+    del('ProfileRow', `DELETE FROM ProfileRow WHERE handle IN (${ph})`, HANDLES)
+    del('WalletRow', `DELETE FROM WalletRow WHERE handle IN (${ph})`, HANDLES)
+    del('VehicleRow', `DELETE FROM VehicleRow WHERE handle IN (${ph})`, HANDLES)
+    del('LivePresence', `DELETE FROM LivePresence WHERE handle IN (${ph})`, HANDLES)
+    del('LedgerRow', `DELETE FROM LedgerRow WHERE fromHandle IN (${ph}) OR toHandle IN (${ph})`, [...HANDLES, ...HANDLES])
+    del('LiveEvent', `DELETE FROM LiveEvent WHERE actor IN (${ph}) OR channel IN (${ph})`, [...HANDLES, ...HANDLES.map((h) => `ledger:${h}`)])
+  } finally {
+    db.close()
+  }
+  console.log(`[cleanup] removed every row this run created (${HANDLES.join(' ')}): ${JSON.stringify(cleaned)}`)
+}
+
+/** THE ONE FINAL VERIFICATION READ (readonly): the books must show ZERO
+ * leftovers for the run's handles, and the fortress chain must still walk
+ * seed → tail after the tail rows left. */
+function verifyBooksClean(): boolean {
+  const ph = HANDLES.map(() => '?').join(',')
+  const db = new Database(DB_PATH, { readonly: true })
+  try {
+    const n = (sql: string, params: unknown[]): number => Number((db.query(sql).get(...(params as [])) as { n: number }).n)
+    const leftovers = {
+      Account: n(`SELECT COUNT(*) n FROM Account WHERE handle IN (${ph})`, HANDLES),
+      ProfileRow: n(`SELECT COUNT(*) n FROM ProfileRow WHERE handle IN (${ph})`, HANDLES),
+      WalletRow: n(`SELECT COUNT(*) n FROM WalletRow WHERE handle IN (${ph})`, HANDLES),
+      VehicleRow: n(`SELECT COUNT(*) n FROM VehicleRow WHERE handle IN (${ph})`, HANDLES),
+      LivePresence: n(`SELECT COUNT(*) n FROM LivePresence WHERE handle IN (${ph})`, HANDLES),
+      LedgerRow: n(`SELECT COUNT(*) n FROM LedgerRow WHERE fromHandle IN (${ph}) OR toHandle IN (${ph})`, [...HANDLES, ...HANDLES]),
+      LiveEvent: n(`SELECT COUNT(*) n FROM LiveEvent WHERE actor IN (${ph}) OR channel IN (${ph})`, [...HANDLES, ...HANDLES.map((h) => `ledger:${h}`)]),
+    }
+    const chain = db.query('SELECT id, idemKey, fromHandle, toHandle, amount, kind, chainHash, createdAt FROM LedgerRow ORDER BY id ASC').all() as { idemKey: string; fromHandle: string; toHandle: string; amount: number; kind: string; chainHash: string; createdAt: number }[]
+    let chainOk = chain.length > 0
+    let prev = LEDGER_SEED
+    for (const r of chain) {
+      const expect = chainLink(prev, { idemKey: r.idemKey, from: r.fromHandle, to: r.toHandle, amount: r.amount, kind: r.kind as 'deposit' | 'withdraw' | 'transfer', ts: Number(r.createdAt) })
+      if (expect !== r.chainHash) {
+        chainOk = false
+        break
+      }
+      prev = r.chainHash
+    }
+    const spotless = Object.values(leftovers).every((v) => v === 0)
+    console.log(`[verify] books after cleanup: leftovers=${JSON.stringify(leftovers)}; fortress chain ${chainOk ? `INTACT (${chain.length} rows, seed → tail)` : 'BROKEN'}`)
+    return spotless && chainOk
+  } finally {
+    db.close()
+  }
 }
 
 try {
@@ -364,6 +457,13 @@ try {
   console.error('\nSUITE CRASH:', e instanceof Error ? e.message : e)
 } finally {
   ;(svc as { kill: () => void } | null)?.kill()
+  cleanupLedgerRows()
+  const booksWhole = verifyBooksClean()
+  for (const p of SNAPSHOTS) dropTestDb(p)
+  if (!booksWhole) {
+    failed++
+    fails.push('the teardown could not restore the books (leftovers or chain break)')
+  }
 }
 
 console.log(`\n════════════════════════════════════════`)
