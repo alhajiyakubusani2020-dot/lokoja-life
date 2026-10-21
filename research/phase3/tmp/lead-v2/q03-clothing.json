@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "query": "Nigerian wedding aso ebi guests colorful fashion gathering",
+  "count": 4,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/764e077fee3a.jpg",
+      "caption": "",
+      "source": "The Knot",
+      "original_width": "768px",
+      "original_height": "1024px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/be981cf78c86.jpg",
+      "caption": "",
+      "source": "The Knot",
+      "original_width": "768px",
+      "original_height": "1024px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/0c6db50053e7.jpg",
+      "caption": "",
+      "source": "AyeDu",
+      "original_width": "1600px",
+      "original_height": "897px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/628a24660c72.jpg",
+      "caption": "",
+      "source": "Etsy",
+      "original_width": "800px",
+      "original_height": "1328px"
+    }
+  ]
+}

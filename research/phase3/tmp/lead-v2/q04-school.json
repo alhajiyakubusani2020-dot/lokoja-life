@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "query": "Nigerian public secondary school single storey classroom block",
+  "count": 4,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/b66f2068eafb.jpg",
+      "caption": "",
+      "source": "Vanguard News",
+      "original_width": "1307px",
+      "original_height": "816px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/3bd6c3e74fa0.jpg",
+      "caption": "",
+      "source": "Divisare",
+      "original_width": "2592px",
+      "original_height": "1936px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/0a37d9a0c31a.jpg",
+      "caption": "",
+      "source": "LinkedIn",
+      "original_width": "720px",
+      "original_height": "1280px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/060a0b18ca2d.jpg",
+      "caption": "",
+      "source": "YouTube",
+      "original_width": "1280px",
+      "original_height": "720px"
+    }
+  ]
+}

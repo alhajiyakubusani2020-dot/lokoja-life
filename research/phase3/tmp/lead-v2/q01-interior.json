@@ -1,0 +1,40 @@
+🚀 Initializing Z-AI SDK...
+🔎 Searching images: "Nigerian local buka restaurant interior wooden benches food"
+✅ Got 4 images
+{
+  "success": true,
+  "query": "Nigerian local buka restaurant interior wooden benches food",
+  "count": 4,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/967b0726757a.jpg",
+      "caption": "",
+      "source": "Eater NY",
+      "original_width": "1352px",
+      "original_height": "1360px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/fbe172a156b2.jpg",
+      "caption": "",
+      "source": "LocalBuka",
+      "original_width": "880px",
+      "original_height": "1047px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/db41e7887322.jpg",
+      "caption": "",
+      "source": "Yelp",
+      "original_width": "1000px",
+      "original_height": "1000px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/2e5dbbf3c835.jpg",
+      "caption": "",
+      "source": "Tripadvisor",
+      "original_width": "1200px",
+      "original_height": "1200px"
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+LOKOJA MOON GEOMETRY - 7.790N 6.753E, Africa/Lagos (UTC+1) - computed 2026-10-22
+Method: Meeus truncated lunar theory (8 longitude perturbations); geocentric altitude (parallax ~1 deg not applied, stated).
+Cross-validation anchors (timeanddate.com, Lagos): Full 2026-09-26 ~17:49 WAT; LQ 2026-10-03 ~14:25 WAT;
+  New 2026-05-16; Blue (second) Full 2026-05-31. Deltas in Part A must be <= ~40 min.
+
+## A. 2026 LUNAR PHASE CALENDAR (WAT)
+| Event | Date/Time (WAT) |
+|---|---|
+| Full | 2026-01-03 11:11 |
+| Last Quarter | 2026-01-10 16:57 |
+| New | 2026-01-18 20:47 |
+| First Quarter | 2026-01-26 05:40 |
+| Full | 2026-02-01 22:58 |
+| Last Quarter | 2026-02-09 13:43 |
+| New | 2026-02-17 12:44 |
+| First Quarter | 2026-02-24 13:14 |
+| Full | 2026-03-03 12:20 |
+| Last Quarter | 2026-03-11 10:26 |
+| New | 2026-03-19 01:50 |
+| First Quarter | 2026-03-25 19:59 |
+| Full | 2026-04-02 02:59 |
+| Last Quarter | 2026-04-10 05:40 |
+| New | 2026-04-17 12:12 |
+| First Quarter | 2026-04-24 03:05 |
+| Full | 2026-05-01 18:18 |
+| Last Quarter | 2026-05-09 22:14 |
+| New | 2026-05-16 20:31 |
+| First Quarter | 2026-05-23 11:41 |
+| Full | 2026-05-31 09:42 |
+| Last Quarter | 2026-06-08 11:20 |
+| New | 2026-06-15 03:48 |
+| First Quarter | 2026-06-21 22:34 |
+| Full | 2026-06-30 00:54 |
+| Last Quarter | 2026-07-07 20:55 |
+| New | 2026-07-14 11:02 |
+| First Quarter | 2026-07-21 12:00 |
+| Full | 2026-07-29 15:38 |
+| Last Quarter | 2026-08-06 03:48 |
+| New | 2026-08-12 19:10 |
+| First Quarter | 2026-08-20 03:54 |
+| Full | 2026-08-28 05:32 |
+| Last Quarter | 2026-09-04 09:14 |
+| New | 2026-09-11 05:03 |
+| First Quarter | 2026-09-18 21:56 |
+| Full | 2026-09-26 18:13 |
+| Last Quarter | 2026-10-03 14:46 |
+| New | 2026-10-10 17:21 |
+| First Quarter | 2026-10-18 17:26 |
+| Full | 2026-10-26 05:42 |
+| Last Quarter | 2026-11-01 21:46 |
+| New | 2026-11-09 08:25 |
+| First Quarter | 2026-11-17 13:02 |
+| Full | 2026-11-24 16:23 |
+| Last Quarter | 2026-12-01 07:22 |
+| New | 2026-12-09 02:04 |
+| First Quarter | 2026-12-17 06:53 |
+| Full | 2026-12-24 02:45 |
+| Last Quarter | 2026-12-30 20:07 |
+
+## B. MONTHLY NIGHT SUMMARY (illumination % / moon altitude deg at 18:30 & 21:00 WAT)
+| Month | 18:30 illum% | 18:30 alt | 21:00 illum% | 21:00 alt |
+|---|---|---|---|---|
+| 2026-01 | 50 | -2 | 50 | -1 |
+| 2026-02 | 53 | -5 | 53 | -6 |
+| 2026-03 | 47 | -2 | 47 | +1 |
+| 2026-04 | 47 | -2 | 47 | +1 |
+| 2026-05 | 45 | -1 | 45 | +2 |
+| 2026-06 | 46 | -1 | 46 | +2 |
+| 2026-07 | 45 | -1 | 45 | +3 |
+| 2026-08 | 46 | -0 | 46 | +3 |
+| 2026-09 | 49 | +2 | 49 | +3 |
+| 2026-10 | 50 | +0 | 50 | +0 |
+| 2026-11 | 52 | +1 | 52 | -1 |
+| 2026-12 | 53 | -4 | 53 | -6 |
+
+## C. DARK-MOON EVENINGS (illum <5% at both 18:30 and 21:00) - 'generator-lit compound nights'
+| 2026-01-01 | dark |
+| 2026-01-02 | dark |
+| 2026-01-03 | dark |
+| 2026-01-04 | dark |
+| 2026-01-31 | dark |
+| 2026-02-01 | dark |
+| 2026-02-02 | dark |
+| 2026-02-03 | dark |
+| 2026-03-01 | dark |
+| 2026-03-02 | dark |
+| 2026-03-03 | dark |
+| 2026-03-04 | dark |
+| 2026-03-31 | dark |
+| 2026-04-01 | dark |
+| 2026-04-02 | dark |
+| 2026-04-03 | dark |
+| 2026-04-29 | dark |
+| 2026-04-30 | dark |
+| 2026-05-01 | dark |
+| 2026-05-02 | dark |
+| 2026-05-03 | dark |
+| 2026-05-29 | dark |
+| 2026-05-30 | dark |
+| 2026-05-31 | dark |
+| 2026-06-01 | dark |
+| 2026-06-27 | dark |
+| 2026-06-28 | dark |
+| 2026-06-29 | dark |
+| 2026-06-30 | dark |
+| 2026-07-01 | dark |
+| 2026-07-27 | dark |
+| 2026-07-28 | dark |
+| 2026-07-29 | dark |
+| 2026-07-30 | dark |
+| 2026-07-31 | dark |
+| 2026-08-26 | dark |
+| 2026-08-27 | dark |
+| 2026-08-28 | dark |
+| 2026-08-29 | dark |
+| 2026-09-24 | dark |
+| 2026-09-25 | dark |
+| 2026-09-26 | dark |
+| 2026-09-27 | dark |
+| 2026-10-24 | dark |
+| 2026-10-25 | dark |
+| 2026-10-26 | dark |
+| 2026-10-27 | dark |
+| 2026-11-23 | dark |
+| 2026-11-24 | dark |
+| 2026-11-25 | dark |
+| 2026-12-22 | dark |
+| 2026-12-23 | dark |
+| 2026-12-24 | dark |
+| 2026-12-25 | dark |
+
+## D. FULL-MOON EVENINGS (illum >97% at 18:30) - 'Patti silhouettes by moonlight'
+| 2026-01-17 | full at 18:30 (-12 deg alt) |
+| 2026-01-18 | full at 18:30 (-1 deg alt) |
+| 2026-01-19 | full at 18:30 (+11 deg alt) |
+| 2026-02-16 | full at 18:30 (-6 deg alt) |
+| 2026-02-17 | full at 18:30 (+5 deg alt) |
+| 2026-02-18 | full at 18:30 (+17 deg alt) |
+| 2026-03-17 | full at 18:30 (-13 deg alt) |
+| 2026-03-18 | full at 18:30 (-1 deg alt) |
+| 2026-03-19 | full at 18:30 (+11 deg alt) |
+| 2026-04-16 | full at 18:30 (-8 deg alt) |
+| 2026-04-17 | full at 18:30 (+6 deg alt) |
+| 2026-04-18 | full at 18:30 (+19 deg alt) |
+| 2026-05-15 | full at 18:30 (-13 deg alt) |
+| 2026-05-16 | full at 18:30 (+1 deg alt) |
+| 2026-05-17 | full at 18:30 (+15 deg alt) |
+| 2026-06-13 | full at 18:30 (-16 deg alt) |
+| 2026-06-14 | full at 18:30 (-2 deg alt) |
+| 2026-06-15 | full at 18:30 (+13 deg alt) |
+| 2026-07-13 | full at 18:30 (-4 deg alt) |
+| 2026-07-14 | full at 18:30 (+9 deg alt) |
+| 2026-07-15 | full at 18:30 (+22 deg alt) |
+| 2026-08-11 | full at 18:30 (-9 deg alt) |
+| 2026-08-12 | full at 18:30 (+4 deg alt) |
+| 2026-08-13 | full at 18:30 (+16 deg alt) |
+| 2026-09-09 | full at 18:30 (-15 deg alt) |
+| 2026-09-10 | full at 18:30 (-4 deg alt) |
+| 2026-09-11 | full at 18:30 (+7 deg alt) |
+| 2026-09-12 | full at 18:30 (+17 deg alt) |
+| 2026-10-09 | full at 18:30 (-13 deg alt) |
+| 2026-10-10 | full at 18:30 (-3 deg alt) |
+| 2026-10-11 | full at 18:30 (+7 deg alt) |
+| 2026-11-07 | full at 18:30 (-22 deg alt) |
+| 2026-11-08 | full at 18:30 (-11 deg alt) |
+| 2026-11-09 | full at 18:30 (-1 deg alt) |
+| 2026-11-10 | full at 18:30 (+9 deg alt) |
+| 2026-12-07 | full at 18:30 (-18 deg alt) |
+| 2026-12-08 | full at 18:30 (-8 deg alt) |
+| 2026-12-09 | full at 18:30 (+3 deg alt) |
+| 2026-12-10 | full at 18:30 (+14 deg alt) |

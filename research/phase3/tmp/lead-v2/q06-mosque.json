@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "query": "Nigeria central mosque exterior minaret",
+  "count": 4,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/6a187ebfca66.jpg",
+      "caption": "",
+      "source": "www.tripadvisor.com",
+      "original_width": "1024px",
+      "original_height": "768px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/1bbf5ed46427.jpg",
+      "caption": "",
+      "source": "www.alamy.com",
+      "original_width": "866px",
+      "original_height": "1390px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/2a575055a1ea.jpg",
+      "caption": "",
+      "source": "us.trip.com",
+      "original_width": "1080px",
+      "original_height": "810px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/062371df7552.jpg",
+      "caption": "",
+      "source": "www.tripadvisor.com",
+      "original_width": "1100px",
+      "original_height": "1100px"
+    }
+  ]
+}

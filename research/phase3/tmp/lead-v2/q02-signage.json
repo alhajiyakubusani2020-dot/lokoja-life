@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "query": "Nigerian street shopfront painted signage commercial block",
+  "count": 4,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/f8d9fc26da24.jpg",
+      "caption": "",
+      "source": "bl.ag",
+      "original_width": "1200px",
+      "original_height": "1200px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/968d4f116ec1.jpg",
+      "caption": "",
+      "source": "bl.ag",
+      "original_width": "1200px",
+      "original_height": "1200px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/d0c6deb94ab3.jpg",
+      "caption": "",
+      "source": "www.alamy.com",
+      "original_width": "1300px",
+      "original_height": "956px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/3212db6f5d5c.jpg",
+      "caption": "",
+      "source": "bl.ag",
+      "original_width": "1200px",
+      "original_height": "1000px"
+    }
+  ]
+}
