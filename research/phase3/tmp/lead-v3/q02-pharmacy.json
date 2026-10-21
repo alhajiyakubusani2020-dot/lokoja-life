@@ -1,0 +1,37 @@
+{
+ "success": true,
+ "query": "Nigerian local pharmacy chemist shop storefront street",
+ "count": 4,
+ "ranked": false,
+ "captioned_count": 0,
+ "results": [
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/9733fecfe915.jpg",
+   "caption": "",
+   "source": "healthplugpharmacy.com",
+   "original_width": "1800px",
+   "original_height": "1200px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/37dff1c4888e.jpeg",
+   "caption": "",
+   "source": "AskAnnie - TortoisePath",
+   "original_width": "879px",
+   "original_height": "1280px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/4f487f4b0d2d.jpg",
+   "caption": "",
+   "source": "Alamy",
+   "original_width": "1300px",
+   "original_height": "956px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/bacd6d2a5898.jpg",
+   "caption": "",
+   "source": "Yelp",
+   "original_width": "1000px",
+   "original_height": "1000px"
+  }
+ ]
+}

@@ -1,0 +1,37 @@
+{
+ "success": true,
+ "query": "Nigerian residential compound metal gate wall house",
+ "count": 4,
+ "ranked": false,
+ "captioned_count": 0,
+ "results": [
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/94387849df72.jpg",
+   "caption": "",
+   "source": "Alibaba",
+   "original_width": "1456px",
+   "original_height": "1456px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/b2a24a75647a.jpg",
+   "caption": "",
+   "source": "Alamy",
+   "original_width": "1300px",
+   "original_height": "956px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/9f17fa9c9074.jpg",
+   "caption": "",
+   "source": "TilesNg.com",
+   "original_width": "656px",
+   "original_height": "1359px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/e0e56ac962e2.jpg",
+   "caption": "",
+   "source": "Alamy",
+   "original_width": "1300px",
+   "original_height": "956px"
+  }
+ ]
+}

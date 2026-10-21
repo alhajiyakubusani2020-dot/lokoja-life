@@ -1,0 +1,37 @@
+{
+ "success": true,
+ "query": "Nigerian public school classroom block building pupils",
+ "count": 4,
+ "ranked": false,
+ "captioned_count": 0,
+ "results": [
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/69f76a7354c0.jpg",
+   "caption": "",
+   "source": "OECD-Development Matters",
+   "original_width": "1200px",
+   "original_height": "714px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/5e82654445c8.png",
+   "caption": "",
+   "source": "ICIR Nigeria",
+   "original_width": "1600px",
+   "original_height": "1200px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/bcee7a162bd0.jpeg",
+   "caption": "",
+   "source": "Pexels",
+   "original_width": "5056px",
+   "original_height": "3436px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/ef031cb8f04d.jpg",
+   "caption": "",
+   "source": "Vanguard News",
+   "original_width": "1600px",
+   "original_height": "1200px"
+  }
+ ]
+}

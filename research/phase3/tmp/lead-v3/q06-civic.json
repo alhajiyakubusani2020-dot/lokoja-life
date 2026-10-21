@@ -1,0 +1,37 @@
+{
+ "success": true,
+ "query": "Nigeria state government secretariat building white facade",
+ "count": 4,
+ "ranked": false,
+ "captioned_count": 0,
+ "results": [
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/e181d4cff054.jpg",
+   "caption": "",
+   "source": "The Guardian",
+   "original_width": "1200px",
+   "original_height": "1200px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/bb3a51e6330a.jpg",
+   "caption": "",
+   "source": "Channels TV",
+   "original_width": "1280px",
+   "original_height": "720px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/2518d60c7280.jpg",
+   "caption": "",
+   "source": "Shutterstock",
+   "original_width": "1500px",
+   "original_height": "1099px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/5523eb841c63.jpg",
+   "caption": "",
+   "source": "Buffalo News",
+   "original_width": "1200px",
+   "original_height": "800px"
+  }
+ ]
+}

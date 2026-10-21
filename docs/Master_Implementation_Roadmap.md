@@ -90,3 +90,29 @@ Phase 3 implementation begins only when the research gate is accepted. Acceptanc
 **Evidence trail:** 9 team files + red team + solar/moon outputs + visual library v1/v2 under
 `research/phase3/`; supplementary verification in `Phase3_Research.md` Parts C–G; worklog Task IDs
 6-a…6-t, PH3R-GATE, and this phase's entry.
+
+---
+
+## PART VIII — THE NAMED-BOOK REGISTRY (2026-10-22 supplement; the 21-deliverable map)
+
+The second master directive's 21 deliverables now all exist; the complete map with states lives in
+`Phase3_Research.md` Part I.1. The eleven NEW named books (NPC, Vehicle, Building, Economy, Weather,
+Wildlife, Multiplayer, Future Cities, UI Philosophy, Interaction, Accessibility) are
+consolidation-and-expansion documents: the numbered canon (`docs/phase3/01–10`) and the four canon
+bibles remain binding and untouched; where a named book and a numbered book overlap, BOTH govern
+their own extensions and neither amends the other — conflicts resolve toward canon and get logged
+in the contradiction register (same law as Content_Expansion VI.4).
+
+**Implementer reading order (amends Content_Expansion Part IV):** Design Constitution →
+Content_Bible v2.2 → this roadmap → the domain bible for the workstream (W1: Environment/Weather/
+Lighting; W2: Building/Art-Audio-Expansion; W3: NPC/World-Expansion; W4: Vehicle; W5: Economy;
+W6: Audio/Weather; W7: World-Expansion/Culture) → the Dossier adjudications (A1–A12, B1–B7, E1–E4)
+→ the relevant new named book → the gate list of that book. Multiplayer work reads
+`Multiplayer_Bible.md` + `MULTIPLAYER_PLAN.md` + the N-gates. Interface work reads
+`UI_Philosophy_Bible.md` + `Interaction_Bible.md` + `Accessibility_Bible.md` + `ERA2-UI-AUDIT.md`.
+
+**Red Team v3 outcome:** 93 claims audited (64V/15S/10W/4C/0U) — all findings fixed in-place;
+`research/phase3/redteam-v3.md` is the record. The M1–M7 acceptance criteria, W1–W7 order, and
+gate system (Parts I–V) are UNCHANGED by this supplement; the named books arm the workstreams,
+they do not re-scope them. Visual pass v3 (13 new usable references) feeds W2's material law and
+the P2 polish band; the church-facade and home-interior debts stay on the Part VI list.

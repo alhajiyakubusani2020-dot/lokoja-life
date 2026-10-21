@@ -1,0 +1,37 @@
+{
+ "success": true,
+ "query": "Nigerian local buka restaurant roadside food stall customers eating",
+ "count": 4,
+ "ranked": false,
+ "captioned_count": 0,
+ "results": [
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/444fe5db86f5.jpg",
+   "caption": "",
+   "source": "Vanguard News",
+   "original_width": "1408px",
+   "original_height": "768px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/3b6f16eae411.jpg",
+   "caption": "",
+   "source": "Houston Food Finder",
+   "original_width": "1200px",
+   "original_height": "800px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/8351cb01c8e5.jpg",
+   "caption": "",
+   "source": "LocalBuka",
+   "original_width": "1024px",
+   "original_height": "1024px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/1139dacda778.jpg",
+   "caption": "",
+   "source": "Yelp",
+   "original_width": "1000px",
+   "original_height": "1000px"
+  }
+ ]
+}

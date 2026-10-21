@@ -102,3 +102,45 @@ strengthened (C-1) and A5 refined (C-2).
 - **P2 (delight):** shadow-vanish days · **moon states (unblocked)** · Patti Race · erosion scars ·
   collapse-silence · vendor calls · dogs · masquerade windows · stall grammar v2.
 Full measurable plan: `Master_Implementation_Roadmap.md`.
+
+---
+
+## PART VII — SUPPLEMENT (2026-10-22, master-directive reconciliation; append-only)
+
+The second Phase 3 master directive (21 named deliverables) was reconciled against the ratified
+corpus. Findings and new binding decisions:
+
+**E1 — Named-book completion set ratified.** Eleven named books created as consolidation-and-expansion
+documents (canon + `docs/phase3/01–10` untouched): `NPC_Bible.md`, `Vehicle_Bible.md`,
+`Building_Bible.md`, `Economy_Bible.md`, `Weather_Bible.md`, `Wildlife_Bible.md`,
+`Multiplayer_Bible.md` (binds `MULTIPLAYER_PLAN.md`), `Future_Cities_Bible.md`,
+`UI_Philosophy_Bible.md`, `Interaction_Bible.md`, `Accessibility_Bible.md`. The complete
+21-deliverable map lives in `Phase3_Research.md` Part I.1. No new web research was required —
+the Red-Teamed corpus already carried every domain (RULE ZERO: consolidate, never rewrite).
+
+**E2 — Visual pass v3 adopted.** 8 thin categories, 32 candidates, 19 downloaded and every one
+visually reviewed: **13 ACCEPT (2 narrow-use) / 2 HOLD / 4 REJECT** (all four rejects wrong-country:
+UK/US churches, US civic, Eastern-European barrier). Library: **43 reviewed / 32 usable**. Highest
+value: the UBE/SUBEB school bar with hand-painted commissioning text (v3-school3), the buka
+pot-wall (v3-buka1), the market-hall shed (v3-market1), and the hand-painted "POS & DATA" sign
+(v3-market3). Verdicts recorded in `Phase3_Research.md` Part H; the church-facade debt REMAINS open
+(now with two documented wrong-country rejections).
+
+**E3 — Red Team v3 verdicts adopted with in-place fixes.** 93 claims from the eleven books: 64
+VERIFIED / 15 SUPPORTED / 10 WEAK / 4 CONTRADICTED / 0 UNVERIFIABLE
+(`research/phase3/redteam-v3.md`). All 4 contradictions + 11 citation/labelling findings fixed
+in the books the same session; the fix list is logged in `Phase3_Research.md` I.2. Two divergence
+notes now recorded in the books themselves: the built market pulse (`marketDayEvery: 3`,
+`config.ts:458`) vs the 5-day canon (W3/W7 reconciliation), and the four-scalar weather roll as
+DESIGN LAW PENDING W1/W6 (not a current repo anchor).
+
+**E4 — Count corrections restated (from canon v2.1/v2.2, re-verified by RT v3):** 98 doors = 10
+layout + 88 school (never 108) · phone apps 26 = 7 wire-backed / 12 store-backed / 7 read-only ·
+19 distinct named streets across 29 named ways · nation-wire decomposed (index.ts 164 + context 565
++ handlers ≈2,009) · built taxi fare ₦960/3km (base 300 + ₦220/km). These figures are the ones the
+named books now carry.
+
+**Unresolved debts unchanged:** Part III list stands (keke local fare, monthly climate table,
+church/mosque/Gov-House facades, school bell times, Bassa-Nge names, Ebira/Nupe greetings, Bortle
+class, FUL status, CBH revival intent, home-interior documentary reference, flora wild-tree survey).
+Nothing new was invented to close them; nothing new blocked Phase 3.

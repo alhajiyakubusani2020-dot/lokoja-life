@@ -1,0 +1,40 @@
+🚀 Initializing Z-AI SDK...
+🔎 Searching images: "Nigerian family living room interior sofa curtains home"
+✅ Got 4 images
+{
+  "success": true,
+  "query": "Nigerian family living room interior sofa curtains home",
+  "count": 4,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/17e969eefe53.webp",
+      "caption": "",
+      "source": "Nicetown",
+      "original_width": "2752px",
+      "original_height": "1536px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/b1cd1b8d73b4.jpg",
+      "caption": "",
+      "source": "Maker&Son",
+      "original_width": "1200px",
+      "original_height": "675px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/fbb71de006c3.png",
+      "caption": "",
+      "source": "HomeLane",
+      "original_width": "1024px",
+      "original_height": "1024px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/1e1f042b4712.jpg",
+      "caption": "",
+      "source": "Pinterest",
+      "original_width": "736px",
+      "original_height": "1104px"
+    }
+  ]
+}

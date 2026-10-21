@@ -279,3 +279,97 @@ in `team-8-visual-ref.md` and this file.
 Source-hygiene notes: S-F is social-media evidence — labelled MED and used only for the hotel's decay
 state; S-I is community-sourced language data — labelled MED, restricted to the four formulas quoted;
 every Prelude-era rule (URL + date + confidence, NG-labelling, conflict preservation) continues to bind.
+
+---
+
+## PART H — VISUAL REFERENCE PASS v3 (2026-10-22 supplement; extends Part D)
+
+Method: z-ai image-search (`--gl us`), **8 thin categories × 4 candidates = 32 candidates** (JSON logs
+under `research/phase3/tmp/lead-v3/q01…q08.json`); **19 downloaded** to
+`research/phase3/team-8-visual-ref/imgs-v3/` and **every one visually reviewed** before verdict
+(categories chosen from Master_Dossier Part III.3 debts: interiors, healthcare, church, residential
+compound/gate, market close-ups, civic facades, home interior, fresh-state schools).
+
+| File | Category | Source | Verdict | What it shows + design use |
+|---|---|---|---|---|
+| `imgs-v3/v3-buka1.jpg` | Buka / food stall | Vanguard (NG press) | **ACCEPT (NG)** | Roadside food centre: vendor in apron over ankara at a pot-wall (stacked aluminum pots + enamel basins), "MAMA KIKI FOOD CENTRE" hand-painted sign, bench tables kerb-side, tarp/zinc canopy, danfo/keke/okada street behind. Use: THE food-strip/buka kit (Building_Bible V5), vendor dress, kerb-side dining grammar. |
+| `imgs-v3/v3-buka2.jpg` | Buka (evening) | LocalBuka | **ACCEPT (NG — Lagos-verified)** | Street-edge buka at dusk: MTN-yellow commercial grammar, "THE BUKKA / LAGOS EATS" storefronts, keke, wooden tables, phone-lit patron. Use: evening buka lighting + commercial-signage density. Never citable as Lokoja (Lagos). |
+| `imgs-v3/v3-buka3.jpg` | Dish close-up | Yelp | **HOLD (NG-dish, venue unverifiable)** | Pounded-yam ball + egusi soup on print tablecloth. Use: food surface/plate reference only; restaurant location unverifiable. |
+| `imgs-v3/v3-pharm1.jpg` | Pharmacy storefront | healthplug (Lagos-verified) | **ACCEPT (NG — Lagos-verified)** | Chemist fascia board with RC number + service lists, poster-paper density on glass/pillars, gated forecourt. Use: pharmacy/chemist shopfront kit (Building_Bible V4). |
+| `imgs-v3/v3-pharm2.jpg` | Chemist interior | Alamy (documentary) | **ACCEPT (NG)** | Wooden cubby shelves PACKED with drug boxes, proprietor seated in the grid. Use: chemist interior kit — the shelf-cells + box-colour noise law. |
+| `imgs-v3/v3-church1.jpg` | Church facade | Alamy | **REJECT** | UK brick "New Life Church" — wrong country/architecture. |
+| `imgs-v3/v3-church2.jpg` | Church facade | Alamy | **REJECT** | US brick "Victory Temple Church" with US traffic signals — wrong country. Church facade detail REMAINS an honest NG design-space debt (03 §IV). |
+| `imgs-v3/v3-compound1.jpg` | Gate (palace form) | Alamy | **ACCEPT (NG — Kano-verified, narrow)** | Monumental crenellated arched palace gate, red/cream. Use: form reference ONLY for the Maigari's palace district dressing; never citable as Lokoja residential. |
+| `imgs-v3/v3-compound2.jpg` | Security door | TilesNg | **ACCEPT (NG)** | Nigerian steel security door: basket-weave + ribbed embossed panels, powder-coat black, yard context. Use: door-panel emboss grammar (Building_Bible V1). |
+| `imgs-v3/v3-compound3.jpg` | Barrier gate | Alamy | **REJECT** | Eastern-European yellow boom barrier — wrong location entirely. |
+| `imgs-v3/v3-market1.jpg` | Market hall interior | Pexels | **ACCEPT (NG)** | Timber post/purlin shed under old zinc, long wooden tables, tomatoes/tatashe/onions in enamel bowls + woven baskets. Use: THE market-hall interior kit (Building_Bible V3) — shed structure + bowl-display system + table-height grammar. |
+| `imgs-v3/v3-market2.jpg` | Basin-scale trade | Alamy | **ACCEPT (NG)** | Tomato seller with enamel basin unit-trade, ochre mud-brick wall behind. Use: the basin-as-measure trade grammar + sack exchange. |
+| `imgs-v3/v3-market3.jpg` | Market + POS | Unsplash | **ACCEPT (NG)** | Outdoor market: tomato pyramids in enamel bowls, ankara/gele vendors, **hand-painted "POS & DATA" sign under red umbrellas** — the documented POS street economy photographed in the wild. Use: POS-agent kit (Economy_Bible IV.1) + umbrella-stall grammar + produce pyramids. |
+| `imgs-v3/v3-civic1.jpg` | Civic building | The Guardian | **REJECT** | US Institute of Peace (Washington DC) — wrong country. |
+| `imgs-v3/v3-civic2.jpg` | Commercial plaza | Channels TV | **ACCEPT (NG — Abuja-verified, narrow)** | Wadata Plaza (PDP HQ): teal/white block, external AC compressors on every floor line, party signage/banners, flag row. Use: plaza/AC-wall/banner grammar (Building_Bible V6); NOT a government secretariat. |
+| `imgs-v3/v3-interior1.jpg` | Home interior | Pinterest | **HOLD (styled, not documentary)** | Afro-boho living room: warm tan walls, woven wall art, rattan. Use: middle-class interior dressing palette hints ONLY; the typical home interior reference remains a debt. |
+| `imgs-v3/v3-school1.jpg` | Classroom interior | OECD Development Matters | **ACCEPT (NG)** | Nigerian classroom: dark dual-desks with carved graffiti (UBE), blue/white uniforms, exercise books. Use: classroom furniture grammar (Building_Bible IV.4 funded end). |
+| `imgs-v3/v3-school2.png` | Classroom interior | ICIR Nigeria | **ACCEPT (NG)** | Overcrowded classroom: peeling mint-green render, green shuttered louvre windows, children on floor, hijab uniforms. Use: the under-resourced end of the school spectrum (pairs with v2-school1 derelict exterior). |
+| `imgs-v3/v3-school3.jpg` | School block exterior | Vanguard (NG press) | **ACCEPT (NG — highest value)** | UBE/SUBEB classroom bar: veranda arcade, cream render + dark-green dado + blue fascia, green metal door shutters, **hand-painted commissioning text** ("UBEC/SUBEB … EN. WORKS 3RD QRT 2013/086/2017") + pasted paper notices. Use: THE fresh-state school-block reference; foundation of the commissioning-text facade layer (Building_Bible V2). |
+
+**Library status after v3: 24 (v1+v2) + 19 (v3) = 43 reviewed images; usable references 32**
+(19 v1/v2-usable + 13 v3-ACCEPT, of which 2 narrow-use) + 3 HOLD + 8 REJECT documented with
+reasons. The v1 hygiene law stands: no unverified image may be cited as "Lokoja"; images are
+procedural-parameter references only (Law A-2). Rejection classes this pass: wrong-country (4) —
+the strongest evidence yet that unverified "Nigerian" search results are unreliable.
+
+## PART I — NAMED-BOOK COMPLETION PASS (2026-10-22 supplement; the master-directive reconciliation)
+
+**Method:** the second Phase 3 master directive listed 21 required deliverables. The prior wave had
+produced 15 (4 canon bibles incl. Experience; World/Environment/Lighting/Audio Bibles; Art & Content
+Expansions; Dossier; Research; Roadmap — with NPC/Weather/Building topics covered by numbered
+`docs/phase3/03·05·06` and multiplayer by `MULTIPLAYER_PLAN.md`). RULE ZERO verdict: consolidate,
+never rewrite — the research corpus and Red Team already covered the new books' domains, so **no new
+web research was required**; the eleven named books were written as consolidation-and-expansion
+documents ([EXT]-marked, canon untouched).
+
+### I.1 The 21-deliverable map (final state)
+
+| # | Deliverable | Lives at | State |
+|---|---|---|---|
+| 1 | Experience Bible | `docs/Experience_Bible.md` (canon v2.2) | preserved; coverage verified Part F |
+| 2 | World Bible Expansion | `docs/World_Bible_Expansion.md` | v1.0, preserved |
+| 3 | Environment Bible | `docs/Environment_Bible.md` | v1.0, preserved |
+| 4 | Lighting Bible | `docs/Lighting_Bible.md` | v1.0, preserved |
+| 5 | Audio Bible | `docs/Audio_Bible.md` | v1.0, preserved |
+| 6 | Art Bible Expansion | `docs/Art_Audio_Bible_Expansion.md` | v1.0, preserved |
+| 7 | Content Bible Expansion | `docs/Content_Bible_Expansion.md` | v1.0, preserved |
+| 8 | NPC Bible | `docs/NPC_Bible.md` **[NEW]** + `docs/phase3/05` (binding) | v1.0, RT-audited |
+| 9 | Vehicle Bible | `docs/Vehicle_Bible.md` **[NEW]** + `docs/phase3/05` Part B (binding) | v1.0, RT-audited |
+| 10 | Building Bible | `docs/Building_Bible.md` **[NEW]** + `docs/phase3/03` (binding) | v1.0, RT-audited |
+| 11 | Economy Bible | `docs/Economy_Bible.md` **[NEW]** | v1.0, RT-audited |
+| 12 | Weather Bible | `docs/Weather_Bible.md` **[NEW]** + `docs/phase3/06` (binding) | v1.0, RT-audited |
+| 13 | Wildlife Bible | `docs/Wildlife_Bible.md` **[NEW]** | v1.0, RT-audited |
+| 14 | Multiplayer Bible | `docs/Multiplayer_Bible.md` **[NEW]** (binds `MULTIPLAYER_PLAN.md`, never amends) | v1.0, RT-audited |
+| 15 | Future Cities Bible | `docs/Future_Cities_Bible.md` **[NEW]** (expands Content_Expansion III) | v1.0, RT-audited |
+| 16 | UI Philosophy Bible | `docs/UI_Philosophy_Bible.md` **[NEW]** | v1.0, RT-audited |
+| 17 | Interaction Bible | `docs/Interaction_Bible.md` **[NEW]** | v1.0, RT-audited |
+| 18 | Accessibility Bible | `docs/Accessibility_Bible.md` **[NEW]** | v1.0, RT-audited |
+| 19 | Production Dossier | `docs/Master_Dossier.md` (+ Part VII supplement) | v1.0 + supplement |
+| 20 | Master Research Report | `docs/Phase3_Research.md` (+ Parts H/I) | v1.0 + supplement |
+| 21 | Master Implementation Roadmap | `docs/Master_Implementation_Roadmap.md` (+ Part VIII) | v1.0 + supplement |
+
+### I.2 RED TEAM v3 (adversarial audit of the eleven new books)
+
+`research/phase3/redteam-v3.md` — 93 claims decomposed from the 11 books, every repo anchor
+byte-verified (~40 anchors + executed counts: 88 school doors via bun run, LOCATIONS.length = 32,
+`bunx tsc` exit 0 at HEAD), git re-proof of the m24 battery claims. **Verdicts: 64 VERIFIED /
+15 SUPPORTED / 10 WEAK / 4 CONTRADICTED / 0 UNVERIFIABLE.** The 4 CONTRADICTED + all 11 citation/
+labelling WEAK findings were **fixed in-place the same session** (Weather four-scalar roll relabelled
+design-law-pending; 98-doors canon restored; app split 7/12/7; wire decomposition citation; taxi
+₦960 built constant; 19-street-name canon; NG median-age label; marketDayEvery:3 divergence note;
+GBIF→team-7 attribution; ×0.6 design-target label; device-shorthand label; controls.ts path). All 15
+fixes verified applied; blocked items (Ebira/Nupe greetings, Ganaja flyover, durbar, Igala regalia,
+church facade) confirmed correctly blocked everywhere.
+
+### I.3 Source registry additions (this supplement)
+
+| ID | Source | Used for | Accessed |
+|---|---|---|---|
+| S-M | z-ai image-search JSON logs (`research/phase3/tmp/lead-v3/`) + 19 downloaded files under `imgs-v3/` | visual pass v3 | 2026-10-22 |
+| S-N | `research/phase3/redteam-v3.md` (repo-internal adversarial record) | named-book verification | 2026-10-22 |

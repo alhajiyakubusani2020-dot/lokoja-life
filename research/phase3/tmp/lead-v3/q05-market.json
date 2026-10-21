@@ -1,0 +1,37 @@
+{
+ "success": true,
+ "query": "Nigerian market woman selling tomatoes peppers basket stall",
+ "count": 4,
+ "ranked": false,
+ "captioned_count": 0,
+ "results": [
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/6667897ee579.jpeg",
+   "caption": "",
+   "source": "Pexels",
+   "original_width": "4080px",
+   "original_height": "3072px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/09ed133acf53.jpg",
+   "caption": "",
+   "source": "Alamy",
+   "original_width": "1300px",
+   "original_height": "956px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/c0c43aa03598.jpg",
+   "caption": "",
+   "source": "Unsplash",
+   "original_width": "3000px",
+   "original_height": "3749px"
+  },
+  {
+   "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/0d0c32726aad.jpg",
+   "caption": "",
+   "source": "Dailymotion",
+   "original_width": "1920px",
+   "original_height": "1080px"
+  }
+ ]
+}
