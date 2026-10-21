@@ -1,5 +1,5 @@
 # LOKOJA LIFE — CONTENT BIBLE
-### Version 2.0 · The book of growth
+### Version 2.1 · The book of growth
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *how the game grows*: the laws every future content addition obeys, the playbook for each content type, the wire rulebook, the save law, the performance budgets, the copy voice, and the review gates.
 >
@@ -8,6 +8,8 @@
 > **Reader.** This is the book a new contributor opens on day one — and the book a veteran opens before every merge. If a rule here surprises you, the rule wins until amended.
 >
 > **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: counts re-verified on disk (48 unit suites, 58 client-facing doors, 45 refusal reasons, 12/6 placed signal heads/bumps, 16 Prisma models), the three Foundation Laws enter the register (C-19 → C-21, §1.1), and the living-constitution layers added (Part XI). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
+>
+> **Reverification (v2.1, 2026-10-21).** Second RULE ZERO pass: the 45 refusal reasons re-counted from the wire itself (exact), the conservation walk re-proven kind-aware (deposits − withdraws − refuel − repair = Σ WalletRow, ₦0 drift; the ₦11,100 tip lane identified as the unsigned spray ingress), stale `EX-44` test references corrected to "Experience §44" (EX-44 is now the City Memory Law), the door census corrected to 98, and the app classification completed (7 wire / 12 store / 7 read-only = 26 — Story is a read-only book).
 
 ---
 
@@ -66,7 +68,7 @@ Seven foundation laws were reviewed in the ERA II reverification; four entered t
 A content item is **Done** when *all* of these hold — for any type:
 
 1. **Registered** — in its canonical register (C-4), with id, name, description.
-2. **Wired** — perceivable *and* answerable in-world (E answers, app opens, fare pays). Wired paths pass the Exit Test (EX-44: no stuck states).
+2. **Wired** — perceivable *and* answerable in-world (E answers, app opens, fare pays). Wired paths pass the Exit Test (Experience §44: no stuck states).
 3. **In-identity** — passes its playbook's chapter checks + the Art Test (A-IX) + Mother Test.
 4. **Economically honest** — any money path is signed/idempotent/receipted (C-0.5); any grant conserved.
 5. **Voiced** — every refusal has its Verdict Voice line; every why-label in the single source (C-4).
@@ -104,7 +106,7 @@ Each playbook: **where it lives** (register) · **laws it serves** · **the rule
 - **No dead rooms** (EX-14.1): an interior ships with ≥ 3 wired hotspots or not at all. Furniture IS interface (EX-14.4): functions are walkable hotspots first, panels second.
 - Every building type claims: a wash family (A-8), a room-layer parameter set (A-42), a threshold cut ≤ 1 s (EX-14.2), and collision completeness (the civic-fence debt is the cautionary tale).
 - Interiors never pause the world (NO-PAUSE; EX-14.3): the wire stays live, the clock keeps its slot.
-- Door ids join the location namespace (32 anchors / 108 doors today) — ids are the anchor⇄map⇄travel⇄presence namespace and are never recycled.
+- Door ids join the location namespace (32 anchors / 98 doors today) — ids are the anchor⇄map⇄travel⇄presence namespace and are never recycled.
 - New buildings respect the protected sightlines (W-3/W-17) and approach compositions (A-1.2).
 
 **Checklist:** door in namespace · interior with 3+ hotspots · wash family · room params · both-way exit test · sightline check · save integration for any state it keeps.
@@ -328,10 +330,10 @@ These numbers are law (disk-verified). A PR that exceeds one amends this table *
 | Tone mapping | ACES @1.12 | WorldScene |
 | Packet size | **4 KB** | `index.ts:1064` |
 | Body / vehicle cadence | 10 Hz / 12 Hz moving-only | wire law |
-| Reconnect gap replay | cap **100** | `index.ts:537-540` |
+| Reconnect gap replay | cap **100** | `RESUME_CAP`, `index.ts:151` |
 | Toasts | 3.2 s life · max 3 | UI law |
-| Walk / sprint | 4.4 / 7.4 u/s | controls |
-| Energy burn | past 150 m, settled on exit | `controls.ts:284-304` |
+| Walk / sprint | 4.4 / 7.4 u/s | `controls.ts:26-27` |
+| Energy burn | past 150 m free allowance (`config.ts:349`), settled on world exit (`useGameStore.ts:1559`) | config + controls + store |
 | SILK posture | TTI < 3.0 s · wire < 900 KB · 0 errors | `scripts/silk-gates.ts` |
 | FramePacer (low tier) | 30 Hz | device.ts |
 | Interaction radii | anchor 8.6 · POI 5.3 · door 3.2 · hotspot 2.1 · talk 4.0 · gist 24 · car 4.6 · pump 26 · shop 28 · secret 9 | `Actors.tsx` registries |
@@ -373,7 +375,7 @@ The game speaks with **one narrator** (W-59) through registers:
 3. **Wire gate** — §4 checklist for anything the server owns.
 4. **Save gate** — §5 checklist for anything persisted.
 5. **Budget gate** — §6 measured, not assumed.
-6. **Feel gate** — the PR names its EX entries; the relevant Feel Test (EX-44) is run.
+6. **Feel gate** — the PR names its EX entries; the relevant Feel Test (Experience §44) is run.
 7. **Bible gate** — C-10: the books amended together, the worklog anchored.
 
 ### 8.2 The test floor
@@ -424,7 +426,7 @@ Breaking a red line is not a review note; it is a refusal — and the Constituti
 
 ### 11.1 Implementation Reality
 
-**What exists today (disk-verified 2026-10-21):** 15 playbooks with a live review order · save v20 over 16 Prisma models, migrations baselined · 48 unit suites + 58 e2e suites · 26 apps (7 wire-backed, 12 store-backed, 6 read-only) · 21 jobs / 20 hustles / 4 boards · 5 Patti secrets · 10 festivals on a 72-day calendar · 58 client-facing wire doors with the full C-11 ritual on money · the refusal ledger at 45 reasons · conservation ₦0 drift on the live books.
+**What exists today (disk-verified 2026-10-21, second pass):** 15 playbooks with a live review order · save v20 over 16 Prisma models, migrations baselined · 48 unit suites + 58 e2e suites · 26 apps (7 wire-backed, 12 store-backed, 7 read-only — Story is a read-only book) · 21 jobs / 20 hustles / 4 boards · 5 Patti secrets · 10 festivals on a 72-day calendar · 58 client-facing wire doors with the full C-11 ritual on money · the refusal ledger at **45 reasons (re-counted from the wire this pass: 5 `minors-no-money` · 3 `minors-no-voice` · 2 `minors-collect-nothing` · 1 `kid-text-refused` among them)** · conservation ₦0 drift on the live books, kind-aware (deposits 3,610,200 − withdraws 9,500 − refuel 22,000 − repair 1,594 = 3,577,106 = Σ WalletRow; the ₦11,100 tip lane is the unsigned spray ingress, EX-20.1's debt).
 
 **What is planned:** the one-register reconciliation for phone apps (before app #27) · the WHY single-source (C-15) · discovery moved from localStorage into the save (the v21 candidate) · market content after the stall resurrection · the festival playbook's first live run · exterior door pins for the five G2 rooms · per-NPC event memory (EX-44's horizon).
 

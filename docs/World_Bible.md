@@ -1,5 +1,5 @@
 # LOKOJA LIFE — WORLD BIBLE
-### Version 2.0 · The book of the city itself
+### Version 2.1 · The book of the city itself
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *the place*: its land, districts, landmarks, fabric, nature, seasons, people, and time. The Experience Bible owns how the place *feels*; this one owns how the place *is*.
 >
@@ -8,6 +8,8 @@
 > **Ground rule.** Every number below was verified on disk (source files cited). Where the city today falls short of the city this book describes, the gap is named as a **debt** — never hidden, never faked. Honesty about the city is part of the city.
 >
 > **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: the geo layer re-decoded from the binary itself (2,655 ways / 5,894 segments / **750.4 km**), street-craft counts re-verified at runtime, stale figures amended, and the living-constitution layers added (Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
+>
+> **Reverification (v2.1, 2026-10-21).** Second RULE ZERO pass: the binary re-decoded again (all headline figures held), the door census corrected (**98 doors = 10 layout + 88 school** — the old "108" double-counted `ALL_DOORS`), the underwater-segment measure replaced with a reproducible one (**23 unbridged crossings / 3 within half-width**), parked cars 12 → **7**, school interior builders 17 → **20**, and the road-fabric W-32 figure aligned with §3.5. Every change below carries its own anchor.
 
 ---
 
@@ -83,9 +85,9 @@ The city's measures are engine law (`geo.ts:7-38`, `layout.ts:36-49`):
 
 **DOCTRINE.**
 
-- **Law W-5 — Bridges are promises.** A bridge rendered must be walkable/drivable, and a road that crosses water must do it on a bridge. The known fabric debt (15 channel-crossing road segments, 6 fully submerged at half-width — threshold-dependent measure, re-audited 2026-10-21) is a *lie the city tells*; it is scheduled fabric repair (§3.5), and until then no content may route the player onto one.
+- **Law W-5 — Bridges are promises.** A bridge rendered must be walkable/drivable, and a road that crosses water must do it on a bridge. The known fabric debt (**23 unbridged road segments geometrically cross a river centerline; 3 more lie within a river's half-width at midpoint** — the reproducible v2.1 re-decode of `geo-v1.bin`; earlier "15/6/18" figures were threshold-dependent and are retired) is a *lie the city tells*; it is scheduled fabric repair (§3.5), and until then no content may route the player onto one.
 - Ferry fares follow the universal consent law (quote → consent → pay → receipt).
-- The rivers have moods with the weather: flood days raise them (Experince EX-24); storm makes them loud (the river ambience layer swells). A river that ignores the sky is a texture, not a river.
+- The rivers have moods with the weather: flood days raise them (Experience EX-24); storm makes them loud (the river ambience layer swells). A river that ignores the sky is a texture, not a river.
 
 ### 1.4 Terrain & Ground
 
@@ -305,12 +307,12 @@ Each entry below is a *character sheet for a place*. Content added to a district
 
 ### 3.1 The Road Network
 
-**GROUND.** 2,655 ways / 5,894 segments / **750.4 km of real Lokoja roads** decoded from `geo-v1.bin` (60,071 B) into draped ribbon geometry with markings, kerbs, zebras (`WorldTerrain.tsx:499-662`, `CityMesh.tsx:71-160`). Only 19 ways carry OSM names — the wayfinding load rests on the 32 anchors and the landmark silhouettes (W-41), which is why they are law. Five traffic loops exist; **three carry rigs** (loops 0/1/2 — `TRAFFIC_MIX`, `Actors.tsx:749`; loops 3/4 have tables, zero rigs — audit §4.4). **Stale-header debt:** `layout.ts:7` still claims "3,000+ ways, ~930 km" — a fossil comment; the binary and `geo.ts` are the truth.
+**GROUND.** 2,655 ways / 5,894 segments / **750.4 km of real Lokoja roads** decoded from `geo-v1.bin` (60,071 B) into draped ribbon geometry with markings, kerbs, zebras (`WorldTerrain.tsx:499-662`, `CityMesh.tsx:71-160`; 2,656 ribbons render = 2,655 ways + the Patti trail, `ROAD_RIBBONS`). Only **19 distinct OSM names across 29 named ways** — the wayfinding load rests on the 32 anchors and the landmark silhouettes (W-41), which is why they are law. Five traffic loops exist; **three carry rigs** (loops 0/1/2 — `TRAFFIC_MIX`, `Actors.tsx:749`; loops 3/4 have tables, zero rigs — audit §4.4). **Stale-header debt:** `layout.ts:7` still claims "3,000+ ways, ~930 km" — a fossil comment; the binary and `geo.ts` are the truth.
 
 **DOCTRINE.**
 
 - **Law W-31 — The ribbon is the truth.** Roads follow the OSM layer; no road may be nudged for aesthetics. Beauty comes from dressing, not from bending.
-- **Law W-32 — Fabric honesty budget.** The known fabric debts are named and scheduled, never normalized: 72% of way-endpoints dead-end; 18 segments run underwater; school-yard clips leave open ribbon holes; no end caps. Each is a *lie the city tells* — repair is World Bible work, tracked in the debt ledger (§3.5). New content must not route the player onto fabric lies.
+- **Law W-32 — Fabric honesty budget.** The known fabric debts are named and scheduled, never normalized: 72% of way-endpoints dead-end; **23 unbridged segments cross a river centerline, 3 more sit within a river's half-width** (the reproducible v2.1 measure — see W-5 and §3.5); school-yard clips leave open ribbon holes; no end caps. Each is a *lie the city tells* — repair is World Bible work, tracked in the debt ledger (§3.5). New content must not route the player onto fabric lies.
 - **Law W-33 — Loops earn their rigs.** Traffic loops 3/4 may not carry "traffic" until rigs are budgeted (Content Bible caps); an empty table is fine, a fake-feeling flow is not.
 
 ### 3.2 Junctions, Signals & Bumps
@@ -345,7 +347,7 @@ Named, ranked, and honest — these are the repairs the city owes its own truth 
 | # | Debt | Truth broken | Where |
 |---|---|---|---|
 | 1 | Kpata + food-area stall resurrection | The commercial heart renders empty | `layout.ts:1660` filter |
-| 2 | 15 underwater road segments (6 fully submerged; threshold-dependent count) | Roads that drown | geo layer dressing |
+| 2 | 23 unbridged road segments cross a river centerline; 3 more lie within a river half-width (reproducible re-decode; the "15/6/18" era is retired) | Roads that drown | geo layer dressing |
 | 3 | 72% dead-end way-ends | Suburbs that go nowhere | geo layer + rim logic |
 | 4 | Unlit signal heads | Hardware with no behavior | `CityMesh.tsx:1358` |
 | 5 | Civic fence walk-through | Boundaries that aren't | `collision.ts:56-71` |
@@ -425,7 +427,7 @@ Twelve hand-built landmarks exist (`CityMesh.tsx`): **Confluence Deck + flag + c
 
 ### 7.1 The People (NPC truth & the crowd horizon)
 
-**GROUND.** 12 NPC strollers across 13 zones (`NPC_COUNT = 12`, `Actors.tsx:356`; night 4), with familiarity, favors → real hustle offers, gifts, hangouts, and gist chips (talk 4 u, chip 24 u). Ambient traffic: 14 rigs; 12 parked cars (decorative).
+**GROUND.** 12 NPC strollers across 13 zones (`NPC_COUNT = 12`, `Actors.tsx:356`; night 4), with familiarity, favors → real hustle offers, gifts, hangouts, and gist chips (talk 4 u, chip 24 u). Ambient traffic: 14 rigs; **7 parked cars** (`PARKED_VEHICLES`, `vehicles.ts:940` — decorative, static visual-only rigs, `Actors.tsx:1007-1010`).
 
 **DOCTRINE.**
 
@@ -443,7 +445,7 @@ Twelve hand-built landmarks exist (`CityMesh.tsx`): **Confluence Deck + flag + c
 
 ### 7.3 Institutions
 
-**GROUND.** Schools (12 sites · 98 doors · 88 rooms, 17 interior builders, `schools.ts`), civic desks (KGIRS/NEPA/police/EFCC → CivicPanel), the bank (teller → BankPanel in a real bank building — the healthiest interior path), the clinics' orbit (no dedicated hospital interior yet — a named horizon). **Built but doorless (named horizon):** five G2 rooms — the Maigari palace hall, stadium office, Sokamms room, Adankolo reading room, Emiwoziri fish shed — are schema-valid and registered, excluded from the door array pending their exterior pins (the one-door law, `interiors.ts:758-768`); they are the next rooms, not decoration.
+**GROUND.** Schools (12 sites · **88 school doors** · 88 rooms, **20 interior builders**, `schools.ts`); city-wide the door census is **98 doors = 10 layout + 88 school** (`ALL_DOORS`, `schools.ts:1761`), with 98 registered interiors and **103 interior spaces** once the 5 doorless G2 rooms are counted (`INTERIORS` + `DISTRICT_INTERIORS`), civic desks (KGIRS/NEPA/police/EFCC → CivicPanel), the bank (teller → BankPanel in a real bank building — the healthiest interior path), the clinics' orbit (no dedicated hospital interior yet — a named horizon). **Built but doorless (named horizon):** five G2 rooms — the Maigari palace hall, stadium office, Sokamms room, Adankolo reading room, Emiwoziri fish shed — are schema-valid and registered, excluded from the door array pending their exterior pins (the one-door law, `interiors.ts:758-768`); they are the next rooms, not decoration.
 
 **DOCTRINE.**
 
@@ -542,19 +544,19 @@ The rare skies (W-49) mark the year: harmattan's dust weeks (the pale sun, the c
 
 | Fact | Value | Anchor |
 |---|---|---|
-| Real roads | 2,655 ways / 5,894 segs / 750.4 km (+ Patti trail) | `geo-v1.bin` |
-| Rivers / bridges | 16 / 16 | geo layer |
+| Real roads | 2,655 ways / 5,894 segs / 750.4 km (+ Patti trail = 2,656 ribbons) | `geo-v1.bin`, layout |
+| Rivers / bridges | 16 / 16 · confluence vertex-exact 0.00 u | geo layer |
 | Scale | 1 u = 26 m · ≈16 km across | `geo.ts:7-38` |
-| Launch places | 10 anchors · 32 district anchors wired | `locations.ts`, `Actors.tsx` |
+| Launch places | 10 anchors · 32 district anchors wired | `locations.ts`, `layout.DISTRICTS` |
 | G2 wards | 10 real wards, stage-honest | `locations.ts:340-574` |
 | Trees / grass / rocks | 720 / 10 sp · 10,000 tufts · 110 | `flora.ts:115`, layout |
 | Lamps / drains / lights / bumps | 492 / 204 / 12 placed (cap 14) / 6 placed (cap 12) | junctions, layout |
-| Calendar | 72-day year · 10 festivals | `config.ts:658`, `calendar.ts` |
+| Calendar | 72-day year · 10 festivals | `config.ts:658`, `calendar.ts:159-173` |
 | Clock / weather | 4 slots · 7 skies | `config.ts:192`, `types.ts:289` |
-| Ambience layers | 8, procedural, zero assets | `ambience.ts:37-106` |
-| NPCs / traffic rigs | 12 (night 4) / 14 on loops 0–2 | `Actors.tsx:356,749` |
+| Ambience layers | 8, procedural (the audio bed; zero audio assets) | `ambience.ts:99-106` |
+| NPCs / rigs / parked | 12 (night 4) / 14 on loops 0–2 / 7 decorative | `Actors.tsx:356,749`, `vehicles.ts:940` |
 | Jobs / hustles / boards | 21 / 20 / 4 | `data/jobs.ts`, `data/hustles.ts` |
-| Interiors / school doors | 10 interiors · 98 doors | `interiors.ts`, `schools.ts` |
+| Doors / interiors / spaces | 98 doors (10 + 88 school) · 98 interiors · 103 spaces | `schools.ts:1761`, `interiors.ts` |
 | Patti secrets | 5, idempotent | `patti.ts:64-116` |
 | Vehicles / modes | 4 kinds · 7 modes · ferry | `types.ts:227,292` |
 | Money | ₦5,000 Day 1 · pocket + purse · v20 save | `config.ts:14`, `save.ts:45` |
@@ -568,7 +570,7 @@ This sheet is the shared vocabulary of every Bible. When a number here changes, 
 
 ### 10.1 Implementation Reality
 
-**What exists today (disk-verified 2026-10-21):** 2,655 OSM ways / 5,894 segments / 750.4 km (plus the authored Patti trail → 2,656 rendered roads) · 16 rivers / 16 bridges, confluence vertex-exact (0.00 u) · 32 district anchors (10 launch places + 10 G2 wards + 12 school sites) · analytic terrain with a reachable, authored Patti summit (5 secrets, 110 rocks, plateau 30.03 u) · 204 drains / 492 lamps / 12 signal heads (unlit) / 6 bumps placed · 720 trees in 10 species / 10,000 grass tufts / 3 bird flocks (18 birds) · 108 doors (10 interiors + 98 school doors) + 5 built-but-doorless G2 rooms · 21 jobs / 20 hustles / 4 boards / 14 named NPCs / 12 strollers (night 4) + 14 traffic rigs · 72-day year, 10 festivals · 7 skies, 4 slots · 1 u = 26 m, confluence origin-true.
+**What exists today (disk-verified 2026-10-21, second pass):** 2,655 OSM ways / 5,894 segments / 750.4 km (plus the authored Patti trail → 2,656 rendered ribbons, `ROAD_RIBBONS`) · 16 rivers / 16 bridges, confluence vertex-exact (0.00 u — the `niger` and `benu` ways share the identical vertex (−3, 172.3)) · 32 district anchors (10 launch places + 10 G2 wards + 12 school sites) · analytic terrain with a reachable, authored Patti summit (5 secrets, 110 rocks, the +30 u mound, `layout.ts:625`) · 204 drains / 492 lamps / 12 signal heads (unlit) / 6 bumps placed · 720 trees in 10 species / 10,000 grass tufts / 3 bird flocks (18 birds) · **98 doors (10 layout + 88 school) + 5 built-but-doorless G2 rooms = 103 registered interior spaces** · 21 jobs / 20 hustles / 4 boards / 14 named NPCs / 12 strollers (night 4) + 14 traffic rigs + 7 decorative parked cars · 72-day year, 10 festivals · 7 skies, 4 slots · 1 u = 26 m, confluence origin-true.
 
 **What is planned (the honest horizon):** the stall resurrection (W-9, with count assertions) · lit signal heads on the existing 12/3/15 phase law (W-34) · exterior door pins for the five G2 rooms · loop 3/4 rigs or their deletion (W-33) · NPC event memory (EX-44) · the fabric ledger's repairs (§3.5, in order) · flood waterline honesty beyond the veil · river moods deepening.
 

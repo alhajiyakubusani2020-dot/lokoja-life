@@ -1,5 +1,5 @@
 # LOKOJA LIFE — ART & AUDIO BIBLE
-### Version 2.0 · The book of the senses
+### Version 2.1 · The book of the senses
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *how Lokoja looks and sounds*: art direction, color, light, camera, character, motion, effects, the UI's visual system, and the entire audio identity.
 >
@@ -8,6 +8,8 @@
 > **Ground rule.** Every token, constant, and system named here exists on disk (`globals.css`, `WorldScene.tsx`, `atmosphere.ts`, `ambience.ts`, `music.ts`, `polish.tsx`). This book never asks the engine to become something it is not — it defines what the engine's materials must *mean*.
 >
 > **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: the SILK law restated as gates + dated measurements (re-measured, never assumed), the arbitrary-size census re-counted, and the living-constitution layers added (Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
+>
+> **Reverification (v2.1, 2026-10-21).** Second RULE ZERO pass: the zero-asset claim was **scoped to the truth** — the 3D world and all audio are 100% procedural (zero models, zero audio files, zero world photo-textures), but the 2D shell ships a small, named set of binaries (the painted menu hero, the PWA icons) and **13 orphaned .webp files** were discovered and entered as a debt. The type census re-counted: 1,178 exact `text-[Npx]`. Nothing doctrinal changed.
 
 ---
 
@@ -22,7 +24,7 @@ Lokoja Life's eye is the light of the evening slot (the game's signature amber h
 ### 0.2 The five senses laws
 
 1. **Law A-1 — Readable before beautiful.** A 360 px phone in afternoon sun is the reference device. If legibility and beauty conflict, legibility wins *every time* — then we find the third option that is both.
-2. **Law A-2 — 100% procedural.** Zero model files, zero image-sequenced animation, zero audio assets in `public/` (disk truth). The city is *generated from its own parameters* — canvas-baked textures, instanced flora, synthesized sound. This is a creative law, not just a budget: a procedural city can respond to its state (weather, slot, district) in ways baked assets never can. **No binary art asset may be committed without a Bible amendment.**
+2. **Law A-2 — The world is 100% procedural.** Zero model files, zero image-sequenced animation, zero audio assets anywhere; zero photo-textures in the 3D world renderer. The city is *generated from its own parameters* — canvas-baked textures, instanced flora, synthesized sound. This is a creative law, not just a budget: a procedural city can respond to its state (weather, slot, district) in ways baked assets never can. **The 2D shell's sanctioned binaries are exactly two families, named here so the exception cannot grow quietly:** the painted menu hero (`public/art/menu-hero.webp`, consumed by `MainMenu.tsx`) and the PWA icon set + `logo.svg` (`public/icons/`, app chrome — not game art). Any other binary entering `public/` needs a Bible amendment. (The 13 orphaned `.webp` files found by the v2.1 reverification — 10 `loc-*.webp` plates whose only consumer `LocationArt.tsx` has zero importers, and 3 `ad-*.webp` generator outputs with zero consumers — are dead files awaiting deletion, §10.1's debt list.)
 3. **Law A-3 — The senses agree.** What the eye says (a market, evening, rain) the ear must confirm, and the camera must respect. A conflict between senses is a bug of meaning, not of style.
 4. **Law A-4 — Style is a decision, so is its boundary.** Stylized realism with warm abstractions — never photoreal envy, never cartoon pastiche. The test: does it look like *this Lokoja*?
 5. **Law A-5 — Performance is an aesthetic.** The SILK posture is what a *well-made* city feels like: TTI < 3.0 s · wire < 900 KB · 0 console errors · warm click < 100 ms · heap < 300 MB (G1–G6, `scripts/silk-gates.ts`). Last measured 2.59 s / 406 KB / heap 27 MB / warm click 4 ms (2026-10-20). The numbers are **re-measured, never assumed** (C-13); a stale number in this book is a measurement debt, not a license. Jank is not a technical debt; it is an art failure.
@@ -186,7 +188,7 @@ The UI is the game's *paper* — cards of `--lko-surface` on `--lko-cream`, ink 
 
 ### 7.2 Typography
 
-**GROUND.** `lko-display` for headers, `lko-num` for figures (tabular truth — money aligns), body sizes currently scattered across ≈1,200 arbitrary values (re-audit 2026-10-21: ~1,173 exact `text-[Npx]`; the audit's 1,191 used a wider regex — debt #1 in the design system pillar).
+**GROUND.** `lko-display` for headers, `lko-num` for figures (tabular truth — money aligns), body sizes currently scattered across ≈1,200 arbitrary values (v2.1 re-census 2026-10-21: 1,178 exact `text-[Npx]`; the audit's 1,191 used a wider regex — debt #1 in the design system pillar).
 
 **DOCTRINE.**
 
@@ -204,6 +206,7 @@ These are the art debts that *must* die before UI feature work scales further:
 4. **Ghost classes** (`lko-glass`, `lko-label` referenced, never defined — `kit.tsx:96,125`) — defined or deleted; ghosts invite cargo cults.
 5. **≈1,200 arbitrary font sizes** — the six-step scale (A-27) is the migration target.
 6. **`tailwind.config.ts` untouched shadcn defaults** — the config is aligned to tokens or emptied; drift between config and `globals.css` is how two design systems are born.
+7. **13 orphaned `.webp` files in `public/art/`** — the 10 `loc-*.webp` location plates (only consumer `LocationArt.tsx` has zero importers) and 3 `ad-*.webp` generator outputs (zero consumers anywhere). They ship bytes nobody sees; deletion is the cure, admission to the game (through a wired surface) would be an amendment. (v2.1 finding.)
 
 **Law A-30 — No new visual language, ever.** A PR introducing a new button class, a new sheet, a new glass, a new shadow, or a foreign component library is rejected on sight, however pretty.
 
@@ -311,18 +314,18 @@ Every visual/audio addition passes this checklist before it merges:
 
 ### 10.1 Implementation Reality
 
-**What exists today (disk-verified 2026-10-21):** zero asset files — 100% procedural, permanent · 13 `--lko-*` tokens + surface + line + 3 shadow tokens as the entire color constitution · 8 ambience layers (shaped noise at 320 / 850 / 480 / 1,400 / 140 / 4,400 / 520 / 3,200 Hz) · a 4-mood procedural afro-fusion engine (8-voice cap, deterministic per-bar) · ACES @1.12 · one 1024² governed shadow sun · 620 rain particles · two permanent motifs (discovery, refusal) · the paper-UI primitives (`lko-card / press / display / num / sheet / toast / scrim`) · fonts: Geist (body) + Outfit (display) · canvas-baked facades with per-district washes and life-pattern night emissives.
+**What exists today (disk-verified 2026-10-21, second pass):** the 3D world and all audio **100% procedural** — zero models, zero audio files, zero world photo-textures · the 2D shell's only sanctioned binaries: the painted menu hero + PWA icons + logo.svg (named in A-2) · 13 orphaned `.webp` files awaiting deletion (§7.3 debt #7) · 18 `--lko-*` tokens (13 colors + surface + line + 3 shadows) as the entire color constitution · 8 ambience layers (shaped noise at 320 / 850 / 480 / 1,400 / 140 / 4,400 / 520 / 3,200 Hz, `ambience.ts:99-106`) · a 4-mood procedural afro-fusion engine (16-step bars, C-pentatonic 261.63, the 0/7/10 kick cell, deterministic per-bar) · ACES @1.12 (`WorldScene.tsx:490-492`) · one 1024² governed shadow sun (`:359`) · 620 rain particles (`Actors.tsx:1032`) · two permanent motifs (discovery, refusal) · the paper-UI primitives (`lko-card / press / display / num / sheet / toast / scrim`) · fonts: Geist (body) + Outfit (display, `layout.tsx:2`) · canvas-baked facades with per-district washes and life-pattern night emissives.
 
-**What is planned:** the six-step type scale replacing the ≈1,200 arbitrary sizes · one wallet grammar, one button, one sheet (§7.3's unification debts) · `--lko-*` registered in Tailwind's `@theme` · the ghost classes (`lko-glass`, `lko-label`) defined or deleted · one merged icon set · festival music arrangements (the lawful density exception, A-38).
+**What is planned:** the six-step type scale replacing the ≈1,200 arbitrary sizes · one wallet grammar, one button, one sheet (§7.3's unification debts) · `--lko-*` registered in Tailwind's `@theme` · the ghost classes (`lko-glass`, `lko-label`) defined or deleted · one merged icon set · festival music arrangements (the lawful density exception, A-38) · deletion of the 13 orphaned `.webp` files (§7.3 debt #7).
 
-**What is forbidden:** any binary art or audio asset (A-2) · a second visual grammar (A-30) · a third motif (A-40) · unsourced light (A-14) · motion that gates truth (A-32) · beauty that spends the mobile budget without the FramePacer/DynRes valve · icon fonts, emoji as UI iconography, glassmorphism envy.
+**What is forbidden:** any new binary art or audio asset beyond A-2's two named families (menu hero, PWA icons) · a second visual grammar (A-30) · a third motif (A-40) · unsourced light (A-14) · motion that gates truth (A-32) · beauty that spends the mobile budget without the FramePacer/DynRes valve · icon fonts, emoji as UI iconography, glassmorphism envy.
 
 ### 10.2 The Verification Layer
 
 | Laws | Verification method | Responsible system | Failure condition |
 |---|---|---|---|
 | A-1 → A-5 | Art Test on 360 px + SILK G1–G6 run | `scripts/silk-gates.ts` | illegible in sun; a gate red |
-| A-2 | asset scan: no model/image/audio file in `public/` | CI sweep | any asset file appears |
+| A-2 | asset scan: no model/audio file, no world photo-texture; only A-2's two named shell families in `public/` | CI sweep | any unowned asset file appears |
 | A-6 → A-8 | Color Line grep: no new hex without a token; wash family check | token registry | off-palette color ships |
 | A-9, A-10 | painter read-through; layer-height registry walk | WorldTerrain/CityMesh | phototexture slap; z-fighting |
 | A-11 → A-14 | light audit: one sun, per-slot keyframes, sourced glow | atmosphere/WorldScene | second caster; orphan glow |

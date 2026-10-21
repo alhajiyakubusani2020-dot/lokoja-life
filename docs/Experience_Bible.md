@@ -1,5 +1,5 @@
 # LOKOJA LIFE — EXPERIENCE BIBLE
-### Version 2.0 · The book of how the player should feel
+### Version 2.1 · The book of how the player should feel
 
 > **Authority.** This Bible is subordinate to the **Design Constitution** (the Philosophy Bible). Where this document and the Constitution disagree, the Constitution wins. This document turns the Constitution's laws into felt experience, one experience at a time.
 >
@@ -8,6 +8,8 @@
 > **Ground rule.** Every anchor marked `file:line` was verified on disk. Lokoja Life's engine truth is the floor this book builds on — nothing here asks the engine to become something it is not.
 >
 > **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: every claim re-verified against disk, stale scar anchors corrected, numeric drift amended — and the living-constitution layers added: Implementation Reality (§47), Verification (§48), Production (§49), Future Scale (§50), plus the four Foundation Laws (EX-44 → EX-47, Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
+>
+> **Reverification (v2.1, 2026-10-21).** Second RULE ZERO pass: every anchor re-checked against disk. Corrections: the door census is **98 doors (10 layout + 88 school)** — the "108" double-counted `ALL_DOORS`; the M13 wall census is **11 direct wire walls** plus the band capability layer; the spawn veil, autosave, pagehide, and reconnect-cap anchors were re-pointed at their true lines; dead scar line-numbers (the fixed double-pay sites) were retired to history without their numbers. Nothing doctrinal changed — only the truth got sharper.
 
 ---
 
@@ -114,7 +116,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 
 ### EX-3 · First Arrival
 
-**Purpose.** The moment the veil lifts and the player is *standing in it*. This is the game's opening sentence and its thesis: you have arrived in a real place. Spawn is at the player's location anchor +4/+5 units with a "Entering Lokoja…" veil until the first frame renders (`Dashboard.tsx:878-977`, `WorldTab.tsx:56-110`).
+**Purpose.** The moment the veil lifts and the player is *standing in it*. This is the game's opening sentence and its thesis: you have arrived in a real place. Spawn is at the player's location anchor +4/+5 units with an "Entering Lokoja…" veil held until the first frame renders (`WorldTab.tsx:503-516` — the veil; `:56-110` the WebGL probe and honest map fallback; `Dashboard.tsx` mounts the world tab).
 
 **Emotions.** Disorientation (brief, deliberate) → orientation → first awe (the city stretches toward the horizon) → possessiveness ("this is *mine* to walk").
 
@@ -188,7 +190,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 
 ### EX-6 · Leaving and Returning
 
-**Purpose.** The experience of trust. Lokoja Life is played in stolen minutes on phones — the game must treat every exit as temporary and every return as a homecoming. Autosave debounces at 1.2 s with a pagehide flush (`useGameStore.ts:1433-1438`, `:1394-1419`); Continue restores position, money, vehicles, story.
+**Purpose.** The experience of trust. Lokoja Life is played in stolen minutes on phones — the game must treat every exit as temporary and every return as a homecoming. Autosave debounces at 1,200 ms (`AUTOSAVE.debounceMs`, `config.ts:333`; the debounced writer `useGameStore.ts:1157`) with a pagehide flush (`page.tsx:80`); Continue restores position, money, vehicles, story.
 
 **Emotions.** On leaving: nothing — leaving should be boring, safe, invisible. On returning: being *remembered*. Your car where you left it, your money intact, your day resumed. **This is Lokoja Knows Your Name made mechanical.**
 
@@ -198,7 +200,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 
 **Animation philosophy.** No splash, no replayed intro. Return is a *cut*, not a ceremony.
 
-**Interaction philosophy.** One tap from cold boot to standing in your street. If reconnecting to the wire, the hello re-claim keeps the last honest moment and `resume` replays the gap, capped at 100 (`index.ts:537-540`) — the player should perceive none of this machinery, only that *things kept happening honestly*.
+**Interaction philosophy.** One tap from cold boot to standing in your street. If reconnecting to the wire, the hello re-claim keeps the last honest moment and `resume` replays the gap, capped at 100 (`RESUME_CAP = 100`, `index.ts:151`; the kept last-moment itself lives at `index.ts:537-540`) — the player should perceive none of this machinery, only that *things kept happening honestly*.
 
 **Common mistakes.**
 1. *The lost minute.* Any loss of state on return — even a cosmetic one — is a betrayal. The save's HMAC envelope + shadow + backup descent (`save.ts`, fortress) exists so this never happens; every new system must save through it.
@@ -278,7 +280,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 3. *The vanishing ride.* Vehicles popping in/out at ride edges. Streaming seams are a feel crime at passenger speed.
 
 **Design principles.**
-- EX-9.1: Fare is quoted, consented, then paid — never silently debited (the double-pay bug, `useGameStore.ts:4999`/:4801, is the eternal shame; one-intent-one-payment is law).
+- EX-9.1: Fare is quoted, consented, then paid — never silently debited (the historic double-pay bug — fixed since by the one-application book, the scar kept as history — is the eternal shame; one-intent-one-payment is law).
 - EX-9.2: Rides cross the city on the real road graph, junction law included.
 - EX-9.3: Travel guards always narrate the *why* of a refusal in Verdict Voice.
 
@@ -386,7 +388,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 
 ### EX-14 · Entering Buildings
 
-**Purpose.** A door is a promise: *something different is in here.* Crossing a threshold must always change the sensory contract — light, sound, scale, air. Today 10 interiors exist with data-authored hotspots (bed, stove, fridge, sofa, TV, bath, wardrobe, menu, shop — `interiors.ts`), plus 98 school doors (108 doors total across layout + schools). The promise must hold at every one.
+**Purpose.** A door is a promise: *something different is in here.* Crossing a threshold must always change the sensory contract — light, sound, scale, air. Today **98 doors** open onto **98 wired interiors** — 10 city interiors with data-authored hotspots (bed, stove, fridge, sofa, TV, bath, wardrobe, menu, shop — `interiors.ts`) + 88 school interiors (`SCHOOL_INTERIORS`; the full census: `ALL_DOORS = 10 layout + 88 school`, `schools.ts:1761`), plus 5 more built-but-doorless G2 rooms waiting for their exterior pins (World §7.3). The promise must hold at every one.
 
 **Emotions.** Threshold curiosity (what's in here?) → intimacy (the world narrows) → ownership or welcome (mine, or someone else's place that receives me).
 
@@ -461,7 +463,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 
 ### EX-17 · School
 
-**Purpose.** Education as a *place* with dignity: 98 school doors across the mapped school sites (`schools.ts ALL_DOORS`, 17 interior builders), classrooms, and the School app in the phone. School is the long game — the skill ladder that makes hustles stable and careers real. It is also M13's home ground: age bands are picked at creation, and the school must be the safest room in the game.
+**Purpose.** Education as a *place* with dignity: **88 school doors** across the 12 mapped school sites (`schools.ts`, 20 interior builders), classrooms, and the School app in the phone. School is the long game — the skill ladder that makes hustles stable and careers real. It is also M13's home ground: age bands are picked at creation, and the school must be the safest room in the game.
 
 **Emotions.** Purpose (studying moves me forward) → gentle discipline (the day has a shape) → pride of progress.
 
@@ -481,7 +483,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 **Design principles.**
 - EX-17.1: Every study action maps to a skill with a visible future use (job, hustle, or civic).
 - EX-17.2: School interiors are the calmest mix in the game — never combat-loud, never alarm-red.
-- EX-17.3: Age-band law is enforced identically in-world and on the wire (13 M13 walls exist across money/voice/DM paths — keep them one truth).
+- EX-17.3: Age-band law is enforced identically in-world and on the wire (**11 direct minor-wall sites on the wire — 5 money · 3 voice · 2 collect · 1 lexicon — plus the shared `canLive` band capability layer and the M13 suite's wider protection matrix** — keep them one truth).
 
 ### EX-18 · Working (Jobs & Hustles)
 
@@ -1142,7 +1144,7 @@ This book is a living constitution's right hand. Amendments follow the Content B
 
 ### 47. Implementation Reality
 
-**What exists today (disk-verified 2026-10-21):** 63 systems · 26 phone apps · save v20 (HMAC envelope, shadow, backup, 20-step migration ladder) · the wire: 58 client-facing doors / 59 handlers, 4 KB cap, dual rate buckets (per-socket + per-account), idemKey UNIQUE, scrypt PIN, M13 minor walls, N12 clamp · conservation ₦0 drift on the live books (319 ledger rows, full chain walk clean) · 10 interiors + 98 school doors (108 doors) · 21 jobs / 20 hustles / 4 job boards · 14 named NPCs on the familiarity grammar · 5 Patti secrets, idempotent · ferry, postcards, stage/spray/trades on the wire · 100% procedural art and audio.
+**What exists today (disk-verified 2026-10-21, second pass):** 63 systems · 26 phone apps · save v20 (HMAC envelope, shadow, backup, 20-step migration ladder) · the wire: 58 client-facing doors / 59 handlers, 4 KB cap, dual rate buckets (per-socket + per-account), idemKey UNIQUE, scrypt PIN, 11 minor-wall sites + the band capability layer, N12 clamp · conservation ₦0 drift on the live books (319 ledger rows, kind-aware chain walk clean: deposits 3,610,200 − withdraws 9,500 − refuel 22,000 − repair 1,594 = 3,577,106 = Σ WalletRow exactly; the ₦11,100 tip lane is the named unsigned spray ingress, EX-20.1) · **98 doors (10 city interiors + 88 school interiors) + 5 doorless G2 rooms** · 21 jobs / 20 hustles / 4 job boards · 14 named NPCs on the familiarity grammar · 5 Patti secrets, idempotent · ferry, postcards, stage/spray/trades on the wire · 3D world and audio 100% procedural (zero models, zero audio files; the 2D shell's painted menu hero and PWA icons are its only sanctioned binaries — Art A-2).
 
 **What is planned (the honest horizon):** NPC event memory (EX-44's table) · the stall resurrection, then market economy (EX-16.1) · the Bag tab made real · the signed bank/festival/ferry/travel paths (EX-20.1) · rig-per-view co-presence (EX-31.2) · the hospital interior, when it can be honestly a hospital (W-54). Swimming is *not* planned — the river's inviolability (W-3) stands until amended.
 

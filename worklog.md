@@ -1865,3 +1865,28 @@ Stage Summary:
 - Documentation ecosystem is now a living constitution: 4 Bibles v2.0 (1,194 + 618 + 354 + 477 lines = 2,643) + BIBLE_UPGRADE_AUDIT.md (142 lines). Law census: 179 numbered laws (EX-47 · W-64 · A-47 · C-21), every one with a verification path. Zero canon destroyed; 13 drifts amended; 7 laws added; 7 newly-named debts recorded (wolf alarm, withdraw asymmetry, offerer window, prod-DB-in-git, fossil header, doorless rooms, render honesty).
 - Next engineering milestone (Bible-enforced by C-19): finish Gate 0 — signed money paths, rig-per-view, stall resurrection + count test, presence street refresh, boot diet — then prod-build SILK re-measurement.
 - Open recommendation: persist the Design Constitution to docs/Design_Constitution.md in a future pass (persist-only, no rewrite) so the Ten-Year Test's authority chain survives chat history.
+
+---
+Task ID: BIBLE-REVERIFY-2.1
+Agent: Principal Architect / Documentation Custodian (orchestrator, solo)
+Task: LOKOJA LIFE — BIBLE REVERIFICATION & UPGRADE (RULE ZERO): re-verify every Bible claim against disk; upgrade v2.0 → v2.1; rebuild BIBLE_UPGRADE_AUDIT.md.
+
+Work Log:
+- Read all four Bibles (1,194/619/355/478 lines) + ERA2-UI-AUDIT (246) end-to-end BEFORE editing; extracted ~90 load-bearing claims into a verification matrix.
+- Re-decoded public/world/geo-v1.bin twice with the repo's own decoder + custom intersection probes: 2,655 ways / 5,894 segs / 8,549 pts / 750.4 km / 60,071 B / 16 rivers / 16 bridges / 5 loops HELD; confluence re-proven vertex-exact 0.00u (niger & benu share (−3, 172.3)).
+- Runtime world bootstrap via bun: lights 12/14, bumps 6/12, STALLS=2, lamps 492, rocks 110, secrets 5, DISTRICTS=32, ROAD_RIBBONS=2,656, INTERIORS=98, ALL_DOORS=98 (10+88) — found "108 doors/98 school doors" was a double-count.
+- DB walk (bun:sqlite, readonly): kind-aware conservation re-proven — deposits 3,610,200 − withdraws 9,500 − refuel 22,000 − repair 1,594 = 3,577,106 = Σ WalletRow (₦0 drift, 125 wallets); ₦11,100 tip lane identified as the unsigned spray ingress (EX-20.1 debt, not drift).
+- Wire re-census: 59 handlers (58 client + disconnect), 45 distinct refusal why-codes (exact), 4KB cap, RESUME_CAP=100 at :151, 11 direct minor-wall sites (not 13).
+- Anchor spot-checks (~50): stale lines re-pointed (autosave → config.ts:333/page.tsx:80, veil → WorldTab:503-516, energy 150 → config.ts:349, cap → index.ts:151); dead scar line numbers (4999/4801) retired to history.
+- Asset law falsified & rescoped: "zero asset files" false — public/art holds 14 .webp (menu-hero LIVE, 10 loc-plates orphaned via LocationArt (0 importers), 3 ad-* zero-consumer) + 5 PWA icons; A-2 rewritten with two named sanctioned families; 13 orphans entered as debt (Art §7.3 #7).
+- 16 amendments applied across all four Bibles (doors 98, school doors 88, builders 20, underwater 23/3 reproducible, parked 7, named ways 19/29, M13 walls 11, app split 7/12/7, type census 1,178, plateau +30u, anchors, typo, EX-44→"Experience §44" stale refs).
+- ERA2-UI-AUDIT correction banner refreshed with v2.1 numbers (15/6/18 underwater era retired).
+- docs/BIBLE_UPGRADE_AUDIT.md rebuilt as the v2.1 audit of record (methodology, ~70 held / 16 amended / 1 falsified / 0 added / 0 removed, retired statements, debt ledger, quality gates, next priorities).
+- Version lines bumped to 2.1 in all four Bibles with dated reverification notes.
+- Evidence scripts persisted: scripts/audit-p3-geo.ts, audit-p3-geo2.ts, audit-p3-battery.sh, audit-p3-battery2.sh, audit-p3-world.ts, audit-p3-final*.ts.
+
+Stage Summary:
+- Canon v2.1 on disk: 4 Bibles + ERA2 banner + BIBLE_UPGRADE_AUDIT.md all agree with each other AND with disk; zero source code touched.
+- 0 laws added/removed (7 Foundation Laws re-verified in place); 16 figures/anchors corrected; 1 unqualified claim (zero-asset) falsified and rescoped; 10 statement families retired.
+- Headline held: 750.4 km geo, confluence 0.00u, 45 refusals, 58/59 doors, 48+58 suites, 63 systems, 26 apps, 16 models, save v20, ₦0 conservation.
+- Next: Gate-0 trust debts (signed bank/festival/ferry/travel paths, rig-per-view, stall resurrection, presence street, boot diet) then prod-build SILK re-measure; persist docs/Design_Constitution.md (still chat-canon).
