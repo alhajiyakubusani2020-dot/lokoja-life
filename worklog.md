@@ -1890,3 +1890,22 @@ Stage Summary:
 - 0 laws added/removed (7 Foundation Laws re-verified in place); 16 figures/anchors corrected; 1 unqualified claim (zero-asset) falsified and rescoped; 10 statement families retired.
 - Headline held: 750.4 km geo, confluence 0.00u, 45 refusals, 58/59 doors, 48+58 suites, 63 systems, 26 apps, 16 models, save v20, ₦0 conservation.
 - Next: Gate-0 trust debts (signed bank/festival/ferry/travel paths, rig-per-view, stall resurrection, presence street, boot diet) then prod-build SILK re-measure; persist docs/Design_Constitution.md (still chat-canon).
+
+---
+Task ID: bible-reverify-3
+Agent: Main Agent (Super Z)
+Task: LOKOJA LIFE — INDEPENDENT CANON REVERIFICATION (NO TRUST MODE) — re-verify and upgrade the four Bibles + ERA2 audit against the repository; produce docs/BIBLE_UPGRADE_AUDIT.md
+
+Work Log:
+- PHASE 1 (recon-first, anti-bias): 4 parallel Explore agents rebuilt World/Geo, Economy/Gameplay, UI/Audio/Perf, Architecture/Assets from source only; no Bible opened until recon finished
+- PHASE 2: read all 4 Bibles + ERA2-UI-AUDIT + prior BIBLE_UPGRADE_AUDIT end-to-end (~120 claims extracted)
+- PHASE 3 (independent re-derivation): wrote + ran 3 new persisted scripts (scripts/rv-geo-census.ts, rv-data-census.ts, rv-spot-checks.ts): raw binary decode (2,655/5,894/8,549/750.4 km; 16/16/5; confluence 0.00u vertex (−3,172.3); 29 named ways/19 names), runtime census (32 anchors, STALLS=2 both Ganaja via layout.ts:1660, flora 720 exact split, lamps 492, doors 98=10+88, interiors 98+5=103, 20 interior builders by name, birds 3/18, NPC_ZONES 13, PARKED 7@vehicles.ts:940), data registries (21 jobs, 20 hustles, 8 meals, 10 festivals incl. curly-apostrophe catch, 4 POIs, teleport 10+8), constants (ACES 1.12, dpr caps, phases 12/3/15, freeMeters 150@config.ts:349, SERVICE_RADIUS 26@wheels.ts:489, radii spread config.ts:101/73/353), UI (26 app keys, 1,178 text-[Npx], 18 tokens, ghost classes, 48 shadcn, SW m16.1), wire (59 socket.on = 58 doors + disconnect, 45 why-codes, 11 walls, RESUME_CAP@151), suites (48 test-* + 58 e2e-*), DB walk (319 LedgerRows: 3,610,200−9,500−22,000−1,594=3,577,106=Σ WalletRow 125 wallets, ₦0 drift; tips 30=₦11,100), save ladder (19 real steps, case 20 = no-op)
+- Method forensics: dead-end 72% irreproducible (65.3% degree-≤1; 84.3% way-based; 79.6/49.2/21.2% at 1/2/3u tolerance) → amended; crossings 23/3 held once the binary's own bridge flag was used; SECURE badge located at Dashboard.tsx:621 verifyChain-gated (not Profile); signed vs unsigned rows confirmed at useGameStore.ts:3719/3756/3793 vs :2205/2258/2341/2730/3626-38; SILK provenance split (m24 run 2.59s/406KB/56MB vs m19 run 2.54s/389KB/27MB; no prod build on disk)
+- PHASE 9 (canon-only edits): World/Experience/Art_Audio/Content Bibles → v2.2 (6 amendments, each anchored); ERA2-UI-AUDIT banner addendum (16 models, 19 steps, 65.3%, Dashboard chip, radii spread)
+- PHASE 10: docs/BIBLE_UPGRADE_AUDIT.md rewritten as this pass's audit of record (methodology, evidence, ~104 held / 6 amended / 0 new falsified / 6 UNKNOWN, 7 new debts incl. dead ECONOMY.rent block + code fossils, contradiction hunt, implementation-reality register, philosophy audit — Constitution still not a file, asset classes, production reality, confidence); worklog appended
+
+Stage Summary:
+- Canon and disk agree: ~104 claims HELD exactly (incl. conservation ₦0 to the naira), 6 AMENDED with anchors, 0 new falsified, 6 UNKNOWN declared (wire runtime dormant on :3003, SILK stale/no prod build, ERA2 historical estimates, icon-union regex-dependent, unread DB tables, stale dev.log 500)
+- All 4 Bibles now v2.2; ERA2 archive carries both banner strips; new re-runnable evidence scripts persisted under scripts/rv-*
+- Newly documented: dead ECONOMY.rent/shopMargin/business config, jobs.ts/layout.ts header fossils, 3-headed era-copy drift, achievements 1-entry stub
+- Next: signed bypass paths, rig-per-view, stall resurrection, boot diet, fresh prod SILK re-gate, persist Design_Constitution.md

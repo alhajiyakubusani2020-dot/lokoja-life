@@ -1,5 +1,5 @@
 # LOKOJA LIFE — WORLD BIBLE
-### Version 2.1 · The book of the city itself
+### Version 2.2 · The book of the city itself
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *the place*: its land, districts, landmarks, fabric, nature, seasons, people, and time. The Experience Bible owns how the place *feels*; this one owns how the place *is*.
 >
@@ -10,6 +10,8 @@
 > **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: the geo layer re-decoded from the binary itself (2,655 ways / 5,894 segments / **750.4 km**), street-craft counts re-verified at runtime, stale figures amended, and the living-constitution layers added (Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 >
 > **Reverification (v2.1, 2026-10-21).** Second RULE ZERO pass: the binary re-decoded again (all headline figures held), the door census corrected (**98 doors = 10 layout + 88 school** — the old "108" double-counted `ALL_DOORS`), the underwater-segment measure replaced with a reproducible one (**23 unbridged crossings / 3 within half-width**), parked cars 12 → **7**, school interior builders 17 → **20**, and the road-fabric W-32 figure aligned with §3.5. Every change below carries its own anchor.
+>
+> **Reverification (v2.2, 2026-10-21).** Third independent NO-TRUST pass (fresh recon agents + new re-runnable scripts `scripts/rv-geo-census.ts` / `rv-data-census.ts` / `rv-spot-checks.ts`): every headline figure re-derived from the binary and the live modules — **all held exactly** (2,655 / 5,894 / 8,549 / 750.4 km; 23+3 crossings via the binary's own bridge flag; STALLS 2 both Ganaja; flora 720 exact species split; lamps 492; doors 98=10+88; interiors 98+5=103; 20 interior builders re-counted by name). One claim **failed re-derivation**: the "72% dead-end way-ends" figure is method-dependent and was never script-persisted — replaced with the reproducible **65.3%** (degree-≤1 test, 3,465/5,310; 79.6% at 1 u endpoint-proximity, 49.2% at 2 u — the metric is tolerance-sensitive and now says so). Clock-function anchors sharpened: the one clock hand is **`advanceWorldClock`** (`world.ts:42-58`), night is forced by **`weatherForSlot`** (`world.ts:32-38`). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 
 ---
 
@@ -312,7 +314,7 @@ Each entry below is a *character sheet for a place*. Content added to a district
 **DOCTRINE.**
 
 - **Law W-31 — The ribbon is the truth.** Roads follow the OSM layer; no road may be nudged for aesthetics. Beauty comes from dressing, not from bending.
-- **Law W-32 — Fabric honesty budget.** The known fabric debts are named and scheduled, never normalized: 72% of way-endpoints dead-end; **23 unbridged segments cross a river centerline, 3 more sit within a river's half-width** (the reproducible v2.1 measure — see W-5 and §3.5); school-yard clips leave open ribbon holes; no end caps. Each is a *lie the city tells* — repair is World Bible work, tracked in the debt ledger (§3.5). New content must not route the player onto fabric lies.
+- **Law W-32 — Fabric honesty budget.** The known fabric debts are named and scheduled, never normalized: **65.3% of way-endpoints dead-end** (the reproducible v2.2 measure — degree-≤1 test on the decoded binary, 3,465 of 5,310 endpoints; the number is tolerance-sensitive: 79.6% at 1 u endpoint-proximity, 49.2% at 2 u, and the pre-v2.2 "72%" was an unpersisted method that no script reproduces — retired); **23 unbridged segments cross a river centerline, 3 more sit within a river's half-width** (re-proven this pass with the binary's own bridge flag); school-yard clips leave open ribbon holes; no end caps. Each is a *lie the city tells* — repair is World Bible work, tracked in the debt ledger (§3.5). New content must not route the player onto fabric lies.
 - **Law W-33 — Loops earn their rigs.** Traffic loops 3/4 may not carry "traffic" until rigs are budgeted (Content Bible caps); an empty table is fine, a fake-feeling flow is not.
 
 ### 3.2 Junctions, Signals & Bumps
@@ -348,7 +350,7 @@ Named, ranked, and honest — these are the repairs the city owes its own truth 
 |---|---|---|---|
 | 1 | Kpata + food-area stall resurrection | The commercial heart renders empty | `layout.ts:1660` filter |
 | 2 | 23 unbridged road segments cross a river centerline; 3 more lie within a river half-width (reproducible re-decode; the "15/6/18" era is retired) | Roads that drown | geo layer dressing |
-| 3 | 72% dead-end way-ends | Suburbs that go nowhere | geo layer + rim logic |
+| 3 | 65.3% dead-end way-ends (degree-≤1; tolerance-sensitive — 79.6% @ 1 u, 49.2% @ 2 u) | Suburbs that go nowhere | geo layer + rim logic |
 | 4 | Unlit signal heads | Hardware with no behavior | `CityMesh.tsx:1358` |
 | 5 | Civic fence walk-through | Boundaries that aren't | `collision.ts:56-71` |
 | 6 | School-yard clip holes | Fabric with gaps | school mesh |
@@ -404,11 +406,11 @@ Twelve hand-built landmarks exist (`CityMesh.tsx`): **Confluence Deck + flag + c
 
 ### 6.1 The Clock
 
-**GROUND.** Four slots — morning, afternoon, evening, night (`config.ts:192`); night is always night-clear (`world.ts:31-34`); `advanceClock` is the one true clock-advancing function (`world.ts:39-51`); the absolute slot is `(day-1)×4 + slot`.
+**GROUND.** Four slots — morning, afternoon, evening, night (`config.ts:192`); night is always night-clear (`weatherForSlot`, `world.ts:32-38`); `advanceWorldClock` is the one true clock-advancing function (`world.ts:42-58`; `nextSlot` :13-17, `absoluteSlot` :65-67); the absolute slot is `(day-1)×4 + slot`.
 
 **DOCTRINE.**
 
-- **Law W-46 — One clock, one hand.** All time passes through `advanceClock`. No system may keep private time. (The 4-slot law is engine truth and creative doctrine: slot poetry over clock bureaucracy, EX-21.3.)
+- **Law W-46 — One clock, one hand.** All time passes through `advanceWorldClock`. No system may keep private time. (The 4-slot law is engine truth and creative doctrine: slot poetry over clock bureaucracy, EX-21.3.)
 - **Law W-47 — Night is a different city.** NPC 12→4, sodium pools, headlight cones, the crickets' band — night content must be authored *for* night, never tinted from day.
 
 ### 6.2 The Seven Skies
@@ -588,7 +590,7 @@ This sheet is the shared vocabulary of every Bible. When a number here changes, 
 | W-28 → W-30 | Ward list vs register; stage-99 copy check; gate-order audit | `locations.ts`, Content P3 | renamed ward; decoration promoted |
 | W-33 → W-35 | Loop rig audit; phase law 12/3/15 vs rendered heads | `junctions.ts`, Actors | fake flow; phase drift; crash mechanics |
 | W-38 | Plate uniqueness query | schema `@unique` | a duplicate plate |
-| W-46, W-47 | Clock walk (only `advanceClock`); night census check | `world.ts`, Actors | private clock; day-tinted night |
+| W-46, W-47 | Clock walk (only `advanceWorldClock`); night census check | `world.ts`, Actors | private clock; day-tinted night |
 | W-48, W-49 | Four-system weather check; weight drift audit | weather weights, guards | wallpaper weather; FOMO skies |
 | W-50, W-51 | NPC roster: every NPC has corner + rhythm + memory line | NPC register | a dispenser NPC |
 | W-56, W-57 | Eyes-closed district test; zero-asset scan | ambience tables, CI sweep | silent district; a sample sneaks in |

@@ -1,5 +1,5 @@
 # LOKOJA LIFE — CONTENT BIBLE
-### Version 2.1 · The book of growth
+### Version 2.2 · The book of growth
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *how the game grows*: the laws every future content addition obeys, the playbook for each content type, the wire rulebook, the save law, the performance budgets, the copy voice, and the review gates.
 >
@@ -10,6 +10,8 @@
 > **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: counts re-verified on disk (48 unit suites, 58 client-facing doors, 45 refusal reasons, 12/6 placed signal heads/bumps, 16 Prisma models), the three Foundation Laws enter the register (C-19 → C-21, §1.1), and the living-constitution layers added (Part XI). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 >
 > **Reverification (v2.1, 2026-10-21).** Second RULE ZERO pass: the 45 refusal reasons re-counted from the wire itself (exact), the conservation walk re-proven kind-aware (deposits − withdraws − refuel − repair = Σ WalletRow, ₦0 drift; the ₦11,100 tip lane identified as the unsigned spray ingress), stale `EX-44` test references corrected to "Experience §44" (EX-44 is now the City Memory Law), the door census corrected to 98, and the app classification completed (7 wire / 12 store / 7 read-only = 26 — Story is a read-only book).
+>
+> **Reverification (v2.2, 2026-10-21).** Third independent NO-TRUST pass: the wire re-counted from `mini-services/nation-wire/index.ts` (59 `socket.on` handlers = **58 client-facing doors + `disconnect`**; **45 distinct refusal codes** re-enumerated with the exact `minors-no-money` 5 / `minors-no-voice` 3 / `minors-collect-nothing` 2 / `kid-text-refused` 1 split; 4 KB cap; RESUME_CAP 100 at `index.ts:151`); the conservation walk re-reproduced to the naira from `db/custom.db` (319 rows, ₦0 drift, tips ₦11,100/30 rows); 48 unit + 58 e2e script files re-counted; 26 app keys enumerated from the grid; 16 Prisma models confirmed; caps-table anchors re-proven (`config.ts:349` freeMeters 150 · `wheels.ts:489` SERVICE_RADIUS 26 · `config.ts:101` doorRadius 3.2 · `config.ts:73` hotspotRadius 2.1 · `config.ts:353` npcGistRadius 24). One correction: the migration ladder is **19 real steps** (SAVE_VERSION 20; the `case 20` arm is the current-version no-op — "20-step" counted the no-op). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 
 ---
 
@@ -295,7 +297,7 @@ The wire (`mini-services/nation-wire/index.ts` — Bun + `bun:sqlite` on the sha
 
 ## PART V — SAVE & MIGRATION LAW
 
-**GROUND.** Save v20 (`save.ts:45`), HMAC envelope + shadow + backup descent, a 20-step migration ladder; 16 Prisma models with migrations baselined (`0_init` + hardening indexes); autosave 1.2 s debounce + pagehide flush; reconnect `resume` gap cap 100.
+**GROUND.** Save v20 (`save.ts:45`), HMAC envelope + shadow + backup descent, a **19-step migration ladder** (SAVE_VERSION 20 — the ladder's `case 20` arm is the current-version no-op, so 19 steps do the migrating); 16 Prisma models with migrations baselined (`0_init` + hardening indexes); autosave 1.2 s debounce + pagehide flush; reconnect `resume` gap cap 100.
 
 **Law C-12 — The ladder is the only way in.** New persisted state: extend the schema → write the migration step (`vN → vN+1`) → bump `SAVE_VERSION` → keep *every* old step runnable (a player on v1 must reach v21 through the same ladder). Migrations never lose data (the `--accept-data-loss` era is dead; `prisma/migrations` is baselined).
 
@@ -336,7 +338,7 @@ These numbers are law (disk-verified). A PR that exceeds one amends this table *
 | Energy burn | past 150 m free allowance (`config.ts:349`), settled on world exit (`useGameStore.ts:1559`) | config + controls + store |
 | SILK posture | TTI < 3.0 s · wire < 900 KB · 0 errors | `scripts/silk-gates.ts` |
 | FramePacer (low tier) | 30 Hz | device.ts |
-| Interaction radii | anchor 8.6 · POI 5.3 · door 3.2 · hotspot 2.1 · talk 4.0 · gist 24 · car 4.6 · pump 26 · shop 28 · secret 9 | `Actors.tsx` registries |
+| Interaction radii | anchor 8.6 (`controls.ts` interactRadius) · POI 5.3 (= 8.6 × 0.62, `Actors.tsx:275`) · door 3.2 (`config.ts:101`) · hotspot 2.1 (`config.ts:73`) · talk 4.0 (`Actors.tsx:376`) · gist 24 (`config.ts:353`) · car 4.6 (`DriveSystem.tsx:51`) · pump/garage 26 (`wheels.ts:489`) · shop 28 (`HudOverlay.tsx:273`) · secret 9 (`patti.ts`) | registries |
 
 **Law C-13 — Budgets are measured, not assumed.** The measurement tools exist (SILK gates, PerfChip, the audit's computed probes); a PR that says "should be fine" is not done.
 

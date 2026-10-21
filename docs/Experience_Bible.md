@@ -1,5 +1,5 @@
 # LOKOJA LIFE — EXPERIENCE BIBLE
-### Version 2.1 · The book of how the player should feel
+### Version 2.2 · The book of how the player should feel
 
 > **Authority.** This Bible is subordinate to the **Design Constitution** (the Philosophy Bible). Where this document and the Constitution disagree, the Constitution wins. This document turns the Constitution's laws into felt experience, one experience at a time.
 >
@@ -10,6 +10,8 @@
 > **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: every claim re-verified against disk, stale scar anchors corrected, numeric drift amended — and the living-constitution layers added: Implementation Reality (§47), Verification (§48), Production (§49), Future Scale (§50), plus the four Foundation Laws (EX-44 → EX-47, Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 >
 > **Reverification (v2.1, 2026-10-21).** Second RULE ZERO pass: every anchor re-checked against disk. Corrections: the door census is **98 doors (10 layout + 88 school)** — the "108" double-counted `ALL_DOORS`; the M13 wall census is **11 direct wire walls** plus the band capability layer; the spawn veil, autosave, pagehide, and reconnect-cap anchors were re-pointed at their true lines; dead scar line-numbers (the fixed double-pay sites) were retired to history without their numbers. Nothing doctrinal changed — only the truth got sharper.
+>
+> **Reverification (v2.2, 2026-10-21).** Third independent NO-TRUST pass (fresh recon + re-runnable scripts): the conservation walk re-reproduced to the naira from the live books (319 rows; deposits 3,610,200 − withdraws 9,500 − refuel 22,000 − repair 1,594 = 3,577,106 = Σ WalletRow across 125 wallets, ₦0 drift; tips ₦11,100 across 30 rows), the wire re-counted (59 `socket.on` handlers = 58 client-facing doors + `disconnect`; 45 distinct refusal codes; walls 5+3+2+1 = 11), 26 app keys enumerated, 1,178 `text-[Npx]` re-counted. Corrections: the migration ladder is **19 real steps** (SAVE_VERSION 20; the `case 20` arm is the current-version no-op); the security badge lives on the **Dashboard chain chip** (`Dashboard.tsx:621`, gated by `verifyChain`) — not the Profile screen; the unsigned-row wolf-alarm mechanics were re-confirmed live (signed rows carry `sig` at `useGameStore.ts:3719/3756/3793`; the 5 bypass sites push unsigned rows at `:2205/:2258/:2341/:2730/:3626-38`); clock anchors re-pointed (`advanceWorldClock`, `world.ts:42-58`); the SILK "last measured" figures now cite their run of record (see EX-2.4). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 
 ---
 
@@ -112,7 +114,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 - EX-2.1: A brand-new player reaches character creation in ≤ 2 taps from cold boot.
 - EX-2.2: No authentication is ever required to *enter the world*; identity is an upgrade, not a gate.
 - EX-2.3: The menu contains no metric, banner, or number the player did not earn.
-- EX-2.4: TTI stays under the SILK gate (gate < 3.0 s, `scripts/silk-gates.ts`; last measured 2.59 s, 2026-10-20 — re-measured per Content C-13, never assumed). First launch *is* the first feeling of the city's unhurried honesty — a slow, janky boot contradicts everything.
+- EX-2.4: TTI stays under the SILK gate (gate < 3.0 s, `scripts/silk-gates.ts`; last recorded run: **2.59 s**, worklog-anchored — G1 2.59 s / G2 406 KB / G3 15 ms / G4 56 MB / G5 2.4 MB on a fresh prod build of the m24-fuel era; an earlier m19 run recorded 2.54 s / 389 KB / heap 27 MB / click 4 ms. The build that produced 2.59 s no longer exists on disk — re-measure per Content C-13, never assume). First launch *is* the first feeling of the city's unhurried honesty — a slow, janky boot contradicts everything.
 
 ### EX-3 · First Arrival
 
@@ -537,7 +539,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 
 ### EX-20 · The Bank
 
-**Purpose.** The bank is where trust becomes architecture. Today it is also our most public debt: three money UIs (BankApp, BankPanel, WalletApp — `PhoneScreen:219`, `BankPanel.tsx:52`, `wallet-app.tsx:62`), and **bank deposit/withdraw still writes unsigned ledger rows** (`useGameStore.ts:2205/:2258`) while the Profile screen claims Fortress SECURE. The *experience* we promise: money moved with the gravity it deserves — a teller, a PIN, a receipt, a ledger that cannot lie. The experience we must *never* ship: numbers that change with no body and no witness.
+**Purpose.** The bank is where trust becomes architecture. Today it is also our most public debt: three money UIs (BankApp, BankPanel, WalletApp — `PhoneScreen:219`, `BankPanel.tsx:52`, `wallet-app.tsx:62`), and **bank deposit/withdraw still writes unsigned ledger rows** (`useGameStore.ts:2205/:2258` — rows without `sig`, unlike the signed doors at `:3719/:3756/:3793`) while the Dashboard's chain chip claims 🔒 SECURE whenever `verifyChain` passes (`Dashboard.tsx:621`). The *experience* we promise: money moved with the gravity it deserves — a teller, a PIN, a receipt, a ledger that cannot lie. The experience we must *never* ship: numbers that change with no body and no witness.
 
 **Emotions.** Gravity → trust → the pleasure of receipts. (For the ₦5,000 Day-1 player: the first "my money is somewhere safe" feeling.)
 
@@ -550,7 +552,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 **Interaction philosophy.** Deposit/withdraw/transfer as a three-beat ritual: state intent → verify (PIN on purse paths) → receive receipt. Every receipt is a first-class object (WalletApp keeps them). The fortress chain (SHA-256+HMAC, idemKey replay law) is the *reason* the feeling is honest — and until bank paths are signed (open P1), the bank must *say so* in its honest lane rather than claim a security it does not yet have.
 
 **Common mistakes.**
-1. *The SECURE lie.* Any UI claiming fortress-grade safety for an unsigned path. Copy must match the ledger truth (audit-verified debt).
+1. *The SECURE lie.* Any UI claiming fortress-grade safety for an unsigned path. The Dashboard chain chip is `verifyChain`-gated (it flips to ⚠️ CHAIN when the chain breaks) — which makes the wolf alarm, not a false badge, the live symptom: ordinary banking breaks the chain and the chip cries tamper (audit-verified debt).
 2. *Silent money.* Any mutation without a receipt object. If it didn't receipt, it didn't happen.
 3. *Three wallets.* Three visual languages for one truth. The money-UI unification is a feel debt of the first order — one wallet law, one visual grammar (see Art Bible, UI).
 4. *The wolf alarm.* Unsigned rows written after signed rows make the fortress verifier report the whole chain broken — a false tamper alarm that cries wolf after ordinary banking, ferry rides, or festival joy. The cure is signing the paths (EX-20.1), never muting the alarm.
@@ -568,7 +570,7 @@ Every experience entry below implicitly answers the classic ten: Why does it exi
 
 ### EX-21 · The Four Lights (Morning · Afternoon · Evening · Night)
 
-**Purpose.** Time in Lokoja is told in four honest slots (`config.ts:192` — morning/afternoon/evening/night; night is always night-clear, `world.ts:33-34`). Discrete slots are an engine truth, and they are a *gift*: each slot can be a fully authored mood rather than a mush of interpolation. The experience: a day that has *phases a player can feel in their body* — when to hustle, when to eat, when to gist, when to sleep.
+**Purpose.** Time in Lokoja is told in four honest slots (`config.ts:192` — morning/afternoon/evening/night; night is always night-clear, `weatherForSlot` at `world.ts:32-38`). Discrete slots are an engine truth, and they are a *gift*: each slot can be a fully authored mood rather than a mush of interpolation. The experience: a day that has *phases a player can feel in their body* — when to hustle, when to eat, when to gist, when to sleep.
 
 **Emotions.** Morning: appetite and clean energy. Afternoon: full-tilt commerce heat. Evening: golden warmth and social pull. Night: intimacy, sodium-orange streets, and the pleasant vulnerability of being out late.
 
@@ -781,7 +783,7 @@ Covered in EX-20 (The Bank) — the ritual, the gravity, the receipts, the hones
 
 **Animation philosophy.** The body lies down *in* the bed (position matters — the hotspot is the bed, not the room), a breath, and the cut to morning. No spinning loaders, no screens.
 
-**Interaction philosophy.** One intent: sleep. The game answers with: slot advance (honest day delta, `world.ts:39-51` advance law), needs restored, comfort bonus applied, save written (the autosave 1.2 s debounce means the bed is a *ceremony* over an already-safe system). Sleeping anywhere but home costs comfort — the ladder rewards the kept home.
+**Interaction philosophy.** One intent: sleep. The game answers with: slot advance (honest day delta, `advanceWorldClock`, `world.ts:42-58`), needs restored, comfort bonus applied, save written (the autosave 1.2 s debounce means the bed is a *ceremony* over an already-safe system). Sleeping anywhere but home costs comfort — the ladder rewards the kept home.
 
 **Common mistakes.**
 1. *Sleep as skip button.* Sleep advances time but *never skips content* (no "while you slept" invented events — EX-6.3 honesty).
@@ -881,7 +883,7 @@ Covered in EX-20 (The Bank) — the ritual, the gravity, the receipts, the hones
 
 **Interaction philosophy.** Trust is felt at three temperatures: *invisible* (everything just works), *explained* (when a refusal protects — Verdict Voice), and *ceremonied* (when something big happens — first PIN, first large transfer: a deliberate, respectful ritual, not a modal).
 
-**Common mistakes.** Security theater (Fortress SECURE labels on unsigned paths — the live debt), silent walls, and blame-the-player copy ("invalid input" energy). All three are forbidden.
+**Common mistakes.** Security theater (a security state claimed in copy that `verifyChain` does not enforce — the Dashboard chain chip is the one lawful security surface, `Dashboard.tsx:621`; the wolf alarm it suffers on unsigned paths is the live debt), silent walls, and blame-the-player copy ("invalid input" energy). All three are forbidden.
 
 **Design principles.**
 - EX-34.1: Every security refusal explains the *reason and the remedy* in one breath.
@@ -895,7 +897,7 @@ Covered in EX-20 (The Bank) — the ritual, the gravity, the receipts, the hones
 
 ### EX-35 · Exploration
 
-**Purpose.** The pleasure of the map with legs: 2,655 real ways, 750 km of real Lokoja roads, 20 launch places + 10 G2 wards, and the promise that *around any corner is something true*. Exploration is the game's quietest compulsion loop — no markers, no fog-of-war gameification; just streets that keep being real.
+**Purpose.** The pleasure of the map with legs: 2,655 real ways, 750 km of real Lokoja roads, 10 launch places + 10 G2 wards (32 anchors with the 12 school sites), and the promise that *around any corner is something true*. Exploration is the game's quietest compulsion loop — no markers, no fog-of-war gameification; just streets that keep being real.
 
 **Emotions.** Wanderlust → the collector's itch (districts found, 32 anchors) → the *patina of familiarity* (routes becoming mine).
 
@@ -915,7 +917,7 @@ Covered in EX-20 (The Bank) — the ritual, the gravity, the receipts, the hones
 **Design principles.**
 - EX-35.1: No navigation UI may ever point at content; the world points at itself.
 - EX-35.2: Discovery requires arrival + attention (the 8.6 u anchor law + a dwell sense).
-- EX-35.3: Every launch district is walkable end-to-end on real roads (the road-fabric dead-end debt, 72% of way-endpoints, is the known budget — closing it is World Bible work).
+- EX-35.3: Every launch district is walkable end-to-end on real roads (the road-fabric dead-end debt, 65.3% of way-endpoints, is the known budget — closing it is World Bible work).
 
 ### EX-36 · Discovery
 
@@ -1144,7 +1146,7 @@ This book is a living constitution's right hand. Amendments follow the Content B
 
 ### 47. Implementation Reality
 
-**What exists today (disk-verified 2026-10-21, second pass):** 63 systems · 26 phone apps · save v20 (HMAC envelope, shadow, backup, 20-step migration ladder) · the wire: 58 client-facing doors / 59 handlers, 4 KB cap, dual rate buckets (per-socket + per-account), idemKey UNIQUE, scrypt PIN, 11 minor-wall sites + the band capability layer, N12 clamp · conservation ₦0 drift on the live books (319 ledger rows, kind-aware chain walk clean: deposits 3,610,200 − withdraws 9,500 − refuel 22,000 − repair 1,594 = 3,577,106 = Σ WalletRow exactly; the ₦11,100 tip lane is the named unsigned spray ingress, EX-20.1) · **98 doors (10 city interiors + 88 school interiors) + 5 doorless G2 rooms** · 21 jobs / 20 hustles / 4 job boards · 14 named NPCs on the familiarity grammar · 5 Patti secrets, idempotent · ferry, postcards, stage/spray/trades on the wire · 3D world and audio 100% procedural (zero models, zero audio files; the 2D shell's painted menu hero and PWA icons are its only sanctioned binaries — Art A-2).
+**What exists today (disk-verified 2026-10-21, third pass):** 63 systems (the `src/game/systems/` module census) · 26 phone apps · save v20 (HMAC envelope, shadow, backup, 19-step migration ladder — SAVE_VERSION 20, the `case 20` arm is the current-version no-op) · the wire: 58 client-facing doors / 59 handlers, 4 KB cap, dual rate buckets (per-socket + per-account), idemKey UNIQUE, scrypt PIN, 11 minor-wall sites + the band capability layer, N12 clamp · conservation ₦0 drift on the live books (319 ledger rows, kind-aware chain walk clean: deposits 3,610,200 − withdraws 9,500 − refuel 22,000 − repair 1,594 = 3,577,106 = Σ WalletRow exactly, re-reproduced from `db/custom.db` this pass; the ₦11,100 tip lane is the named unsigned spray ingress, EX-20.1) · **98 doors (10 city interiors + 88 school interiors) + 5 doorless G2 rooms** · 21 jobs / 20 hustles / 4 job boards · 14 named NPCs on the familiarity grammar · 5 Patti secrets, idempotent · ferry, postcards, stage/spray/trades on the wire · 3D world and audio 100% procedural (zero models, zero audio files; the 2D shell's painted menu hero and PWA icons are its only sanctioned binaries — Art A-2).
 
 **What is planned (the honest horizon):** NPC event memory (EX-44's table) · the stall resurrection, then market economy (EX-16.1) · the Bag tab made real · the signed bank/festival/ferry/travel paths (EX-20.1) · rig-per-view co-presence (EX-31.2) · the hospital interior, when it can be honestly a hospital (W-54). Swimming is *not* planned — the river's inviolability (W-3) stands until amended.
 

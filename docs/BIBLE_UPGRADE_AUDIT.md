@@ -1,152 +1,173 @@
-# LOKOJA LIFE — BIBLE UPGRADE & REVERIFICATION AUDIT
+# LOKOJA LIFE — INDEPENDENT CANON REVERIFICATION AUDIT (NO TRUST MODE)
 
-**Date:** 2026-10-21 · **HEAD at reverification:** `1fd2320` (clean tree) · **Mode:** read-only recon → canon amendment (Bibles + this audit only; zero source code touched)
-**Scope:** `docs/Experience_Bible.md` · `docs/World_Bible.md` · `docs/Art_Audio_Bible.md` · `docs/Content_Bible.md` — upgraded **v2.0 → v2.1** ("the truth got sharper"), plus the ERA2-UI-AUDIT correction banner refreshed.
-**Trigger:** the RULE ZERO directive — *never trust memory, previous conversations, old reports, or assumptions; everything re-discovered from the repository.* The v2.0 pass (commit `1fd2320`) had itself amended the Bibles; this pass re-verified **the v2.0 claims themselves** from disk, found 16 drifted/irreproducible figures and 1 falsified headline claim, and amended canon accordingly.
-
----
-
-## 1. VERIFICATION METHODOLOGY
-
-Everything in this pass was executed **directly against the repository**, in this order:
-
-1. **Full-document read.** All four Bibles (1,194 + 619 + 355 + 478 lines) and `ERA2-UI-AUDIT.md` (246 lines) read end-to-end before any edit. Every `file:line` anchor and every number extracted into a verification matrix (~90 claims).
-2. **The geo binary re-decoded — twice, two ways.** The repo's own decoder (`src/game/world3d/geo.ts decodeGeoBin`) was run against the raw bytes of `public/world/geo-v1.bin`; then a second probe did exact segment–polyline intersection tests for every road/river pair and a full pairwise river-vertex scan for the confluence. No prior measurement was trusted or reused.
-3. **Runtime world bootstrap.** The layout/junctions/schools/interiors/flora/patti modules were imported and initialized inside `bun` with the real binary — placed counts (lights, bumps, stalls, lamps, doors, interiors, secrets, ribbons) read from the live arrays, not from comments.
-4. **The live books walked.** `db/custom.db` opened readonly via `bun:sqlite`: the 319 LedgerRows were walked with kind-aware semantics (deposits/withdraws are self-rows; transfers and tips cancel; refuel/repair burn) and reconciled against Σ WalletRow.
-5. **The wire re-counted.** Distinct refusal `why:` codes enumerated from `mini-services/nation-wire/index.ts`; handlers, caps, cadences, and wall sites grepped at their exact lines.
-6. **Anchor spot-checks.** ~50 `file:line` citations opened and read at the cited line; stale ones re-pointed at the true lines.
-7. **Only then were the Bibles edited** — and every amendment below carries the anchor that proves it.
-
-Verification scripts persisted at `scripts/audit-p3-*.ts|sh` (re-runnable evidence).
+**Date:** 2026-10-21 · **HEAD at reverification:** `411f119` (four Bibles at v2.1 + this file's v2.1 predecessor) · **Mode:** read-only recon → canon amendment (4 Bibles → v2.2, ERA2 banner addendum, this document; zero source code touched)
+**Scope:** `Experience_Bible.md` · `World_Bible.md` · `Art_Audio_Bible.md` · `Content_Bible.md` → **v2.2**, plus the ERA2-UI-AUDIT correction strip. Supersedes the v2.1 audit (recoverable at git `411f119~1`); the retired-claims discipline carries forward.
+**Trigger:** the INDEPENDENT CANON REVERIFICATION directive — *every Bible, every previous audit, every worklog, every prior commit message treated as potentially wrong; only the repository is canon; nothing survives without reproducible evidence; if evidence cannot be produced the claim is marked UNKNOWN or leaves canon.*
 
 ---
 
-## 2. VERIFICATION SUMMARY
+## 1. METHODOLOGY (what was actually done, in order)
 
-**Claims re-verified this pass: ~90 load-bearing figures/anchors across the four Bibles.**
+1. **Recon before reading.** Per the anti-bias order, four parallel read-only recon agents rebuilt the project from source only — World/Geography, Economy/Gameplay, UI/Audio/Performance, Architecture/Assets/Infra — with file:line evidence for every figure. **No Bible was opened until the recon was complete.**
+2. **Full-document read.** All four Bibles + `ERA2-UI-AUDIT.md` + the prior `BIBLE_UPGRADE_AUDIT.md` read end-to-end (3050 lines total), every number and anchor extracted into a verification matrix (~120 claims).
+3. **Independent re-derivation.** Three new re-runnable scripts were written and executed against the live repo (persisted, unlike some prior-pass evidence):
+   - `scripts/rv-geo-census.ts` — raw binary decode + runtime bootstrap census (geo gate first, then layout/junctions/schools/interiors/flora/vehicles/data registries).
+   - `scripts/rv-data-census.ts` — config constants, anchor greps, UI census, wire census, suite counts.
+   - `scripts/rv-spot-checks.ts` — dead-end tolerance variants, festival/teleport/POI registries, app-key enumeration, orphan-asset importer census, **the live-books walk**, Prisma model count.
+4. **The live books walked.** `db/custom.db` opened readonly via `bun:sqlite`; every LedgerRow kind summed; reconciled against Σ WalletRow.
+5. **The wire re-counted.** `mini-services/nation-wire/index.ts` (2,395 lines): every `socket.on` enumerated, every `why:` code extracted with a strict literal pattern, wall sites counted.
+6. **Method forensics on every claim that failed.** Where a reproduced value differed from canon (dead-end %, crossings, migration steps), the *method* was investigated before any edit — three independent dead-end variants were computed; the crossing test was re-run using the binary's own bridge flag after the first method proved naive.
+7. **Only then were the Bibles edited** — every amendment carries the anchor that proves it.
+
+## 2. EVIDENCE INVENTORY (all re-runnable)
+
+| Script | Produces |
+|---|---|
+| `scripts/rv-geo-census.ts` | ways/segs/points/km · rivers/bridges/loops · confluence vertex · named ways · dead-end variants · bridge-flag crossings · runtime census (districts, buildings, stalls-by-anchor, trees-by-species, grass, rocks, doors, interiors, lights, bumps, lamps, clusters, parked) · data registries (jobs, hustles, meals, foods, NPCs, vehicles, weather, loc-actions) |
+| `scripts/rv-data-census.ts` | config constants (freeMeters, autosave, FORTRESS, GAME_META, xp) · line counts · ACES/dpr/far/frameHz · phase law · caps (drains/plates) · patti · music/ambience · SAVE_VERSION + migration cases · teleport · file-existence ledger · text-[Npx] · lko tokens · ghost classes · shadcn count · app grid · e2e/unit counts |
+| `scripts/rv-spot-checks.ts` | dead-end tolerance curves · cash/yearDays/xp anchors · festival names · job-board POIs · teleport roster/categories · systems file count · BAY_SPECS/PARKED · silk gates G1–G6 · OPTIMIZATION-PLAN baseline · app keys · public/art inventory + importer census · SW_VERSION · **DB walk** · Prisma models · API route count |
+
+Prior-pass evidence (`scripts/audit-p3-*.ts|sh`, `scripts/geo/bootstrap.ts`) remains on disk and was used to understand *methods*, never as a source of numbers.
+
+## 3. VERIFICATION SUMMARY
+
+**Claims re-verified this pass: ~120 load-bearing figures/anchors across the four Bibles, the ERA2 audit, and the prior audit.**
 
 | Verdict | Count | Meaning |
 |---|---|---|
-| **HELD — verified again, unchanged** | **~70** | The v2.0 canon is mostly true. All headline geo figures held exactly. |
-| **AMENDED — drifted or irreproducible** | **16** | Corrected in the Bibles this pass (table §3). |
-| **FALSIFIED — unqualified claim contradicted by disk** | **1** | "Zero asset files — 100% procedural" (Art §10.1, echoed in Experience §47 and the v2.0 audit). Truth: the 3D world and audio are 100% procedural; the 2D shell ships 20 binaries (1 live hero + 5 PWA icons + logo + 13 orphans). Law A-2 rewritten with the precise scope and two named sanctioned families. |
-| **LAWS ADDED** | **0** | The seven Foundation Laws (EX-44→47, C-19→21) were confirmed present, correctly placed, and re-verified; this pass adds none — nothing observed on disk earned permanence that the books did not already hold. |
-| **LAWS REMOVED / RENUMBERED** | **0** | Canon is additive and corrective only. |
+| **HELD — reproduced exactly** | **~104** | Re-derived independently; value and anchor both held. All headline geo, economy, wire, UI, audio, save, and suite figures held. |
+| **AMENDED — drifted, mis-anchored, or method-dependent** | **6** | Corrected in the Bibles this pass (table §5). |
+| **REJECTED — claim left canon** | **0 new** | The v2.1 pass already falsified the one unqualified claim ("zero asset files"); its rescope was re-verified and holds. |
+| **UNRESOLVED — marked UNKNOWN** | **6** | Listed §7 with the exact reason evidence could not be produced. |
+| **LAWS ADDED / REMOVED** | **0 / 0** | Nothing observed earned permanence the books lack; no law was contradicted by disk. Canon stays additive-and-corrective. |
 
-**Held (headline, each re-proven this pass):** 2,655 ways / 5,894 segments / 8,549 points / **750.4 km** / 60,071 B binary · 16 rivers / 16 bridges / 5 loops · confluence **0.00 u** (the `niger` and `benu` ways share the identical vertex (−3, 172.3)) · 1 u = 26 m (`geo.ts:8`) · GEO_WORLD_HALF 310 · 2,656 rendered ribbons · NPC_COUNT 12 · 13 stroll zones · night 4 · TRAFFIC_MIX 14 rigs on loops 0–2 · LIGHT_CAP 14 / **12 placed** · BUMP_CAP 12 / **6 placed** · phases 12/3/15 (`junctions.ts:52-54`) · TREE_CAP 720 · GRASS_TUFTS 10,000 · 110 rocks · 492 lamps · drains cap 1,800 · plate cap 40 · yearDays 72 (`config.ts:658`) · **10 festivals** (`calendar.ts:159-173`) · ₦5,000 day 1 (`config.ts:14`) · 4 slots (`config.ts:192`) · 7 skies (`types.ts:289`) · 4 vehicle kinds (`types.ts:227`) / 7 modes (`types.ts:292`) · 21 jobs · 20 hustles · 4 job boards · **14 named NPCs** (`npcs.ts`) · **5 Patti secrets**, DISCOVERY_RADIUS 9, ~2 Hz · **32 anchors** (`layout.DISTRICTS`) · 58 client-facing doors / **59 handlers** · **45 refusal why-codes** (enumerated; `minors-*`/`guest-*`/`bad-*`/`no-*`/`not-*` families) · 4 KB cap (`index.ts:1064`) · RESUME_CAP 100 (`index.ts:151`) · save v20 (`save.ts`) · 16 Prisma models, migrations baselined (`0_init` + hardening) · **48 unit + 58 e2e suites** · **63 systems** · **26 phone apps** (`PhoneApp` union, `PhoneScreen.tsx:79`) · **conservation ₦0 drift re-proven kind-aware**: deposits 3,610,200 − withdraws 9,500 − refuel 22,000 − repair 1,594 = **3,577,106 = Σ WalletRow exactly** (125 wallets) · 18 `--lko-*` tokens · Geist + Outfit · ACES @1.12 · 1024² governed sun · FramePacer 30 Hz · silk gates G1–G6 (`scripts/silk-gates.ts`) · 8 ambience layers at 320/850/480/1,400/140/4,400/520/3,200 Hz (`ambience.ts:99-106`) · music: C-pentatonic 261.63, 16-step bars, kick 0/7/10 · ghost classes (`lko-glass`/`lko-label`) still undefined · legacy `layout.TREES` (700) still dead compute · `layout.GRASS` still feeding only ≤72 flower dots (`WorldTerrain.tsx:956`) · shared-rig still live (`RemoteVehicles.tsx:114/:179/:221`) · stall filter still live (`layout.ts:1660`; **STALLS=2**) · stale header still live (`layout.ts:7`) · unlit signal heads still live (`CityMesh.tsx:1358`) · `wireSetStreet` entry/join-only still live (`wire.ts:645-648`) · unsigned bank rows still live (`useGameStore.ts:2205/:2258`) · the 5 bypass sites confirmed at `:2205/:2258/:2341/:2730/:3652` · `depositVerdict` pure (`ledger.ts:96-107`) · merge law (`guest.ts:106`) · TIERS (`social.ts:22-27`) · STORY_BEATS (`story.ts:371`) · plate `@unique` (`schema.prisma:240`) · idemKey `@unique`.
+## 4. THE HELD CLAIMS (headline, each re-proven this pass)
 
----
+- **Geo binary** (decoded from `public/world/geo-v1.bin` bytes, 60,071 B): **2,655 ways / 5,894 segments / 8,549 points / 750.4 km** (28,863.0 u × 26 m) · 16 rivers (333 segments, 72.0 km) · 16 bridges · 5 loops · **29 named ways across 19 distinct OSM names** · **confluence vertex-exact 0.00 u** (`niger` and `benu` share vertex (−3, 172.3)) · **23 unbridged centerline crossings + 3 segments within a river's half-width at midpoint** — reproduced with the binary's own bridge flag (the correct method; my first naive distance-to-bridge method gave 27/396 and was discarded as a method artifact).
+- **Runtime world**: 2,656 rendered ribbons / 5,900 segs / 752.2 km (incl. the Patti trail) · 32 anchors (10 launch + 10 G2 + 12 schools) · 61 generic buildings · **STALLS = 2, both nearest `ganaja-junction`** (kpata 0, food-area 0 — `roadGap(x,z) < 0.45` at `layout.ts:1660` exactly) · legacy `TREES` 700 + `GRASS` 7,500 (≤72 flower dots, `WorldTerrain.tsx:956`) + `ROCKS` 110 · `NPC_ZONES` = **13** · flora **720 trees with the exact species split** (neem 181 · mango 227 · cashew 94 · shea 92 · acacia 54 · plantain 45 · raffia 16 · oilpalm 6 · iroko 3 · baobab 2) · 10,000 flora tufts · lights 12 placed / cap 14 · bumps 6 / cap 12 · phases 12/3/15 · danfo stops 3 · junction clusters 39 · **lamps 492** (cap 1,500 at `layout.ts:1630`) · drains cap 1,800 · plates cap 40 · **PARKED_VEHICLES = 7** (`vehicles.ts:940`; 12 BAY_SPECS are the input, the shoulder-clearance filter decides) · **ALL_DOORS = 98 (10 layout + 88 school)** · `SCHOOL_INTERIORS` 88 · `INTERIORS` array 98 · `INTERIOR_BY_ID` 103 (5 doorless G2 rooms) · **20 school interior builders** (`classroomInterior` … `demoInterior`, counted by name) · **birds: 3 flocks / 18 birds (confluence 7, Patti 6, market 5), day-only** (`Actors.tsx:1111-1130`).
+- **Data registries**: 21 jobs · 20 hustles · 8 meals · 10 display-only foods · 14 named NPCs · 4 vehicle models · **4 job-board POIs** (`POINTS_OF_INTEREST`) · **10 attendable festivals** (my first regex count said 8 — the miss was a curly apostrophe in "Workers' Day"; the register is 10) · yearDays 72 (`config.ts:658`) · weather weights {sunny 55, cloudy 25, rain 14, harmattan 3.5, storm 1.8, flood 0.7} · 107 location-action rows over 32 keys · ₦5,000 day 1 (`config.ts:14`) · xp 120·L^1.4, cap 50 · FORTRESS {1.5M, 3M, 24} · autosave 1,200 ms · freeMeters 150 (`config.ts:349`) · teleport roster 10 (append-only) + 8 categories · Patti 5 secrets, radius 9, ~2 Hz poll (`patti.ts:7/:138`).
+- **Interaction constants** (registry-spread, not one table): anchor 8.6 (`controls.ts` interactRadius) · POI 5.3 (= 8.6 × 0.62, `Actors.tsx:275`) · door 3.2 (`config.ts:101`) · hotspot 2.1 (`config.ts:73`) · talk 4.0 (`Actors.tsx:376`) · gist 24 (`config.ts:353`) · car 4.6 (`DriveSystem.tsx:51`) · pump/garage **26 = `SERVICE_RADIUS` (`wheels.ts:489`)** · shop 28 (`HudOverlay.tsx:273`) · secret 9.
+- **Rendering/perf**: ACESFilmicToneMapping + exposure 1.12 · dpr caps 1.75/1.4/1.05 · far 900/820/720 · frameHz 0/0/30 · NPC_COUNT 12 → night 4 (`Actors.tsx:629`) · rain COUNT 620 (`Actors.tsx:1032`) · hair palette `#1A1714…#B79545` present.
+- **Audio**: 8 ambience layers at 320/850/480/1,400/140/4,400/520/3,200 Hz · music bpm {108, 100, 92, 78} · C-pentatonic 261.63 · maxVoices 8 · zero audio files in `public/`.
+- **The books** (`db/custom.db`, readonly): 18 tables (16 app + `_prisma_migrations` + `sqlite_sequence`) · **319 LedgerRows** — deposits 148 = ₦3,610,200 · withdraws 19 = ₦9,500 · refuel 11 = ₦22,000 · repair 5 = ₦1,594 · tips 30 = ₦11,100 · transfers 106 = ₦3,414,400 · **125 WalletRows, Σ = ₦3,577,106 = deposits − withdraws − refuel − repair, drift ₦0, reproduced to the naira**.
+- **The wire** (`mini-services/nation-wire/index.ts`): **59 `socket.on` handlers = 58 client-facing doors + `disconnect`** · **45 distinct refusal why-codes** (strict literal pattern; a looser pattern yields 46 by matching a non-literal — the strict count is the count) · minor walls 5 `minors-no-money` + 3 `minors-no-voice` + 2 `minors-collect-nothing` + 1 `kid-text-refused` = **11** · RESUME_CAP 100 (`index.ts:151`) · maxHttpBufferSize 4_096 · port 3003.
+- **Chain mechanics**: signed doors attach `sig` (`useGameStore.ts:3719/:3756/:3793` via `chainNext`); the 5 bypass sites push **unsigned** rows (`:2205` bankDeposit · `:2258` bankWithdraw · `:2341` festival spray · `:2730` canoe ferry · `:3626-38` travel events; `recordTransaction` at `economy.ts:27-42` builds rows with no `sig`). The wolf alarm is real and live.
+- **UI**: **26 app keys enumerated** (chats…patti) · **1,178 exact `text-[Npx]`** · **18 `--lko-*` tokens** · `lko-glass`/`lko-label` defined in no stylesheet · 48 shadcn `ui/` files · APP_VERSION `'Lokoja Life • Stage 5'` vs GAME_META `version 0.3.0 / 'Stage 3 — Economy, Work & Opportunities'` · menu chip `'26 phone apps'` hardcoded · `SW_VERSION 'm16.1'` · fonts Geist + Outfit only.
+- **Suites**: 48 `scripts/test-*` unit scripts + 58 `scripts/e2e-*` scripts · silk-gates G1 TTI<3s / G2 wire<900KB / G3 click<100ms / G4 heap<300MB / G5 cache<30MB / G6 matrix (`scripts/silk-gates.ts`).
+- **Save**: SAVE_VERSION 20 · **19 real migration steps** (`case 1…19` mutate; `case 20` is the current-version no-op at `save.ts:310`) · flags.ts / guest.ts / social.ts (TIERS stranger→acquaintance→paddy→…) / story.ts (`STORY_BEATS` at `:371`) / needs.ts all exist · LocationArt.tsx exists with **0 importers**.
+- **Assets**: `public/` = 25 files — 14 `art/*.webp` (menu-hero **live** (1 consumer) + 10 `loc-*` orphans + 3 `ad-*` orphans) + 5 PWA PNGs + logo.svg + manifest.json + sw.js + offline.html + robots.txt + `world/geo-v1.bin`. Zero audio/video/model files. 13 orphans re-confirmed.
+- **Infra**: 13 API handlers (12 `route.ts` + 1 `route.tsx` OG) · 16 Prisma models · `.env` = DATABASE_URL only · Caddy `?XTransformPort` split · `output: "standalone"` · `next.config.ts` `/rt`→LiveKit rewrite present with zero `/rt` references in src (dormant).
 
-## 3. THE 16 AMENDMENTS (corrected figures)
+## 5. THE 6 AMENDMENTS
 
-| # | Was (v2.0 canon) | Now (v2.1, disk-proven) | Where amended |
+| # | Was (v2.1 canon) | Now (v2.2, disk-proven) | Where |
 |---|---|---|---|
-| 1 | 108 doors (10 + 98 school) | **98 doors = 10 layout + 88 school** (`ALL_DOORS`, `schools.ts:1761`); 98 interiors + 5 doorless G2 rooms = **103 registered spaces**. The "108" double-counted `ALL_DOORS`. | Experience EX-14, EX-17, §47 · World §7.3, quick sheet, §10.1 · Content P2 |
-| 2 | 98 school doors | **88 school doors** (`SCHOOL_DOORS`) across 12 sites | same rows |
-| 3 | 17 interior builders | **20 interior builders** (`schools.ts`: classroom/office/library/grandLibrary/lab/theatre/senate/facultyArts/facultyScience/hostel/canteen/clinic/scienceLab/hall/anatomyLab/preclinic/workshop/chapel/mosque/demo) | Experience EX-17 · World §7.3 |
-| 4 | "15 channel-crossing / 6 fully submerged" (and W-32's stale "18") | **23 unbridged road segments geometrically cross a river centerline; 3 more lie within a river half-width** — the reproducible re-decode (exact segment–polyline intersection; threshold-independent). All three old figures retired. | World W-5, W-32, §3.5, §10.1 |
-| 5 | 12 decorative parked cars | **7** (`PARKED_VEHICLES`, `vehicles.ts:940`) | World §7.1, quick sheet, §10.1 |
-| 6 | "Only 19 ways carry OSM names" | **19 distinct OSM names across 29 named ways** | World §3.1 |
-| 7 | 13 M13 walls | **11 direct minor-wall sites** (5 `minors-no-money` · 3 `minors-no-voice` · 2 `minors-collect-nothing` · 1 `kid-text-refused`) + the `canLive` band capability layer + the M13 suite's wider matrix | Experience EX-17.3 |
-| 8 | Resume gap cap cited at `index.ts:537-540` | Cap is `RESUME_CAP = 100` at **`index.ts:151`** (`:537-540` is the kept last-moment — re-cited as such) | Experience EX-6 · Content caps table |
-| 9 | Autosave anchors `useGameStore.ts:1433-1438 / :1394-1419` | **`config.ts:333`** (`debounceMs: 1200`) + writer **`useGameStore.ts:1157`** + pagehide flush **`page.tsx:80`** | Experience EX-6 |
-| 10 | Spawn veil anchor `Dashboard.tsx:878-977` | Veil at **`WorldTab.tsx:503-516`**, probe/fallback `:56-110` | Experience EX-3 |
-| 11 | 26 apps = 7 wire + 12 store + 6 read-only (sums 25) | **7 wire + 12 store + 7 read-only = 26** — Story is a read-only book (`story-app.tsx`) | Content §11.1 |
-| 12 | Rain particles anchored to `polish.tsx` | 620 at **`Actors.tsx:1032`** (`COUNT = 620`; polish.tsx keeps DustHaze/puddles/veil) | World §6.2-via-Art §10.1 |
-| 13 | 1,173 exact `text-[Npx]` | **1,178** (v2.1 census, decimal-tolerant pattern); "≈1,200" posture unchanged | Art §7.2 |
-| 14 | Patti plateau "30.03 u" | **+30 u authored mound** (`layout.ts:625`: `plateauH +30` at the patti anchor) | World §10.1 |
-| 15 | Energy 150 m cited to `controls.ts:284-304` | Constant is **`config.ts:349`** (`freeMeters: 150`); measurement `controls.ts:293-305`; application `useGameStore.ts:1559` | Content caps table |
-| 16 | Typo "Experince EX-24" | "Experience EX-24" | World §1.3 |
+| 1 | "72% of way-endpoints dead-end" (ERA2 `[computed]`, never script-persisted) | **65.3%** — degree-≤1 test on the decoded binary (3,465 of 5,310 endpoints). The metric is tolerance-sensitive: 79.6% at 1 u endpoint-proximity, 49.2% at 2 u, 21.2% at 3 u; 84.3% of *ways* have ≥1 dead end. The old "72%" is retired as an unpersisted method. | World W-32, §3.5 row 3 · Experience EX-35.3 · ERA2 banner |
+| 2 | "20-step migration ladder" (Experience §47, Content Part V) | **19 real steps** — `case 1…19` migrate v1→v20; `case 20` (`save.ts:310`) is the current-version no-op. "20-step" counted the no-op. | Experience EX-header note + §47 · Content Part V |
+| 3 | "the Profile screen claims Fortress SECURE" (EX-20, EX-34, ERA2 §2) | The security badge is the **Dashboard chain chip** (`Dashboard.tsx:621`), gated by `verifyChain(...)` — it shows 🔒 SECURE only when the chain verifies and ⚠️ CHAIN otherwise. The live symptom is the **wolf alarm** (unsigned bank/festival/ferry/travel rows flip it), not a false badge. Profile carries no security copy (grep-verified). | Experience EX-20 purpose + mistake #1, EX-34 · ERA2 banner |
+| 4 | A-5 "Last measured 2.59 s / 406 KB / heap 27 MB / warm click 4 ms (2026-10-20)" — one sentence, two different runs | Provenance split: **m24-fuel-era fresh prod run — 2.59 s / 406 KB / click 15 ms / heap 56 MB / SW 2.4 MB** (worklog-anchored; build since deleted); **m19 run — 2.54 s / 389 KB / heap 27 MB / click 4 ms / SW 3.1 MB**. No prod build exists on disk now (`.next/` holds only dev/) — the next gate run re-derives all six. | Art A-5 · Experience EX-2.4 |
+| 5 | Clock anchors: "`advanceClock` (world.ts:39-51)", "night is always night-clear (world.ts:31-34 / :33-34)" | The function is **`advanceWorldClock`** (`world.ts:42-58`; `nextSlot` :13-17, `absoluteSlot` :65-67) — no `advanceClock` symbol exists anywhere in src. Night forcing is **`weatherForSlot`** (`world.ts:32-38`). | World §6.1 + W-46 + verification table · Experience EX-6, EX-21, EX-30 |
+| 6 | EX-35 "20 launch places + 10 G2 wards" | **10 launch places + 10 G2 wards** (32 anchors once the 12 school sites are counted). "20" was an arithmetic slip. | Experience EX-35 |
 
-**Also fixed for coherence:** Content Bible Parts II & VIII cited the Exit Test as "(EX-44)" — stale since EX-44 became the City Memory Law; now "(Experience §44)" per the v2.0 breaking-change rule. All four Bibles' version lines are now **2.1** with a dated reverification note each.
+## 6. REJECTED / RETIRED (do not quote these again)
 
-**The falsified claim, precisely:** Art §10.1 said "zero asset files — 100% procedural, permanent." Disk: `public/art/` holds 14 `.webp` files; `public/icons/` holds 5 PWA PNGs; `logo.svg` sits at the root. Consumer census: `menu-hero.webp` is **live** (MainMenu key art — and always was; the phrase "100% procedural" was never true of the menu); the 10 `loc-*.webp` plates have **zero importers** (`LocationArt.tsx` is an orphan); the 3 `ad-*.webp` files have **zero consumers** (only `scripts/gen_art.mjs`, their generator); icons/logo are PWA chrome. A-2 now scopes the law (world + audio 100% procedural; two named sanctioned shell families), and the 13 orphans enter the debt ledger (Art §7.3 #7). Experience §47 re-worded to match. This is the Sincerity Law working exactly as intended: a claim that could not survive re-decode did not survive.
+1. "72% dead-end way-ends" — replaced by 65.3% (degree-≤1) with the tolerance curve stated.
+2. "20-step migration ladder" — 19 real steps + the no-op arm.
+3. "Profile shows/claims Fortress SECURE" — Dashboard chain chip, `verifyChain`-gated.
+4. One measurement run wearing another's numbers (A-5) — runs now cited separately.
+5. `advanceClock` as a symbol name — it does not exist; `advanceWorldClock` does.
+6. "20 launch places" — 10.
+7. (Carried from v2.1, re-verified still retired): "108 doors", "98 school doors", "15/6/18 underwater", "12 parked cars", "13 M13 walls", "17 interior builders", "only 19 named ways", unqualified "zero asset files", "plateau 30.03 u".
+
+## 7. UNRESOLVED (marked UNKNOWN, with the reason)
+
+1. **Wire runtime state**: `nation-wire` is **not running in this sandbox** (nothing listens on :3003). The 2,395-line server is real, imports game laws verbatim, and writes the real DB — but "multiplayer works" is currently *code-true, runtime-unproven here*. `wire-status` will honestly report `{live:false, online:0}`; the 12 s relay lane is the functional fallback. Remains UNKNOWN until a wire process is booted and a two-client walk is run.
+2. **SILK G1–G6 current values**: no prod build on disk (`.next/` holds only dev/) — the last recorded run (2.59 s / 406 KB, worklog line 1585) is historical. Requires a fresh `next build` + gate run. All six gate *thresholds* are disk-verified.
+3. **ERA2's "≈140 distinct user-facing interfaces" and "≈152 store actions"** — historical census estimates from the archived audit; not re-derived this pass (not load-bearing in canon; marked as audit-of-record estimates, not engine truth).
+4. **`ui/icons.tsx` `IconName` union exact size** — pattern-dependent (39–44 by regex); non-load-bearing. The other icon count (73 exported glyphs in `icons.tsx`) held exactly.
+5. **DB row counts beyond the ledger/wallet census** (Account/LiveEvent/etc.) — not needed for any Bible claim; left unread rather than half-read.
+6. **Dev-log CSS 500** (`dev.log`: GET / 500, compile error at `globals.css:2676` in an older run) — the log predates the current 430-line globals.css; treated as a stale dev artifact, not current truth. Not resolvable without a dev-server boot, which this read-only pass did not perform.
+
+## 8. NEWLY DISCOVERED DEBT (entered this pass)
+
+1. **Dead economy config block** — `ECONOMY.rent` (7-day cycle, basic-room/apartment/house ₦2.5k/15k/45k), `ECONOMY.shopMargin`, `ECONOMY.business` (`config.ts:166-185`) have **zero consumers**; only `ECONOMY.transport` is read (travel/garage/fleet/rivers). The live rent law is `LADDER.housing` (`config.ts:1063+`). Two rent laws in one config, one dead — the same pattern the Bibles call "two homes for one truth" (C-4). Deletion is the cure.
+2. **`jobs.ts:4` header fossil** — "Ten launch jobs" above a 21-entry register (10 launch + 8 school + 3 M12 careers). The Bibles say 21 (correct); the code header lies.
+3. **`layout.ts:720-721` comment fossil** — "ALL 22 anchors … ALL 12 school sites" describing code that now walks 32 anchors.
+4. **Era-copy drift is three-headed**: GAME_META `'Stage 3 — Economy, Work & Opportunities'` / APP_VERSION `'Lokoja Life • Stage 5'` / Bag tab `'Stage 4'` — three era strings, one game (Experience EX-2 mistake #3 already names the pattern; the census now shows three simultaneous values).
+5. **`foods.ts` confirmed prototype** — 10 display-only items; the only consumer is the Bag "ComingSoon" teaser + health-app top-3 readout; `FOOD_BY_ID` has no external consumers.
+6. **Achievements stub** — `player.achievements` receives exactly one value ever (`'japa'`); no redemption surface.
+7. (Carried, re-confirmed live): the 5 unsigned bypass sites + wolf alarm · shared-rig `RemoteVehicles.tsx:114/:179/:221` · stall wipe (`layout.ts:1660`) · presence street staleness (`wire.ts:645-648`) · unlit signal heads (`CityMesh.tsx:1358`) · loops 3/4 table-only · civic fence walk-through · `layout.TREES`/`GRASS` dead compute · 13 orphan `.webp` · `manifest.ts` 10-vs-26 register drift · stale `layout.ts:7` header ("3,000+ ways, ~930 km") · dormant `/rt`→LiveKit rewrite · `tailwind.config.ts` staleness · ghost classes.
+
+## 9. CONTRADICTION HUNT (repo-wide)
+
+Resolved or documented this pass:
+- **Method-dependency made explicit**: dead-end % and (historically) underwater crossings are threshold-sensitive; canon now states the method with every figure.
+- **Counting-convention traps documented**: "58 doors / 59 handlers" (disconnect), "45 codes" (strict pattern), "19 steps" (no-op arm), "10 festivals" (curly apostrophe broke a naive count), "7 parked / 12 specs" (filter input vs live output).
+- **Archive vs canon**: ERA2 §1 still says "14 Prisma models" and "57 doors" in its body — its correction banner now covers both (the banner is the archive's truth-lens; the archive text stays as written by policy).
+- **Cross-Bible coherence**: the four books' shared figures (750.4 km, 98/103 doors, 720 trees, 26 apps, 45 codes, 319 rows, ₦0 drift, 19 steps) now all agree with each other and with disk.
+
+## 10. IMPLEMENTATION REALITY REGISTER (Phase-4 labels, current)
+
+| System | State |
+|---|---|
+| Geo pipeline + binary + gate | **IMPLEMENTED** |
+| 3D world (terrain/roads/flora/buildings/landmarks/interiors/schools) | **IMPLEMENTED** (named fabric debts §8) |
+| Stalls at Kpata/food-area | **DEBT** (filter wipe; 2 survive at Ganaja) |
+| Traffic-light *behavior* rendering | **DEBT** (phase law simulated; heads unlit) |
+| Pocket economy (fortress guards, kobo-chain, HMAC save v20) | **IMPLEMENTED** |
+| Bank deposit/withdraw, festival spray, canoe ferry, travel fares | **PARTIAL — unsigned bypass paths** (5 sites; wolf alarm live) |
+| Purse/server ledger (idemKey, chainHash, PIN, caps) | **IMPLEMENTED** (code + live books ₦0) |
+| Nation-wire multiplayer (socket.io, 58 doors) | **IMPLEMENTED — runtime dormant in this sandbox** |
+| WebRTC voice/stage (signaling on wire, media P2P) | **IMPLEMENTED — unproven at runtime here** |
+| Cloud save (push/pull, delta, offline queue) | **IMPLEMENTED** |
+| Auth (scrypt PIN, tiers, parent PIN, guest-first) | **IMPLEMENTED** (`/api/auth/tier` has no game-client caller — test-only) |
+| PWA (manifest, sw m16.1, offline) | **IMPLEMENTED** |
+| Foods/bag inventory | **PROTOTYPE** (display-only) |
+| Achievements | **PROTOTYPE** (1 value ever) |
+| `/api` hello route, `/rt` rewrite, `ECONOMY.rent/business/shopMargin` | **DEAD** |
+| NPC event memory, hospital interior, swimming | **PLANNED** (with doctrine gates) |
+
+## 11. PHILOSOPHY AUDIT (Phase 6)
+
+- **The Design Constitution is still chat-canon, not a file.** All four Bibles declare subordination to it; `docs/Design_Constitution.md` does not exist (directory listing re-verified). This is the standing Ten-Year-Test condition (prior audit Risk #11) and it remains **unmet**. Persisting it — verbatim, as a *persist not a rewrite* — is still the recommended future pass.
+- **Law-by-law spot verdicts** (the audit's Phase-6 sample): W-46's law text named a non-existent symbol (`advanceClock`) — the *law* was timeless, its anchor wasn't; fixed by naming the real hand (`advanceWorldClock`). W-32 carried an unpersisted statistic — fixed by stating method + tolerance curve. EX-20's law was sound; its badge-location example had drifted — fixed. No law was found contradictory, implementation-bound beyond repair, or valueless. The seven Foundation Laws (EX-44→47, C-19→21) re-verified in place.
+
+## 12. ASSET AUDIT (Phase 7 — classification)
+
+| Asset | Class |
+|---|---|
+| `public/world/geo-v1.bin` (60,071 B) | **Intentional binary** — OSM pipeline product, gated load |
+| `public/art/menu-hero.webp` | **Sanctioned 2D-shell art** (A-2 family 1; 1 live consumer) |
+| `public/icons/*.png` (5) + `logo.svg` | **PWA shell** (A-2 family 2) |
+| `public/art/loc-*.webp` (10) + `ad-*.webp` (3) | **Legacy debt** — zero importers/consumers; deletion is the cure |
+| `public/manifest.json`, `sw.js`, `offline.html`, `robots.txt` | **PWA shell** |
+| 3D world geometry, textures, all audio | **Runtime-generated** (procedural; zero shipped models/audio/photo-textures) |
+| `research/competitor-zip/`, `download/**`, `scripts/tmp/**`, root `worklog.md` | **Non-shipped dev artifacts** (not part of the Next app) |
+| `examples/websocket/` | **Orphan scaffold** |
+
+## 13. PRODUCTION REALITY (Phase 8)
+
+- **Measured, with records**: conservation ₦0 (reproduced to the naira this pass); wire census (58/45/11); suite file counts (48+58); save ladder (19 steps); asset bytes (60,071 B binary; 1.5 MB `public/`).
+- **Recorded but stale — remeasure owed**: SILK G1–G6 (last run m24-fuel-era: 2.59 s / 406 KB / 56 MB heap; no prod build exists now).
+- **Code-true, runtime-unproven here**: multiplayer wire (nothing on :3003 in this sandbox), WebRTC voice, cloud push/pull round-trip, PWA update cycle.
+- **Never measured / no artifact**: boot-time wall-clock on device targets beyond the SILK TTI proxy; memory profile beyond PerfChip's live readout (no persistent heap metric exists by design).
+
+## 14. REPOSITORY STATUS & CONFIDENCE
+
+- **canon ↔ disk**: the four Bibles v2.2 now agree with the repository on every figure this pass could re-derive (~104 held, 6 amended, 0 new falsified). Every number is re-derivable from the three persisted `rv-*` scripts plus the prior `audit-p3-*` battery.
+- **Docs ecosystem**: Bibles v2.2 + this audit + ERA2 (with both banner strips) are mutually consistent. The v2.1 audit survives at git `411f119~1`.
+- **Confidence assessment**: **HIGH** for every held figure (double-derived, script-persisted); **HIGH** for the six amendments (each carries the exact anchor and, where relevant, the method forensics); **MEDIUM** for multiplayer/voice/cloud runtime behavior (code-true, sandbox-dormant); **EXPLICITLY UNKNOWN** where listed in §7 — never papered over.
+
+## 15. NEXT ENGINEERING PRIORITIES (unchanged in substance, re-anchored)
+
+1. Sign the 5 bypass paths (EX-20.1) — the wolf alarm dies with the last unsigned row.
+2. RemoteVehicles rig-per-view + tagCache LRU (EX-31.2).
+3. Kpata stall resurrection with count assertions (`STALLS ≥ 20`, kpata ≥ 8) in `test-world3d.ts`.
+4. Presence street refresh on district change (EX-31.1).
+5. Boot diet: delete `layout.TREES`/`GRASS` dead compute.
+6. Fresh prod build + full SILK re-gate (the first act under "re-measured, never assumed").
+7. Cheap hygiene riding any commit: delete the 13 orphan `.webp`; fix the `layout.ts:7`, `jobs.ts:4`, `layout.ts:720` fossils; delete the dead `ECONOMY.rent/business/shopMargin` block; persist `docs/Design_Constitution.md` (Risk #11, still open).
 
 ---
 
-## 4. CONSERVATION, SHARPER (the money semantics)
-
-The v2.0 formula ("3,610,200 − 9,500 − 23,594 = Σ WalletRow") is **confirmed exact** but its semantics are now written down: LedgerRow amounts are unsigned; direction lives in `kind` (deposit/withdraw are self-rows pocket⇄purse; transfers and tips cancel across purses; refuel/repair burn). The kind-aware identity: **deposits 3,610,200 − withdraws 9,500 − refuel 22,000 − repair 1,594 = 3,577,106 = Σ WalletRow (125 wallets), drift ₦0.** The **₦11,100 tip lane** (30 rows) is value that enters a server purse from a client-side pocket with no server-side debit row — i.e., the unsigned spray ingress, already named as an EX-20.1 bypass debt. It is *not* drift; it is the wound the Bibles already scheduled for surgery.
-
----
-
-## 5. RETIRED STATEMENTS (do not quote these again)
-
-1. "108 doors" / "98 school doors" — replaced by 98 doors (10+88) / 103 spaces.
-2. "15 underwater / 6 submerged" and "18 underwater" — replaced by the reproducible 23 crossings / 3 half-width.
-3. "12 parked cars" — 7.
-4. "13 M13 walls" — 11 direct sites + capability layer.
-5. "17 interior builders" — 20.
-6. "Only 19 ways carry OSM names" — 19 names across 29 ways.
-7. "Zero asset files" (unqualified) — scoped per A-2.
-8. "plateau 30.03 u" — +30 u authored.
-9. Dead line anchors: `useGameStore.ts:4999/:4801` (double-pay, fixed-since — the scar stays, the line numbers go), `:1433-1438`/`:1394-1419`, `index.ts:537-540` as the cap, `Dashboard.tsx:878-977` as the veil.
-10. Every pre-v2.1 underwater/parked/door figure in `ERA2-UI-AUDIT.md` — the archive's correction banner now carries the v2.1 numbers so no reader quotes the archive's arithmetic.
-
----
-
-## 6. UNRESOLVED ENGINEERING DEBT (re-verified still open, ranked)
-
-**P0-class (trust/world truth):**
-1. **Shared-rig multi-mount** (`RemoteVehicles.tsx:114/:179/:221`) — unchanged this pass; the multiplayer trust wound.
-2. **5 unsigned pocket-cash bypass sites** (`useGameStore.ts:2205/:2258/:2341/:2730/:3652`) + the fortress wolf alarm — all five re-confirmed live; the tip lane (₦11,100 on the live books) is its visible face.
-3. **Kpata stall wipe** (`layout.ts:1660`) — re-confirmed at runtime: STALLS=2, both Ganaja; Kpata 0, food-area 0.
-4. **Presence street staleness** (`wire.ts:645-648`) — re-confirmed.
-5. **Mid-drive wire drop never re-hellos** (fire-and-forget refusal lane) — unchanged.
-
-**World fabric:**
-6. 23 unbridged river crossings / 3 half-width submerged (reproducible v2.1 measure).
-7. 72% dead-end way-ends; school-yard clip holes; no end caps.
-8. Unlit signal heads (`CityMesh.tsx:1358`); loops 3/4 table-only; civic fence walk-through (`collision.ts:56` region).
-
-**Boot/perf:**
-9. Dead boot compute: `layout.TREES` (700 trees, zero consumers) + `layout.GRASS` (7,500 → ≤72 flower dots) — re-confirmed; the boot diet is still owed.
-10. SILK re-measure on a prod build still owed (the 2.59 s / 406 KB posture is dated 2026-10-20; no prod build was on disk this pass either — re-measure, never assume).
-
-**Documentation ecosystem:**
-11. **The Design Constitution is still chat-canon, not a file** — all four Bibles declare subordination to it; `docs/Design_Constitution.md` still does not exist. Persisting it remains the recommended future pass (a *persist*, not a rewrite).
-12. **Prod DB in git** (`db/custom.db` with tokens + PIN hashes rides every commit) — unchanged.
-13. **13 orphaned `.webp` files** (new this pass, Art §7.3 #7).
-14. Phone-app one-register reconciliation (`manifest.ts` says 10, grid is 26 — both re-confirmed) before app #27.
-15. Stale fossil header `layout.ts:7` ("3,000+ ways, ~930 km") — still live.
-
----
-
-## 7. PRODUCTION READINESS
-
-- **Client + world + save:** production-shaped and honestly documented — v20 save ladder, migrations baselined, zero known state-loss paths, NO-PAUSE honored, the Feel Tests defined and executable.
-- **Wire:** 58 doors / 45 refusal codes / idempotency / rate buckets / 4 KB cap all re-verified; conservation ₦0 on the live books. The 5 bypass sites and the tip lane are the named, scheduled exception — do not add a sixth.
-- **Content pipeline:** 15 playbooks + gate order + caps registry re-anchored; a new contributor can be onboarded from the Bibles alone (Content Part IX).
-- **Docs:** the four Bibles v2.1 + this audit + the archived ERA2 audit now agree with each other and with disk; every number in them is re-derivable from the persisted scripts in `scripts/audit-p3-*`.
-
-**Verdict: canon and disk agree. The remaining distance to "ship" is the debt ledger in §6, not the books.**
-
----
-
-## 8. QUALITY GATES (the four tests, re-run this pass)
-
-| Test | Verdict | Evidence |
-|---|---|---|
-| **Mother Test** — respectful & understandable to someone from Lokoja | **PASS** | Real ward names untouched (W-28); Cultural Respect (C-21) re-verified in canon; no invented geography introduced by either pass; the falsified asset claim was *withdrawn* rather than defended — the city is not flattered to. |
-| **Stranger Test** — a newcomer can understand the city from the books | **PASS (stronger)** | The quick sheet now carries the door/parked/ribbon census with anchors; every figure traces to a re-runnable script. |
-| **Developer Test** — a new engineer can build correctly from these | **PASS (sharper)** | 16 stale anchors/figures that would have misdirected work are corrected; the caps table now cites the true constant lines (`config.ts:349`, `index.ts:151`). |
-| **Ten-Year Test** — do the laws still protect the city in ten years? | **PASS (conditional, unchanged)** | The condition remains Risk #11: persist the Design Constitution to disk so the authority chain survives beyond chat history. |
-
----
-
-## 9. NEXT ENGINEERING PRIORITIES (unchanged in substance, now better-anchored)
-
-1. **Signed bank/festival/ferry/travel paths** (EX-20.1) — the wolf alarm dies with the SECURE lie; the tip lane's ₦ ingress closes with it.
-2. **RemoteVehicles rig-per-view + tagCache LRU** (EX-31.2).
-3. **Kpata stall resurrection** with count assertions (`STALLS.length >= 20`, `kpata >= 8`) in `test-world3d.ts`.
-4. **Presence street refresh on district change** (EX-31.1).
-5. **Boot diet**: delete `layout.TREES`/`GRASS` dead compute (World §5.1).
-6. **Then a prod-build SILK re-measurement** (G1–G6) — the first act under "re-measured, never assumed."
-7. **Cheap doc-hygiene wins riding any commit:** delete the 13 orphaned `.webp` files (Art §7.3 #7); fix the `layout.ts:7` fossil header; persist `docs/Design_Constitution.md` (Risk #11).
-
-Every item: fail-test → fix → green → commit (the Phase-1 protocol). No new gameplay before the trust debts die (C-19 now enforces it).
-
----
-
-*Audit artifacts: geo decode ×2 (`scripts/audit-p3-geo.ts`, `audit-p3-geo2.ts`), count batteries (`audit-p3-battery.sh`, `audit-p3-battery2.sh`), runtime world census (`audit-p3-world.ts`, `audit-p3-final*.ts`), DB walks (`/tmp/p3-cons*.ts` logic reproduced in §4), wire census, ~50 anchor spot-checks. All re-runnable. Zero source files modified — this pass amended canon only (4 Bibles, 1 archive banner, this document).*
+*Evidence artifacts: `scripts/rv-geo-census.ts`, `scripts/rv-data-census.ts`, `scripts/rv-spot-checks.ts` (this pass; re-runnable), plus the retained `scripts/audit-p3-*` battery of prior passes. Zero source files modified — this pass amended canon only (4 Bibles → v2.2, 1 archive banner addendum, this document).*

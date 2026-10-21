@@ -1,5 +1,5 @@
 # LOKOJA LIFE — ART & AUDIO BIBLE
-### Version 2.1 · The book of the senses
+### Version 2.2 · The book of the senses
 
 > **Authority.** Subordinate to the **Design Constitution**. This book owns *how Lokoja looks and sounds*: art direction, color, light, camera, character, motion, effects, the UI's visual system, and the entire audio identity.
 >
@@ -10,6 +10,8 @@
 > **Upgrade (v2.0, 2026-10-21).** The ERA II reverification pass: the SILK law restated as gates + dated measurements (re-measured, never assumed), the arbitrary-size census re-counted, and the living-constitution layers added (Part X). Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 >
 > **Reverification (v2.1, 2026-10-21).** Second RULE ZERO pass: the zero-asset claim was **scoped to the truth** — the 3D world and all audio are 100% procedural (zero models, zero audio files, zero world photo-textures), but the 2D shell ships a small, named set of binaries (the painted menu hero, the PWA icons) and **13 orphaned .webp files** were discovered and entered as a debt. The type census re-counted: 1,178 exact `text-[Npx]`. Nothing doctrinal changed.
+>
+> **Reverification (v2.2, 2026-10-21).** Third independent NO-TRUST pass: every sensory constant re-derived — 18 `--lko-*` tokens, 8 ambience layers at 320/850/480/1,400/140/4,400/520/3,200 Hz, music bpm {108,100,92,78} + C-pentatonic 261.63 + maxVoices 8, ACES exposure 1.12, dpr caps 1.75/1.4/1.05, far 900/820/720, frameHz 0/0/30, 620 rain particles, the NPC hair palette, 1,178 exact `text-[Npx]`, 14 `public/art` files (1 live hero + 13 orphans, importer census re-run). One precision fix: A-5's "last measured" sentence had mixed two different measurement runs into one — now cites each run separately with its own record. Audit of record: `docs/BIBLE_UPGRADE_AUDIT.md`.
 
 ---
 
@@ -27,7 +29,7 @@ Lokoja Life's eye is the light of the evening slot (the game's signature amber h
 2. **Law A-2 — The world is 100% procedural.** Zero model files, zero image-sequenced animation, zero audio assets anywhere; zero photo-textures in the 3D world renderer. The city is *generated from its own parameters* — canvas-baked textures, instanced flora, synthesized sound. This is a creative law, not just a budget: a procedural city can respond to its state (weather, slot, district) in ways baked assets never can. **The 2D shell's sanctioned binaries are exactly two families, named here so the exception cannot grow quietly:** the painted menu hero (`public/art/menu-hero.webp`, consumed by `MainMenu.tsx`) and the PWA icon set + `logo.svg` (`public/icons/`, app chrome — not game art). Any other binary entering `public/` needs a Bible amendment. (The 13 orphaned `.webp` files found by the v2.1 reverification — 10 `loc-*.webp` plates whose only consumer `LocationArt.tsx` has zero importers, and 3 `ad-*.webp` generator outputs with zero consumers — are dead files awaiting deletion, §10.1's debt list.)
 3. **Law A-3 — The senses agree.** What the eye says (a market, evening, rain) the ear must confirm, and the camera must respect. A conflict between senses is a bug of meaning, not of style.
 4. **Law A-4 — Style is a decision, so is its boundary.** Stylized realism with warm abstractions — never photoreal envy, never cartoon pastiche. The test: does it look like *this Lokoja*?
-5. **Law A-5 — Performance is an aesthetic.** The SILK posture is what a *well-made* city feels like: TTI < 3.0 s · wire < 900 KB · 0 console errors · warm click < 100 ms · heap < 300 MB (G1–G6, `scripts/silk-gates.ts`). Last measured 2.59 s / 406 KB / heap 27 MB / warm click 4 ms (2026-10-20). The numbers are **re-measured, never assumed** (C-13); a stale number in this book is a measurement debt, not a license. Jank is not a technical debt; it is an art failure.
+5. **Law A-5 — Performance is an aesthetic.** The SILK posture is what a *well-made* city feels like: TTI < 3.0 s · wire < 900 KB · 0 console errors · warm click < 100 ms · heap < 300 MB (G1–G6, `scripts/silk-gates.ts`). Recorded runs: **m24-fuel-era fresh prod build — TTI 2.59 s / wire 406 KB / click 15 ms / heap 56 MB / SW 2.4 MB / 0 console errors** (worklog-anchored; the build no longer exists on disk); an **earlier m19 run recorded 2.54 s / 389 KB / heap 27 MB / warm click 4 ms / SW 3.1 MB**. The numbers are **re-measured, never assumed** (C-13) — no prod build is on disk right now, so the next gate run re-derives all six. A stale number in this book is a measurement debt, not a license. Jank is not a technical debt; it is an art failure.
 
 ---
 
