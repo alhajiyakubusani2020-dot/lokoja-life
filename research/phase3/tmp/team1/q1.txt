@@ -1,0 +1,5 @@
+[out:json][timeout:50];
+(
+  node["natural"="peak"](7.55,6.40,8.05,7.05);
+);
+out body;
