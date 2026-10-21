@@ -1,0 +1,3 @@
+cash:1e308 push → status=400 body={"ok":false,"why":"bad payload"}
+PASS hostile 1e308 refused
+PASS no vault row stored

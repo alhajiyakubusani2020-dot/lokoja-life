@@ -1,0 +1,230 @@
+[
+  {
+    "tier": "low",
+    "run": 1,
+    "ts": "2026-10-21T14:53:13.928Z",
+    "buildId": "kXh-vGlPeWLhJFejk39HZ",
+    "base": "http://localhost:3200",
+    "emulation": {
+      "viewport": "360x800",
+      "hasTouch": true,
+      "cpuThrottle": "x2",
+      "deviceScaleFactor": 1
+    },
+    "renderEnv": "headless chromium — SwiftShader software WebGL (NOT a real-device number)",
+    "flow": {
+      "gotoMs": 209,
+      "menuToExploreMs": 6693,
+      "guestGateHandled": "not-shown",
+      "worldWaitMs": 1542
+    },
+    "boot": {
+      "worldSceneReadyMs": 12562,
+      "marker": "__lklTier && __lklGlCanvas present (WorldScene onCreated, 40ms poll)",
+      "tierInForce": "low",
+      "fcpMs": 260
+    },
+    "fps30s": {
+      "frames": 90,
+      "elapsedMs": 30532,
+      "avgFps": 2.95,
+      "fpsP50": 1.82,
+      "fpsP05": 1.46,
+      "p50GapMs": 550,
+      "p95GapMs": 683.4,
+      "worstGapMs": 850.1,
+      "jankOver50ms": 47,
+      "jankOver100ms": 47,
+      "heapStartMB": 51.7,
+      "heapEndMB": 49.3
+    },
+    "probeReport": {
+      "raw": "Lokoja Life — FPS report (e2e capture)\nwhen: 2026-10-21T14:54:16.231Z\ndevice: 360x800 @1.00x · ~4GB RAM · net 4g\ngpu: ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)\nfps: 2.6 avg · p95 frame 800ms · worst 2283ms (131 frames)\nrender: 150 draw calls · 606k tris · 48 programs\nua: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "fpsAvg": "2.6",
+      "p95FrameMs": "800",
+      "worstFrameMs": "2283",
+      "frames": "131",
+      "drawCalls": "150",
+      "trisK": "606",
+      "programs": "48",
+      "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+    },
+    "drawCalls": null,
+    "drawCallsWhy": "__lklRenderer absent — either the served artifact predates the ?e2e=1 gate (WorldScene.tsx Phase-2.5 hook) or the context died",
+    "heap": {
+      "usedMB": 43.5,
+      "limitMB": 2117,
+      "source": "performance.memory (precise)"
+    },
+    "errors": {
+      "pageerror": 0,
+      "consoleError": 0,
+      "samples": []
+    },
+    "wallMs": 63196
+  },
+  {
+    "tier": "low",
+    "run": 2,
+    "ts": "2026-10-21T14:54:32.893Z",
+    "buildId": "kXh-vGlPeWLhJFejk39HZ",
+    "base": "http://localhost:3200",
+    "emulation": {
+      "viewport": "360x800",
+      "hasTouch": true,
+      "cpuThrottle": "x2",
+      "deviceScaleFactor": 1
+    },
+    "renderEnv": "headless chromium — SwiftShader software WebGL (NOT a real-device number)",
+    "flow": {
+      "gotoMs": 102,
+      "menuToExploreMs": 7209,
+      "guestGateHandled": "not-shown",
+      "worldWaitMs": 1599
+    },
+    "boot": {
+      "worldSceneReadyMs": 13096,
+      "marker": "__lklTier && __lklGlCanvas present (WorldScene onCreated, 40ms poll)",
+      "tierInForce": "low",
+      "fcpMs": 248
+    },
+    "fps30s": {
+      "frames": 89,
+      "elapsedMs": 30042,
+      "avgFps": 2.96,
+      "fpsP50": 1.76,
+      "fpsP05": 1.36,
+      "p50GapMs": 566.7,
+      "p95GapMs": 716.7,
+      "worstGapMs": 900,
+      "jankOver50ms": 45,
+      "jankOver100ms": 45,
+      "heapStartMB": 54.5,
+      "heapEndMB": 47.8
+    },
+    "probeReport": {
+      "raw": "Lokoja Life — FPS report (e2e capture)\nwhen: 2026-10-21T14:55:34.312Z\ndevice: 360x800 @1.00x · ~4GB RAM · net 4g\ngpu: ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)\nfps: 2.6 avg · p95 frame 900ms · worst 2583ms (125 frames)\nrender: 132 draw calls · 605k tris · 48 programs\nua: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "fpsAvg": "2.6",
+      "p95FrameMs": "900",
+      "worstFrameMs": "2583",
+      "frames": "125",
+      "drawCalls": "132",
+      "trisK": "605",
+      "programs": "48",
+      "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+    },
+    "drawCalls": null,
+    "drawCallsWhy": "__lklRenderer absent — either the served artifact predates the ?e2e=1 gate (WorldScene.tsx Phase-2.5 hook) or the context died",
+    "heap": {
+      "usedMB": 37.7,
+      "limitMB": 2117,
+      "source": "performance.memory (precise)"
+    },
+    "errors": {
+      "pageerror": 0,
+      "consoleError": 0,
+      "samples": []
+    },
+    "wallMs": 62427
+  },
+  {
+    "tier": "low",
+    "run": 1,
+    "ts": "2026-10-21T14:58:09.554Z",
+    "buildId": "GeFABs10TZzWlEjPw2Nye",
+    "base": "http://localhost:3200",
+    "emulation": {
+      "viewport": "360x800",
+      "hasTouch": true,
+      "cpuThrottle": "x2",
+      "deviceScaleFactor": 1
+    },
+    "renderEnv": "headless chromium — SwiftShader software WebGL (NOT a real-device number)",
+    "flow": {
+      "gotoMs": 294,
+      "harnessError": "TimeoutError: click: Timeout 45000ms exceeded.\nCall log:\n  - waiting for getByText('START YOUR LIFE').first()\n"
+    },
+    "boot": {},
+    "fps30s": null,
+    "probeReport": null,
+    "drawCalls": null,
+    "drawCallsWhy": null,
+    "heap": {},
+    "errors": {
+      "pageerror": 0,
+      "consoleError": 1,
+      "samples": [
+        "console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+      ]
+    },
+    "wallMs": 45721
+  },
+  {
+    "tier": "low",
+    "run": 1,
+    "ts": "2026-10-21T15:02:39.518Z",
+    "buildId": "GeFABs10TZzWlEjPw2Nye",
+    "base": "http://localhost:3200",
+    "emulation": {
+      "viewport": "360x800",
+      "hasTouch": true,
+      "cpuThrottle": "x2",
+      "deviceScaleFactor": 1
+    },
+    "renderEnv": "headless chromium — SwiftShader software WebGL (NOT a real-device number)",
+    "flow": {
+      "gotoMs": 284,
+      "menuToExploreMs": 6794,
+      "guestGateHandled": "not-shown",
+      "worldWaitMs": 2416
+    },
+    "boot": {
+      "worldSceneReadyMs": 12706,
+      "marker": "__lklTier && __lklGlCanvas present (WorldScene onCreated, 40ms poll)",
+      "tierInForce": "low",
+      "fcpMs": 348
+    },
+    "fps30s": {
+      "frames": 90,
+      "elapsedMs": 30414,
+      "avgFps": 2.96,
+      "fpsP50": 1.82,
+      "fpsP05": 1.4,
+      "p50GapMs": 550,
+      "p95GapMs": 700,
+      "worstGapMs": 766.7,
+      "jankOver50ms": 47,
+      "jankOver100ms": 47,
+      "heapStartMB": 36.1,
+      "heapEndMB": 67.3
+    },
+    "probeReport": {
+      "raw": "Lokoja Life — FPS report (e2e capture)\nwhen: 2026-10-21T15:03:42.225Z\ndevice: 360x800 @1.00x · ~4GB RAM · net 4g\ngpu: ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)\nfps: 2.6 avg · p95 frame 850ms · worst 2283ms (130 frames)\nrender: 150 draw calls · 606k tris · 48 programs\nua: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "fpsAvg": "2.6",
+      "p95FrameMs": "850",
+      "worstFrameMs": "2283",
+      "frames": "130",
+      "drawCalls": "150",
+      "trisK": "606",
+      "programs": "48",
+      "gpu": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+    },
+    "drawCalls": {
+      "calls": 150,
+      "triangles": 606456,
+      "programs": 48
+    },
+    "drawCallsWhy": null,
+    "heap": {
+      "usedMB": 62.4,
+      "limitMB": 2117,
+      "source": "performance.memory (precise)"
+    },
+    "errors": {
+      "pageerror": 0,
+      "consoleError": 0,
+      "samples": []
+    },
+    "wallMs": 63564
+  }
+]

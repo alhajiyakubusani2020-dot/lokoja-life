@@ -1,0 +1,26 @@
+
+== 1. HOSTILE PAYLOADS (Phase-2 law re-run + 600KB) ==
+PASS cash:-999999 → 400 → got=[400,"bad payload"]
+PASS day:"5" → 400 → got=[400,"bad payload"]
+PASS version 999 → 400 → got=[400,"bad payload"]
+PASS 600KB envelope → 400 too large → got=[400,"payload too large"]
+PASS valid push within cap → ok → got=[200,true]
+PASS garbage patch (base exists) → 400 refused → got=[400,"patch refused — send whole"]
+
+== 2. THE DELTA CEILING (patch small, rebuild > 512KB) ==
+PASS 400KB base push → ok → got=[200,true]
+PASS rebuild would exceed 512KB → got=true
+PASS patch itself stays under the envelope cap → got=true
+PASS oversized rebuild → 400 payload too large (was: stored!) → got=[400,"payload too large"]
+
+== 3. THE PULL CEILING + PULL THROTTLE ==
+PASS oversized legacy row → 400, never streamed → got=[400,"vault row too large"]
+PASS pulls 2–60 all ok (59×; token #1 was the ceiling refusal) → got=59
+PASS 61st pull in the hour → 429 → got=429
+PASS 429 why too-many-pulls → got="too-many-pulls"
+
+== 4. THE PUSH THROTTLE (30/h — the bucket already holds 9) ==
+PASS 429 why too-many-pushes → got="too-many-pushes"
+PASS the 31st push in the hour → 429 (honest pushes before it: ok) → got=true
+
+== PAYLOAD PROBE: 16 PASS / 0 FAIL ==

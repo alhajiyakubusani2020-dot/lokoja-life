@@ -7,11 +7,26 @@
  * the relay's thin books, and broadcasts the event. The relay never
  * simulates: it holds treasuries/trades/pots because money cannot be
  * trusted to any single client, but it rolls no dice and keeps no clock.
+ *
+ * PH2.5 THE ESCROW LAW (Team Bravo) — trade cash is now SERVER truth:
+ * an offer DEBITS the offerer's purse inside its creation tx (escrow),
+ * an accept credits the recipient's purse in the same tx that flips the
+ * status, and a cancel/expiry refunds the escrow exactly. The status
+ * column is the escrow state machine: 'offered' = escrow held (amount =
+ * the row's giveCash), 'accepted' = credited onward, 'cancelled' =
+ * refunded. Every leg is a CONDITIONAL updateMany inside one tx — the
+ * same overdraft-safe law the wallet lane runs.
+ *
+ * PH2.5 THE PIN THROTTLE — the wallet spend sides answer to a brute-
+ * force wall: ≤4 recorded PIN failures / 15min per handle arm an
+ * exponential lockout (30s doubling, 15min cap); locked attempts are
+ * refused before any hash runs. A correct PIN clears the book.
  */
 import { NextResponse } from 'next/server'
 import { scryptSync, timingSafeEqual } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
+import { isLockedOut, recordFailure, clearFailures, rlKey, RL_LIMITS } from '@/lib/rate-limit'
 import {
   canLive, sanitizeChat, emoteById, validateEvent,
   joinTeleportEvent, type LiveIdentity, type LiveBand,
@@ -73,6 +88,54 @@ function rowToCircle(r: {
 }
 
 const pruneLedger = (ledger: Association['ledger']) => ledger.slice(-32)
+
+/* ----------------------- PH2.5 trade-escrow consts ------------------------ */
+/** THE TRADE TTL — an unanswered offer cannot hold a purse hostage
+ *  forever: 24h after createdAt the escrow refunds on the next touch. */
+const TRADE_TTL_MS = 24 * 60 * 60 * 1000
+/** the sweep batch — bounded work per touch, the rest waits for the next */
+const TRADE_SWEEP_BATCH = 50
+/** the roster read cap — a heartbeat-door read never walks an unbounded table */
+const ROSTER_TAKE = 200
+
+/** THE ESCROW SWEEP — every trade touch (offer/accept/cancel/list) runs
+ *  this first: any offer older than the TTL refunds its escrow to the
+ *  offerer and closes as 'cancelled'. The refund is IDEMPOTENT by the
+ *  conditional status flip: only the tx that wins offered→cancelled
+ *  credits the wallet, so a replayed sweep (or two instances sweeping
+ *  at once) can never pay twice. Bounded batch — a backlog drains a
+ *  little on every touch, and no honest offer is ever in it. */
+async function sweepStaleTrades(): Promise<void> {
+  try {
+    const stale = await db.tradeRow.findMany({
+      where: { status: 'offered', createdAt: { lt: new Date(Date.now() - TRADE_TTL_MS) } },
+      select: { id: true, fromHandle: true, giveCash: true },
+      take: TRADE_SWEEP_BATCH,
+    })
+    for (const t of stale) {
+      try {
+        await db.$transaction(async (tx) => {
+          const flipped = await tx.tradeRow.updateMany({
+            where: { id: t.id, status: 'offered' },
+            data: { status: 'cancelled' },
+          })
+          if (flipped.count === 0) return // someone else took it — not ours to refund
+          if (t.giveCash > 0) {
+            await tx.walletRow.upsert({
+              where: { handle: t.fromHandle },
+              create: { handle: t.fromHandle, balance: t.giveCash },
+              update: { balance: { increment: t.giveCash }, version: { increment: 1 } },
+            })
+          }
+        })
+      } catch {
+        // one stuck row never blocks the door — the next touch sweeps again
+      }
+    }
+  } catch {
+    // the sweep is maintenance: the action continues even if the read fails
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -142,8 +205,12 @@ export async function POST(req: Request) {
       if (!row || row.status !== 'live') return NextResponse.json({ ok: false, why: 'not-live' }, { status: 400 })
       const viewers = JSON.parse(row.viewersJson || '[]') as string[]
       if (!viewers.includes(account.handle)) viewers.push(account.handle)
-      await db.streamRow.update({ where: { id }, data: { viewersJson: JSON.stringify(viewers) } })
-      return NextResponse.json({ ok: true, viewers: viewers.length })
+      // PH2.5: the viewers column is a JSON string on an unbounded row —
+      // capped at the last 500 handles so a stadium stream cannot bloat
+      // the row (the count law only needs an honest head-count tail).
+      const capped = viewers.slice(-500)
+      await db.streamRow.update({ where: { id }, data: { viewersJson: JSON.stringify(capped) } })
+      return NextResponse.json({ ok: true, viewers: capped.length })
     }
 
     if (action === 'stream-close') {
@@ -209,25 +276,88 @@ export async function POST(req: Request) {
       const amount = int(p.amount)
       if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ ok: false, why: 'bad-amount' }, { status: 400 })
       const day = int(p.day) || 1
-      let delta: number
-      let label: string
+
       if (action === 'assoc-dues') {
         if (!assoc.members.some((m) => m.handle === account.handle)) return NextResponse.json({ ok: false, why: 'not-member' }, { status: 403 })
-        delta = amount
-        label = `dues by ${account.handle}`
-      } else {
-        const verdict = withdrawVerdict(assoc, account.handle, str(p.coSigner, 48) || null, amount)
-        if (!verdict.ok) return NextResponse.json({ ok: false, why: verdict.why }, { status: 403 })
-        delta = -amount
-        label = `withdrawal by ${account.handle} (co-signed by ${str(p.coSigner, 48)})`
+        // THE DUES CAP (PH2.5): dues obey the ledger's single-move ceiling —
+        // the same ₦50,000 law the wire and the relay enforce on transfers.
+        if (amount > LEDGER_LIMITS.MAX_PER_TRANSFER) return NextResponse.json({ ok: false, why: 'too-big' }, { status: 400 })
+        const category = 'assoc-dues'
+        const label = `dues by ${account.handle}`
+        try {
+          const result = await db.$transaction(async (tx) => {
+            // THE DUES PURSE LAW (PH2.5) — the member's SERVER purse pays
+            // FIRST, conditionally and overdraft-safe (the wallet-withdraw
+            // pattern): the treasury never again receives a naira that no
+            // purse actually lost. A zero-row bump refuses the whole move.
+            const bumped = await tx.walletRow.updateMany({
+              where: { handle: account.handle, balance: { gte: amount } },
+              data: { balance: { decrement: amount }, version: { increment: 1 } },
+            })
+            if (bumped.count === 0) throw new Error('insufficient')
+            // the books are read FRESH inside the tx (no stale-tail sig)
+            const fresh = await tx.associationRow.findUnique({ where: { id: row.id } })
+            if (!fresh) throw new Error('no-assoc')
+            const freshAssoc = rowToAssociation(fresh)
+            const sig = assocChainLink(freshAssoc.chainTail, day, amount, category, label)
+            const ledger = pruneLedger([...freshAssoc.ledger, { day, amount, category, label, sig }])
+            // THE TAIL CAS — the write lands only while the chain tail is
+            // still the one we just hashed; a concurrent writer moves the
+            // tail, this bump matches ZERO rows and the whole tx (purse
+            // debit included) rolls back. No double-credit, no forked book.
+            const booked = await tx.associationRow.updateMany({
+              where: { id: row.id, chainTail: freshAssoc.chainTail },
+              data: { treasury: { increment: amount }, chainTail: sig, ledgerJson: JSON.stringify(ledger) },
+            })
+            if (booked.count === 0) throw new Error('assoc-moved')
+            return { treasury: freshAssoc.treasury + amount, sig }
+          })
+          const wAfter = await db.walletRow.findUnique({ where: { handle: account.handle } })
+          await broadcast('assoc', `assoc:${row.id}`, account.handle, identity.band, { move: category, amount, treasury: result.treasury })
+          // PH2.5-DUES: the SERVER purse (WalletRow) was debited HERE — the
+          // client contract point that must reconcile centrally is
+          // useGameStore.ts:5064 (livePayDues' client-side
+          // removeMoney(amount, 'Union dues …')). Until that store fix
+          // lands, a dues payer's DEVICE cash is debited in addition to
+          // this server debit; the store should switch to consuming this
+          // ack's `debited` + `balance` (server truth) instead of calling
+          // removeMoney itself.
+          return NextResponse.json({ ok: true, treasury: result.treasury, sig: result.sig, debited: amount, balance: wAfter?.balance ?? 0 })
+        } catch (e) {
+          const why = e instanceof Error ? e.message : 'refused'
+          return NextResponse.json({ ok: false, why: why === 'refused' ? 'refused' : why }, { status: 400 })
+        }
       }
-      const category = action === 'assoc-dues' ? 'assoc-dues' : 'assoc-withdraw'
-      const sig = assocChainLink(assoc.chainTail, day, delta, category, label)
-      const treasury = assoc.treasury + delta
-      const ledger = pruneLedger([...assoc.ledger, { day, amount: delta, category, label, sig }])
-      await db.associationRow.update({ where: { id: row.id }, data: { treasury, chainTail: sig, ledgerJson: JSON.stringify(ledger) } })
-      await broadcast('assoc', `assoc:${row.id}`, account.handle, identity.band, { move: category, amount, treasury })
-      return NextResponse.json({ ok: true, treasury, sig })
+
+      // assoc-withdraw — the two-key law stands; the treasury books move
+      // through the SAME fresh-read + tail-CAS tx (an incrementless blind
+      // set was the one way two officers could inflate the books).
+      const verdict = withdrawVerdict(assoc, account.handle, str(p.coSigner, 48) || null, amount)
+      if (!verdict.ok) return NextResponse.json({ ok: false, why: verdict.why }, { status: 403 })
+      const delta = -amount
+      const category = 'assoc-withdraw'
+      const label = `withdrawal by ${account.handle} (co-signed by ${str(p.coSigner, 48)})`
+      try {
+        const result = await db.$transaction(async (tx) => {
+          const fresh = await tx.associationRow.findUnique({ where: { id: row.id } })
+          if (!fresh) throw new Error('no-assoc')
+          const freshAssoc = rowToAssociation(fresh)
+          if (freshAssoc.treasury < amount) throw new Error('empty-treasury')
+          const sig = assocChainLink(freshAssoc.chainTail, day, delta, category, label)
+          const ledger = pruneLedger([...freshAssoc.ledger, { day, amount: delta, category, label, sig }])
+          const booked = await tx.associationRow.updateMany({
+            where: { id: row.id, chainTail: freshAssoc.chainTail, treasury: { gte: amount } },
+            data: { treasury: { decrement: amount }, chainTail: sig, ledgerJson: JSON.stringify(ledger) },
+          })
+          if (booked.count === 0) throw new Error('assoc-moved')
+          return { treasury: freshAssoc.treasury + delta, sig }
+        })
+        await broadcast('assoc', `assoc:${row.id}`, account.handle, identity.band, { move: category, amount, treasury: result.treasury })
+        return NextResponse.json({ ok: true, treasury: result.treasury, sig: result.sig })
+      } catch (e) {
+        const why = e instanceof Error ? e.message : 'refused'
+        return NextResponse.json({ ok: false, why: why === 'refused' ? 'refused' : why }, { status: 400 })
+      }
     }
 
     if (action === 'assoc-contract') {
@@ -281,18 +411,26 @@ export async function POST(req: Request) {
 
     /* --------------------------------- trades ---------------------------------- */
     if (action === 'trades') {
+      // THE TTL SWEEP rides the list door too — a stale escrow refunds
+      // even if the offerer never comes back to touch it.
+      await sweepStaleTrades()
       const rows = await db.tradeRow.findMany({ where: { toHandle: account.handle, status: 'offered' }, take: 24 })
       return NextResponse.json({ ok: true, trades: rows })
     }
 
     if (action === 'trade-offer') {
       if (!canLive(identity, 'trade')) return NextResponse.json({ ok: false, why: 'adults-only' }, { status: 403 })
+      await sweepStaleTrades()
       const to = str(p.to, 48)
       const giveCash = int(p.giveCash)
       const wantCash = int(p.wantCash)
       const terms = str(p.terms, 160).trim() || 'street trade'
       const day = int(p.day) || 1
       if (!to || to === account.handle) return NextResponse.json({ ok: false, why: 'bad-partner' }, { status: 400 })
+      // PH2.5: the partner must EXIST — escrow is never held against a
+      // ghost handle (a non-existent `to` would strand the purse until TTL).
+      const partner = await db.account.findUnique({ where: { handle: to }, select: { id: true } })
+      if (!partner) return NextResponse.json({ ok: false, why: 'no-such-paddy' }, { status: 404 })
       if ((!Number.isFinite(giveCash) || giveCash < 0) || (!Number.isFinite(wantCash) || wantCash < 0)) return NextResponse.json({ ok: false, why: 'bad-amounts' }, { status: 400 })
       if (giveCash === 0 && wantCash === 0) return NextResponse.json({ ok: false, why: 'empty-trade' }, { status: 400 })
       // THE TRADE PURSE LAW (F5 hardening): an offer is a promise of naira,
@@ -301,31 +439,56 @@ export async function POST(req: Request) {
       // NaN/negative already died at 'bad-amounts' above (int() hands NaN
       // back for any non-finite payload).
       if (giveCash > LEDGER_LIMITS.MAX_PER_TRANSFER) return NextResponse.json({ ok: false, why: 'too-big' }, { status: 400 })
-      // the offerer must HOLD what they promise (a light purse makes no offers)
+      // the offerer must HOLD what they promise (a light purse makes no
+      // offers) — advisory here; the CONDITIONAL debit inside the tx below
+      // is the law (two concurrent offers of one purse: exactly one wins).
       const w = await db.walletRow.findUnique({ where: { handle: account.handle } })
       if ((w?.balance ?? 0) < giveCash) return NextResponse.json({ ok: false, why: 'insufficient' }, { status: 400 })
       // THE DAY AGGREGATE: the offerer's promises today — counted from the
       // SERVER's own clock (createdAt >= dayStartMs), never the client's
-      // `day` word, the same eye the ledger cap reads with (route.ts:638).
+      // `day` word, the same eye the ledger cap reads with. Cancelled
+      // offers (escrow refunded) don't count; accepted + open escrow do.
       const gaveToday = (await db.tradeRow.aggregate({
         _sum: { giveCash: true },
         where: { fromHandle: account.handle, status: { not: 'cancelled' }, createdAt: { gte: new Date(dayStartMs()) } },
       }))._sum.giveCash ?? 0
       if (gaveToday + giveCash > LEDGER_LIMITS.DAY_TRANSFER_CAP) return NextResponse.json({ ok: false, why: 'day-cap' }, { status: 400 })
-      // TODO(F5): the offer is still NOT ESCROW — acceptance credits the
-      // receiver without a server-side debit of the offerer's purse (the
-      // move stays client-applied), so these laws bound the PROMISE, not
-      // the money. Escrow (debit the offerer inside one tx at accept)
-      // remains the documented remaining blocker.
       const count = await db.tradeRow.count({ where: { fromHandle: account.handle } })
       const id = tradeIdFor(account.handle, to, day, count + 1)
-      await db.tradeRow.create({ data: { id, fromHandle: account.handle, toHandle: to, giveCash, wantCash, terms, day } })
+      // THE ESCROW LAW (PH2.5) — the promise leaves the purse NOW: one tx
+      // mints the offer row AND takes the escrow, or mints neither. The
+      // debit is CONDITIONAL (WHERE balance >= giveCash) and bumps version,
+      // the exact overdraft-safe pattern the wallet lane runs — a crashed
+      // create can never strand a debit, and a crashed debit can never
+      // strand an offer.
+      try {
+        await db.$transaction(async (tx) => {
+          const bumped = await tx.walletRow.updateMany({
+            where: { handle: account.handle, balance: { gte: giveCash } },
+            data: { balance: { decrement: giveCash }, version: { increment: 1 } },
+          })
+          if (bumped.count === 0) throw new Error('insufficient')
+          try {
+            await tx.tradeRow.create({ data: { id, fromHandle: account.handle, toHandle: to, giveCash, wantCash, terms, day } })
+          } catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new Error('trade-exists')
+            throw e
+          }
+        })
+      } catch (e) {
+        const why = e instanceof Error ? e.message : 'escrow no gree'
+        return NextResponse.json({ ok: false, why: why === 'refused' ? 'refused' : why }, { status: 400 })
+      }
       await broadcast('trade', 'global', account.handle, identity.band, { tradeId: id, to, giveCash, wantCash, terms })
-      return NextResponse.json({ ok: true, tradeId: id })
+      const wAfter = await db.walletRow.findUnique({ where: { handle: account.handle } })
+      // `escrowed` rides the ack: the AMOUNT this purse just paid to hold
+      // the offer open (the refund on cancel/expire pays it back exactly).
+      return NextResponse.json({ ok: true, tradeId: id, escrowed: giveCash, balance: wAfter?.balance ?? 0 })
     }
 
     if (action === 'trade-accept' || action === 'trade-cancel') {
       if (!canLive(identity, 'trade')) return NextResponse.json({ ok: false, why: 'adults-only' }, { status: 403 })
+      await sweepStaleTrades()
       const row = await db.tradeRow.findUnique({ where: { id: str(p.tradeId, 64) } })
       if (!row) return NextResponse.json({ ok: false, why: 'no-trade' }, { status: 404 })
       const offer: TradeOffer = {
@@ -333,13 +496,47 @@ export async function POST(req: Request) {
         giveCash: row.giveCash, wantCash: row.wantCash, terms: row.terms,
         status: row.status as TradeOffer['status'], day: row.day,
       }
+      // THE REPLAY LAW (PH2.5, the idemKey spirit): an accept for a trade
+      // already sealed returns the SAME receipt and moves NOTHING — no
+      // second credit, no 400 for an honest double-tap or a network dup.
+      if (action === 'trade-accept' && row.status === 'accepted') {
+        const wReplay = await db.walletRow.findUnique({ where: { handle: offer.to } })
+        return NextResponse.json({
+          ok: true,
+          trade: { ...offer, status: 'accepted' },
+          credited: 0,
+          replayed: true,
+          balance: wReplay?.balance ?? 0,
+        })
+      }
       if (action === 'trade-cancel') {
         if (offer.from !== account.handle) return NextResponse.json({ ok: false, why: 'not-yours' }, { status: 403 })
-        await db.tradeRow.update({ where: { id: row.id }, data: { status: 'cancelled' } })
-        await broadcast('trade', 'global', account.handle, identity.band, { tradeId: row.id, cancelled: true })
-        return NextResponse.json({ ok: true })
+        // THE REFUND LAW (PH2.5): the escrow goes back EXACTLY — and only
+        // the tx that wins the offered→cancelled flip pays it (a cancel
+        // racing an accept, or a double cancel, refunds once or never).
+        let refunded = false
+        await db.$transaction(async (tx) => {
+          const flipped = await tx.tradeRow.updateMany({
+            where: { id: row.id, status: 'offered' },
+            data: { status: 'cancelled' },
+          })
+          if (flipped.count === 0) return // already accepted/cancelled — nothing held
+          if (offer.giveCash > 0) {
+            await tx.walletRow.upsert({
+              where: { handle: offer.from },
+              create: { handle: offer.from, balance: offer.giveCash },
+              update: { balance: { increment: offer.giveCash }, version: { increment: 1 } },
+            })
+            refunded = true
+          }
+        })
+        await broadcast('trade', 'global', account.handle, identity.band, { tradeId: row.id, cancelled: true, refunded })
+        return NextResponse.json({ ok: true, refunded })
       }
-      const rosterRows = await db.livePresence.findMany()
+      // THE ROSTER READ (bounded, freshest-first): the cap never cuts an
+      // ALIVE walker — ordering by updatedAt desc reads the newest
+      // heartbeats first; the 90s TTL law filters the dead ones out.
+      const rosterRows = await db.livePresence.findMany({ orderBy: { updatedAt: 'desc' }, take: ROSTER_TAKE })
       const now = Date.now()
       const roster = rosterRows.map((r) => ({
         handle: r.handle, street: r.street, status: 'chilling' as const,
@@ -347,12 +544,55 @@ export async function POST(req: Request) {
       }))
       const verdict = tradeVerdict(offer, account.handle, roster, now)
       if (!verdict.ok) return NextResponse.json({ ok: false, why: verdict.why }, { status: 400 })
-      await db.tradeRow.update({ where: { id: row.id }, data: { status: 'accepted' } })
+      // THE ONE CREDIT LAW (PH2.5) — the status flip IS the lock: exactly
+      // one accept transaction ever wins offered→accepted, and only that
+      // one credits the recipient's purse inside the SAME tx. A replayed
+      // or concurrent accept bumps ZERO rows, credits NOTHING, and gets
+      // the honest already-sealed answer.
+      let credited = false
+      await db.$transaction(async (tx) => {
+        const flipped = await tx.tradeRow.updateMany({
+          where: { id: row.id, status: 'offered' },
+          data: { status: 'accepted' },
+        })
+        if (flipped.count === 0) return // someone's accept landed first — replay
+        if (offer.giveCash > 0) {
+          await tx.walletRow.upsert({
+            where: { handle: offer.to },
+            create: { handle: offer.to, balance: offer.giveCash },
+            update: { balance: { increment: offer.giveCash }, version: { increment: 1 } },
+          })
+          credited = true
+        }
+      })
       await broadcast('trade', 'global', account.handle, identity.band, {
         tradeId: row.id, accepted: true,
         from: offer.from, to: offer.to, giveCash: offer.giveCash, wantCash: offer.wantCash, terms: offer.terms,
       })
-      return NextResponse.json({ ok: true, trade: { ...offer, status: 'accepted' } })
+      const wAfter = await db.walletRow.findUnique({ where: { handle: offer.to } })
+      // PH2.5-ESCROW: THE SERVER IS NOW THE SOURCE OF TRUTH FOR TRADE CASH.
+      // The recipient's purse (WalletRow) was credited HERE, inside the
+      // accept tx, exactly once (idempotent by the offered→accepted flip).
+      // The offerer's purse was debited at OFFER time (escrow) — never at
+      // accept. CLIENT CONTRACT POINTS that must reconcile centrally (do
+      // NOT self-apply these amounts anymore once the store fix lands):
+      //   • useGameStore.ts:5124-5125 (liveAcceptTrade) — the client's
+      //     addMoney(giveCash) on the recipient's DEVICE cash double-books
+      //     against this server credit; switch to consuming this ack's
+      //     `credited` + `balance` (and keep appliedTrades as the replay
+      //     book). The recipient's client-side removeMoney(wantCash) at
+      //     :5125 remains the one client-held leg until the wantCash escrow
+      //     gets the same treatment (documented remaining debt).
+      //   • useGameStore.ts:4919 (sync trade handler) — the OFFERER's
+      //     device cash self-applies wantCash-giveCash on the 12s sync;
+      //     the -giveCash half is now already server-true (escrow) and
+      //     must be dropped from that sync application.
+      return NextResponse.json({
+        ok: true,
+        trade: { ...offer, status: 'accepted' },
+        credited: credited ? offer.giveCash : 0,
+        balance: wAfter?.balance ?? 0,
+      })
     }
 
     /* ------------------------------ ajo / esusu -------------------------------- */
@@ -632,12 +872,41 @@ export async function POST(req: Request) {
       const idemKey = str(p.idemKey, 80)
       if (!idemKey) return NextResponse.json({ ok: false, why: 'bad-idem' }, { status: 400 })
       if (kind !== 'deposit') {
-        // THE PIN LAW — the spend sides answer to the REAL PIN
+        // THE PIN LAW — the spend sides answer to the REAL PIN, now behind
+        // THE PIN THROTTLE (PH2.5): ≤4 recorded failures / 15min per handle
+        // arm an exponential lockout. The lock is checked BEFORE any hash
+        // runs — a locked handle is refused even with the CORRECT PIN (no
+        // timing oracle, no brute-force grace). A correct PIN clears the book.
+        const pinThrottle = rlKey('pin', [account.handle])
+        const lock = isLockedOut(pinThrottle)
+        if (lock.locked) {
+          return NextResponse.json({ ok: false, why: 'pin-locked' }, {
+            status: 429,
+            headers: { 'Retry-After': String(lock.retryAfterSec) },
+          })
+        }
         const pin = typeof p.pin === 'string' ? p.pin : ''
-        if (!/^[0-9]{4,8}$/.test(pin)) return NextResponse.json({ ok: false, why: 'bad-pin' }, { status: 403 })
+        if (!/^[0-9]{4,8}$/.test(pin)) {
+          recordFailure(pinThrottle, {
+            windowMs: RL_LIMITS.PIN_FAIL_WINDOW_MS,
+            maxFails: RL_LIMITS.PIN_MAX_FAILS,
+            baseLockMs: RL_LIMITS.PIN_BASE_LOCK_MS,
+            maxLockMs: RL_LIMITS.PIN_MAX_LOCK_MS,
+          })
+          return NextResponse.json({ ok: false, why: 'bad-pin' }, { status: 403 })
+        }
         const h = scryptSync(pin, account.salt, 32)
         const stored = Buffer.from(account.pinHash, 'hex')
-        if (h.length !== stored.length || !timingSafeEqual(h, stored)) return NextResponse.json({ ok: false, why: 'bad-pin' }, { status: 403 })
+        if (h.length !== stored.length || !timingSafeEqual(h, stored)) {
+          recordFailure(pinThrottle, {
+            windowMs: RL_LIMITS.PIN_FAIL_WINDOW_MS,
+            maxFails: RL_LIMITS.PIN_MAX_FAILS,
+            baseLockMs: RL_LIMITS.PIN_BASE_LOCK_MS,
+            maxLockMs: RL_LIMITS.PIN_MAX_LOCK_MS,
+          })
+          return NextResponse.json({ ok: false, why: 'bad-pin' }, { status: 403 })
+        }
+        clearFailures(pinThrottle)
       }
       const to = kind === 'transfer' ? str(p.to, 16).trim() : account.handle
       if (kind === 'transfer') {

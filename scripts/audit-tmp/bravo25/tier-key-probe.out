@@ -1,0 +1,4 @@
+lane: 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 429:too-many-attempts · 429:too-many-attempts
+PASS attempts 1–10: 401 (got 10)
+PASS attempts 11–12: 429 too-many-attempts (handle+IP key, single body read)
+PASS malformed body → honest 400 (got 400:Pick a tier — kid, teen or adult.)

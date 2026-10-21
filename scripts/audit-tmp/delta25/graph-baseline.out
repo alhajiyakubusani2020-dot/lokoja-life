@@ -1,0 +1,131 @@
+=== STATIC FIRST-LOAD CLOSURE of src/app/page.tsx (menu entry) ===
+modules reached: 85  (value-graph: 85)
+src LOC on static closure: 26450  (value-graph: 26450)
+
+LOC  depth  type-only?  module   [first importer]
+ 1233      3  value     src/game/data/schools.ts                                       ← src/game/data/locations.ts
+ 1121      2  value     src/game/data/config.ts                                        ← src/components/game/screens/MainMenu.tsx
+ 1004      2  value     src/game/types.ts                                              ← src/game/store/menu-store.ts
+  946      4  value     src/game/store/slices/economy.ts                               ← src/game/store/useGameStore.ts
+  898      2  value     src/game/systems/save.ts                                       ← src/game/store/menu-store.ts
+  808      4  value     src/game/store/slices/world.ts                                 ← src/game/store/useGameStore.ts
+  805      2  value     src/components/game/icons.tsx                                  ← src/components/game/screens/MainMenu.tsx
+  716      6  value     src/game/systems/wire.ts                                       ← src/game/systems/walletnet.ts
+  674      4  value     src/game/store/shared.ts                                       ← src/game/store/useGameStore.ts
+  640      4  value     src/game/store/slices/net.ts                                   ← src/game/store/useGameStore.ts
+  622      3  value     src/game/systems/calendar.ts                                   ← src/game/systems/save.ts
+  620      4  value     src/game/store/slices/saveBoot.ts                              ← src/game/store/useGameStore.ts
+  602      3  value     src/game/systems/citypack.ts                                   ← src/game/systems/save.ts
+  584      5  value     src/game/systems/wheels.ts                                     ← src/game/store/slices/vehicles.ts
+  576      2  value     src/game/data/locations.ts                                     ← src/components/game/screens/MainMenu.tsx
+  506      3  value     src/game/systems/live.ts                                       ← src/game/systems/save.ts
+  505      4  value     src/game/store/types.ts                                        ← src/game/store/useGameStore.ts
+  476      2  value     src/game/systems/music.ts                                      ← src/game/store/menu-store.ts
+  467      4  value     src/game/store/slices/ladder.ts                                ← src/game/store/useGameStore.ts
+  464      2  value     src/components/game/screens/MenuAuthSheet.tsx                  ← src/components/game/screens/MainMenu.tsx
+  456      3  value     src/game/systems/rivers.ts                                     ← src/game/systems/save.ts
+  429      5  value     src/game/data/hustles.ts                                       ← src/game/store/slices/social.ts
+  427      4  value     src/game/store/slices/player.ts                                ← src/game/store/useGameStore.ts
+  403      3  value     src/game/systems/story.ts                                      ← src/game/systems/save.ts
+  385      2  value     src/game/systems/device.ts                                     ← src/game/store/menu-store.ts
+  379      3  value     src/game/systems/civic.ts                                      ← src/game/systems/save.ts
+  362      5  value     src/game/data/jobs.ts                                          ← src/game/store/slices/economy.ts
+  350      3  value     src/game/systems/pulse.ts                                      ← src/game/systems/save.ts
+  342      3  value     src/game/systems/fortress.ts                                   ← src/game/systems/save.ts
+  316      4  value     src/game/systems/nation-sim.ts                                 ← src/game/systems/nation.ts
+  312      4  value     src/game/store/slices/vehicles.ts                              ← src/game/store/useGameStore.ts
+  303      5  value     src/game/systems/teleport.ts                                   ← src/game/store/types.ts
+  295      3  value     src/game/systems/chaos.ts                                      ← src/game/systems/save.ts
+  295      4  value     src/game/store/slices/social.ts                                ← src/game/store/useGameStore.ts
+  294      1  value     src/components/game/screens/MainMenu.tsx                       ← src/app/page.tsx
+  288      3  value     src/game/systems/shield.ts                                     ← src/game/systems/save.ts
+  280      5  value     src/game/data/npcChat.ts                                       ← src/game/store/slices/social.ts
+  266      5  value     src/game/systems/biz.ts                                        ← src/game/store/slices/economy.ts
+  266      6  value     src/game/systems/bodies.ts                                     ← src/game/systems/wheels.ts
+  250      3  value     src/game/systems/japa.ts                                       ← src/game/systems/save.ts
+  245      3  value     src/game/systems/education.ts                                  ← src/game/systems/save.ts
+  242      3  value     src/game/systems/profile.ts                                    ← src/components/game/screens/MenuAuthSheet.tsx
+  212      5  value     src/game/systems/walletnet.ts                                  ← src/game/store/slices/net.ts
+  210      3  value     src/game/systems/wardrobe.ts                                   ← src/game/systems/save.ts
+  208      4  value     src/game/store/slices/lifestyle.ts                             ← src/game/store/useGameStore.ts
+  202      4  value     src/game/store/slices/pulse.ts                                 ← src/game/store/useGameStore.ts
+  188      3  value     src/game/systems/housing.ts                                    ← src/game/systems/save.ts
+  180      5  value     src/game/systems/opportunities.ts                              ← src/game/store/slices/economy.ts
+  177      5  value     src/game/systems/work.ts                                       ← src/game/store/slices/economy.ts
+  171      5  value     src/game/systems/binarydelta.ts                                ← src/game/store/slices/pulse.ts
+  167      5  value     src/game/systems/nation-bridge.ts                              ← src/game/store/slices/saveBoot.ts
+  165      3  value     src/game/systems/patti.ts                                      ← src/game/systems/save.ts
+  156      5  value     src/game/systems/garage.ts                                     ← src/game/store/slices/world.ts
+  154      5  value     src/game/systems/fleet.ts                                      ← src/game/store/slices/vehicles.ts
+  144      2  value     src/game/data/npcs.ts                                          ← src/components/game/screens/MainMenu.tsx
+  144      2  value     src/components/ui/dialog.tsx                                   ← src/components/game/screens/MainMenu.tsx
+  144      5  value     src/game/systems/social.ts                                     ← src/game/store/slices/social.ts
+  141      3  value     src/game/systems/guest.ts                                      ← src/components/game/screens/MenuAuthSheet.tsx
+  137      1  value     src/game/store/menu-store.ts                                   ← src/app/page.tsx
+  130      3  value     src/game/systems/goals.ts                                      ← src/game/systems/save.ts
+  128      3  value     src/game/systems/nation.ts                                     ← src/game/systems/save.ts
+  127      4  value     src/game/systems/seasons.ts                                    ← src/game/systems/civic.ts
+  127      5  value     src/game/systems/flags.ts                                      ← src/game/store/types.ts
+  127      5  value     src/game/systems/travel.ts                                     ← src/game/store/slices/world.ts
+  120      0  value     src/app/page.tsx                                               ← (entry)
+  101      2  value     src/game/systems/audio.ts                                      ← src/components/game/screens/MainMenu.tsx
+   99      5  value     src/game/data/vehicles.ts                                      ← src/game/store/slices/world.ts
+   97      4  value     src/game/store/slices/ui.ts                                    ← src/game/store/useGameStore.ts
+   90      3  value     src/game/data/avatar.ts                                        ← src/components/game/screens/MenuAuthSheet.tsx
+   88      5  value     src/game/systems/needs.ts                                      ← src/game/store/slices/player.ts
+   86      6  value     src/game/data/travelEvents.ts                                  ← src/game/systems/travel.ts
+   85      5  value     src/game/systems/economy.ts                                    ← src/game/store/slices/player.ts
+   82      3  value     src/game/store/useGameStore.ts                                 ← src/components/game/screens/MenuAuthSheet.tsx
+   80      2  value     src/components/game/screens/GraphicsPicker.tsx                 ← src/components/game/screens/MainMenu.tsx
+   78      5  value     src/game/systems/progression.ts                                ← src/game/store/slices/player.ts
+   77      5  value     src/game/systems/telemetry.ts                                  ← src/game/store/types.ts
+   71      5  value     src/game/systems/skills.ts                                     ← src/game/store/slices/player.ts
+   68      5  value     src/game/systems/world.ts                                      ← src/game/store/slices/player.ts
+   59      2  value     src/game/systems/haptics.ts                                    ← src/game/store/menu-store.ts
+   50      1  value     src/components/game/GameSkeleton.tsx                           ← src/app/page.tsx
+   36      5  value     src/game/systems/world3d.ts                                    ← src/game/store/slices/player.ts
+   35      2  value     src/game/data/flavor.ts                                        ← src/components/game/screens/MainMenu.tsx
+   32      2  value     src/components/ui/switch.tsx                                   ← src/components/game/screens/MainMenu.tsx
+   18      1  value     src/components/game/screens/dashboard-chunk.ts                 ← src/app/page.tsx
+    7      3  value     src/lib/utils.ts                                               ← src/components/ui/dialog.tsx
+
+=== DYNAMIC CUTS (left the first load) ===
+  src/components/game/screens/CharacterCreation.tsx  ←dynamic  src/app/page.tsx
+  src/components/game/screens/Dashboard.tsx  ←dynamic  src/app/page.tsx
+  src/components/game/screens/Dashboard.tsx  ←dynamic  src/components/game/screens/dashboard-chunk.ts
+  src/game/data/npcChat.ts  ←dynamic  src/game/types.ts
+  src/game/store/useGameStore.ts  ←dynamic  src/app/page.tsx
+  src/game/store/useGameStore.ts  ←dynamic  src/components/game/screens/dashboard-chunk.ts
+  src/game/store/useGameStore.ts  ←dynamic  src/game/store/menu-store.ts
+  src/game/store/useGameStore.ts  ←dynamic  src/game/store/types.ts
+  src/game/systems/citypack.ts  ←dynamic  src/game/store/slices/net.ts
+  src/game/systems/nation.ts  ←dynamic  src/game/types.ts
+  src/game/systems/wire.ts  ←dynamic  src/game/store/slices/vehicles.ts
+  src/game/types.ts  ←dynamic  src/game/store/shared.ts
+  src/game/types.ts  ←dynamic  src/game/store/slices/saveBoot.ts
+  src/game/types.ts  ←dynamic  src/game/store/types.ts
+  src/game/types.ts  ←dynamic  src/game/systems/citypack.ts
+  src/game/types.ts  ←dynamic  src/game/systems/live.ts
+  src/game/types.ts  ←dynamic  src/game/systems/pulse.ts
+
+=== node_modules packages on the STATIC closure ===
+  , budgetMinutes: 45, startsAtMinute: 0 },
+  { key:  imported by 1 file(s): src/game/systems/citypack.ts
+  @radix-ui/react-dialog       imported by 1 file(s): src/components/ui/dialog.tsx
+  @radix-ui/react-switch       imported by 1 file(s): src/components/ui/switch.tsx
+  clsx                         imported by 1 file(s): src/lib/utils.ts
+  lucide-react                 imported by 1 file(s): src/components/ui/dialog.tsx
+  next                         imported by 2 file(s): src/app/page.tsx, src/components/game/screens/MainMenu.tsx
+  react                        imported by 6 file(s): src/app/page.tsx, src/components/game/screens/MainMenu.tsx, src/components/game/icons.tsx, src/components/ui/dialog.tsx, src/components/ui/switch.tsx, src/components/game/screens/MenuAuthSheet.tsx
+  socket.io-client             imported by 1 file(s): src/game/systems/wire.ts
+  tailwind-merge               imported by 1 file(s): src/lib/utils.ts
+  zustand                      imported by 15 file(s): src/game/store/menu-store.ts, src/game/store/useGameStore.ts, src/game/store/slices/ui.ts, src/game/store/slices/saveBoot.ts, src/game/store/slices/player.ts, src/game/store/slices/world.ts, src/game/store/slices/economy.ts, src/game/store/slices/vehicles.ts, src/game/store/slices/ladder.ts, src/game/store/slices/social.ts, src/game/store/slices/lifestyle.ts, src/game/store/slices/pulse.ts, src/game/store/slices/net.ts, src/game/systems/walletnet.ts, src/game/systems/wire.ts
+
+=== MISSION MARKERS on the static closure ===
+  useGameStore         IN FIRST LOAD: src/game/store/useGameStore.ts (82L)
+  data/schools         IN FIRST LOAD: src/game/data/schools.ts (1233L)
+  data/config          IN FIRST LOAD: src/game/data/config.ts (1121L)
+  data/locations       IN FIRST LOAD: src/game/data/locations.ts (576L)
+  data/npcChat         IN FIRST LOAD: src/game/data/npcChat.ts (280L)
+  systems/wire         IN FIRST LOAD: src/game/systems/wire.ts (716L)
+  walletnet            IN FIRST LOAD: src/game/systems/walletnet.ts (212L)

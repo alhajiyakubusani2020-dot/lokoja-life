@@ -1,0 +1,37 @@
+
+== 1. FIXED WINDOW (limit 3 / 100ms) ==
+PASS req1 ok → got=true
+PASS req2 ok → got=true
+PASS req3 ok → got=true
+PASS req4 refused → got=false
+PASS req4 carries retryAfterSec → got=true
+PASS window rolls → reset works → got=true
+
+== 2. FAILURE LOCKOUT (maxFails 2, base 60ms, cap 10s) — backoff grows ==
+PASS locked before any failure → got=false
+PASS fail 1: not locked yet → got=false
+PASS fail 2: locks → got=true
+PASS fail 2: lock ≈ 60ms backoff → got=true
+PASS lock expires → got=false
+PASS fail 3: backoff GROWS to ≈120ms → got=true
+PASS fail 4: backoff GROWS to ≈180ms → got=true
+
+== 3. CLEARING (correct credential wipes the book) ==
+PASS cleared → not locked → got=false
+PASS cleared → fails 0 → got=0
+
+== 4. KEY LAW + IP LAW ==
+PASS rlKey shape → got="login:ada|9.9.9.9"
+PASS rlKey absent part → got="pin:-"
+PASS ipOf takes first forwarded hop → got="1.2.3.4"
+PASS ipOf fallback → got="local"
+
+== 5. PRODUCTION CONSTANTS (the doors) ==
+PASS LOGIN window 15min → got=900000
+PASS LOGIN arms after 4 fails → got=4
+PASS LOGIN backoff base 30s / cap 15min → got=[30000,900000]
+PASS TIER 10/min → got=[10,60000]
+PASS PUSH 30/h → got=[30,3600000]
+PASS PULL 60/h → got=[60,3600000]
+
+== RATE-LIMIT PROBE: 25 PASS / 0 FAIL ==

@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server'
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { db } from '@/lib/db'
 import { profileVerdict, sanitizeProfilePublic } from '@/game/systems/profile'
+import { takeToken, rlKey, ipOf, RL_LIMITS } from '@/lib/rate-limit'
 
 const HANDLE_RE = /^[a-zA-Z0-9_]{3,16}$/
 const PIN_RE = /^\d{4,8}$/
@@ -22,7 +23,16 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as {
+    // PH2.5 THE THROTTLE LAW — the register mints rows: ≤10 claims / 15min
+    // per IP (a generous household cap — row growth is the abuse here).
+    const gate = takeToken(rlKey('register', [ipOf(req)]), RL_LIMITS.REGISTER_MAX_PER_WINDOW, RL_LIMITS.REGISTER_WINDOW_MS)
+    if (!gate.ok) {
+      return NextResponse.json({ ok: false, why: 'too-many-attempts' }, {
+        status: 429,
+        headers: { 'Retry-After': String(gate.retryAfterSec) },
+      })
+    }
+    const body = (await req.json().catch(() => ({}))) as {
       handle?: string
       contact?: string
       pin?: string

@@ -1,0 +1,81 @@
+=== STATIC FIRST-LOAD CLOSURE of src/app/page.tsx (menu entry) ===
+modules reached: 41  (value-graph: 40)
+src LOC on static closure: 13874  (value-graph: 13558)
+
+LOC  depth  type-only?  module   [first importer]
+ 1233      3  value     src/game/data/schools.ts                                       ← src/game/data/locations.ts
+ 1121      2  value     src/game/data/config.ts                                        ← src/components/game/screens/MainMenu.tsx
+ 1004      2  value     src/game/types.ts                                              ← src/game/store/menu-store.ts
+  898      2  value     src/game/systems/save.ts                                       ← src/game/store/menu-store.ts
+  805      2  value     src/components/game/icons.tsx                                  ← src/components/game/screens/MainMenu.tsx
+  622      3  value     src/game/systems/calendar.ts                                   ← src/game/systems/save.ts
+  602      3  value     src/game/systems/citypack.ts                                   ← src/game/systems/save.ts
+  576      2  value     src/game/data/locations.ts                                     ← src/components/game/screens/MainMenu.tsx
+  506      3  value     src/game/systems/live.ts                                       ← src/game/systems/save.ts
+  476      2  value     src/game/systems/music.ts                                      ← src/game/store/menu-store.ts
+  456      3  value     src/game/systems/rivers.ts                                     ← src/game/systems/save.ts
+  403      3  value     src/game/systems/story.ts                                      ← src/game/systems/save.ts
+  385      2  value     src/game/systems/device.ts                                     ← src/game/store/menu-store.ts
+  379      3  value     src/game/systems/civic.ts                                      ← src/game/systems/save.ts
+  350      3  value     src/game/systems/pulse.ts                                      ← src/game/systems/save.ts
+  342      3  value     src/game/systems/fortress.ts                                   ← src/game/systems/save.ts
+  316      4  TYPEONLY  src/game/systems/nation-sim.ts                                 ← src/game/systems/nation.ts
+  306      1  value     src/components/game/screens/MainMenu.tsx                       ← src/app/page.tsx
+  295      3  value     src/game/systems/chaos.ts                                      ← src/game/systems/save.ts
+  288      3  value     src/game/systems/shield.ts                                     ← src/game/systems/save.ts
+  250      3  value     src/game/systems/japa.ts                                       ← src/game/systems/save.ts
+  245      3  value     src/game/systems/education.ts                                  ← src/game/systems/save.ts
+  210      3  value     src/game/systems/wardrobe.ts                                   ← src/game/systems/save.ts
+  188      3  value     src/game/systems/housing.ts                                    ← src/game/systems/save.ts
+  165      3  value     src/game/systems/patti.ts                                      ← src/game/systems/save.ts
+  144      2  value     src/game/data/npcs.ts                                          ← src/components/game/screens/MainMenu.tsx
+  144      2  value     src/components/ui/dialog.tsx                                   ← src/components/game/screens/MainMenu.tsx
+  141      3  value     src/game/systems/guest.ts                                      ← src/game/systems/save.ts
+  137      1  value     src/game/store/menu-store.ts                                   ← src/app/page.tsx
+  130      3  value     src/game/systems/goals.ts                                      ← src/game/systems/save.ts
+  128      3  value     src/game/systems/nation.ts                                     ← src/game/systems/save.ts
+  127      4  value     src/game/systems/seasons.ts                                    ← src/game/systems/civic.ts
+  120      0  value     src/app/page.tsx                                               ← (entry)
+  101      2  value     src/game/systems/audio.ts                                      ← src/components/game/screens/MainMenu.tsx
+   80      2  value     src/components/game/screens/GraphicsPicker.tsx                 ← src/components/game/screens/MainMenu.tsx
+   59      2  value     src/game/systems/haptics.ts                                    ← src/game/store/menu-store.ts
+   50      1  value     src/components/game/GameSkeleton.tsx                           ← src/app/page.tsx
+   35      2  value     src/game/data/flavor.ts                                        ← src/components/game/screens/MainMenu.tsx
+   32      2  value     src/components/ui/switch.tsx                                   ← src/components/game/screens/MainMenu.tsx
+   18      1  value     src/components/game/screens/dashboard-chunk.ts                 ← src/app/page.tsx
+    7      3  value     src/lib/utils.ts                                               ← src/components/ui/dialog.tsx
+
+=== DYNAMIC CUTS (left the first load) ===
+  src/components/game/screens/CharacterCreation.tsx  ←dynamic  src/app/page.tsx
+  src/components/game/screens/Dashboard.tsx  ←dynamic  src/app/page.tsx
+  src/components/game/screens/Dashboard.tsx  ←dynamic  src/components/game/screens/dashboard-chunk.ts
+  src/components/game/screens/MenuAuthSheet.tsx  ←dynamic  src/components/game/screens/MainMenu.tsx
+  src/game/data/npcChat.ts  ←dynamic  src/game/types.ts
+  src/game/store/useGameStore.ts  ←dynamic  src/app/page.tsx
+  src/game/store/useGameStore.ts  ←dynamic  src/components/game/screens/dashboard-chunk.ts
+  src/game/store/useGameStore.ts  ←dynamic  src/game/store/menu-store.ts
+  src/game/systems/nation.ts  ←dynamic  src/game/types.ts
+  src/game/types.ts  ←dynamic  src/game/systems/citypack.ts
+  src/game/types.ts  ←dynamic  src/game/systems/live.ts
+  src/game/types.ts  ←dynamic  src/game/systems/pulse.ts
+
+=== node_modules packages on the STATIC closure ===
+  , budgetMinutes: 45, startsAtMinute: 0 },
+  { key:  imported by 1 file(s): src/game/systems/citypack.ts
+  @radix-ui/react-dialog       imported by 1 file(s): src/components/ui/dialog.tsx
+  @radix-ui/react-switch       imported by 1 file(s): src/components/ui/switch.tsx
+  clsx                         imported by 1 file(s): src/lib/utils.ts
+  lucide-react                 imported by 1 file(s): src/components/ui/dialog.tsx
+  next                         imported by 2 file(s): src/app/page.tsx, src/components/game/screens/MainMenu.tsx
+  react                        imported by 5 file(s): src/app/page.tsx, src/components/game/screens/MainMenu.tsx, src/components/game/icons.tsx, src/components/ui/dialog.tsx, src/components/ui/switch.tsx
+  tailwind-merge               imported by 1 file(s): src/lib/utils.ts
+  zustand                      imported by 1 file(s): src/game/store/menu-store.ts
+
+=== MISSION MARKERS on the static closure ===
+  useGameStore         not on value closure
+  data/schools         IN FIRST LOAD: src/game/data/schools.ts (1233L)
+  data/config          IN FIRST LOAD: src/game/data/config.ts (1121L)
+  data/locations       IN FIRST LOAD: src/game/data/locations.ts (576L)
+  data/npcChat         not on value closure
+  systems/wire         not on value closure
+  walletnet            not on value closure

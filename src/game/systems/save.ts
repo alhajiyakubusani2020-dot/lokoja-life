@@ -628,7 +628,13 @@ function deserialize(raw: string): GameSave | null {
   // whole naira, the day a finite integer ≥ 1, needs sit in [0,100], life
   // counters are finite. Valid saves already satisfy every rule here and
   // pass through byte-identical (verified by round-trip in the F1 battery).
-  p.cash = typeof p.cash === 'number' && Number.isFinite(p.cash) ? Math.max(0, Math.floor(p.cash)) : 0
+  // PH2.5 (Bravo25): the heal also caps the CEILING — a hand-edited save
+  // with cash:1e308 is finite and passed the floor-only law. Load-side
+  // ceiling = ₦1bn, the same ceiling the cloud-push law enforces.
+  p.cash = typeof p.cash === 'number' && Number.isFinite(p.cash) ? Math.min(1_000_000_000, Math.max(0, Math.floor(p.cash))) : 0
+  if (typeof p.bankBalance === 'number' && Number.isFinite(p.bankBalance)) {
+    p.bankBalance = Math.min(1_000_000_000, Math.max(0, Math.floor(p.bankBalance)))
+  }
   if (save.world) {
     const d = Number(save.world.day)
     save.world.day = Number.isFinite(d) ? Math.max(1, Math.floor(d)) : 1

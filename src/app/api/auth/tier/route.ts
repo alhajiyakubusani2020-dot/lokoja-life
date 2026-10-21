@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyPin, verifyParentPin } from '../register/route'
+import { takeToken, rlKey, ipOf, RL_LIMITS } from '@/lib/rate-limit'
 
 const BANDS = ['kid', 'teen', 'adult'] as const
 type Band = (typeof BANDS)[number]
@@ -17,7 +18,25 @@ const ORDER: Record<Band, number> = { kid: 0, teen: 1, adult: 2 }
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { handle?: string; pin?: string; parentPin?: string; toBand?: string }
+    // PH2.5 THE THROTTLE LAW — the tier gate is a PIN probe door: ≤10
+    // attempts/min, 429 beyond. Volume counts whether the attempt passes
+    // or fails — a hammer is a hammer either way.
+    // PH2.5 COMPLETION (Task 5-b) — THE KEY LAW fix: the body DECLARES a
+    // handle, so it throttles TOGETHER with the IP (`kind:handle|ip`, the
+    // login door's exact shape). IP-only keys let one handle be brute-
+    // forced from many IPs at 10/min each; the handle half caps the
+    // aggregate at 10/min no matter how many IPs knock. The body is read
+    // ONCE here (a Request stream cannot be consumed twice) and the
+    // malformed-JSON catch makes the garbage body a 400, not a 500.
+    const body = (await req.json().catch(() => ({}))) as { handle?: string; pin?: string; parentPin?: string; toBand?: string }
+    const gate = takeToken(rlKey('tier', [(body.handle ?? '').trim() || null, ipOf(req)]), RL_LIMITS.TIER_MAX_PER_WINDOW, RL_LIMITS.TIER_WINDOW_MS)
+    if (!gate.ok) {
+      return NextResponse.json({ ok: false, why: 'too-many-attempts' }, {
+        status: 429,
+        headers: { 'Retry-After': String(gate.retryAfterSec) },
+      })
+    }
+
     const handle = (body.handle ?? '').trim()
     const pin = body.pin ?? ''
     const parentPin = body.parentPin ?? ''

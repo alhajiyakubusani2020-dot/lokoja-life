@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Outfit } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
 import { PwaRegister } from "@/components/game/PwaRegister";
 
 const geistSans = Geist({
@@ -74,7 +73,6 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${outfit.variable} antialiased`}      >
         {children}
-        <Toaster />
         <PwaRegister />
       </body>
     </html>

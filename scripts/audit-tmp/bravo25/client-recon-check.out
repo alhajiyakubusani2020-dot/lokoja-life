@@ -1,0 +1,28 @@
+boot: pocket ₦5000, mirror=null
+PASS  dues ack ok
+PASS  dues: pocket UNTOUCHED (server purse paid) — cash=5000 (old law would removeMoney 2500)
+PASS  dues: mirror takes ack balance — mirror=4500
+PASS  dues: narrated
+PASS  offer ack ok
+PASS  offer: pocket UNTOUCHED (escrow is server-side) — cash=5000
+PASS  offer: mirror = post-escrow balance — mirror=1500
+PASS  accept ack ok
+PASS  accept: pocket = cash0 - wantCash EXACTLY (no +giveCash double-pay) — cash=4200 want=-800 (old law: +2200)
+PASS  accept: mirror = post-credit balance — mirror=4500
+PASS  accept: tradesDone +1
+PASS  accept: the giveCash lands in the PURSE per the narrated law
+PASS  replay: pocket UNCHANGED (no second wantCash charge) — cash=4200
+PASS  replay: tradesDone NOT double-counted
+PASS  replay: mirror steady
+PASS  sync(re-acked tradeId): pocket UNCHANGED (book skip) — cash=4200
+PASS  sync(recipient, fresh): pocket pays -wantCash ONLY — cash=4000 (old law: +300)
+PASS  sync(recipient, fresh): finesPaid UNTOUCHED (no fine mislabel) — finesPaid=0
+PASS  sync(recipient, fresh): ledger label is the trade’s own — label(head)=paid for trade from OTHER
+PASS  sync(recipient, fresh): mirror re-pulled server truth — mirror=9000
+PASS  sync(recipient, fresh): the mirror pull rode the relay wallet door — /api/live/action:wallet
+PASS  sync(offerer): pocket collects +wantCash ONLY — cash=5200 (old law: -1800)
+PASS  court fine: pocket -fine — cash=4500
+PASS  court fine: finesPaid +fine — finesPaid=700
+PASS  court fine: ⚖️ narrated
+
+ALL CLIENT-RECON CHECKS PASS

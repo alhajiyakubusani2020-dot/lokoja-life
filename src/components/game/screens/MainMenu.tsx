@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { audio } from '@/game/systems/audio'
 import { GAME_META } from '@/game/data/config'
@@ -30,7 +31,18 @@ import {
 } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { GraphicsPicker } from './GraphicsPicker'
-import { MenuAuthSheet } from './MenuAuthSheet'
+
+/* DELTA 5-d — THE AUTH SHEET IS NOT THE MENU: MenuAuthSheet statically
+ * imported the FAT GAME STORE (its register/login/notify hooks), which
+ * silently hauled every slice + walletnet + the wire (socket.io) + npcChat
+ * + hustles into the menu's first load — and crashed the "/" prerender
+ * with a circular-init TDZ inside saveBootSlice. The sheet only mounts
+ * when authOpen flips true (a click — never during first paint or SSR),
+ * so it rides its own chunk and the store leaves the entry for good. */
+const MenuAuthSheet = dynamic(() => import('./MenuAuthSheet').then((m) => m.MenuAuthSheet), {
+  ssr: false,
+  loading: () => null, // overlay opens a beat later; the sheet itself fades in
+})
 
 function PlayMark({ className }: { className?: string }) {
   return (

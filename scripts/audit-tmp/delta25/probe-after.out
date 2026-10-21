@@ -1,0 +1,14 @@
+first-load chunks: 11
+     219 KB  /_next/static/chunks/abc386bdde209760.js
+     153 KB  /_next/static/chunks/d845d9d9b0c68126.js
+      10 KB  /_next/static/chunks/turbopack-2b5844ecc4c27bcb.js
+       0 KB  /_next/static/chunks/ff1a16fafef87110.js
+      30 KB  /_next/static/chunks/d2be314c3ece3fbe.js
+       1 KB  /_next/static/chunks/3375a593f3689d77.js
+      23 KB  /_next/static/chunks/36e20c34e8c6268e.js
+     163 KB  /_next/static/chunks/7373f75bff03ec42.js  → crowther-memorial×3 SAVE_VERSION×1
+      90 KB  /_next/static/chunks/c542714f6eda32ae.js
+     110 KB  /_next/static/chunks/a6dad97d9634a72d.js
+      18 KB  /_next/static/chunks/d3287ab0873d49d1.js
+
+GUARD PASS: zero three.js markers in first-load chunks

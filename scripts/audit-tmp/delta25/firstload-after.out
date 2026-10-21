@@ -1,0 +1,20 @@
+scripts:
+     224411 raw     70029 gz  /_next/static/chunks/abc386bdde209760.js
+     156670 raw     39804 gz  /_next/static/chunks/d845d9d9b0c68126.js
+      10196 raw      4035 gz  /_next/static/chunks/turbopack-2b5844ecc4c27bcb.js
+        282 raw       245 gz  /_next/static/chunks/ff1a16fafef87110.js
+      30681 raw      7437 gz  /_next/static/chunks/d2be314c3ece3fbe.js
+        893 raw       572 gz  /_next/static/chunks/3375a593f3689d77.js
+      23126 raw      7288 gz  /_next/static/chunks/36e20c34e8c6268e.js
+     167676 raw     57088 gz  /_next/static/chunks/7373f75bff03ec42.js
+      91736 raw     29545 gz  /_next/static/chunks/c542714f6eda32ae.js
+     112594 raw     39499 gz  /_next/static/chunks/a6dad97d9634a72d.js
+      18555 raw      6367 gz  /_next/static/chunks/d3287ab0873d49d1.js
+css:
+       4528 raw       859 gz  /_next/static/chunks/9194014af09e0b26.css
+     154359 raw     24500 gz  /_next/static/chunks/9bd9df9525c8e201.css
+
+TOTAL first-load JS: 836820 bytes raw, 261909 bytes gzip (255.8 KB)
+TOTAL css: 158887 raw, 25359 gzip (24.8 KB)
+inline <script> bodies: 7 totaling 8052 bytes
+preload/modulepreload links: 3

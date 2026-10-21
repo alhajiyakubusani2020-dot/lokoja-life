@@ -1,0 +1,8 @@
+PASS sync answers ok → got=[200,true]
+PASS dead presence rows existed before the heartbeat → got=true
+PASS the SAME request pruned every dead row → got=0
+PASS the alive walker is on the roster → got=true
+PASS the dead walkers are NOT on the roster → got=false
+PASS retention guard touched no event < 30 days → got=1802
+
+== SYNC PROBE: 6 PASS / 0 FAIL ==

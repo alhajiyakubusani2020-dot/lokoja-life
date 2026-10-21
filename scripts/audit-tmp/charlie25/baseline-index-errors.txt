@@ -1,0 +1,11 @@
+index.ts(50,49): error TS2307: Cannot find module 'socket.io' or its corresponding type declarations.
+index.ts(1062,118): error TS2322: Type '"refuel" | "repair"' is not assignable to type 'LedgerKind'.
+index.ts(1066,74): error TS2322: Type '"refuel" | "repair"' is not assignable to type 'LedgerKind'.
+index.ts(1127,9): error TS7006: Parameter 'socket' implicitly has an 'any' type.
+index.ts(1127,17): error TS7006: Parameter 'next' implicitly has an 'any' type.
+index.ts(1149,22): error TS7006: Parameter 'socket' implicitly has an 'any' type.
+index.ts(2469,12): error TS2345: Argument of type '"SIGTERM"' is not assignable to parameter of type '"memoryPressure"'.
+index.ts(2470,12): error TS2345: Argument of type '"SIGINT"' is not assignable to parameter of type '"memoryPressure"'.
+index.ts(2474,12): error TS2345: Argument of type '"uncaughtException"' is not assignable to parameter of type '"memoryPressure"'.
+index.ts(2475,67): error TS2339: Property 'stack' does not exist on type '"warning" | "critical"'.
+index.ts(2477,12): error TS2345: Argument of type '"unhandledRejection"' is not assignable to parameter of type '"memoryPressure"'.

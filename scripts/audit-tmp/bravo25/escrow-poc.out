@@ -1,0 +1,64 @@
+
+== 0. THE CAST (fresh bravo25_* rows on db/custom.db) ==
+offerer   bravo25_a_i6je4a: ₦10000
+recipient bravo25_b_i6je4a: ₦0
+recipient bravo25_c_i6je4a: ₦0
+
+== 1. OFFER → OFFERER DEBITED (escrow), row offered ==
+PASS offer ok → got=[200,true]
+PASS offer ack escrowed=3000 → got=3000
+PASS offerer wallet 10000→7000 → got=7000
+PASS trade row status 'offered' (escrow held = giveCash) → got=["offered",3000]
+
+== 2. ACCEPT → RECIPIENT CREDITED, OFFERER NOT RE-DEBITED ==
+PASS accept ok → got=[200,true]
+PASS accept ack credited=3000 → got=3000
+PASS recipient wallet 0→3000 → got=3000
+PASS offerer STILL 7000 (no re-debit at accept) → got=7000
+PASS trade row accepted → got="accepted"
+
+== 3. DOUBLE-ACCEPT REPLAY → NO DOUBLE CREDIT ==
+PASS replay answers ok (honest already-sealed) → got=[200,true]
+PASS replay credits 0 → got=0
+PASS recipient STILL 3000 after sequential replay → got=3000
+PASS offer2 escrowed (7000-800=6200) → got=6200
+PASS concurrent double-accept: exactly ONE credit among acks → got=1
+PASS recipient = 3000 + 800 exactly once → 3800 → got=3800
+
+== 4. CANCEL → EXACT REFUND / NO DOUBLE REFUND ==
+PASS offer3 escrowed (6200-1500=4700) → got=4700
+PASS cancel ok + refunded → got=[true,true]
+PASS offerer refunded exactly → 6200 → got=6200
+PASS second cancel refunds NOTHING → got=false
+PASS offerer STILL 6200 (no double refund) → got=6200
+PASS cancel-after-accept: refunded false → got=false
+PASS offerer STILL 6200 (accepted trade never refunds) → got=6200
+
+== 5. CONCURRENT OVERDRAFT (Promise.all ×2 offers, purse pinned to 6000, 4000 each) ==
+PASS fixture: purse pinned to 6000 (burned → got=6000
+PASS exactly ONE offer wins → got=1
+PASS the loser refused (insufficient/trade-exists — never a negative purse) → got=true
+PASS purse = 6000-4000 = 2000 exactly → got=2000
+PASS no negative purse ever → got=true
+
+== 6. TTL SWEEP (offer older than 24h refunds on next touch) ==
+PASS stale offer escrowed (2000-777=1223) → got=1223
+PASS list ok → got=[200,true]
+PASS sweep refunded 777 → 2000 exactly → got=2000
+PASS stale row closed → got="cancelled"
+
+== 7. CONSERVATION (the books add up) ==
+PASS balances printed → got=true
+PASS held escrow = the one winning overdraft offer (4000) → got=4000
+PASS CONSERVATION: A+B+C+held == entered → got=9800
+  bravo25_a_i6je4a = ₦2000   bravo25_b_i6je4a = ₦3800   bravo25_c_i6je4a = ₦0   escrow held = ₦4000   fixture burned = ₦200
+
+== FINAL BALANCES (all bravo25 wallets) ==
+  wallet bravo25_a_i5hslm = ₦2000 (v8)
+  wallet bravo25_b_i5hslm = ₦3800 (v1)
+  wallet bravo25_pin_i5jla7 = ₦5000 (v0)
+  wallet bravo25_fresh_i5jla7 = ₦1500 (v1)
+  wallet bravo25_a_i6je4a = ₦2000 (v8)
+  wallet bravo25_b_i6je4a = ₦3800 (v1)
+
+== ESCROW PoC: 34 PASS / 0 FAIL ==

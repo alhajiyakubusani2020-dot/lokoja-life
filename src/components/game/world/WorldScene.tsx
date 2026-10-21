@@ -497,10 +497,14 @@ export function WorldScene({
           gl.shadowMap.autoUpdate = false
           gl.shadowMap.needsUpdate = true
           governedRenderer.gl = gl
-          // honest metrics for the perf harness (dev only)
-          if (process.env.NODE_ENV !== 'production') {
-            ;(window as unknown as Record<string, unknown>).__lklRenderer = gl
-          }
+        }
+        // honest metrics for the perf harness — dev builds always, production
+        // ONLY behind the ?e2e=1 test-hook door (Phase-2.5 perf-truth harness
+        // reads renderer.info.drawCalls here; normal play never passes ?e2e)
+        // PH2.5 fix: was nested in the shadows branch — mid/low tiers (shadows
+        // off) never exposed the renderer; the hook belongs on the common path.
+        if (process.env.NODE_ENV !== 'production' || new URLSearchParams(window.location.search).has('e2e')) {
+          ;(window as unknown as Record<string, unknown>).__lklRenderer = gl
         }
         // M4: the perf probe reads renderer.info on EVERY tier — real-device
         // diagnostics must work in production and on weak phones too

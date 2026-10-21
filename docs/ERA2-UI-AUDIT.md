@@ -66,6 +66,7 @@
 **Phone (26 apps) wire-status:** wire-backed 7 — Live (roster/chat/spray/stage), Messages (nation+DMs), Calls (WebRTC), Connect (friend graph), Wallet (purse ledger + receipts), Profile (server face), Forge (hybrid). Store-backed 12 — Bank, Hustle, Civic, My Biz, Settings, Shield, School, Houses, Garage, Wardrobe, Whot!, Chats. Read-only books 6 — Pulse, Nation, Career, Health, Contacts, Mt Patti. Stubs: none inside the phone; the only true stub is the dashboard **Bag tab** ("Arrives in Stage 4", Dashboard.tsx:359-390).
 
 **Orphans (dead UI shipped):** `StatusPanel.tsx` (pre-3D Home, zero importers) · `LocationArt.tsx` · `LocationSheet` body (re-implemented inline in MapScreen) · radix Toaster mounted at layout.tsx:77 with **zero producers** · ~40/48 shadcn components · `phone/apps/manifest.ts` (documents 10 apps; consumed by tests only — the real grid is 26, hardcoded).
+**RESOLVED (Phase-2.5, Team Foxtrot):** StatusPanel.tsx, LocationArt.tsx, 46/48 shadcn ui components (closure of dialog+switch kept), the Toaster mount + use-toast, 13 orphaned art webps, and 38 dead dependencies removed after a fresh zero-reference sweep. Remaining: LocationSheet inline body (design choice) · manifest.ts (consumed by tests only) · use-mobile.ts (now zero importers).
 
 **Stubs/fakes (honestly labeled):** Whot vs local NPC · NPC chat threads (component-state) · Forge "run" theatrical pacing · Nation crowd sim · "street paddies — no phone yet" rows.
 

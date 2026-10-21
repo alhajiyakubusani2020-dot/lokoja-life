@@ -1,0 +1,5 @@
+PASS day:1e308 whole → 400 (got 400)
+PASS lawful push still ok (got 200)
+PASS delta rebuild cash:1e308 → 400 (got 400 "patch refused — bad payload")
+PASS lawful delta day 1→2 still ok (got 200)
+== HOSTILE CEILING PROBE: 4 PASS / 0 FAIL ==

@@ -4,6 +4,12 @@
  * the multiplayer identity — no separate signup). One POST carries the
  * walker's presence up and pulls the nation's new events down since
  * the walker's cursor. THE RELAY DOCTRINE: distribute, never simulate.
+ *
+ * PH2.5 THE BOUNDED HEARTBEAT (Team Bravo) — no read on this door walks
+ * an unbounded table: the roster take is capped, dead presence rows are
+ * pruned opportunistically in the same request that reads them, and the
+ * LiveEvent ledger self-trims past 30 days at most once an hour (a
+ * module-level timestamp guard — the wire stays thin forever).
  */
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -17,6 +23,17 @@ interface PresenceRow {
   updatedAt: Date
 }
 
+/* ---------------------- PH2.5 bounded-heartbeat consts --------------------- */
+/** the roster read cap (a heartbeat never walks an unbounded table) */
+const ROSTER_TAKE = 200
+/** dead presence rows (2 min silent — the 90s TTL already read them out) */
+const PRESENCE_PRUNE_MS = 120_000
+/** LiveEvent retention horizon */
+const EVENT_RETENTION_MS = 30 * 24 * 3_600_000
+/** retention fires at most once per hour, per server process */
+const RETENTION_EVERY_MS = 3_600_000
+let lastRetentionAt = 0
+
 export async function POST(req: Request) {
   try {
     const auth = req.headers.get('authorization') ?? ''
@@ -24,6 +41,25 @@ export async function POST(req: Request) {
     if (!token) return NextResponse.json({ ok: false, why: 'no token' }, { status: 401 })
     const account = await db.account.findFirst({ where: { token } })
     if (!account) return NextResponse.json({ ok: false, why: 'bad token' }, { status: 401 })
+
+    // THE PRUNE LAW (PH2.5): dead presence rows (2 min silent) leave with
+    // the same request that reads the roster — the table cannot grow
+    // past the honest walker count. 2 min > the 90s read TTL, so no
+    // alive row is ever pruned from under a real walker.
+    await db.livePresence.deleteMany({
+      where: { updatedAt: { lt: new Date(Date.now() - PRESENCE_PRUNE_MS) } },
+    })
+
+    // THE RETENTION LAW (PH2.5): events past 30 days leave the ledger at
+    // most once an hour (module-level guard), fire-and-forget — the
+    // heartbeat never waits on housekeeping and never double-fires it.
+    const nowMs = Date.now()
+    if (nowMs - lastRetentionAt >= RETENTION_EVERY_MS) {
+      lastRetentionAt = nowMs
+      db.liveEvent
+        .deleteMany({ where: { createdAt: { lt: new Date(nowMs - EVENT_RETENTION_MS) } } })
+        .catch(() => {})
+    }
 
     const body = (await req.json().catch(() => ({}))) as {
       presence?: { street?: string; status?: string }
@@ -62,8 +98,11 @@ export async function POST(req: Request) {
       return pair.length === 2 && pair.includes(account.handle)
     })
 
-    // the roster: every heartbeat inside the TTL window
-    const rows = (await db.livePresence.findMany()) as PresenceRow[]
+    // the roster: every heartbeat inside the TTL window — bounded take
+    // (PH2.5: ≤200 walkers, FRESHEST-FIRST: ordering by updatedAt desc
+    // reads the newest heartbeats before the take cuts, then the 90s TTL
+    // filter keeps only the alive ones)
+    const rows = (await db.livePresence.findMany({ orderBy: { updatedAt: 'desc' }, take: ROSTER_TAKE })) as PresenceRow[]
     const now = Date.now()
     const roster = rows
       .map((r) => ({

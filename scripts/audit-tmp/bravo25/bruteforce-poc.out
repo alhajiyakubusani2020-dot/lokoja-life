@@ -1,0 +1,28 @@
+
+== 1. WALLET PIN LANE — 6 rapid bad PINs ==
+PASS deposit 5000 ok (no pin on the top-up leg) → got=[200,true]
+PASS attempts 1–4: 403 bad-pin (recorded) → got=4
+PASS attempt 5: 429 pin-locked → got="429:pin-locked"
+PASS attempt 6: 429 pin-locked → got="429:pin-locked"
+PASS lockout carries Retry-After → got=true
+  lane outcomes: 403:bad-pin · 403:bad-pin · 403:bad-pin · 403:bad-pin · 429:pin-locked · 429:pin-locked
+
+== 2. CORRECT PIN DURING LOCKOUT — also refused ==
+PASS correct PIN during lockout → 429 pin-locked (no oracle) → got=[429,"pin-locked"]
+PASS no money moved during the lockout → got=5000
+
+== 3. LOGIN LANE — 6 rapid bad PINs (handle+IP keyed) ==
+PASS attempts 1–4: 401 bad credentials → got=4
+PASS attempt 5: 429 too-many-attempts → got="429:too-many-attempts"
+PASS attempt 6: 429 too-many-attempts → got="429:too-many-attempts"
+  lane outcomes: 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 401:Name or PIN no match — try again. · 429:too-many-attempts · 429:too-many-attempts
+
+== 4. CORRECT CREDENTIALS DURING LOGIN LOCKOUT — also refused ==
+PASS correct handle+PIN during lockout → 429 → got=[429,"too-many-attempts"]
+PASS lockout response carries Retry-After → got=true
+
+== 5. THE HONEST LANE STILL SPENDS (fresh handle, no failures) ==
+PASS first-try correct PIN withdraws → got=[200,true]
+PASS purse moved 2000→1500 → got=1500
+
+== BRUTE-FORCE PoC: 14 PASS / 0 FAIL ==
