@@ -10,7 +10,8 @@
  * resolve() every frame with its intended position and gets a legal one.
  */
 
-import { BUILDINGS, BRIDGES, inSchoolYard, POINTS_OF_INTEREST, WALK_BOUND, riverNearest, type BuildingDef } from './layout'
+import { BUILDINGS, BRIDGES, inSchoolYard, POINTS_OF_INTEREST, STALLS, WALK_BOUND, riverNearest, type BuildingDef } from './layout'
+import { PARKED_VEHICLES, type ParkedBuild } from './vehicles'
 import { SCHOOL_BOXES, isSchoolCollider, type SchoolBox } from './schools'
 
 /** (layout.inSchoolYard re-exported locally for the river override) */
@@ -53,6 +54,32 @@ function boxForSchool(b: SchoolBox): BoxCollider {
   }
 }
 
+/* ---------------------- walk-through props (F3 fix squad) ---------------------- */
+
+/**
+ * SLIM BAY FOOTPRINTS for the parked fleet — half width × half depth in the
+ * rig's local frame (x = across, z = along, +z = the nose), matched to the
+ * body boxes the builders in `vehicles.ts` lay down (keke tub 1.28×1.5 +
+ * nose, danfo 1.94×4.4, sedan 1.74×4.16, lorry 1.9×5.0, okada ~0.8×2.1).
+ * No breathing pad: a parked car is a walk-around obstacle, not a wall.
+ */
+const PARKED_FOOTPRINT: Record<ParkedBuild, [number, number]> = {
+  keke: [0.72, 1.4],
+  okada: [0.45, 1.1],
+  taxi: [0.95, 2.16],
+  sedan: [0.95, 2.16],
+  danfo: [1.05, 2.28],
+  lorry: [1.05, 2.5],
+}
+
+/**
+ * THE ADDED-BOX LAW — parked bays + stall counters are the only props that
+ * join the building colliders, and their total stays ≤ 30: 7 bays + the
+ * first 23 stalls in deterministic array order (a stall counter is a
+ * waist-high walk-blocker; its canopy stays overhead and never collides).
+ */
+const STALL_COLLIDER_CAP = 23
+
 const BOXES: BoxCollider[] = [
   ...BUILDINGS.map(boxFor),
   // Stage 7 — school compounds (walls, blocks, gatehouses… the open gate gap
@@ -67,6 +94,30 @@ const BOXES: BoxCollider[] = [
     cos: Math.cos(-p.rotY),
     sin: Math.sin(-p.rotY),
     rotY: p.rotY,
+  })),
+  // F3 — parked vehicles: slim oriented bays (walk around the cab, not through it)
+  ...PARKED_VEHICLES.map((p) => {
+    const [hw, hd] = PARKED_FOOTPRINT[p.build]
+    return {
+      cx: p.x,
+      cz: p.z,
+      hw,
+      hd,
+      cos: Math.cos(-p.rotY),
+      sin: Math.sin(-p.rotY),
+      rotY: p.rotY,
+    }
+  }),
+  // F3 — stall counters: the market's wooden tables block the walk, slim OBB
+  // at the counter's 2×1 render footprint (+ a hand of pad), rotY-aware
+  ...STALLS.slice(0, STALL_COLLIDER_CAP).map((s) => ({
+    cx: s.x,
+    cz: s.z,
+    hw: 1.1,
+    hd: 0.6,
+    cos: Math.cos(-s.rotY),
+    sin: Math.sin(-s.rotY),
+    rotY: s.rotY,
   })),
 ]
 

@@ -25,7 +25,7 @@ import {
   requestVerdict, acceptVerdict, reportVerdict, dmChannel, dmVerdict,
 } from '@/game/systems/socialgraph'
 import {
-  transferVerdict, depositVerdict, chainLink, receiptOf, dayStartMs, LEDGER_SEED,
+  transferVerdict, depositVerdict, chainLink, receiptOf, dayStartMs, LEDGER_SEED, LEDGER_LIMITS,
 } from '@/game/systems/ledger'
 
 const CHAIN_SEED = 'lko-assoc-chain-seed'
@@ -295,6 +295,28 @@ export async function POST(req: Request) {
       if (!to || to === account.handle) return NextResponse.json({ ok: false, why: 'bad-partner' }, { status: 400 })
       if ((!Number.isFinite(giveCash) || giveCash < 0) || (!Number.isFinite(wantCash) || wantCash < 0)) return NextResponse.json({ ok: false, why: 'bad-amounts' }, { status: 400 })
       if (giveCash === 0 && wantCash === 0) return NextResponse.json({ ok: false, why: 'empty-trade' }, { status: 400 })
+      // THE TRADE PURSE LAW (F5 hardening): an offer is a promise of naira,
+      // so the promise obeys the ledger's own limits (ledger.ts LEDGER_LIMITS
+      // — the same law the wire and this relay enforce on real transfers).
+      // NaN/negative already died at 'bad-amounts' above (int() hands NaN
+      // back for any non-finite payload).
+      if (giveCash > LEDGER_LIMITS.MAX_PER_TRANSFER) return NextResponse.json({ ok: false, why: 'too-big' }, { status: 400 })
+      // the offerer must HOLD what they promise (a light purse makes no offers)
+      const w = await db.walletRow.findUnique({ where: { handle: account.handle } })
+      if ((w?.balance ?? 0) < giveCash) return NextResponse.json({ ok: false, why: 'insufficient' }, { status: 400 })
+      // THE DAY AGGREGATE: the offerer's promises today — counted from the
+      // SERVER's own clock (createdAt >= dayStartMs), never the client's
+      // `day` word, the same eye the ledger cap reads with (route.ts:638).
+      const gaveToday = (await db.tradeRow.aggregate({
+        _sum: { giveCash: true },
+        where: { fromHandle: account.handle, status: { not: 'cancelled' }, createdAt: { gte: new Date(dayStartMs()) } },
+      }))._sum.giveCash ?? 0
+      if (gaveToday + giveCash > LEDGER_LIMITS.DAY_TRANSFER_CAP) return NextResponse.json({ ok: false, why: 'day-cap' }, { status: 400 })
+      // TODO(F5): the offer is still NOT ESCROW — acceptance credits the
+      // receiver without a server-side debit of the offerer's purse (the
+      // move stays client-applied), so these laws bound the PROMISE, not
+      // the money. Escrow (debit the offerer inside one tx at accept)
+      // remains the documented remaining blocker.
       const count = await db.tradeRow.count({ where: { fromHandle: account.handle } })
       const id = tradeIdFor(account.handle, to, day, count + 1)
       await db.tradeRow.create({ data: { id, fromHandle: account.handle, toHandle: to, giveCash, wantCash, terms, day } })
@@ -647,9 +669,21 @@ export async function POST(req: Request) {
           if (kind === 'deposit') {
             await tx.walletRow.upsert({ where: { handle: account.handle }, create: { handle: account.handle, balance: amount }, update: { balance: { increment: amount }, version: { increment: 1 } } })
           } else if (kind === 'withdraw') {
-            await tx.walletRow.update({ where: { handle: account.handle }, data: { balance: { decrement: amount }, version: { increment: 1 } } })
+            // THE OVERDRAFT LAW (F5 hardening): the decrement is CONDITIONAL
+            // — WHERE balance >= amount, at the row itself. The verdict's
+            // findUnique read is advisory; two concurrent spends of one purse
+            // both pass it, but SQLite serializes the writes and exactly one
+            // conditional update matches. A zero-row bump refuses here, in
+            // the SAME transaction (the throw rolls the whole move back).
+            const bumped = await tx.walletRow.updateMany({ where: { handle: account.handle, balance: { gte: amount } }, data: { balance: { decrement: amount }, version: { increment: 1 } } })
+            if (bumped.count === 0) throw new Error('insufficient')
           } else {
-            await tx.walletRow.upsert({ where: { handle: account.handle }, create: { handle: account.handle, balance: -amount }, update: { balance: { decrement: amount }, version: { increment: 1 } } })
+            // THE OVERDRAFT LAW (F5 hardening) — the spend leg: the sender's
+            // purse decrements ONLY if it holds the amount (a missing row or
+            // a light purse bumps ZERO rows — no phantom negative purse is
+            // ever minted, the old upsert's create-balance:-amount is dead).
+            const bumped = await tx.walletRow.updateMany({ where: { handle: account.handle, balance: { gte: amount } }, data: { balance: { decrement: amount }, version: { increment: 1 } } })
+            if (bumped.count === 0) throw new Error('insufficient')
             await tx.walletRow.upsert({ where: { handle: to }, create: { handle: to, balance: amount }, update: { balance: { increment: amount }, version: { increment: 1 } } })
           }
           // THE FORTRESS LAW: the row stores the SAME ts the hash used —

@@ -27,7 +27,9 @@ export async function POST(req: Request) {
     await db.account.update({ where: { id: account.id }, data: { token } })
 
     const save = account.cloudSave ? (JSON.parse(account.cloudSave.data) as unknown) : null
-    // M14 — the vault row's client signature rides back (the merge verifies)
+    // M14 — the vault row's client signature rides back: the client's login
+    // merge verifies it against the device fortress key BEFORE applying
+    // (F2 pull gate in useGameStore.loginAccount — verifyPayload + version gate).
     const sig = account.cloudSave?.sig ?? null
     // W1 — the face rides home: the returning player's profile comes
     // with the token (null for pre-W1 names — honest absence, the

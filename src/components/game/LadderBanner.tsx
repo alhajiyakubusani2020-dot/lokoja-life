@@ -15,6 +15,7 @@ import { LADDER } from '@/game/data/config'
 import { isLectureWindow, isExamWindow, isStrikeDay, strikeDaysLeft, semesterDayOf } from '@/game/systems/education'
 import { homeComfort, propertyFor } from '@/game/systems/housing'
 import { hasPaper, escortAvailable } from '@/game/systems/japa'
+import { formatNaira } from '@/game/systems/progression'
 
 export function LadderBanner() {
   const world = useGameStore((s) => s.world)!
@@ -112,7 +113,7 @@ export function LadderBanner() {
           <span className="min-w-0 flex-1 truncate">
             {prop
               ? `${prop.name} — yours · comfort ${comfort}`
-              : `Rent owed: ${Math.round(housing.rentOwed) >= LADDER.housing.baseRent * 2 ? 'TWO CYCLES BEHIND — quit notice dey table' : `₦${Math.round(housing.rentOwed).toLocaleString()}`}`}
+              : `Rent owed: ${Math.round(housing.rentOwed) >= LADDER.housing.baseRent * 2 ? 'TWO CYCLES BEHIND — quit notice dey table' : formatNaira(housing.rentOwed)}`}
           </span>
           {housing.wahala && <span aria-hidden className="animate-pulse">⚠️</span>}
         </div>

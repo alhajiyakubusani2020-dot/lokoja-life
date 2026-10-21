@@ -258,6 +258,7 @@ import {
   incomeGuard,
   velocityGuard,
   chainNext,
+  verifyPayload,
   configFingerprint,
   CHAIN_SEED,
 } from '../systems/fortress'
@@ -645,6 +646,8 @@ interface GameStore {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+/** F2 — a failed disk write announces itself ONCE per session (no spam wall). */
+let quotaWarned = false
 let notificationId = 0
 let pulseId = 0
 /** THE ONE APPLICATION LAW (hardening) — the ack-applied tradeIds: the 12s
@@ -1119,6 +1122,48 @@ function commitCivicDays(
   }
 }
 
+/** F2 — a failed autosave never dies silent: SaveSystem.write returns false on
+ *  a full/quota-blocked disk (save.ts catches the setItem throw and reports
+ *  failure). The honest message fires once per session, then the flag holds. */
+function warnSaveFailure(get: () => GameStore): void {
+  if (quotaWarned) return
+  quotaWarned = true
+  get().notify({ icon: '💾', text: 'Disk full — progress at risk. Free some space so the city fit save your hustle.', tone: 'bad' })
+  audio.play('notify')
+}
+
+/** F2 — THE PULL GATE: the same defensive verdict a local load gets, applied
+ *  to the vault row BEFORE login may merge it. verifyPayload is the fortress
+ *  HMAC over the exact payload under THIS device's key (a foreign envelope
+ *  never verifies); the version + shape + scalar gates mirror the deserialize
+ *  reject law (F1 hardening lives inside save.ts where deserialize stays
+ *  private, so the gate enforces the same law through the public surface:
+ *  a future version, a missing player or an insane scalar REFUSES instead
+ *  of applying raw). */
+type CloudSaveProbe = {
+  version?: unknown
+  player?: { cash?: unknown; bankBalance?: unknown; needs?: Partial<Record<'health' | 'energy' | 'hunger' | 'mood', unknown>>; stats?: Partial<Record<'totalEarned' | 'totalSpent', unknown>> } | null
+  world?: { day?: unknown } | null
+}
+
+function cloudSaveGate(cloud: GameSave, sig: string, key: string | null): { ok: true } | { ok: false; why: string } {
+  const probe = cloud as unknown as CloudSaveProbe
+  const verify = verifyPayload(JSON.stringify(cloud), sig, key)
+  if (!verify.ok) return { ok: false, why: verify.why }
+  if (typeof probe.version !== 'number' || !Number.isFinite(probe.version) || probe.version < 1 || probe.version > SaveSystem.SAVE_VERSION) {
+    return { ok: false, why: 'future version' }
+  }
+  if (!probe.player || !probe.world) return { ok: false, why: 'malformed' }
+  const num = (v: unknown, min: number): v is number => typeof v === 'number' && Number.isFinite(v) && v >= min
+  if (!num(probe.player.cash, 0) || !num(probe.player.bankBalance, 0)) return { ok: false, why: 'insane money' }
+  if (!num(probe.world.day, 1)) return { ok: false, why: 'insane day' }
+  for (const v of Object.values(probe.player.needs ?? {})) {
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 100) return { ok: false, why: 'insane needs' }
+  }
+  if (!num(probe.player.stats?.totalEarned ?? 0, 0) || !num(probe.player.stats?.totalSpent ?? 0, 0)) return { ok: false, why: 'insane stats' }
+  return { ok: true }
+}
+
 /** Debounced autosave — called after every state-mutating action. */
 function scheduleAutosave(get: () => GameStore) {
   if (saveTimer) clearTimeout(saveTimer)
@@ -1126,7 +1171,7 @@ function scheduleAutosave(get: () => GameStore) {
     const { player, world, civic, settings } = get()
     if (!player || !world || !civic) return
     const existing = SaveSystem.load()
-    SaveSystem.write({
+    const wrote = SaveSystem.write({
       version: SaveSystem.SAVE_VERSION,
       createdAt: existing?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
@@ -1154,6 +1199,7 @@ function scheduleAutosave(get: () => GameStore) {
       nation: get().nation ?? freshNationState(),
       settings,
     })
+    if (!wrote) warnSaveFailure(get)
   }, AUTOSAVE.debounceMs)
 }
 
@@ -1442,6 +1488,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   rest: (kind) => {
     const { player, world } = get()
     if (!player || !world) return
+    // busy-guard: no clock-advancing actions mid-shift/mid-travel
+    if (get().isWorking || get().isTravelling) return
 
     // rest values come from the central config — never hard-coded
     const { energy, hunger, mood, health } = NEEDS.rest[kind]
@@ -1524,6 +1572,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   relaxIndoors: (kind) => {
     const { player, world, civic } = get()
     if (!player || !world) return
+    // busy-guard: no clock-advancing actions mid-shift/mid-travel
+    if (get().isWorking || get().isTravelling) return
     // M2 — load-shedding is real: no light, no TV. M8 — a blown transformer
     // is darker still: the whole feeder is down, the screen is furniture.
     if (kind === 'tv') {
@@ -2124,6 +2174,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   workout: () => {
     const { player, world } = get()
     if (!player || !world) return
+    // busy-guard: no clock-advancing actions mid-shift/mid-travel
+    if (get().isWorking || get().isTravelling) return
     const needs = applySlotDecay(applyNeedsDelta(player.needs, INTERIOR.gym), 1, get().settings.chill ? CHILL.decayMult : 1)
     const clock = advanceWorldClock(world.timeOfDay, world.day, world.weather, 1)
     set({ player: { ...player, needs }, world: { ...world, ...clock } })
@@ -2136,6 +2188,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   study: (label) => {
     const { player, world } = get()
     if (!player || !world) return
+    // busy-guard: no clock-advancing actions mid-shift/mid-travel
+    if (get().isWorking || get().isTravelling) return
     const cfg = INTERIOR.study
     // M13 — education-first: young bands' brains harvest the boost
     const boost = player.ageBand === 'adult' ? 1 : SHIELD.studyBoost
@@ -2256,13 +2310,27 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     const slot = absoluteSlot(day, world.timeOfDay)
     const tx = recordTransaction(label, 'bank', net, day, slot)
+    // F2 — the POS levy signs the kobo-chain too: a destroyed fee is a real
+    // ledger event, not a silent shave. The entry chains from the fortress
+    // tail exactly like every signed entry (chainNext → sig → chainTail),
+    // recorded -fee per the ledger's outflow convention (bankDeposit writes
+    // the pocket-outflow the same way); magnitude = the fee.
+    let transactions = pushTransaction(player.transactions, tx, LEDGER_CAP)
+    let fortress = get().fortress
+    if (fee > 0) {
+      const levySig = chainNext(fortress.chainTail, { day, slot, amount: -fee, category: 'bank', label: 'POS agent levy' })
+      const levyTx = { ...recordTransaction('POS agent levy', 'bank', -fee, day, slot), sig: levySig }
+      transactions = pushTransaction(transactions, levyTx, LEDGER_CAP)
+      fortress = { ...fortress, slotTxSlot: slot, slotTxCount: (fortress.slotTxSlot === slot ? fortress.slotTxCount : 0) + 1, chainTail: levySig }
+    }
     set({
       player: {
         ...player,
         cash: player.cash + net,
         bankBalance: player.bankBalance - amount,
-        transactions: pushTransaction(player.transactions, tx, LEDGER_CAP),
+        transactions,
       },
+      ...(fee > 0 ? { fortress } : {}),
     })
     get().notify({
       icon: channel === 'pos' ? '🏧' : '🏦',
@@ -2350,7 +2418,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tone: 'good',
     })
     audio.play('chime')
-    haptics.fire('reward')
+    haptics.fire('festival') // F2 — the spray rides its own pattern ('festival' was defined in haptics.ts:19 but never fired)
     get().bumpGoal('festival')
     scheduleAutosave(get)
     return true
@@ -2696,6 +2764,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   takeFerry: (toId) => {
     const { player, world } = get()
     if (!player || !world) return
+    // busy-guard: no clock-advancing actions mid-shift/mid-travel
+    if (get().isWorking || get().isTravelling) return
     const from = world.currentLocation
     const destination = LOCATION_BY_ID[toId]
     if (!destination || from === toId) return
@@ -4602,10 +4672,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ handle: input.handle.trim(), pin: input.pin }),
       })
-      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string; save?: import('../types').GameSave | null; band?: string | null; profile?: { handle: string; displayName: string; avatarLook: string; bio: string | null } | null }
+      const data = (await res.json()) as { ok?: boolean; why?: string; token?: string; save?: import('../types').GameSave | null; sig?: string | null; band?: string | null; profile?: { handle: string; displayName: string; avatarLook: string; bio: string | null } | null }
       if (!res.ok || !data.ok || !data.token) return { ok: false, why: data.why ?? 'The register no gree — try again.' }
       const local = SaveSystem.load()
-      const cloud = data.save ?? null
+      let cloud = data.save ?? null
+      // F2 — THE PULL GATE: the vault row is client-authored data and used to
+      // ride RAW into set() (a crafted/foreign save booted straight in). It now
+      // passes the same defensive path as a local load: the fortress HMAC
+      // (verifyPayload under THIS device's key), then the deserialize reject
+      // law mirrored through the public surface (future version / missing
+      // player / insane scalar → refuse). A refused row NEVER touches the
+      // store: it lands in the backup slot (never-lose-progress) and the
+      // login falls back to the device's own books — fresh/guest when
+      // nothing local exists.
+      if (cloud) {
+        const gate = cloudSaveGate(cloud, typeof data.sig === 'string' ? data.sig : '', SaveSystem.fortKey())
+        if (!gate.ok) {
+          try { localStorage.setItem(BACKUP_KEY, backupPayload(cloud)) } catch { /* storage full — the refusal stands */ }
+          get().notify({ icon: '🛡️', text: `Cloud save no pass the gate (${gate.why}) — this device dey continue with him own books.`, tone: 'bad' })
+          audio.play('notify')
+          cloud = null
+        }
+      }
       // M17 — the account row's band is the canonical tier law (the
       // register stored it; the save's player band is the fallback)
       const bandFromRegister = (['kid', 'teen', 'adult'].includes(String(data.band)) ? data.band : null) as AccountState['ageBand']
@@ -5384,7 +5472,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { player, world, civic, fleet, chaos, calendar, rivers, education, housing, japa, goals, onboarding, account, settings } = get()
     if (!player || !world || !civic) return
     const existing = SaveSystem.load()
-    SaveSystem.write({
+    const wrote = SaveSystem.write({
       version: SaveSystem.SAVE_VERSION,
       createdAt: existing?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
@@ -5413,6 +5501,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       settings,
     })
     set({ hasSave: true })
+    if (!wrote) warnSaveFailure(get)
   },
 
   resetGame: () => {

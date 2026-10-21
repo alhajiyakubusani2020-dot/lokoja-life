@@ -129,7 +129,7 @@
 **C. UI debt (§3 top-10):** duplication family (location sheets, travel rows, money UIs, look editors), god components (HudOverlay 1,919 lines, PhoneScreen 1,155), hidden module-globals, stale era copy, dead orphans, and the design-system gaps in §6-P1 below.
 
 **D. Design-system reality (score 6.5/10 — one identity, weakly enforced):**
-- Two token generations coexist: dead shadcn oklch block (incl. a dark theme **nobody can reach** — no ThemeProvider) vs the real `--lko-*` palette (14 colors), which is **not registered in `@theme`** → ~1,300 arbitrary `bg-[var(--lko-*)]` usages instead of real utilities.
+- Two token generations coexist: dead shadcn oklch block (incl. a dark theme **nobody can reach** — no ThemeProvider) vs the real `--lko-*` palette (14 colors), which is **not registered in `@theme`** → ~1,300 arbitrary `bg-[var(--lko-star)]` usages (* wildcard class shown abstractly — the star stands for any lko colour token; the literal bracketed star once got harvested by Tailwind's docs scan and 500'd dev, F4 FIX 1) instead of real utilities.
 - **Load-bearing classes that don't exist:** `lko-glass` used in 10+ files (kit.tsx:96,125 + BankPanel, LadderPanels…) and `lko-label` (kit.tsx:136) — zero definitions in globals.css (grep-verified).
 - **Type scale broken in practice:** 171 standard sizes vs **1,191 arbitrary `text-[Npx]` across 25 distinct sizes (6.5px→26px)**; elder mode remaps only 4 of them.
 - Three button systems (kit `Btn` / dead shadcn Button / raw `lko-press` in 45 files) · **≥6 sheet/modal implementations** with 4 different backdrop strengths and a hand-wedged z-ladder (z-[44]/[45]/[46]/[47]).

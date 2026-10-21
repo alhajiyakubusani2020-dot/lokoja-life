@@ -26,6 +26,7 @@ import { Icon } from '../ui/icons'
 import { audio } from '@/game/systems/audio'
 import { useGameStore } from '@/game/store/useGameStore'
 import { useWardrobeBus } from './wardrobe-store'
+import { formatNaira } from '@/game/systems/progression'
 import {
   AVATAR_CLOTHING_STYLES,
   AVATAR_HAIRSTYLES,
@@ -210,7 +211,7 @@ function WardrobeSheet({ player }: { player: PlayerState }) {
               <div data-testid="wardrobe-shop">
                 <p className="mt-2 rounded-lg bg-[var(--lko-gold-soft,#faf3df)] px-3 py-2 text-[11px] font-semibold leading-snug text-[#6b4e12]">
                   Walks change how you MOVE — the 3D rig obeys. Premium cloth na real cloth: your
-                  3D self wears it the moment you step out. Wallet: ₦{playerCash.toLocaleString('en-NG')}.
+                  3D self wears it the moment you step out. Wallet: {formatNaira(playerCash)}.
                 </p>
                 <Section label="Walk styles">
                   <div className="w-full space-y-2">
@@ -241,7 +242,7 @@ function WardrobeSheet({ player }: { player: PlayerState }) {
                               onClick={() => { audio.play('click'); useGameStore.getState().wardrobeBuy('walk', w.key) }}
                               className="lko-press shrink-0 rounded-full bg-[var(--lko-gold)] px-3 py-1.5 text-[10px] font-extrabold text-[#33230a]"
                             >
-                              ₦{w.price.toLocaleString('en-NG')}
+                              {formatNaira(w.price)}
                             </button>
                           )}
                         </div>
@@ -281,7 +282,7 @@ function WardrobeSheet({ player }: { player: PlayerState }) {
                               onClick={() => { audio.play('click'); useGameStore.getState().wardrobeBuy('outfit', o.key) }}
                               className="lko-press shrink-0 rounded-full bg-[var(--lko-gold)] px-3 py-1.5 text-[10px] font-extrabold text-[#33230a]"
                             >
-                              ₦{o.price.toLocaleString('en-NG')}
+                              {formatNaira(o.price)}
                             </button>
                           ) : (
                             <span className="shrink-0 rounded-full border border-[var(--lko-line)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--lko-ink-soft)]">EARN IT</span>

@@ -6,7 +6,7 @@
 // Source generator: scripts/geo/generate_world.py.
 //
 // 1 world unit = 26 m. North = -Z. World center (0,0) = 6.753E, 7.790N.
-// Roads: 2655 ways (754 km real), rivers 16, bridges 16.
+// Roads: 2655 ways (752 km real, measured), rivers 16, bridges 16.
 //
 // THE EXACTNESS LAW: the binary stores every value as round(v × SCALE)
 // (coords ×10, widths ×100, yaw ×1000) with the encoder refusing any

@@ -30,14 +30,17 @@
  */
 
 import { hmacSha256, sha256 } from './fortress'
+import { formatNaira } from './progression'
+import { LOCATIONS, LOCATION_BY_ID } from '../data/locations'
 
 /* ------------------------------ the roster --------------------------------- */
 
 /**
- * The frozen v1 street roster — indexes are baked into circulating codes,
- * so this list is a CONTRACT: append-only, never reorder, never splice.
+ * The frozen v1 head — the ten launch streets whose indexes are baked into
+ * circulating codes. This head is a CONTRACT: append-only, never reorder,
+ * never splice.
  */
-export const TELEPORT_ROSTER: readonly string[] = [
+const V1_ROSTER: readonly string[] = [
   'home',
   'kpata-market',
   'ganaja-junction',
@@ -48,6 +51,20 @@ export const TELEPORT_ROSTER: readonly string[] = [
   'university-area',
   'food-area',
   'transport-area',
+]
+
+/**
+ * The full postcard roster (32 streets). The law at the top of this file
+ * permits tail appends: every street in the LOCATIONS registry that the v1
+ * head does not already speak joins the tail in LOCATIONS order (launch →
+ * school wards → G2 spaces). v1 indexes never move, so circulating codes
+ * decode forever; the schema version (v:1) and the signing pepper stay
+ * untouched for exactly that reason — bumping either would refuse every
+ * postcard already in circulation.
+ */
+export const TELEPORT_ROSTER: readonly string[] = [
+  ...V1_ROSTER,
+  ...LOCATIONS.map((l) => l.id).filter((id) => !V1_ROSTER.includes(id)),
 ]
 
 /** The frozen v1 ledger categories — the ghost card's last three moves. */
@@ -250,8 +267,6 @@ export function decodeTeleport(raw: string): TeleportDecode {
 
 /* ------------------------------ the postcard ------------------------------- */
 
-import { LOCATION_BY_ID } from '../data/locations'
-
 export interface Postcard {
   /** the OG/share title — "Ada na Day 41 dey Kpata Market" */
   title: string
@@ -276,7 +291,7 @@ export function postcardFor(m: TeleportMoment): Postcard {
   const walkLine = walk.length
     ? `Last moves: ${walk.join(' → ')}`
     : 'The day dey quiet — come see the street yourself.'
-  const body = `${walkLine} · ₦${m.earned.toLocaleString('en-NG')} earned across ${m.moves} move${m.moves === 1 ? '' : 's'}`
+  const body = `${walkLine} · ${formatNaira(m.earned)} earned across ${m.moves} move${m.moves === 1 ? '' : 's'}`
   const chips = [
     { label: 'Day', value: String(m.day) },
     { label: 'Street', value: place },

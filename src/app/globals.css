@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* F4 FIX 1 — Tailwind v4 auto content detection scans the repo root and was
+   harvesting class candidates out of PROSE files (the bracketed wildcard
+   token spelled out abstractly in ERA2-UI-AUDIT.md + worklog.md audit notes)
+   into generated CSS that lightningcss cannot parse — dev 500'd on EVERY
+   route. Prose is never markup: exclude it. Syntax per tailwindcss@4.1.18:
+   @source not "<quoted path>"; — paths resolve relative to THIS stylesheet
+   (src/app → ../../ = the repo root). WORKLOG LAW: never paste a literal
+   bg-[...] bracket candidate into a prose file; spell it abstractly. */
+@source not "../../docs";
+@source not "../../worklog.md";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -135,7 +146,9 @@
   --lko-gold: #e8a317;
   --lko-gold-deep: #8a5a00;
   --lko-gold-soft: #fdf0d5;
-  --lko-terra: #c4562a;
+  /* F4 FIX 3 — AA: #c4562a measured 4.38:1 on --lko-surface #fffdf7;
+     #b34a20 measures 5.27:1 (WCAG AA ≥ 4.5:1). Token value only. */
+  --lko-terra: #b34a20;
   --lko-river: #1f7a6d;
   --lko-river-soft: #dcefeb;
   --lko-cream: #fbf3e4;
@@ -192,6 +205,30 @@
 /* Money & stats always align */
 .lko-num {
   font-variant-numeric: tabular-nums;
+}
+
+/* F4 FIX 2 — small-caps section label. Used 16× across the panels
+   (kit.tsx, LocationSheet, BankPanel, LadderPanels, …) without a
+   definition; this is the quiet heading voice of the warm paper UI. */
+.lko-label {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  color: var(--lko-ink-soft);
+}
+
+/* F4 FIX 2 — frosted chip. Used 2× (kit.tsx IconButton + Pill) without a
+   definition: translucent cream over the world/3D layers with a soft blur
+   and the standard ink hairline (--lko-line = rgba(34,39,31,0.08)).
+   Border-radius is deliberately NOT baked in — the two call sites shape
+   themselves (rounded-xl icon button vs rounded-full pill) and an
+   unlayered radius here would override those utilities. */
+.lko-glass {
+  background: color-mix(in srgb, var(--lko-cream) 72%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--lko-line);
 }
 
 /* Subtle float animation for menu art */

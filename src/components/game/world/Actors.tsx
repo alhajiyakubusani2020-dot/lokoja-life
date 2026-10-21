@@ -745,22 +745,24 @@ interface VehiclePlan {
 // speeds are presentation feel, scaled off the shared config base
 const BASE = WORLD3D.trafficBaseSpeed
 
-/** the town's fleet mix — 14 rigs across the real road loops (perf ceiling ~14) */
+/** the town's fleet mix — 14 rigs across all FIVE real road loops (perf
+ *  ceiling ~14; loops 3/4 carry the keke+danfo and one okada so no circuit
+ *  of the geo pipeline's five rides empty) */
 const TRAFFIC_MIX: { kind: VehicleKind; loop: number; lane: number; base: number; variant?: SedanVariant }[] = [
   { kind: 'keke', loop: 0, lane: 1.55, base: 1.0 },
   { kind: 'taxi', loop: 0, lane: -1.7, base: 1.14 },
   { kind: 'danfo', loop: 0, lane: 1.9, base: 0.8 },
   { kind: 'okada', loop: 0, lane: -1.4, base: 1.32 },
-  { kind: 'danfo', loop: 0, lane: 2.1, base: 0.72 },
   { kind: 'lorry', loop: 0, lane: -2.1, base: 0.58 },
   { kind: 'danfo', loop: 1, lane: 1.9, base: 0.78 },
-  { kind: 'keke', loop: 1, lane: -1.55, base: 0.96 },
   { kind: 'sedan', loop: 1, lane: 1.75, base: 1.06, variant: 'white' },
   { kind: 'okada', loop: 1, lane: -1.35, base: 1.36 },
+  { kind: 'taxi', loop: 1, lane: 1.65, base: 1.12 },
   { kind: 'keke', loop: 2, lane: 1.5, base: 1.0 },
   { kind: 'sedan', loop: 2, lane: -1.8, base: 1.08, variant: 'silver' },
-  { kind: 'okada', loop: 2, lane: 1.4, base: 1.3 },
-  { kind: 'taxi', loop: 1, lane: 1.65, base: 1.12 },
+  { kind: 'danfo', loop: 3, lane: 2.1, base: 0.72 },
+  { kind: 'keke', loop: 3, lane: -1.55, base: 0.96 },
+  { kind: 'okada', loop: 4, lane: 1.4, base: 1.3 },
 ]
 
 const VEHICLES: VehiclePlan[] = TRAFFIC_MIX.map((m, i) => {

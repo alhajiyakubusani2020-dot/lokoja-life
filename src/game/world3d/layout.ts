@@ -4,7 +4,7 @@
  * The world is now built on the REAL Lokoja road network (OpenStreetMap,
  * ODbL — the same dataset Google Maps/Earth render). `world3d/geo.ts` is
  * GENERATED from raw OSM tiles by `scripts/geo/` and holds every mapped
- * road (3,000+ ways, ~930 km), the Niger/Benue/streams, bridges and place
+ * road (2,656 ways, ~752 km (measured)), the Niger/Benue/streams, bridges and place
  * names, projected so that 1 world unit = 26 m and north = -Z.
  *
  * This file fuses that real geography with the GAMEPLAY layer:
@@ -1337,60 +1337,13 @@ export const PALM_TONES = ['#5d8a37', '#6ea344', '#4c7a2e']
 export const ACACIA_TONES = ['#6e7a34', '#7d8a3c', '#8a8f45']
 export const BAOBAB_TONES = ['#5d7038', '#6a7c40']
 
-function scatterTrees(): TreeDef[] {
-  const rng = makeRng(51197)
-  const out: TreeDef[] = []
-  let guard = 0
-  while (out.length < 700 && guard < 26000) {
-    guard++
-    const x = (rng() * 2 - 1) * (WALK_BOUND - 4)
-    const z = (rng() * 2 - 1) * (WALK_BOUND - 4)
-    const y = heightAt(x, z)
-    if (y > 26) continue // sparse above the Patti slopes' treeline
-    const nearRiver = riverInfo(x, z)
-    if (nearRiver.d < 13) continue
-    if (roadDistance(x, z) < 6.5) continue
-    if (Math.hypot(x, z) > WALK_BOUND) continue
-    // keep anchor sites readable
-    if (ANCHORS.some((a) => Math.hypot(a.x - x, a.z - z) < 13)) continue
-    // school compounds plant their own trees — no wild scatter inside
-    if (SCHOOL_SITES.some((sp) => Math.hypot(sp.x - x, sp.z - z) < sp.plateauR + 2)) continue
-    if (BUILDINGS.some((b) => Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) * 0.75 + 2)) continue
-    // denser around Patti + riversides, thinner downtown
-    const pattiBoost = Math.max(0, 1 - Math.hypot(x - MOUNT_PATTI.x, z - MOUNT_PATTI.z) / 110)
-    if (rng() > 0.34 + pattiBoost * 0.5) continue
-    // riverside riverine vegetation — palms line the watersides
-    const riverside = nearRiver.d < nearRiver.halfWidth + 26
-    /**
-     * THE TREE GUILD — the real Guinea-savanna mix around Lokoja:
-     *  • palms hold the wet riversides (raffia/elder palms, as in life)
-     *  • broadleaf neem/mango fills the town and the moister ground
-     *  • flat-topped acacias own the open dry plains (the classic silhouette)
-     *  • sparse baobab giants stand over the gentle laterite flats
-     */
-    const moisture = Math.max(0, 1 - nearRiver.d / 60)
-    const slope = (Math.abs(heightAt(x + 2, z) - y) + Math.abs(heightAt(x, z + 2) - y)) / 4
-    let kind: TreeKind = 'tree'
-    if (riverside && rng() < 0.55) {
-      kind = 'palm'
-    } else if (moisture < 0.42 && slope < 0.3 && rng() < 0.38) {
-      kind = 'acacia'
-    } else if (moisture < 0.5 && slope < 0.2 && rng() < 0.05) {
-      kind = 'baobab'
-    }
-    out.push({
-      x, z, y,
-      scale: kind === 'baobab' ? 1.5 + rng() * 0.8 : 0.75 + rng() * 0.8,
-      tone: Math.floor(rng() * (riverside ? PALM_TONES.length : TREE_TONES.length)),
-      kind,
-    })
-  }
-  return out
-}
-
-export const TREES: TreeDef[] = scatterTrees()
-
-/* ---------------------------------- rocks ----------------------------------- */
+/*
+ * THE WILD TREE SCATTER retired — layout.TREES (700 entries) never had an
+ * importer: CityMesh renders the species-true guild from flora.FLORA_TREES
+ * and the school compounds plant their own SCHOOL_TREES. TreeDef/TreeKind
+ * above stay — schools.ts builds its rows with them.
+ *
+ * ---------------------------------- rocks ----------------------------------- */
 
 export interface RockDef {
   x: number
@@ -1463,11 +1416,18 @@ export interface GrassDef {
 
 export const GRASS_TONES = ['#7a9a3a', '#8aa844', '#9db050', '#b3b45c', '#c2b45f']
 
+/**
+ * RIVERSIDE-WEIGHTED, SHRUNKEN — layout.GRASS is no longer the wide savanna
+ * (the 10k instanced tufts of flora.ts GRASS_TUFTS own that job). It keeps
+ * exactly one role: the candidate pool WorldTerrain's `Flowers` walks
+ * (it reads GRASS.length and picks riverside positions, ≤72 dots). So the
+ * scatter is 800 candidates weighted hard toward the green river margins.
+ */
 export const GRASS: GrassDef[] = (() => {
   const rng = makeRng(90210)
   const out: GrassDef[] = []
   let guard = 0
-  while (out.length < 7500 && guard < 72000) {
+  while (out.length < 800 && guard < 150000) {
     guard++
     const x = (rng() * 2 - 1) * (WALK_BOUND - 2)
     const z = (rng() * 2 - 1) * (WALK_BOUND - 2)
@@ -1485,6 +1445,12 @@ export const GRASS: GrassDef[] = (() => {
     if (BUILDINGS.some((b) => Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) * 0.7 + 1.5)) continue
     // moisture gradient — greener close to water
     const moisture = Math.max(0, 1 - river.d / 60)
+    // THE RIVERSIDE BAND — these 800 exist to feed the riverside Flower
+    // dots (WorldTerrain walks this array and keeps only tufts within
+    // halfWidth + 11 of a river — the pool IS the flower band, so every
+    // candidate the Flowers walk samples passes its river law; the wide
+    // plains belong to flora.ts's 10k tufts
+    if (river.d > river.halfWidth + 11) continue
     const tone = Math.min(
       GRASS_TONES.length - 1,
       Math.floor((1 - moisture) * GRASS_TONES.length * (0.75 + rng() * 0.5)),
@@ -1642,6 +1608,18 @@ export interface StallDef {
 
 export const STALL_TONES = ['#c94f2e', '#d99a2b', '#2e7d5b', '#b03a5b', '#3a6ea3', '#8a5aa3']
 
+/**
+ * The job-board spots — the POI props at the end of this file stand here
+ * (anchor + fixed offset). Lifted above STALLS so the stall placement can
+ * keep its counters clear of the boards without a forward reference.
+ */
+const POI_BOARD_SPOTS: { locationId: string; dx: number; dz: number }[] = [
+  { locationId: 'kpata-market', dx: 3.4, dz: 3.2 },
+  { locationId: 'government-area', dx: -3.6, dz: 3.4 },
+  { locationId: 'food-area', dx: -3.2, dz: -3.6 },
+  { locationId: 'transport-area', dx: 3.6, dz: 3.2 },
+]
+
 /** market + food-strip stalls — the colourful heart of Kpata */
 export const STALLS: StallDef[] = (() => {
   const rng = makeRng(4402)
@@ -1651,13 +1629,51 @@ export const STALLS: StallDef[] = (() => {
     { cx: ANCHOR_BY_ID['food-area'].x, cz: ANCHOR_BY_ID['food-area'].z, n: 10, spread: 14, rot: -0.5 },
     { cx: ANCHOR_BY_ID['ganaja-junction'].x, cz: ANCHOR_BY_ID['ganaja-junction'].z, n: 8, spread: 12, rot: 1.1 },
   ]
+  // THE STALL LAW — a stall never stands on the carriageway, in carved water,
+  // on a job-board spot, inside a building, or on top of another stall.
+  // Grid candidates that fail it slide along a deterministic spoke search
+  // (16 compass directions × 9 radii out to 11.7u, start angle seeded per
+  // candidate — the pushSafe pattern at a stall's scale, and within its
+  // reach: the building law slides up to 14 spokes × 1.5u. The market rows
+  // straddle real mapped streets, so the slide has to reach the pockets
+  // between them); a stall with NO legal spoke is dropped, same absolute
+  // end law as the buildings. Bounded by the row sizes; fully seeded.
+  const boards = POI_BOARD_SPOTS.map(({ locationId, dx, dz }) => {
+    const a = ANCHOR_BY_ID[locationId]
+    return { x: a.x + dx, z: a.z + dz }
+  })
+  const stallOk = (x: number, z: number): boolean =>
+    heightAt(x, z) > WATER_Y + 0.15 &&
+    roadGap(x, z) >= 0.45 &&
+    boards.every((b) => Math.hypot(b.x - x, b.z - z) >= 2.4) &&
+    BUILDINGS.every((b) => Math.hypot(b.x - x, b.z - z) >= Math.max(b.w, b.d) * 0.5 + 1.2) &&
+    out.every((o) => Math.hypot(o.x - x, o.z - z) >= 2.0) // market rows pack tight — counters may nearly touch
   for (const row of rows) {
     for (let i = 0; i < row.n; i++) {
       const gx = (i % 4) - 1.5
       const gz = Math.floor(i / 4) - 1
-      const x = row.cx + Math.cos(row.rot) * (gx * 4.6) - Math.sin(row.rot) * (gz * 5.4)
-      const z = row.cz + Math.sin(row.rot) * (gx * 4.6) + Math.cos(row.rot) * (gz * 5.4)
-      if (roadGap(x, z) < 0.45) continue
+      const x0 = row.cx + Math.cos(row.rot) * (gx * 4.6) - Math.sin(row.rot) * (gz * 5.4)
+      const z0 = row.cz + Math.sin(row.rot) * (gx * 4.6) + Math.cos(row.rot) * (gz * 5.4)
+      const start = rng() * Math.PI * 2 // drawn for EVERY candidate — the stream stays aligned
+      let x = x0
+      let z = z0
+      if (!stallOk(x0, z0)) {
+        let found = false
+        outer: for (const r of [1.5, 2.7, 3.9, 5.1, 6.3, 8.1, 9.3, 10.5, 11.7]) {
+          for (let k = 0; k < 16; k++) {
+            const dir = start + (k / 16) * Math.PI * 2
+            const sx = x0 + Math.cos(dir) * r
+            const sz = z0 + Math.sin(dir) * r
+            if (stallOk(sx, sz)) {
+              x = sx
+              z = sz
+              found = true
+              break outer
+            }
+          }
+        }
+        if (!found) continue // no legal ground — no stall
+      }
       out.push({
         x, z, y: heightAt(x, z),
         rotY: row.rot + (rng() - 0.5) * 0.3,
@@ -1708,14 +1724,7 @@ export interface PoiDef {
   rotY: number
 }
 
-export const POINTS_OF_INTEREST: PoiDef[] = (
-  [
-    { locationId: 'kpata-market', dx: 3.4, dz: 3.2 },
-    { locationId: 'government-area', dx: -3.6, dz: 3.4 },
-    { locationId: 'food-area', dx: -3.2, dz: -3.6 },
-    { locationId: 'transport-area', dx: 3.6, dz: 3.2 },
-  ] as { locationId: string; dx: number; dz: number }[]
-).map(({ locationId, dx, dz }) => {
+export const POINTS_OF_INTEREST: PoiDef[] = POI_BOARD_SPOTS.map(({ locationId, dx, dz }) => {
   const a = ANCHOR_BY_ID[locationId]
   const x = a.x + dx
   const z = a.z + dz

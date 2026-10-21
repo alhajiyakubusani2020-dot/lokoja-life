@@ -34,6 +34,28 @@ import {
   canContributePaving,
 } from '@/game/systems/calendar'
 
+/**
+ * F4 FIX 6 — festival length by id, mirroring calendar.ts:festivalDefsForYear.
+ * The FestivalDay shape exposes daysLeft but not len; the day-festivals are
+ * single-day except the Eid pair (2d), the Regatta (2d) and Detty December
+ * (yearDays − dettyStart + 1). Numbers come straight from FESTIVALS.anchors
+ * so a future anchor change cannot desync this label.
+ */
+function festivalLenFor(id: string): number {
+  switch (id) {
+    case 'eid-fitr':
+      return FESTIVALS.anchors.eidFitrDays
+    case 'regatta':
+      return FESTIVALS.anchors.regattaDays
+    case 'eid-kabir':
+      return FESTIVALS.anchors.eidKabirDays
+    case 'detty':
+      return FESTIVALS.yearDays - FESTIVALS.anchors.dettyStart + 1
+    default:
+      return 1
+  }
+}
+
 export function FestivalPanel({ location }: { location: LokojaLocation }) {
   const world = useGameStore((s) => s.world)!
   const player = useGameStore((s) => s.player)!
@@ -50,6 +72,15 @@ export function FestivalPanel({ location }: { location: LokojaLocation }) {
   const day = world.day
   const standingHere = world.currentLocation === location.id
   const festival = festivalForDay(day)
+  /* F4 FIX 6 — the day-label law. calendar.ts:192 returns daysLeft = len − i
+     with i the 0-based live index, so the live day number is len − daysLeft + 1
+     (the old "day ${daysLeft} to go" mislabelled live day 1 of a multi-day fest
+     as "day 2 to go"). daysLeft is 1 on the final day → "day len of len";
+     daysLeft can never be 0 out of festivalForDay (i < len), but if a future
+     law ever emits 0 the clamp below treats it as the final day (day = len).
+     Single-day festivals keep the "— today" copy. */
+  const festivalLen = festival ? festivalLenFor(festival.id) : 1
+  const festivalDay = Math.min(festivalLen, Math.max(1, festivalLen - (festival?.daysLeft ?? 0) + 1))
   const wedding = weddingForCycle(day)
   const ramDay = ramMarketDayIndex(day)
   const year = yearOf(day)
@@ -86,7 +117,7 @@ export function FestivalPanel({ location }: { location: LokojaLocation }) {
       {festival && atFestivalVenue && (
         <div className="rounded-xl border border-[#8a5a00]/25 bg-gradient-to-r from-[#fff8ec] to-[#fdeecd] p-3">
           <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8a5a00]">
-            <span aria-hidden>{festival.icon}</span> {festival.name} {festival.daysLeft > 1 ? `— day ${festival.daysLeft} to go` : '— today'}
+            <span aria-hidden>{festival.icon}</span> {festival.name} {festivalLen > 1 ? `— day ${festivalDay} of ${festivalLen}` : '— today'}
           </p>
           <p className="mt-0.5 text-[11px] font-semibold text-[#4a3200]">{festival.note}</p>
           <button

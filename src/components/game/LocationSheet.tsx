@@ -21,6 +21,7 @@ import { pavedMinutesMult } from '@/game/systems/calendar'
 import { BIZ } from '@/game/data/config'
 import { LOCATION_BY_ID } from '@/game/data/locations'
 import { LOC_ACTIONS, type LocAction } from '@/game/data/locActions'
+import { HUSTLES } from '@/game/data/hustles'
 import { LOC_VIBES } from '@/game/data/locVibes'
 import { BizBlock } from './BizBlock'
 import { FleetBlock } from './FleetBlock'
@@ -106,6 +107,14 @@ const NEED_EFFECT_EMOJI: Record<string, string> = {
   mood: '🙂',
 }
 
+/* F4 FIX 9 — hustle-search honesty. locActions.ts puts a searchHustles door on
+ * 10 G2 locations, but opportunities.ts:79-81 generates offers ONLY from
+ * HUSTLES rows whose locationId matches, and all 20 hustles live at the 13
+ * core ids — the affordance at the G2 spots was an always-dry search that
+ * still burned its cooldown. Hide the row where no hustle data exists; it
+ * stays intact at every location that actually has hustles. */
+const LOCATIONS_WITH_HUSTLES: ReadonlySet<string> = new Set(HUSTLES.map((h) => h.locationId))
+
 function NeedsEffects({ effects }: { effects: NonNullable<LocAction['effects']> }) {
   const parts = (Object.keys(NEED_EFFECT_EMOJI) as (keyof typeof NEED_EFFECT_EMOJI)[])
     .filter((k) => effects[k] !== undefined && effects[k] !== 0)
@@ -141,7 +150,9 @@ export function LocActionBoard({
   onOpenWork?: () => void
   onClose?: () => void
 }) {
-  const actions = LOC_ACTIONS[locationId] ?? []
+  const actions = (LOC_ACTIONS[locationId] ?? []).filter(
+    (a) => a.door !== 'searchHustles' || LOCATIONS_WITH_HUSTLES.has(locationId),
+  )
   if (!actions.length) return null
 
   const fire = (a: LocAction) => {

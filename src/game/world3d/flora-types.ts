@@ -92,7 +92,8 @@ export interface FloraStats {
   ms: number
 }
 
-/** One grass tuft. 10k of these replace the 3.2k of layout.GRASS. */
+/** One grass tuft. 10k of these ARE the instanced savanna — layout.GRASS
+ *  now keeps only its 800 riverside candidates (the Flower-dot pool). */
 export interface GrassTuft {
   x: number
   z: number

@@ -108,17 +108,57 @@ function PlateTag({ name, plate }: { name: string; plate: string }) {
 
 /* --------------------------- the rig cache (the DriveSystem doctrine) --------------------------- */
 
-/** one shared rig per (model, paint), OUTSIDE React entirely — the frame
- *  loop mutates wheels/steer, so the rig never belongs to a hook (the
- *  module cache survives mounts exactly like the player's own RIG_CACHE) */
+/** ONE base rig per (model, paint), OUTSIDE React entirely — built once,
+ *  geometry/material caches shared (vehicles.ts matCache/geoCache), and
+ *  NEVER mounted directly: two same-model cars mounting one THREE.Group
+ *  fought over the same transforms (one car vanished, wheels fought).
+ *  rigFor clones the base per VIEWER key — Object3D.clone shares every
+ *  geometry and material reference, so the GPU cost of a clone is zero. */
 const RIGS = new Map<string, VehicleRig>()
+const RIG_CLONES = new Map<string, VehicleRig>()
 
-function rigFor(model: VehicleModel, paint: string): VehicleRig {
+/** the viewer keys rigFor touched since the last prune — the layer evicts
+ *  clones whose car left the roster/parked set, so the cache stays bounded */
+const RIG_CLONE_USES = new Set<string>()
+
+/** clone a rig for ONE viewer. Object3D.clone(true) shares all geometry +
+ *  material references; the only work is remapping wheels/steer/bank onto
+ *  the CLONED nodes (traverse order is deterministic, so index-matched) —
+ *  the frame loop must spin THIS mount's wheels, never the base rig's. */
+function cloneRig(base: VehicleRig): VehicleRig {
+  const group = base.group.clone(true)
+  const originals: THREE.Object3D[] = []
+  base.group.traverse((o) => originals.push(o))
+  const clones: THREE.Object3D[] = []
+  group.traverse((o) => clones.push(o))
+  const map = new Map<THREE.Object3D, THREE.Object3D>()
+  originals.forEach((o, i) => map.set(o, clones[i]))
+  return {
+    group,
+    bank: (map.get(base.bank) as THREE.Group | undefined) ?? group,
+    wheels: base.wheels
+      .map((w) => map.get(w))
+      .filter((w): w is THREE.Object3D => !!w),
+    frontWheels: base.frontWheels
+      .map((w) => map.get(w))
+      .filter((w): w is THREE.Object3D => !!w),
+    steer: base.steer ? ((map.get(base.steer) as THREE.Group | undefined) ?? null) : null,
+  }
+}
+
+function rigFor(model: VehicleModel, paint: string, viewer: string): VehicleRig {
   const k = `${model}:${paint}`
-  let r = RIGS.get(k)
+  let base = RIGS.get(k)
+  if (!base) {
+    base = buildPaintedRig(model, paint)
+    RIGS.set(k, base)
+  }
+  const ck = `${k}\u0000${viewer}`
+  RIG_CLONE_USES.add(ck)
+  let r = RIG_CLONES.get(ck)
   if (!r) {
-    r = buildPaintedRig(model, paint)
-    RIGS.set(k, r)
+    r = cloneRig(base)
+    RIG_CLONES.set(ck, r)
   }
   return r
 }
@@ -132,8 +172,9 @@ function RemoteCarView({ handle }: { handle: string }) {
   const car = remoteCarList().find((c) => c.handle === handle)
   // the meta is a plain per-render object (the compiler memoizes; no manual deps to lie)
   const meta = car ? { model: car.model, paint: car.paint, plate: car.plate, name: car.name } : null
-  // the render reads the MODULE cache (the same rig the frame loop owns)
-  const rig = meta ? rigFor(meta.model, meta.paint) : null
+  // the render reads the MODULE cache — one CLONE per (model, paint, viewer):
+  // this handle's own rig, never another car's THREE.Group
+  const rig = meta ? rigFor(meta.model, meta.paint, handle) : null
 
   useFrame(() => {
     const g = group.current
@@ -142,7 +183,7 @@ function RemoteCarView({ handle }: { handle: string }) {
     // pattern) — the rig comes from the module cache, never a render local
     const c = remoteCarList().find((x) => x.handle === handle)
     if (!c) return
-    const r = rigFor(c.model, c.paint)
+    const r = rigFor(c.model, c.paint, handle)
     const s = c.buf.sample(Date.now())
     if (!s.alive) {
       g.visible = false
@@ -176,7 +217,9 @@ function RemoteCarView({ handle }: { handle: string }) {
   if (!car || !meta || !rig) return null
   return (
     <group ref={group} visible={false}>
-      <primitive object={rig.group} />
+      {/* the clone is owned by THIS mount — dispose={null} keeps R3F's
+          unmount teardown from ever touching the shared geometry/materials */}
+      <primitive object={rig.group} dispose={null} />
       <PlateTag name={meta.name} plate={meta.plate} />
     </group>
   )
@@ -196,7 +239,7 @@ const WHEEL_R: Record<VehicleModel, number> = { okada: 0.33, keke: 0.34, taxi: 0
 function ParkedGhostView({ gkey }: { gkey: string }) {
   const group = useRef<THREE.Group>(null)
   const [, handle, model, plate, paint] = gkey.split('\u0000')
-  const rig = rigFor(model as VehicleModel, paint)
+  const rig = rigFor(model as VehicleModel, paint, gkey)
 
   useFrame(() => {
     const g = group.current
@@ -218,7 +261,8 @@ function ParkedGhostView({ gkey }: { gkey: string }) {
   if (!rig) return null
   return (
     <group ref={group} visible={false}>
-      <primitive object={rig.group} />
+      {/* per-ghost clone, same law as the live view above */}
+      <primitive object={rig.group} dispose={null} />
       <PlateTag name={handle} plate={plate} />
     </group>
   )
@@ -262,6 +306,17 @@ export function RemoteVehicles() {
     () => remoteCarList().map((c) => `${c.handle}\u0000${c.plate}\u0000${c.paint}\u0000${c.model}`),
     [count, platesKey],
   )
+
+  // THE CLONE PRUNE — every mount registers its clone key through rigFor
+  // (render + every frame), so after each roster/parked change anything NOT
+  // re-registered belongs to an unmounted viewer: evict it. The clone cache
+  // stays bounded by the live roster exactly like the old RIGS map was.
+  useEffect(() => {
+    for (const k of [...RIG_CLONES.keys()]) {
+      if (!RIG_CLONE_USES.has(k)) RIG_CLONES.delete(k)
+    }
+    RIG_CLONE_USES.clear()
+  }, [count, platesKey, parkedKeys])
 
   return (
     <group>

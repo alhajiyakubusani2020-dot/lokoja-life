@@ -6,6 +6,20 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { applyDelta, patchFromBase64 } from '@/game/systems/binarydelta'
+// F1 HARDENING — the version ceiling is single-sourced with the save system:
+// a future SAVE_VERSION bump lifts the vault's ceiling automatically. save.ts
+// imports cleanly server-side (pure constants/factories, no DOM at module
+// scope — verified by import probe).
+import { SAVE_VERSION } from '@/game/systems/save'
+
+/**
+ * F1 HARDENING — the whole-envelope ceiling. The vault row is an unbounded
+ * String column; a hostile client must not park megabytes in it. Honest
+ * saves ride far under this (the M20 delta door exists because whole
+ * envelopes are big). Rejections use the route's existing error shape
+ * `{ ok: false, why }` with a 400, before any DB write.
+ */
+const MAX_SAVE_BYTES = 512_000
 
 export async function POST(req: Request) {
   try {
@@ -52,6 +66,28 @@ export async function POST(req: Request) {
     }
 
     const data = JSON.stringify(body.data)
+
+    // F1 HARDENING — size cap before any DB write (see MAX_SAVE_BYTES).
+    if (data.length > MAX_SAVE_BYTES) {
+      return NextResponse.json({ ok: false, why: 'payload too large' }, { status: 400 })
+    }
+
+    // F1 HARDENING — the minimal save law: deserialize heals what it LOADS,
+    // but the vault must not STORE what no honest client could write
+    // (missing player/world, cash:-999999 or "5000", day:"5", a version
+    // ahead of every migration this server knows). Rejected before the
+    // upsert, in this route's existing error shape.
+    const save = body.data as { player?: { cash?: unknown }; world?: { day?: unknown }; version?: unknown }
+    if (
+      !save.player || typeof save.player !== 'object' ||
+      typeof save.player.cash !== 'number' || !Number.isFinite(save.player.cash) || save.player.cash < 0 ||
+      !save.world || typeof save.world !== 'object' ||
+      typeof save.world.day !== 'number' || !Number.isFinite(save.world.day) || save.world.day < 1 ||
+      typeof save.version !== 'number' || save.version > SAVE_VERSION
+    ) {
+      return NextResponse.json({ ok: false, why: 'bad payload' }, { status: 400 })
+    }
+
     const version = typeof body.schema_version === 'number' ? body.schema_version : 10
     // M14 — the client's HMAC rides beside the save (tamper-evidence for the pull)
     const sig = typeof body.sig === 'string' && body.sig.length > 0 ? body.sig : null

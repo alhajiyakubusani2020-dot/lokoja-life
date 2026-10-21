@@ -1,11 +1,15 @@
 /**
- * M21 — THE APP MANIFEST
- * ----------------------
- * Ten new phone apps, gate 1 of the content-breadth push. The parent
- * maps these into the phone registry (PhoneScreen owns the union +
- * titles grid; this file owns only the honest list). Each entry's
- * component file exports APP_ID / APP_TITLE / APP_GLYPH — the law
- * suite proves the manifest agrees with the files, id by id.
+ * M21 — THE APP MANIFEST (scope kept honest — F4 FIX 8)
+ * -----------------------------------------------------
+ * The M21 law-suite subset: the 10 apps under contract test (gate 1 of
+ * the content-breadth push). This is NOT the full phone registry — the
+ * full 26-app union + titles grid lives in PhoneScreen.tsx:79.
+ *
+ * Historical claim retired: this header used to promise that each entry's
+ * component file exports APP_ID / APP_TITLE / APP_GLYPH "proved by the law
+ * suite, id by id" — 5 of the 10 files never honored those exports. The
+ * real contract is simpler: the parent maps these ids into the phone
+ * registry by import; this file owns only the honest list of the 10.
  */
 
 export interface M21AppEntry {

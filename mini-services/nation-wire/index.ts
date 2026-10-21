@@ -335,6 +335,12 @@ interface WirePresence {
   hd: number
   mv: boolean
   hasPos: boolean
+  // F5 THE WALK LAW — the clamp's anchor: the epoch-ms and street of the
+  // LAST ACCEPTED pos. posStreet '' = no lawful anchor yet (spawn, or a
+  // street seam — the join-teleport/ferry door may lawfully move the body
+  // across the map, so the next pos re-anchors instead of clamping).
+  posT: number
+  posStreet: string
   displayName: string
   look: string // the validated avatarLook JSON (the REAL vocab only)
 }
@@ -373,6 +379,8 @@ function freshPresence(handle: string, band: LiveBand, street: string, status: s
     hd: lm?.hd ?? 0,
     mv: false,
     hasPos: !!lm,
+    posT: 0,
+    posStreet: '',
     displayName: face.displayName,
     look: face.look,
     car: null,
@@ -513,6 +521,10 @@ function dropCrew(io: Server, car: WireCar, driver: string): void {
     const rp = presence.get(h)
     if (rp && rp.riding?.driver === driver) {
       rp.riding = null
+      // F5 THE BODY ANCHOR SNAP: the dropped passenger stands where the car
+      // STANDS — their walk-law anchor re-seeds here, so the first pos tick
+      // after the drop clamps from truth, never from the stale pre-ride spot.
+      snapBodyToCar(rp, car)
       if (rp.sid) {
         io.to(rp.sid).emit('wire:car-crew', {
           type: 'dropped',
@@ -538,6 +550,54 @@ const presence = new Map<string, WirePresence>() // handle -> record (one walker
  *  walker STANDS where they last stood instead of blinking to (0,0). Memory
  *  only (the ephemeral law): three numbers per claimed walker, no rows. */
 const lastMoment = new Map<string, { x: number; z: number; hd: number }>()
+
+/* ───────────── F5 THE WALK LAW — the body lane's speed clamp ─────────────
+ * Evidence for the ceiling: controls.ts:26-27 `MOVE = { walkSpeed: 4.4,
+ * sprintSpeed: 7.4 }` u/s (bodies.ts:67 SPEED_MAX = 8 is the drift
+ * headroom), reported at the 10Hz cadence (bodies.ts:51 POS_TICK_MS = 100;
+ * remotenet.ts:20 "While moving: the 10Hz cadence; while still: the 1×/3s
+ * heartbeat"). The wire clamps to 3× the fastest evidenced run speed:
+ * an honest sprinter never touches it, a teleporting body cannot cross
+ * it — the same doctrine the car lane has always run (clampVehicleStep,
+ * wheels.ts:160), which the body lane lacked entirely. */
+const WALK_MAX_SPEED = 3 * 7.4 // 22.2 u/s
+
+/** THE WALKER STEP CLAMP — mirror of clampVehicleStep's structure, scaled
+ * to the elapsed time since the anchor: the delta VECTOR is scaled down
+ * its own direction (no per-axis clamp — a diagonal gains nothing), so
+ * direction is preserved and the average speed across ANY tick pattern
+ * never exceeds WALK_MAX_SPEED. No lawful anchor (first pos, or a street
+ * seam — the where door itself hands out teleports) accepts as-is. */
+function clampBodyStep(
+  prev: { x: number; z: number; t: number } | null,
+  next: { x: number; z: number },
+  nowMs: number,
+): { x: number; z: number; clamped: boolean } {
+  if (!prev || !Number.isFinite(prev.x) || !Number.isFinite(prev.z)) {
+    return { x: next.x, z: next.z, clamped: false }
+  }
+  const dt = Math.max(1, nowMs - prev.t) / 1000
+  const maxDist = Math.max(0, WALK_MAX_SPEED * dt)
+  const dx = next.x - prev.x
+  const dz = next.z - prev.z
+  const dist = Math.hypot(dx, dz)
+  if (dist <= maxDist) {
+    return { x: next.x, z: next.z, clamped: false }
+  }
+  const k = maxDist / dist // scale the leap down its own direction
+  return { x: prev.x + dx * k, z: prev.z + dz * k, clamped: true }
+}
+
+/** THE BODY ANCHOR SNAP — a lawful seam (stepping off a car) puts the
+ * body where the wire KNOWS it stands, so the walk law clamps from truth
+ * instead of gliding the walker from a stale pre-ride spot. */
+function snapBodyToCar(p: WirePresence, car: { x: number; z: number; hd: number }): void {
+  p.x = car.x
+  p.z = car.z
+  p.hd = car.hd
+  p.posT = Date.now()
+  p.posStreet = p.street
+}
 
 /** THE CREW ZONE — the door-side wrapper of the pure law: while EITHER
  *  mouth sits in a live car, both must share the crew (crewVoiceOk
@@ -1108,13 +1168,18 @@ io.on('connection', (socket) => {
       socket.join(`wire:street:${currentStreet}`)
       const prev = presence.get(identity.handle!)
       const p = freshPresence(identity.handle!, identity.band, currentStreet, status, voiceOn, socket.id)
-      // a re-hello (reconnect) keeps the body's last honest moment
+      // a re-hello (reconnect) keeps the body's last honest moment — and
+      // (F5) its walk-law anchor ONLY if the moment belongs to THIS street;
+      // a re-hello into another street is a lawful teleport seam, so the
+      // next pos re-anchors instead of clamping across the old street.
       if (prev && prev.hasPos) {
         p.x = prev.x
         p.z = prev.z
         p.hd = prev.hd
         p.mv = false
         p.hasPos = true
+        p.posT = prev.posStreet === currentStreet ? prev.posT : 0
+        p.posStreet = prev.posStreet === currentStreet ? currentStreet : ''
       }
       presence.set(identity.handle!, p)
       broadcastRoster(io)
@@ -1151,6 +1216,8 @@ io.on('connection', (socket) => {
 
   /* ── W2 THE POS DOOR — the body's moment at 10Hz. THE EPHEMERALITY LAW:
    * memory only, never a row; THE POS LAW at the door (bad-pos refuses);
+   * F5 THE WALK LAW (the step is clamped to the evidenced walk ceiling —
+   * the car lane's own clampVehicleStep doctrine, now on foot too);
    * THE BLOCK WALL per recipient in the relay. A guest broadcasts NOTHING
    * (guest-mic-dark — the spectate law: guests watch, never walk). ── */
   socket.on('pos', (raw: unknown, ack?: (r: unknown) => void) => {
@@ -1164,15 +1231,24 @@ io.on('connection', (socket) => {
     if (!posOk(raw)) return ack?.({ ok: false, why: 'bad-pos' })
     const p = presence.get(identity.handle!)
     if (!p) return ack?.({ ok: false, why: 'no-street' })
-    p.x = raw.x
-    p.z = raw.z
+    const now = Date.now()
+    // F5 THE WALK LAW: clamp from the anchor — the last accepted pos on
+    // THIS street. A street seam (join-teleport, ferry) has no lawful
+    // anchor (posStreet '' or another street): the pos RE-ANCHORS there,
+    // because the wire itself handed the walker that teleport.
+    const anchored = p.hasPos && p.posStreet === p.street && p.posT > 0
+    const step = clampBodyStep(anchored ? { x: p.x, z: p.z, t: p.posT } : null, { x: raw.x, z: raw.z }, now)
+    p.x = step.x
+    p.z = step.z
     p.hd = raw.hd
     p.mv = raw.mv
     p.hasPos = true
-    p.ts = Date.now()
-    lastMoment.set(identity.handle!, { x: raw.x, z: raw.z, hd: raw.hd })
+    p.posT = now
+    p.posStreet = p.street
+    p.ts = now
+    lastMoment.set(identity.handle!, { x: p.x, z: p.z, hd: p.hd })
     relayPos(io, p)
-    ack?.({ ok: true })
+    ack?.({ ok: true, clamped: step.clamped })
   })
 
   /* ── W10 THE CAR DOOR — the fleet's hello. THE ADULT-HANDS LAW at the
@@ -1289,10 +1365,15 @@ io.on('connection', (socket) => {
     if (!claimed) return ack?.({ ok: false, why: 'guest-mic-dark' })
     const p = presence.get(identity.handle!)
     if (p?.car) {
+      const stood = { x: p.car.x, z: p.car.z, hd: p.car.hd }
       dropCrew(io, p.car, identity.handle!)
       vehiclePersist(p.car, identity.handle!)
       broadcastParked(io, p.street, p.car, identity.handle!)
       p.car = null
+      // F5 THE BODY ANCHOR SNAP: the engine dies where it STANDS — the
+      // driver's walk-law anchor re-seeds at the car's stand, so the body
+      // lane that reopens clamps from truth, not the pre-drive spot.
+      snapBodyToCar(p, stood)
       broadcastRoster(io)
     }
     ack?.({ ok: true })
@@ -1372,6 +1453,10 @@ io.on('connection', (socket) => {
       pushCarCrew(io, dp!.sid, driver, car, 'unboard', identity.handle!)
     }
     me.riding = null
+    // F5 THE BODY ANCHOR SNAP: step off where the car STANDS — the wire's
+    // own door law (the ack carries this pose) now anchors the walk law
+    // at the same truth, so the next pos clamps from beside the car.
+    if (pose) snapBodyToCar(me, pose)
     broadcastRoster(io)
     ack?.({ ok: true, ...(pose ?? {}) })
   })

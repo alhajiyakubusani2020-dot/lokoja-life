@@ -32,6 +32,7 @@ import { audio } from '@/game/systems/audio'
 import { BankPanel } from './panels/BankPanel'
 import { LoungeConfirm } from './panels/LoungeConfirm'
 import { CivicPanel } from './panels/CivicPanel'
+import { getDeviceProfile, QUALITY_PRESETS, type DeviceProfile } from '@/game/systems/device'
 
 /* --------------------------------- furniture --------------------------------- */
 
@@ -1481,6 +1482,13 @@ function HotspotMarkers({ def, nearestRef }: { def: InteriorDef; nearestRef: Rea
 
 /* ------------------------------ interior player ------------------------------- */
 
+/** F4 FIX 10 — module scratch for the camera-follow target. The useFrame body
+ *  used to allocate a fresh THREE.Vector3 every frame (the only true per-frame
+ *  allocation in the render path — Foxtrot useframe-alloc census). One scratch
+ *  vector, mutated via .set() and consumed synchronously within the same frame
+ *  — the established pattern (CityMesh.tsx:2491). */
+const DESIRED = new THREE.Vector3()
+
 function InteriorPlayer({
   def,
   avatar,
@@ -1615,7 +1623,7 @@ function InteriorPlayer({
     // camera — closer follow
     s.camDist = THREE.MathUtils.clamp(s.camDist + consumeZoom(), INTERIOR.camera.minDistance, INTERIOR.camera.maxDistance)
     const cosP = Math.cos(s.camPitch)
-    const desired = new THREE.Vector3(
+    const desired = DESIRED.set(
       s.x - Math.sin(s.camYaw) * s.camDist * cosP,
       INTERIOR.camera.height + Math.sin(s.camPitch) * s.camDist,
       s.z - Math.cos(s.camYaw) * s.camDist * cosP,
@@ -1686,6 +1694,23 @@ export function InteriorScene({
 }) {
   const night = timeOfDay === 'night'
   const nearestRef = useRef<string | null>(null)
+
+  // F4 FIX 10 — the device-tier law, acquired exactly the way WorldScene.tsx
+  // acquires it (a useMemo module call over the saved pick + the E2E
+  // __lklForceQuality override): the interior previously hardcoded
+  // shadows + dpr [1,1.8] + antialias on every device, ignoring the tier
+  // system (high {shadows, dprCap 1.75} · mid {no shadows, dprCap 1.4} ·
+  // low {no AA, dprCap 1.05}). Read once per session — the GPU does not
+  // change mid-game, and the interior mounts/unmounts inside one session.
+  const profile = useMemo(() => {
+    const setting = useGameStore.getState().settings.graphics
+    const p = getDeviceProfile(setting)
+    const forced = (window as unknown as { __lklForceQuality?: string }).__lklForceQuality
+    if (forced === 'low' || forced === 'mid' || forced === 'high') {
+      return { ...p, effective: forced, preset: QUALITY_PRESETS[forced] } satisfies DeviceProfile
+    }
+    return p
+  }, [])
 
   // Stage 5-b — in-scene action state (prompt chip + self-owned panels).
   // Sheet state carries its owning interior id so a (defensive) interior
@@ -1789,9 +1814,9 @@ export function InteriorScene({
   return (
     <>
       <Canvas
-        shadows
-        dpr={[1, 1.8]}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        shadows={profile.preset.shadows}
+        dpr={[1, Math.min(profile.preset.dprCap, 1.8)]}
+        gl={{ antialias: profile.preset.antialias, powerPreference: 'high-performance' }}
         camera={{ fov: 58, near: 0.1, far: 60, position: [def.spawn.x - 3, 3.4, def.spawn.z + 3] }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
@@ -1800,10 +1825,15 @@ export function InteriorScene({
         }}
         style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
       >
-        {/* warm interior light */}
+        {/* warm interior light. F4 FIX 10 — the light itself stays on every
+            tier (it IS the room's sun; dropping it would flatten the look),
+            but the shadow-casting cost is gated on the tier law: the Canvas
+            shadows prop already disables the shadow map on mid/low, and
+            castShadow follows the same preset so the 1024² pass is never
+            paid below the high tier. */}
         <hemisphereLight args={[night ? '#3a3f52' : '#fff4e0', '#8a6a4a', night ? 0.72 : 1.05]} />
         <directionalLight
-          castShadow
+          castShadow={profile.preset.shadows}
           position={[def.size.w * 0.3, 7, -def.size.d * 0.4]}
           intensity={night ? 0.35 : 2.2}
           color={night ? '#8fa3c8' : '#fff0d2'}

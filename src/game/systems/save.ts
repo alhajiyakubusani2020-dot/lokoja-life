@@ -42,7 +42,10 @@ import { freshFortressState, CHAIN_SEED, signPayload, verifyPayload, sha256, FOR
 
 const SAVE_KEY = FORTRESS_KEYS.primary
 const SHADOW_KEY = FORTRESS_KEYS.shadow
-const SAVE_VERSION = 20
+/** The current save schema version. EXPORTED so the cloud vault's write
+ *  door (/api/cloud/push) can refuse saves from NEWER app versions without
+ *  hardcoding the number twice (F1 hardening). */
+export const SAVE_VERSION = 20
 
 /** M15 — THE DELTA LAW: the state fingerprint of the last payload that hit disk.
  *  Lives OUTSIDE the save (the fortress rule: the books live beside, not inside). */
@@ -311,7 +314,14 @@ function deserialize(raw: string): GameSave | null {
       // current version
       break
     default:
-      // Unknown / newer save from a newer app version — keep it, best effort.
+      // F1 HARDENING — a save from a NEWER app version is REFUSED, not
+      // best-effort loaded: its shape is ahead of every migration here, and
+      // the unconditional stamp-down below used to claim it as v20. null
+      // sends the load descent to the shadow/backup rungs, then fresh —
+      // continueGame (useGameStore) reads a null load as "no save" and falls
+      // back to the new-game flow. Legacy bare saves (version undefined)
+      // still pass: `undefined > SAVE_VERSION` is false.
+      if (typeof save.version === 'number' && save.version > SAVE_VERSION) return null
       break
   }
 
@@ -348,7 +358,10 @@ function deserialize(raw: string): GameSave | null {
 
   // --- Stage 5 player fields (missing on v2-and-older saves) ---
   if (!p.vehicles) p.vehicles = []
-  if (typeof p.bankBalance !== 'number') p.bankBalance = 0
+  // F1 HARDENING — the bank law: finite, non-negative, whole naira. The old
+  // guard caught non-numbers only; Infinity/NaN/negative/fractional rode
+  // straight into the engine.
+  p.bankBalance = typeof p.bankBalance === 'number' && Number.isFinite(p.bankBalance) ? Math.max(0, Math.floor(p.bankBalance)) : 0
   if (!p.relationships) p.relationships = {}
 
   // --- M6 social-depth fields (missing on v6-and-older saves) ---
@@ -604,6 +617,34 @@ function deserialize(raw: string): GameSave | null {
       police: { ...fresh.police, ...save.civic.police },
       efcc: { ...fresh.efcc, ...save.civic.efcc, pending: save.civic.efcc?.pending ?? [] },
       market: { ...fresh.market, ...save.civic.market },
+    }
+  }
+
+  // --- F1 HARDENING — the scalar sanitization pass ---
+  // The heal blocks above fix MISSING objects only; crafted saves can ride
+  // bad SCALARS straight into the engine (cash:-999999, cash:null,
+  // day:"5" → "51" after +1, cash:1e308, Infinity → totalEarned:null).
+  // Every successful load passes this law: money is a finite non-negative
+  // whole naira, the day a finite integer ≥ 1, needs sit in [0,100], life
+  // counters are finite. Valid saves already satisfy every rule here and
+  // pass through byte-identical (verified by round-trip in the F1 battery).
+  p.cash = typeof p.cash === 'number' && Number.isFinite(p.cash) ? Math.max(0, Math.floor(p.cash)) : 0
+  if (save.world) {
+    const d = Number(save.world.day)
+    save.world.day = Number.isFinite(d) ? Math.max(1, Math.floor(d)) : 1
+  }
+  if (p.needs && typeof p.needs === 'object') {
+    for (const k of ['health', 'energy', 'hunger', 'mood'] as const) {
+      const v = p.needs[k]
+      // a non-finite need loads at the fresh-game value — a corrupt save
+      // must never boot its player starving, exhausted or dead
+      p.needs[k] = typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 100
+    }
+  }
+  if (p.stats && typeof p.stats === 'object') {
+    for (const k of ['jobsCompleted', 'hustlesCompleted', 'totalEarned', 'totalSpent'] as const) {
+      const v = p.stats[k]
+      p.stats[k] = typeof v === 'number' && Number.isFinite(v) ? v : 0
     }
   }
 
