@@ -3010,3 +3010,22 @@ Stage Summary:
 - Contradiction register unchanged (X1-X14, 12 resolved/2 held-by-design); new RT-v3 findings all resolved in-place; no silent wins; unresolved debts honestly carried (church facade + home interior now have documented wrong-country/styled rejects).
 - Binding decisions added: E1 named-book set ratified · E2 visual v3 verdicts adopted (43/32 library) · E3 RT-v3 adopted with in-place fixes · E4 count corrections restated (98 doors, 7/12/7 apps, 19/29 streets, ₦960 taxi, wire decomposition).
 - RESEARCH GATE (master-directive shape): SUBMITTED for acceptance — implementation (W1-W7 per M1-M7) unlocks on ratification of A1-A12 + B1-B7 + E1-E4 and the M1-M7 criteria. STOP — awaiting the user's explicit approval.
+
+---
+Task ID: PH24-PUSH
+Agent: Main Agent (swarm lead)
+Task: Push the entire local project — source, research canon, and project memory (worklog) — to GitHub exactly as it is, no rewrites.
+
+Work Log:
+- INCIDENT recorded: between the PH24-ARCHIVE turn and this turn the environment was reset to commit f316b1e; all untracked files were wiped, including the Phase 24 canon-archive deliverables (download/archives/Lokoja-Life-City-Complete-Research-Canon-v1.0.zip, Archive_Report.md, scripts/archive-out/ Stage 1 manifest + report, and the three canon_archive_* scripts). The worklog append of PH24-ARCHIVE was likewise reverted. Canon itself unharmed (all tracked at f316b1e). Per the user's "push exactly as it is, don't rewrite anything": the archive was NOT rebuilt; the loss stands recorded here as the durable memory of it.
+- GitHub auth: user-supplied PAT verified (login alhajiyakubusani2020-dot, repo scope). Existing repo `proofwall` inspected and rejected as push target (unrelated project: email/ops history; overwriting it would be destructive).
+- Created private repo alhajiyakubusani2020-dot/lokoja-life (empty, no auto-init) via API.
+- Worklog appended (this entry) and committed so the pushed state carries the full project memory.
+- Pushed ALL local branches exactly as-is: main (+ inc3-baseline, inc4-baseline, stage3d-baseline, stage3d-inc3, stage4-start). Token used transiently via one-shot credential helper; never stored in .git/config or any file; remote URL stored clean.
+
+Stage Summary:
+- Remote: https://github.com/alhajiyakubusani2020-dot/lokoja-life (private) — origin configured, full history pushed, all 6 local branches mirrored.
+- Pushed content = local state at push time, byte-exact: source (src/), research canon (docs/ 28 Bibles + phase3 books, research/ evidence + visual library), verification screenshots (download/), geo data, scripts, worklog memory. Zero rewrites, zero renames, zero cleanups.
+- Known exposure noted and accepted by user directive: .env (local SQLite DATABASE_URL only) rides tracked in history.
+- Recommendation recorded: rotate/revoke the PAT pasted in chat after use.
+- STOP — push verified; awaiting next directive.
