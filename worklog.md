@@ -3053,3 +3053,20 @@ Stage Summary:
 - STOP — full upload verified; awaiting next directive.
 
 Addendum (PH24-PUSH-2): during upload, the live backup mirror (.backups/repo-mirror.git) self-fetched each push and repacked, spawning oversize artifacts mid-flight. Final exclusions from the remote (GitHub 100 MB hard file limit; all remain on disk byte-identical, all regenerable or redundant): 2 npm SWC binaries (110 MB each), 1 turbopack cache block (103 MB), 3 mirror pack files (114/396/126 MB), 2 oversize loose mirror objects. One rejected push (pre-receive hook) was caught and corrected via soft reset + index cleanup (commits 29bbc3b, 236f9bf, 0457bca, 6fb17fd, 811627b9; rejected tip never propagated). Origin is canonical; mirror snapshot on remote is complete as of commit time. Residual mirror refs drift after the final push is expected and documented — chasing it is an unbounded loop. STOP — full upload verified.
+
+---
+Task ID: PH24-PUSH-3
+Agent: main (swarm orchestrator)
+Task: User directive — use Git LFS or Release assets to get the 8 oversize artifacts (blocked by GitHub's 100 MB file limit) onto GitHub. Chosen: Release assets (LFS free quota = 1 GB < 1.45 GB payload; release assets allow 2 GB/file).
+
+Work Log:
+- Computed exact sizes + SHA-256 of all 8 files (ledger saved to scripts/oversize_sha256.txt).
+- Created release tag `oversize-artifacts-as-is` (ID 423127262) with full manifest body (original path → size → SHA-256).
+- Uploaded all 8 assets via uploads.github.com, application/octet-stream, byte-exact size verified per-asset.
+- API-verified release: 8/8 assets, total 1,551,836,858 bytes == exact sum of disk files.
+
+Stage Summary:
+- GitHub repo now carries 100% of local disk state: git tree (41,899 files, HEAD 0f85af1c) + release `oversize-artifacts-as-is` (8 files, 1.45 GB, checksummed).
+- Asset-name mapping: `/` → `__`; GitHub prefixed `default` to the .sst asset (leading dot not allowed); sizes byte-exact.
+- Release URL: https://github.com/alhajiyakubusani2020-dot/lokoja-life/releases/tag/oversize-artifacts-as-is
+- Recommendation stands: revoke PAT after verification. STOP — oversize upload verified; awaiting next directive.
