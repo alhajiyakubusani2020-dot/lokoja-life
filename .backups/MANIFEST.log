@@ -4,3 +4,7 @@
 [2026-10-25 03:18:16] mode=incr HEAD=0457bcaeb558ab2ee8a77cd457d4786f8db357d9 MIRROR-IN-SYNC subject=as-is upload stage 3/4: .next/ build output exactly as it is (401/402 files — turbopack cache block 00000095
 [2026-10-25 03:20:03] mode=incr HEAD=6fb17fd8f85a1555feb952af783fa13e5c5d4a56 MIRROR-IN-SYNC subject=as-is upload stage 4/4: node_modules/ exactly as it is (32,355/32,357 files — two @next/swc native compiler 
 [2026-10-25 03:21:18] mode=incr HEAD=be8288b4147e555f23c12425b4a10440ed7fc46c MIRROR-IN-SYNC subject=worklog PH24-PUSH-2: full-disk upload complete — every artifact pushed as-is, 3 files excluded by GitHub 100
+[2026-10-25 03:23:26] mode=incr HEAD=6415ad986f29afb1402835f9f96dd4d3e5312cd6 MIRROR-IN-SYNC subject=as-is upload: backup-mirror live drift during push — MANIFEST, FETCH_HEAD, refs, backup worklog re-sync, 3 l
+[2026-10-25 03:26:42] mode=incr HEAD=96bb98bad43b56ee01fe5de5f11f96baa15cd1ec MIRROR-IN-SYNC subject=as-is upload: backup-mirror live drift — MANIFEST, FETCH_HEAD, refs, backup worklog re-sync, loose mirror ob
+[2026-10-25 03:27:56] mode=incr HEAD=811627b9508df0b73beab48401f99e1a3153bb8f MIRROR-IN-SYNC subject=as-is upload: backup-mirror live drift committed — MANIFEST, FETCH_HEAD, refs, backup worklog re-sync, loose
+[2026-10-25 03:28:17] mode=incr HEAD=0f85af1c4212a27daa017f37d4fad140108e3257 MIRROR-IN-SYNC subject=worklog addendum PH24-PUSH-2: mirror churn documented, exclusion ledger finalized (8 oversize artifacts disclo
