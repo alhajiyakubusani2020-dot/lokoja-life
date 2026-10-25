@@ -1,0 +1,47 @@
+▲ Next.js 16.1.3 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://21.0.8.65:3000
+- Environments: .env
+
+✓ Starting...
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+✓ Ready in 951ms
+○ Compiling / ...
+ GET / 200 in 1215ms (compile: 1153ms, render: 62ms)
+ GET / 200 in 12.9s (compile: 12.6s, render: 229ms)
+ GET / 200 in 12.9s (compile: 12.6s, render: 217ms)
+ GET / 200 in 32ms (compile: 6ms, render: 25ms)
+ GET / 200 in 89ms (compile: 8ms, render: 80ms)
+ GET / 200 in 89ms (compile: 36ms, render: 53ms)
+ GET / 200 in 26ms (compile: 4ms, render: 22ms)
+ GET / 200 in 27ms (compile: 5ms, render: 22ms)
+ GET / 200 in 29ms (compile: 4ms, render: 25ms)
+ GET / 200 in 32ms (compile: 6ms, render: 26ms)
+ GET / 200 in 29ms (compile: 5ms, render: 23ms)
+ GET /api/wire-status 200 in 626ms (compile: 602ms, render: 24ms)
+ GET / 200 in 34ms (compile: 6ms, render: 29ms)
+ GET / 200 in 31ms (compile: 6ms, render: 24ms)
+ GET /api/wire-status 200 in 14ms (compile: 2ms, render: 12ms)
+ GET / 200 in 58ms (compile: 6ms, render: 52ms)
+ GET / 200 in 26ms (compile: 3ms, render: 23ms)
+ GET / 200 in 29ms (compile: 8ms, render: 22ms)
+ GET / 200 in 33ms (compile: 6ms, render: 27ms)
+ GET /api/wire-status 200 in 13ms (compile: 3ms, render: 11ms)
+ GET / 200 in 97ms (compile: 4ms, render: 92ms)
+⚠ Cross origin request detected from preview-chat-b8498cc5-f0ae-4be0-adb5-25e6b53c1ba6.space-z.ai to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+prisma:query SELECT `main`.`Account`.`id`, `main`.`Account`.`handle`, `main`.`Account`.`contact`, `main`.`Account`.`pinHash`, `main`.`Account`.`salt`, `main`.`Account`.`ageBand`, `main`.`Account`.`parentPinHash`, `main`.`Account`.`parentSalt`, `main`.`Account`.`token`, `main`.`Account`.`createdAt`, `main`.`Account`.`updatedAt` FROM `main`.`Account` WHERE `main`.`Account`.`handle` = ? LIMIT ? OFFSET ?
+prisma:query BEGIN IMMEDIATE
+prisma:query INSERT INTO `main`.`Account` (`id`, `handle`, `contact`, `pinHash`, `salt`, `ageBand`, `parentPinHash`, `parentSalt`, `token`, `createdAt`, `updatedAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `handle` AS `handle`
+prisma:query INSERT INTO `main`.`ProfileRow` (`accountId`, `handle`, `displayName`, `avatarLook`, `bio`, `createdAt`, `updatedAt`) VALUES (?,?,?,?,?,?,?) RETURNING `accountId` AS `accountId`, `handle` AS `handle`, `displayName` AS `displayName`, `avatarLook` AS `avatarLook`, `bio` AS `bio`, `createdAt` AS `createdAt`, `updatedAt` AS `updatedAt`
+prisma:query COMMIT
+ POST /api/auth/register 200 in 331ms (compile: 195ms, render: 136ms)
+prisma:query SELECT `main`.`Account`.`id`, `main`.`Account`.`handle`, `main`.`Account`.`contact`, `main`.`Account`.`pinHash`, `main`.`Account`.`salt`, `main`.`Account`.`ageBand`, `main`.`Account`.`parentPinHash`, `main`.`Account`.`parentSalt`, `main`.`Account`.`token`, `main`.`Account`.`createdAt`, `main`.`Account`.`updatedAt` FROM `main`.`Account` WHERE `main`.`Account`.`token` = ? LIMIT ? OFFSET ?
+ POST /api/cloud/push 200 in 238ms (compile: 226ms, render: 11ms)
+prisma:query INSERT INTO `main`.`CloudSave` (`accountId`, `data`, `version`, `sig`, `updatedAt`) VALUES (?,?,?,?,?) ON CONFLICT  (`accountId`) DO UPDATE SET `data` = ?, `version` = ?, `sig` = ?, `updatedAt` = ? WHERE (`main`.`CloudSave`.`accountId` = ? AND 1=1) RETURNING `accountId` AS `accountId`, `data` AS `data`, `version` AS `version`, `sig` AS `sig`, `updatedAt` AS `updatedAt`
+ GET / 200 in 67ms (compile: 5ms, render: 62ms)
+ GET / 200 in 35ms (compile: 5ms, render: 31ms)

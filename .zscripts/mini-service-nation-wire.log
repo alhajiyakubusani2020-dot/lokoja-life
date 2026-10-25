@@ -1,0 +1,11 @@
+[nation-wire] Installing dependencies...
+bun install v1.3.14 (0d9b296a)
+
++ @types/bun@1.4.3
++ socket.io@4.8.4
++ typescript@5.9.3
+
+25 packages installed [178.00ms]
+[nation-wire] Running bun run dev...
+$ bun --hot index.ts
+[nation-wire] THE WIRE IS UP — :3003, head=1792, db=/home/z/my-project/db/custom.db
