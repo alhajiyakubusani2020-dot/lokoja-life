@@ -1,0 +1,14 @@
+[00:00:01.197] Server  LOG     ✓ Ready in 951ms
+[00:00:04.211] Server  LOG     ○ Compiling / ...
+[00:03:43.037] Browser WARN    THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+[00:09:56.005] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:10:48.378] Server  WARN    ⚠ Cross origin request detected from preview-chat-b8498cc5-f0ae-4be0-adb5-25e6b53c1ba6.space-z.ai to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+[00:12:10.724] Browser WARN    THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+[00:14:40.437] Server  LOG     prisma:query "SELECT `main`.`Account`.`id`, `main`.`Account`.`handle`, `main`.`Account`.`contact`, `main`.`Account`.`pinHash`, `main`.`Account`.`salt`, `main`.`Account`.`ageBand`, `main`.`Account`.`parentPinHash`, `main`.`Account`.`parentSalt`, `main`.`Account`.`token`, `main`.`Account`.`createdAt`, `main`.`Account`.`updatedAt` FROM `main`.`Account` WHERE `main`.`Account`.`handle` = ? LIMIT ? OFFSET ?"
+[00:14:40.478] Server  LOG     prisma:query "BEGIN IMMEDIATE"
+[00:14:40.480] Server  LOG     prisma:query "INSERT INTO `main`.`Account` (`id`, `handle`, `contact`, `pinHash`, `salt`, `ageBand`, `parentPinHash`, `parentSalt`, `token`, `createdAt`, `updatedAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `handle` AS `handle`"
+[00:14:40.481] Server  LOG     prisma:query "INSERT INTO `main`.`ProfileRow` (`accountId`, `handle`, `displayName`, `avatarLook`, `bio`, `createdAt`, `updatedAt`) VALUES (?,?,?,?,?,?,?) RETURNING `accountId` AS `accountId`, `handle` AS `handle`, `displayName` AS `displayName`, `avatarLook` AS `avatarLook`, `bio` AS `bio`, `createdAt` AS `createdAt`, `updatedAt` AS `updatedAt`"
+[00:14:40.481] Server  LOG     prisma:query "COMMIT"
+[00:14:41.159] Server  LOG     prisma:query "SELECT `main`.`Account`.`id`, `main`.`Account`.`handle`, `main`.`Account`.`contact`, `main`.`Account`.`pinHash`, `main`.`Account`.`salt`, `main`.`Account`.`ageBand`, `main`.`Account`.`parentPinHash`, `main`.`Account`.`parentSalt`, `main`.`Account`.`token`, `main`.`Account`.`createdAt`, `main`.`Account`.`updatedAt` FROM `main`.`Account` WHERE `main`.`Account`.`token` = ? LIMIT ? OFFSET ?"
+[00:14:41.164] Server  LOG     prisma:query "INSERT INTO `main`.`CloudSave` (`accountId`, `data`, `version`, `sig`, `updatedAt`) VALUES (?,?,?,?,?) ON CONFLICT  (`accountId`) DO UPDATE SET `data` = ?, `version` = ?, `sig` = ?, `updatedAt` = ? WHERE (`main`.`CloudSave`.`accountId` = ? AND 1=1) RETURNING `accountId` AS `accountId`, `data` AS `data`, `version` AS `version`, `sig` AS `sig`, `updatedAt` AS `updatedAt`"

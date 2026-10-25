@@ -1,0 +1,6 @@
+{
+  "/api/auth/register/route": "app/api/auth/register/route.js",
+  "/api/cloud/push/route": "app/api/cloud/push/route.js",
+  "/api/wire-status/route": "app/api/wire-status/route.js",
+  "/page": "app/page.js"
+}

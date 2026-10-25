@@ -1,0 +1,69 @@
+{
+  "[project]/src/components/game/screens/MenuAuthSheet.tsx [app-client] (ecmascript, next/dynamic entry)": {
+    "id": "[project]/src/components/game/screens/MenuAuthSheet.tsx [app-client] (ecmascript, next/dynamic entry)",
+    "files": [
+      "static/chunks/src_game_systems_wire_ts_8b519a0d._.js",
+      "static/chunks/src_ffae309d._.js",
+      "static/chunks/node_modules_5fc1a4ae._.js",
+      "static/chunks/src_components_game_screens_MenuAuthSheet_tsx_84fd2187._.js"
+    ]
+  },
+  "[project]/src/game/world3d/geo-gate.ts [app-client] (ecmascript, next/dynamic entry)": {
+    "id": "[project]/src/game/world3d/geo-gate.ts [app-client] (ecmascript, next/dynamic entry)",
+    "files": [
+      "static/chunks/src_components_game_world_WorldTab_tsx_5e543aef._.js",
+      "static/chunks/src_game_world3d_2546d2ef._.js",
+      "static/chunks/src_game_world3d_geo-gate_ts_84fd2187._.js"
+    ]
+  },
+  "[project]/src/components/game/world/WorldTab.tsx [app-client] (ecmascript, next/dynamic entry)": {
+    "id": "[project]/src/components/game/world/WorldTab.tsx [app-client] (ecmascript, next/dynamic entry)",
+    "files": [
+      "static/chunks/src_game_systems_wire_ts_82f525db._.js",
+      "static/chunks/src_game_systems_e825be31._.js",
+      "static/chunks/src_game_store_94f7f7e8._.js",
+      "static/chunks/src_game_world3d_1052d4a5._.js",
+      "static/chunks/src_game_91d57b4d._.js",
+      "static/chunks/src_components_game_world_CityMesh_tsx_d92141a8._.js",
+      "static/chunks/src_components_game_world_InteriorScene_tsx_d1cfd2b8._.js",
+      "static/chunks/src_components_game_world_HudOverlay_tsx_bc5036d2._.js",
+      "static/chunks/src_components_game_world_deb961c8._.js",
+      "static/chunks/src_components_game_29c4d6f4._.js",
+      "static/chunks/node_modules_three_build_three_core_996ef05a.js",
+      "static/chunks/node_modules_three_build_three_module_0c59ee63.js",
+      "static/chunks/node_modules_three_build_three_module_f7d46d9b.js",
+      "static/chunks/node_modules_@react-three_fiber_dist_9b4b9b74._.js",
+      "static/chunks/node_modules_a3a591c4._.js",
+      "static/chunks/src_components_game_world_WorldTab_tsx_84fd2187._.js"
+    ]
+  },
+  "[project]/src/components/game/screens/CharacterCreation.tsx [app-client] (ecmascript, next/dynamic entry)": {
+    "id": "[project]/src/components/game/screens/CharacterCreation.tsx [app-client] (ecmascript, next/dynamic entry)",
+    "files": [
+      "static/chunks/src_game_systems_wire_ts_1333307c._.js",
+      "static/chunks/src_2ff0e6b9._.js",
+      "static/chunks/node_modules_5fc1a4ae._.js",
+      "static/chunks/src_components_game_screens_CharacterCreation_tsx_84fd2187._.js"
+    ]
+  },
+  "[project]/src/components/game/screens/Dashboard.tsx [app-client] (ecmascript, next/dynamic entry)": {
+    "id": "[project]/src/components/game/screens/Dashboard.tsx [app-client] (ecmascript, next/dynamic entry)",
+    "files": [
+      "static/chunks/src_f043b526._.js",
+      "static/chunks/src_components_game_screens_phone_apps_1b5f0583._.js",
+      "static/chunks/src_components_game_screens_phone_LiveApp_tsx_f99a7c8e._.js",
+      "static/chunks/src_components_game_screens_phone_1e625a74._.js",
+      "static/chunks/src_components_game_screens_PhoneScreen_tsx_3daf6cdb._.js",
+      "static/chunks/src_components_game_screens_MapScreen_tsx_b9a4bc7a._.js",
+      "static/chunks/src_components_game_screens_WorkScreen_tsx_89caae50._.js",
+      "static/chunks/src_components_game_screens_Dashboard_tsx_5cd1c3dc._.js",
+      "static/chunks/src_components_game_screens_1a895a5b._.js",
+      "static/chunks/src_components_game_398c51b2._.js",
+      "static/chunks/src_game_83dde1a6._.js",
+      "static/chunks/node_modules_next_dist_compiled_crypto-browserify_index_44cf344e.js",
+      "static/chunks/node_modules_next_dist_compiled_3db55fc1._.js",
+      "static/chunks/node_modules_4e57f215._.js",
+      "static/chunks/src_components_game_screens_Dashboard_tsx_84fd2187._.js"
+    ]
+  }
+}
