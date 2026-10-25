@@ -1,0 +1,7 @@
+# pack-refs with: peeled fully-peeled sorted 
+7b86ff5913edec6beb5c8f7516a3a67075bc488e refs/heads/main
+3206a6bdc7b89e82d8b6bc5e094b9013cfa16425 refs/tags/inc3-baseline
+edbc63c69a1d30680234061eb7897e2d7d4a7fc7 refs/tags/inc4-baseline
+5399f21a4c99ad7094ca19873c3cc8658409f4f2 refs/tags/stage3d-baseline
+edbc63c69a1d30680234061eb7897e2d7d4a7fc7 refs/tags/stage3d-inc3
+8b6a454121bb89e8869b26fc31b7744c6f7c83c4 refs/tags/stage4-start
